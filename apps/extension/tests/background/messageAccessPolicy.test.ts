@@ -12,6 +12,7 @@ import { BACKGROUND_AUTH_MESSAGE_TYPES } from "../../src/chrome/background/authR
 import { BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES } from "../../src/chrome/background/bankrCredentialRouter";
 import { BACKGROUND_ONBOARDING_MESSAGE_TYPES } from "../../src/chrome/background/onboardingRouter";
 import { BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES } from "../../src/chrome/background/accountStateRouter";
+import { BACKGROUND_CONTACT_BOOK_MESSAGE_TYPES } from "../../src/chrome/background/contactBookRouter";
 import { BACKGROUND_SETTINGS_MESSAGE_TYPES } from "../../src/chrome/background/settingsRouter";
 import { BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES } from "../../src/chrome/background/dappPermissionRouter";
 import { BACKGROUND_PROVIDER_RPC_MESSAGE_TYPES } from "../../src/chrome/background/providerRpcRouter";
@@ -76,6 +77,7 @@ test("every main background route has exactly one explicit audience", async () =
     BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES,
     BACKGROUND_ONBOARDING_MESSAGE_TYPES,
     BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES,
+    BACKGROUND_CONTACT_BOOK_MESSAGE_TYPES,
     BACKGROUND_SETTINGS_MESSAGE_TYPES,
     BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES,
     BACKGROUND_PROVIDER_RPC_MESSAGE_TYPES,

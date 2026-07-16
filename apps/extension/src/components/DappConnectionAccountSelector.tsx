@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -12,11 +11,7 @@ import {
 } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
-import {
-  AccountPickerRow,
-  getAccountPickerDisplayName,
-  getAccountPickerSecondaryIdentity,
-} from "@/components/AccountPickerRow";
+import { AccountPickerRow } from "@/components/AccountPickerRow";
 import { getDefaultAccountExplorerUrl } from "@/components/accountExplorerUtils";
 import { getWalletTypeLabel } from "@/components/accountIdentityLabels";
 import { CopyButton } from "@/components/CopyButton";
@@ -30,7 +25,7 @@ import {
   ListItemTitle,
   ListSurface,
 } from "@/components/ui";
-import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useAccountIdentityLabels } from "@/hooks/useAccountIdentityLabels";
 import { useSeedGroupMap } from "@/hooks/useSeedGroupMap";
 import { truncateAddress } from "@/lib/addressUtils";
 
@@ -51,27 +46,7 @@ export default function DappConnectionAccountSelector({
   const seedGroupMap = useSeedGroupMap(accounts);
   const accountTriggerRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const accountAddresses = useMemo(
-    () => accounts.map((candidate) => candidate.address),
-    [accounts],
-  );
-  const { identities } = useEnsIdentities(accountAddresses);
-
-  const getEnsName = useCallback(
-    (candidate: Account) =>
-      identities.get(candidate.address.toLowerCase())?.name ?? null,
-    [identities],
-  );
-  const getEnsAvatar = useCallback(
-    (candidate: Account) =>
-      identities.get(candidate.address.toLowerCase())?.avatar ?? null,
-    [identities],
-  );
-  const getDisplayName = useCallback(
-    (candidate: Account) =>
-      getAccountPickerDisplayName(candidate, getEnsName(candidate)),
-    [getEnsName],
-  );
+  const { getDisplayName, getEnsAvatar, getSecondaryIdentity } = useAccountIdentityLabels(accounts);
 
   const closePicker = useCallback((restoreFocus = true) => {
     setIsPickerOpen(false);
@@ -186,17 +161,13 @@ export default function DappConnectionAccountSelector({
               description="Choose the account this site can see"
             >
               {accounts.map((candidate) => {
-                const ensName = getEnsName(candidate);
                 return (
                   <AccountPickerRow
                     key={candidate.id}
                     account={candidate}
                     displayName={getDisplayName(candidate)}
                     ensAvatar={getEnsAvatar(candidate)}
-                    secondaryIdentity={getAccountPickerSecondaryIdentity(
-                      candidate,
-                      ensName,
-                    )}
+                    secondaryIdentity={getSecondaryIdentity(candidate)}
                     walletTypeLabel={getWalletTypeLabel(candidate, seedGroupMap)}
                     statusLabel={
                       switchingAccountId === candidate.id ? "Switching…" : undefined

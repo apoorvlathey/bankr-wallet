@@ -126,27 +126,31 @@ export const FullScreenPickerScopes = forwardRef<
 export interface FullScreenPickerGroupProps extends BoxProps {
   label: ReactNode;
   description?: ReactNode;
+  trailing?: ReactNode;
 }
 
 export const FullScreenPickerGroup = forwardRef<
   HTMLDivElement,
   FullScreenPickerGroupProps
 >(function FullScreenPickerGroup(
-  { label, description, children, ...rest },
+  { label, description, trailing, children, ...rest },
   ref,
 ) {
   return (
     <Box ref={ref} as="section" _notFirst={{ mt: 5 }} {...rest}>
-      <Box mb={2} px={1}>
-        <Text as="h2" fontSize="sm" fontWeight="600" color="fg.secondary">
-          {label}
-        </Text>
-        {description && (
-          <Text mt={0.5} fontSize="xs" color="fg.muted">
-            {description}
+      <HStack mb={2} px={1} align="flex-start" justify="space-between" spacing={3}>
+        <Box minW={0}>
+          <Text as="h2" fontSize="sm" fontWeight="600" color="fg.secondary">
+            {label}
           </Text>
-        )}
-      </Box>
+          {description && (
+            <Text mt={0.5} fontSize="xs" color="fg.muted">
+              {description}
+            </Text>
+          )}
+        </Box>
+        {trailing && <Box flexShrink={0}>{trailing}</Box>}
+      </HStack>
       <ListSurface>{children}</ListSurface>
     </Box>
   );

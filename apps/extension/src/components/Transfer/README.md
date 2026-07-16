@@ -16,17 +16,30 @@ existing direct and lazy imports retain the same default-export contract.
 - `CalldataSection.tsx` renders native calldata, deployment mode, and decoding.
 - `TransferNotices.tsx` renders sponsorship eligibility/status and view-only
   notices.
-- `NetworkPicker.tsx` and `RecipientPicker.tsx` own picker-only search/rendering.
+- `NetworkPicker.tsx` and `RecipientPicker.tsx` own picker-only search/rendering. The Contacts group mounts shared `AddressContactList`, so Send and More expose the same identity row, edit/delete dialogs, and sortable controls rather than maintaining Send-specific contact UI. Search results remain selection/edit/delete only until the filter is cleared.
+  Send enables the shared group's Add action and keeps the group visible when
+  empty, making the name-service-aware contact editor reachable from the picker.
 - `AdaptiveBalance.tsx` owns responsive balance measurement and formatting.
 - `formatting.ts` contains pure display formatting/account labels; `types.ts`
   contains the public component contract.
+- `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
+  cached-public-name matching, relevance ranking, and stored-order tie breaking
+  for the recipient combobox. Suggestion rows reuse the shared safe avatar and
+  blockie fallback used by the full contact picker.
 
 ## Hooks and effects
 
 - `hooks/useTransferCatalog.ts` owns portfolio/catalog loading, selected-token
   balance and price fallbacks, custom-token lookup, and chain/token selection.
 - `hooks/useTransferRecipient.ts` owns recipient resolution, contract detection,
-  and WalletChan-account recipient search/identity data.
+  and recipient search. Public contact name/avatar projection is delegated to
+  shared `useAddressContactIdentities` so Send and Address Book stay identical.
+  It also exposes the complete saved contact order and trusted mutation
+  callbacks to the shared picker list; excluded wallet-address contacts retain
+  their slots when the visible Send subset is reordered.
+  Exact local contact or wallet addresses bypass reverse resolution and retain
+  their known label/avatar synchronously; contract-recipient detection remains
+  independent and still runs for the resolved raw address.
 - `hooks/useTransferPreparation.ts` owns amount/calldata state and pure transfer
   preparation, including slider sound semantics and deployment preconditions.
 - `hooks/useSponsoredTransfer.ts` owns premium eligibility, durable ERC-3009

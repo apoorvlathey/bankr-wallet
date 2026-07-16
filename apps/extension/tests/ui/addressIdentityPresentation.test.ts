@@ -13,7 +13,7 @@ const walletAccount: Account = {
   createdAt: 1,
 };
 
-test("wallet display names take priority over resolved and fallback labels", () => {
+test("wallet display names take priority over resolved and fallback labels when no contact exists", () => {
   assert.deepEqual(
     getAddressIdentityPresentation({
       account: walletAccount,
@@ -34,6 +34,29 @@ test("cached names identify external addresses without fabricating avatars", () 
       resolvedName: "router.eth",
     }),
     { avatarKind: "none", label: "router.eth" },
+  );
+});
+
+test("contact labels override wallet and public names without replacing resolved avatars", () => {
+  assert.deepEqual(
+    getAddressIdentityPresentation({
+      account: null,
+      contactLabel: "John",
+      fallbackLabel: "Router",
+      resolvedAvatar: null,
+      resolvedName: "john.eth",
+    }).label,
+    "John",
+  );
+  assert.deepEqual(
+    getAddressIdentityPresentation({
+      account: walletAccount,
+      contactLabel: "John",
+      fallbackLabel: "Router",
+      resolvedAvatar: "https://example.com/avatar.png",
+      resolvedName: "john.eth",
+    }),
+    { avatarKind: "resolved", label: "John" },
   );
 });
 

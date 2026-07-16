@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, HStack, IconButton, Text, VStack } from "@chakra-ui/react";
-import { ExternalLinkIcon } from "@chakra-ui/icons";
+import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { ClearSigningView } from "@/components/ClearSigning/ClearSigningView";
-import { CopyButton } from "@/components/CopyButton";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import { AppHeader, AppScreen, ScreenBody } from "@/components/ui";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -73,26 +72,14 @@ export function NativeCalldataDecodeModal({
 
             <Box py={3} borderBottom="1px solid" borderColor="border.subtle">
               <HStack spacing={3} justify="space-between" minW={0} align="center">
-                <Box minW={0}>
-                  <Text fontSize="xs" color="fg.secondary">Recipient</Text>
-                  <Text mt={0.5} fontFamily="mono" fontSize="sm" isTruncated>
-                    {to.slice(0, 8)}…{to.slice(-6)}
-                  </Text>
-                </Box>
-                <HStack spacing={1} flexShrink={0}>
-                  <CopyButton value={to} />
-                  {explorer && (
-                    <IconButton
-                      aria-label="View recipient on explorer"
-                      icon={<ExternalLinkIcon />}
-                      size="sm"
-                      variant="ghost"
-                      minW="32px"
-                      h="32px"
-                      onClick={() => window.open(`${explorer}/address/${to}`, "_blank", "noopener,noreferrer")}
-                    />
-                  )}
-                </HStack>
+                <Text fontSize="xs" color="fg.secondary">Recipient</Text>
+                <LabeledAddressPopover
+                  address={to}
+                  contextLabel="recipient address"
+                  explorer={explorer}
+                  label={`${to.slice(0, 8)}…${to.slice(-6)}`}
+                  maxW="200px"
+                />
               </HStack>
             </Box>
 

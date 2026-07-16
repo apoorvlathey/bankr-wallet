@@ -10,6 +10,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "pkVault",
   "mnemonicVault",
   "accounts",
+  "addressContacts",
   "seedGroups",
   "txHistory",
   "pendingTxRequests",

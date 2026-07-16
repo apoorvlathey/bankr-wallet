@@ -3531,6 +3531,7 @@ function App() {
               showNetworkSelector={false}
               isAccountPickerOpen={isAccountPickerOpen}
               onAccountPickerOpenChange={setIsAccountPickerOpen}
+              onAccountsReordered={setAccounts}
             />
 
             {/* Portfolio balance, primary actions, assets, positions, and activity */}

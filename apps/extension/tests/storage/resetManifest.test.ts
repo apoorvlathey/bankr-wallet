@@ -21,6 +21,7 @@ test("wallet reset local and sync manifests retain their exact released keys", (
     "pkVault",
     "mnemonicVault",
     "accounts",
+    "addressContacts",
     "seedGroups",
     "txHistory",
     "pendingTxRequests",

@@ -20,7 +20,6 @@ import {
   InputRightElement,
   Spinner,
   Text,
-  Tooltip,
   VStack,
 } from "@chakra-ui/react";
 import {
@@ -30,6 +29,7 @@ import {
 } from "@chakra-ui/icons";
 
 import { CopyButton } from "@/components/CopyButton";
+import { AddressActions as SharedAddressActions } from "@/components/shared/LabeledAddressPopover";
 import AccountSettingsIdentity from "@/components/AccountSettingsIdentity";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
@@ -38,7 +38,6 @@ import {
   AppHeader,
   AppScreen,
   ListItem,
-  ListItemActions,
   ListItemContent,
   ListItemDescription,
   ListItemTitle,
@@ -91,32 +90,7 @@ function AddressActions({
   explorer?: string;
   label: string;
 }) {
-  const explorerUrl = explorer
-    ? `${explorer.replace(/\/+$/, "")}/address/${address}`
-    : null;
-
-  return (
-    <ListItemActions>
-      <CopyButton value={address} />
-      {explorerUrl && (
-        <Tooltip label={`View ${label} on explorer`} hasArrow>
-          <IconButton
-            as="a"
-            href={explorerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`View ${label} on explorer`}
-            icon={<ExternalLinkIcon boxSize={3.5} />}
-            variant="ghost"
-            size="xs"
-            minW="24px"
-            w="24px"
-            h="24px"
-          />
-        </Tooltip>
-      )}
-    </ListItemActions>
-  );
+  return <SharedAddressActions address={address} explorer={explorer} contextLabel={label} compact showAddress={false} />;
 }
 
 export function EditDelegateScreen({

@@ -83,6 +83,11 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "setActiveAccount",
   "renameSeedGroup",
   "updateAccountDisplayName",
+  "getAddressContacts",
+  "createAddressContact",
+  "updateAddressContactLabel",
+  "removeAddressContact",
+  "reorderAddressContacts",
   "saveBankrApiKeyAndAddress",
 
   // Credential, passkey, and session management

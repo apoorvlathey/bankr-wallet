@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getEnsIdentityCache,
   isCacheValid,
+  resolveAndCacheIdentities,
   resolveAndCacheIdentity,
   type EnsIdentityCacheEntry,
 } from "@/lib/ensIdentityCache";
@@ -108,19 +109,15 @@ export function useEnsIdentities(addresses: string[]): UseEnsIdentitiesReturn {
           resolvedRef.current.add(addr.toLowerCase());
         }
 
-        const results = await Promise.allSettled(
-          staleAddresses.map((addr) => resolveAndCacheIdentity(addr))
-        );
+        const results = await resolveAndCacheIdentities(staleAddresses).catch(() => new Map());
 
         if (!cancelled) {
           setIdentities((prev) => {
             const updated = new Map(prev);
-            staleAddresses.forEach((addr, i) => {
-              const result = results[i];
+            staleAddresses.forEach((addr) => {
               const lower = addr.toLowerCase();
-              if (result.status === "fulfilled") {
-                updated.set(lower, result.value);
-              }
+              const result = results.get(lower);
+              if (result) updated.set(lower, result);
             });
             return updated;
           });

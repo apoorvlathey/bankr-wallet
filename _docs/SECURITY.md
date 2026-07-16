@@ -947,6 +947,8 @@ accessible resources.
 | `mnemonicVault`            | Yes (encrypted)  | V2 dedicated-key-encrypted phrases + master wrapper, or V1 PBKDF2-encrypted phrases |
 | `seedGroups`               | No               | Seed group metadata (names, counts)                     |
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
+| `addressContacts`          | No               | Local-only user labels for public EVM addresses         |
+| `ensIdentityCache`         | No               | Six-hour public name/avatar cache; optional `needsAvatar` marks a forward-resolved name awaiting batched avatar lookup |
 | `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
 | `onboardingInitialization` | No               | Temporary `{ version, id, startedAt }` transaction marker for one fresh-wallet setup. Missing is normal; unmarked authoritative key/account state fails closed, disposable residue is cleared before begin, and complete wallets cannot be rolled back because marker cleanup failed. |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |

@@ -141,7 +141,7 @@ export function buildButton(t: ThemeTokens) {
         },
       },
       // Warm Midnight commitment action. Amber marks product-entry, mascot-led
-      // brand moments, and the final single-transaction Confirm decision.
+      // brand moments, explicit saved-state commitments, and final decisions.
       brand: {
         bg: "accent.highlight",
         color: "accentFg.highlight",

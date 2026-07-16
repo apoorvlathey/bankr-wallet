@@ -7,12 +7,30 @@ label-first address disclosure shared by transaction and approval surfaces.
 `LabeledAddressPopover.tsx` owns the compact identity pill plus hover/focus
 address, clipboard, and explorer disclosure across transaction and EIP-712
 review. It resolves the shared cached ENS/Basename/WNS/GNS/Mega identity and
-gives a matching wallet account's display name first priority. Resolved avatars
+gives a local address-book label first priority, followed by a matching wallet
+account's display name before any public name or API label. Resolved avatars
 render through the privileged raster cache; only matching wallet accounts may
 fall back to their Bankr or blockie avatar. `addressIdentityPresentation.ts`
 keeps that label/avatar priority pure and directly testable. Unlabeled callers
 use its exported `AddressActions` row directly rather than inventing a generic
 contract label.
+
+`AddressContactEditorModal.tsx` is the shared trusted-UI add/edit form used by
+the address popover and the Address Book screen. It delegates persistence to
+the contact hook and never owns storage or wallet effects directly.
+
+`AddressContactAvatar.tsx` owns the safe onchain-avatar → deterministic-blockie
+fallback used by Address Book and Send. `useAddressContactIdentities` is their
+single enrichment projection for public names, secondary text, avatar records,
+and raw-address fallback; feature screens must not recreate that logic.
+
+`AddressContactList.tsx` is the single editable contact-list presentation used
+by More → Address book and Send → My contacts. It owns edit/delete dialogs and
+pointer, touch, and keyboard sorting. `addressContactListModel.ts` merges a
+reordered visible subset into the full stored permutation, preserving contacts
+excluded from Send because they duplicate wallet accounts.
+Send enables the list's optional group-header Add action, so the same shared
+name-service-aware editor remains available even when the saved list is empty.
 
 `TokenContractPopover.tsx` keeps ERC-20 contract copy and explorer tools behind
 the visible token symbol across transaction and permission-review surfaces.

@@ -1,5 +1,6 @@
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { resolveAddressToName } from "@/lib/ensUtils";
+import { findAddressContact } from "../contactBook/repository";
 
 export interface CounterpartyLabels {
   label?: string;
@@ -11,6 +12,8 @@ export async function resolveCounterpartyLabels(
   address: string,
   chainId: number,
 ): Promise<CounterpartyLabels> {
+  const contact = await findAddressContact(address);
+  if (contact) return { label: contact.label };
   const [labels, ens] = await Promise.all([
     getEthShLabels(address, chainId).catch(() => [] as string[]),
     resolveAddressToName(address).catch(() => null),

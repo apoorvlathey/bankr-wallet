@@ -35,6 +35,7 @@ import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
 import { createSendAccountToTab } from "../lifecycle/tabAccounts";
 import { routeBackgroundAuthMessage } from "../authRouter";
 import { routeBackgroundAccountStateMessage } from "../accountStateRouter";
+import { routeBackgroundContactBookMessage } from "../contactBookRouter";
 import { createBackgroundBankrCredentialMessageRouter } from "../bankrCredentialRouter";
 import { createBackgroundOnboardingMessageRouter } from "../onboardingRouter";
 import { createBackgroundSettingsMessageRouter } from "../settingsRouter";
@@ -93,6 +94,7 @@ export function composeIdentityRoutes() {
     routeBackgroundBankrCredentialMessage,
     routeBackgroundOnboardingMessage,
     routeBackgroundAccountStateMessage,
+    routeBackgroundContactBookMessage,
     routeBackgroundSettingsMessage,
   };
 }

@@ -11,7 +11,6 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@/components/ui";
-import { truncateAddress } from "@/lib/addressUtils";
 
 interface AccountPickerRowProps {
   account: Account;
@@ -27,22 +26,6 @@ interface AccountPickerRowProps {
   isDragging?: boolean;
   style?: CSSProperties;
   onSelect: () => void;
-}
-
-export function getAccountPickerDisplayName(
-  account: Account,
-  ensName: string | null,
-): string {
-  return account.displayName || ensName || truncateAddress(account.address);
-}
-
-export function getAccountPickerSecondaryIdentity(
-  account: Account,
-  ensName: string | null,
-): string {
-  return account.displayName && ensName
-    ? `${ensName} · ${truncateAddress(account.address)}`
-    : truncateAddress(account.address);
 }
 
 /** Shared account-choice row used by the wallet and connection pickers. */

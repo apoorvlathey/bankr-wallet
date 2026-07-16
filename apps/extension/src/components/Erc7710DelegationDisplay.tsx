@@ -5,14 +5,13 @@ import {
   Box,
   Code,
   HStack,
-  IconButton,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import { CopyButton } from "@/components/CopyButton";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import {
   formatHexByteLength,
   isRootAuthority,
@@ -44,9 +43,6 @@ function AddressValue({
   const { networksInfo } = useNetworks();
   const [label, setLabel] = useState<string | null>(null);
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
-  const explorerUrl = resolvedChain?.explorer
-    ? `${resolvedChain.explorer.replace(/\/+$/, "")}/address/${address}`
-    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -58,44 +54,7 @@ function AddressValue({
     };
   }, [address, chainId]);
 
-  return (
-    <VStack align="end" spacing={0.5} minW={0}>
-      <HStack spacing={1} justify="flex-end" maxW="full">
-        <Text
-          fontSize="xs"
-          fontFamily="mono"
-          color="accent.secondary"
-          fontWeight="700"
-          noOfLines={1}
-        >
-          {truncateHex(address, 6, 4)}
-        </Text>
-        <CopyButton value={address} />
-        {explorerUrl && (
-          <IconButton
-            aria-label="View on explorer"
-            icon={<ExternalLinkIcon boxSize="10px" />}
-            size="xs"
-            variant="ghost"
-            color="text.secondary"
-            onClick={() => window.open(explorerUrl, "_blank", "noopener,noreferrer")}
-            _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-          />
-        )}
-      </HStack>
-      {label && (
-        <Text
-          fontSize="10px"
-          color="fg.secondary"
-          fontWeight="700"
-          textAlign="right"
-          noOfLines={2}
-        >
-          {label}
-        </Text>
-      )}
-    </VStack>
-  );
+  return <LabeledAddressPopover address={address} contextLabel="delegation address" explorer={resolvedChain?.explorer} label={label || truncateHex(address, 6, 4)} maxW="190px" />;
 }
 
 function InfoRow({

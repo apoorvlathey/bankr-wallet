@@ -1,6 +1,7 @@
-import { CheckIcon, CopyIcon, ExternalLinkIcon } from "@chakra-ui/icons";
+import { AddIcon, CheckIcon, CopyIcon, EditIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import {
   Box,
+  Button,
   HStack,
   Icon,
   IconButton,
@@ -11,6 +12,7 @@ import {
   PopoverTrigger,
   Portal,
   Text,
+  VStack,
 } from "@chakra-ui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Account } from "@/chrome/types";
@@ -19,6 +21,8 @@ import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { getAddressIdentityPresentation } from "./addressIdentityPresentation";
+import { useAddressContact } from "@/hooks/useAddressContacts";
+import { AddressContactEditorModal } from "@/components/shared/AddressContactEditorModal";
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/u;
 
@@ -27,6 +31,7 @@ interface AddressActionsProps {
   compact?: boolean;
   contextLabel?: string;
   explorer?: string;
+  showAddress?: boolean;
 }
 
 export function AddressActions({
@@ -34,8 +39,11 @@ export function AddressActions({
   compact = false,
   contextLabel = "address",
   explorer,
+  showAddress = true,
 }: AddressActionsProps) {
   const [copied, setCopied] = useState(false);
+  const [isContactEditorOpen, setIsContactEditorOpen] = useState(false);
+  const { contact } = useAddressContact(address);
   const copiedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shortAddress = compact
     ? `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -67,54 +75,70 @@ export function AddressActions({
   };
 
   return (
-    <HStack spacing={0.5} minW={0} justify="flex-end" whiteSpace="nowrap">
-      <Text
-        minW={0}
-        px={1}
-        color="fg.primary"
-        fontFamily="mono"
-        fontSize="xs"
-        fontWeight="600"
-        noOfLines={1}
-        title={address}
-        aria-label={address}
-      >
-        {shortAddress}
-      </Text>
-      <IconButton
-        aria-label={`Copy ${contextLabel}`}
-        icon={
-          copied ? (
-            <CheckIcon boxSize="10px" />
-          ) : (
-            <CopyIcon boxSize="11px" />
-          )
-        }
-        size="xs"
-        variant="ghost"
-        minW="24px"
-        w="24px"
-        h="24px"
-        color={copied ? "accent.highlight" : "fg.muted"}
-        onClick={copyAddress}
-      />
-      {explorerUrl && (
-        <IconButton
-          as="a"
-          href={explorerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`View ${contextLabel} on explorer`}
-          icon={<ExternalLinkIcon boxSize="11px" />}
+    <>
+      <VStack spacing={1} align="stretch">
+        <HStack spacing={0.5} minW={0} justify="flex-end" whiteSpace="nowrap">
+          {showAddress && (
+            <Text
+              minW={0}
+              px={1}
+              color="fg.primary"
+              fontFamily="mono"
+              fontSize="xs"
+              fontWeight="600"
+              noOfLines={1}
+              title={address}
+              aria-label={address}
+            >
+              {shortAddress}
+            </Text>
+          )}
+          <IconButton
+            aria-label={`Copy ${contextLabel}`}
+            icon={copied ? <CheckIcon boxSize="10px" /> : <CopyIcon boxSize="11px" />}
+            size="xs"
+            variant="ghost"
+            minW="24px"
+            w="24px"
+            h="24px"
+            color={copied ? "accent.highlight" : "fg.muted"}
+            onClick={copyAddress}
+          />
+          {explorerUrl && (
+            <IconButton
+              as="a"
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View ${contextLabel} on explorer`}
+              icon={<ExternalLinkIcon boxSize="11px" />}
+              size="xs"
+              variant="ghost"
+              minW="24px"
+              w="24px"
+              h="24px"
+              color="fg.muted"
+            />
+          )}
+        </HStack>
+        <Button
           size="xs"
           variant="ghost"
-          minW="24px"
-          w="24px"
-          h="24px"
-          color="fg.muted"
-        />
-      )}
-    </HStack>
+          leftIcon={contact ? <EditIcon boxSize="12px" aria-hidden /> : <AddIcon boxSize="12px" aria-hidden />}
+          justifyContent="flex-start"
+          minH="32px"
+          onClick={() => setIsContactEditorOpen(true)}
+        >
+          {contact ? "Edit contact" : "Add to contacts"}
+        </Button>
+      </VStack>
+      <AddressContactEditorModal
+        address={address}
+        initialLabel={contact?.label}
+        isOpen={isContactEditorOpen}
+        onClose={() => setIsContactEditorOpen(false)}
+      />
+    </>
   );
 }
 
@@ -152,6 +176,7 @@ export function LabeledAddressPopover({
   const identity = identities.get(address.toLowerCase());
   const cachedIdentityAvatar = useCachedAvatarSrc(identity?.avatar);
   const [account, setAccount] = useState<Account | null>(null);
+  const { contact } = useAddressContact(address);
 
   useEffect(() => {
     setAccount(null);
@@ -179,6 +204,7 @@ export function LabeledAddressPopover({
 
   const presentation = getAddressIdentityPresentation({
     account,
+    contactLabel: contact?.label,
     fallbackLabel: label,
     resolvedAvatar: identity?.avatar,
     resolvedName: identity?.name,
@@ -228,6 +254,7 @@ export function LabeledAddressPopover({
         closeDelay={220}
         gutter={6}
         isLazy
+        lazyBehavior="keepMounted"
       >
         <PopoverTrigger>
           <Box as="span" display="inline-flex" flexShrink={0} ml={-0.5}>

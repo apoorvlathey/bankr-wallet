@@ -84,7 +84,8 @@ identity assets, and blue reserved for transactional/focus roles.
 - Amber is WalletChan's brand signature. Use it for the brand Unlock action,
   selected Warm Midnight accents, the emphasized homepage Send shortcut, the
   final single-transaction `Confirm` action, the EIP-7702 `Set delegate`
-  commitment action, and small identity/attention moments.
+  commitment action, the Address Book `Save contact` commitment, and small
+  identity/attention moments.
 - Blue remains the default transactional, selection, link, and focus family
   unless a surface has received an explicit Warm Midnight exception. The final
   single-transaction `Confirm` button is one such exception and must use the
@@ -516,6 +517,28 @@ Every displayed `0x` address still follows the repository standard:
 - Correct-chain explorer link when chain context exists.
 - The homepage account's no-global-chain exception defaults to Etherscan and
   offers other explorers through the hover popover.
+- Saved Address Book labels are the first text identity across address,
+  account, signer, and delegate surfaces, ahead of wallet names and public
+  name/API labels. Resolved avatars remain independent and may still accompany
+  the user label. Address overflow
+  disclosures keep copy/explorer together and place Add/Edit contact beneath
+  them; the Address Book itself uses the full-screen searchable list grammar.
+  Contact rows keep the user label primary, show a cached public primary name
+  instead of the truncated address when one exists, and replace the blockie
+  with a safely cached resolved avatar when available. The deterministic
+  blockie remains visible while an avatar loads and whenever none exists.
+  Its address field resolves supported name services in place with quiet
+  loading, resolved-address, and corrective error states before Save.
+  Send autocomplete suggestions use the same compact avatar/name/address
+  identity stack while preserving arrow-key, Enter, and Escape behavior.
+  Selecting a known contact or wallet keeps that identity stable in the
+  recipient header without a transient resolver status.
+  The full Send contact group reuses the Address Book's editable row and
+  deletion dialog, including its explicit drag handle. Pointer, touch, and
+  keyboard reordering is available with an unfiltered list; searching keeps
+  rows selectable and editable but pauses ordering until the filter is clear.
+  A quiet plus action remains aligned to the Contacts heading in Send and opens
+  the same shared Add contact dialog, including when no contacts are saved.
 
 ## 7. Surface status and next work
 

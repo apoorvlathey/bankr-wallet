@@ -23,7 +23,7 @@ import { secureHttpTransport } from "@/chrome/network/rpcClient";
 // Constants
 // ============================================================================
 
-const BASENAME_L2_RESOLVER_ADDRESS =
+export const BASENAME_L2_RESOLVER_ADDRESS =
   "0xC6d566A56A1aFf6508b41f6c90ff131615583BCD" as const;
 
 const GWEI_NAME_NFT_AVATAR_ABI = [
@@ -60,7 +60,7 @@ async function getUserRpcUrl(chainId: number): Promise<string> {
   return rpcUrl;
 }
 
-async function getMainnetClient() {
+export async function getMainnetNameServiceClient() {
   const rpcUrl = await getUserRpcUrl(mainnet.id);
   return createPublicClient({
     chain: mainnet,
@@ -68,7 +68,7 @@ async function getMainnetClient() {
   });
 }
 
-async function getBaseClient() {
+export async function getBaseNameServiceClient() {
   const rpcUrl = await getUserRpcUrl(base.id);
   return createPublicClient({
     chain: base,
@@ -76,7 +76,7 @@ async function getBaseClient() {
   });
 }
 
-async function getMegaEthClient() {
+export async function getMegaNameServiceClient() {
   const rpcUrl = await getUserRpcUrl(MEGAETH_CHAIN_ID);
   return createPublicClient({
     chain: {
@@ -169,7 +169,7 @@ const convertChainIdToCoinType = (chainId: number): string => {
   return cointype.toString(16).toLocaleUpperCase();
 };
 
-const convertReverseNodeToBytes = (
+export const convertReverseNodeToBytes = (
   address: Address,
   chainId: number
 ): Hex => {
@@ -193,7 +193,7 @@ const resolveMegaName = async (
   name: string
 ): Promise<Address | null> => {
   try {
-    const client = await getMegaEthClient();
+    const client = await getMegaNameServiceClient();
     const tokenId = BigInt(namehash(name.toLowerCase()));
     const ZERO = "0x0000000000000000000000000000000000000000";
 
@@ -228,7 +228,7 @@ const getMegaName = async (
   address: string
 ): Promise<string | null> => {
   try {
-    const client = await getMegaEthClient();
+    const client = await getMegaNameServiceClient();
     const name = await client.readContract({
       abi: megaNamesAbi,
       address: MEGA_NAMES_CONTRACT,
@@ -269,7 +269,7 @@ export const resolveNameToAddress = async (
   }
 
   // Let RPC errors (429, timeouts, etc.) propagate so callers can show actionable feedback
-  const client = await getMainnetClient();
+  const client = await getMainnetNameServiceClient();
   return await client.getEnsAddress({ name: normalizedName });
 };
 
@@ -279,7 +279,7 @@ export const resolveNameToAddress = async (
 
 const getBasename = async (address: Address): Promise<string | null> => {
   try {
-    const client = await getBaseClient();
+    const client = await getBaseNameServiceClient();
     const addressReverseNode = convertReverseNodeToBytes(address, base.id);
     const basename = await client.readContract({
       abi: L2ResolverAbi,
@@ -299,7 +299,7 @@ const getBasename = async (address: Address): Promise<string | null> => {
 
 const getEnsName = async (address: string): Promise<string | null> => {
   try {
-    const client = await getMainnetClient();
+    const client = await getMainnetNameServiceClient();
     const name = await client.getEnsName({
       address: address as Hex,
     });
@@ -352,7 +352,7 @@ export const resolveAddressToName = async (
 
 const getEnsAvatar = async (ensName: string): Promise<string | null> => {
   try {
-    const client = await getMainnetClient();
+    const client = await getMainnetNameServiceClient();
     const avatar = await client.getEnsAvatar({
       name: normalize(ensName),
     });
@@ -366,7 +366,7 @@ const getBasenameAvatar = async (
   basename: string
 ): Promise<string | null> => {
   try {
-    const client = await getBaseClient();
+    const client = await getBaseNameServiceClient();
     const avatar = await client.readContract({
       abi: L2ResolverAbi,
       address: BASENAME_L2_RESOLVER_ADDRESS,
@@ -387,7 +387,7 @@ const getMegaAvatar = async (
   megaName: string
 ): Promise<string | null> => {
   try {
-    const client = await getMegaEthClient();
+    const client = await getMegaNameServiceClient();
     const tokenId = BigInt(namehash(megaName.toLowerCase()));
     const avatar = await client.readContract({
       abi: megaNamesAbi,
@@ -406,7 +406,7 @@ const getGweiAvatar = async (
   gweiName: string
 ): Promise<string | null> => {
   try {
-    const client = await getMainnetClient();
+    const client = await getMainnetNameServiceClient();
     const tokenId = await client.readContract({
       abi: GWEI_NAME_NFT_AVATAR_ABI,
       address: GWEI_CONTRACT as Address,

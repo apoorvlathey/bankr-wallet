@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   ExternalLinkIcon,
   LinkIcon,
+  AtSignIcon,
 } from "@chakra-ui/icons";
 import {
   REVOKE_CASH_URL,
@@ -19,6 +20,7 @@ import ConnectedDappsView from "@/components/ConnectedDappsView";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
 import { useEffect, useState } from "react";
+import AddressBookScreen from "@/components/AddressBook/AddressBookScreen";
 import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
 import {
   AppHeader,
@@ -166,6 +168,7 @@ export default function MoreActionsView({
 }: MoreActionsViewProps) {
   const [stakeApy, setStakeApy] = useState<number | null>(null);
   const [showConnectedDapps, setShowConnectedDapps] = useState(false);
+  const [showAddressBook, setShowAddressBook] = useState(false);
   const isFirefox =
     typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent);
 
@@ -221,6 +224,15 @@ export default function MoreActionsView({
 
   const secondaryActions: MoreAction[] = [
     {
+      title: "Address book",
+      detail: "Label frequently used addresses",
+      icon: <AtSignIcon boxSize={5} />,
+      iconBg: "accent.secondary",
+      iconColor: "accentFg.secondary",
+      external: false,
+      onClick: () => setShowAddressBook(true),
+    },
+    {
       title: "Connected dapps",
       detail: "Manage approved sites",
       icon: <LinkIcon boxSize={5} />,
@@ -272,6 +284,10 @@ export default function MoreActionsView({
 
   if (showConnectedDapps) {
     return <ConnectedDappsView onBack={() => setShowConnectedDapps(false)} />;
+  }
+
+  if (showAddressBook) {
+    return <AddressBookScreen onBack={() => setShowAddressBook(false)} />;
   }
 
   return (

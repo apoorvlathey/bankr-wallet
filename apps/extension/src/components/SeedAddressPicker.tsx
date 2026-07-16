@@ -17,6 +17,7 @@ import {
 import { blo } from "blo";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { useAddressContactLabelMap } from "@/hooks/useAddressContacts";
 import { fetchPortfolio } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { truncateAddress } from "@/lib/addressUtils";
@@ -97,7 +98,7 @@ function BlockieAvatarImg({ address }: { address: string }) {
 
 function AddressRow({
   item,
-  ensName,
+  resolvedName,
   ensAvatar,
   portfolioState,
   checked,
@@ -105,7 +106,7 @@ function AddressRow({
   onToggle,
 }: {
   item: PreviewItem;
-  ensName: string | null;
+  resolvedName: string | null;
   ensAvatar: string | null;
   portfolioState: { loading: boolean; value: number | null; error: boolean };
   checked: boolean;
@@ -114,8 +115,8 @@ function AddressRow({
   onToggle: () => void;
 }) {
   const short = truncateAddress(item.address);
-  const primary = ensName || short;
-  const showAddrLine = !!ensName;
+  const primary = resolvedName || short;
+  const showAddrLine = !!resolvedName;
 
   return (
     <HStack
@@ -165,11 +166,11 @@ function AddressRow({
             fontSize="sm"
             fontWeight="700"
             color="text.primary"
-            fontFamily={ensName ? undefined : "mono"}
+            fontFamily={resolvedName ? undefined : "mono"}
             noOfLines={1}
             flex={1}
             minW={0}
-            title={ensName ? `${ensName} · ${item.address}` : item.address}
+            title={resolvedName ? `${primary} · ${item.address}` : item.address}
           >
             {primary}
           </Text>
@@ -375,13 +376,11 @@ function SeedAddressPicker({
     });
   };
 
-  const addresses = useMemo(
-    () => items.map((it) => it.address),
-    [items],
-  );
+  const addresses = useMemo(() => items.map((it) => it.address), [items]);
 
   // ENS resolution for everything currently visible.
   const { identities } = useEnsIdentities(addresses);
+  const contactLabels = useAddressContactLabelMap();
 
   // Portfolio fetch per address — keyed by lowercase address; cancellable
   // on unmount so background fetches don't leak.
@@ -488,7 +487,7 @@ function SeedAddressPicker({
               <AddressRow
                 key={item.index}
                 item={item}
-                ensName={ens?.name ?? null}
+                resolvedName={contactLabels.get(lower) ?? ens?.name ?? null}
                 ensAvatar={ens?.avatar ?? null}
                 portfolioState={port}
                 checked={checked}

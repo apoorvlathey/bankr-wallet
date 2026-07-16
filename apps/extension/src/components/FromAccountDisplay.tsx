@@ -5,6 +5,7 @@ import type { Account } from "@/chrome/types";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { truncateAddress } from "@/lib/addressUtils";
+import { useAddressContact } from "@/hooks/useAddressContacts";
 
 interface FromAccountDisplayProps {
   address: string;
@@ -14,6 +15,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
   const [fromAccount, setFromAccount] = useState<Account | null>(null);
   const addresses = useMemo(() => [address], [address]);
   const { identities } = useEnsIdentities(addresses);
+  const { contact } = useAddressContact(address);
 
   useEffect(() => {
     chrome.runtime.sendMessage(
@@ -31,8 +33,8 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
   const ens = identities.get(address.toLowerCase());
   const cachedAvatar = useCachedAvatarSrc(ens?.avatar);
   const displayName =
-    fromAccount?.displayName || ens?.name || truncateAddress(address);
-  const hasResolvedName = !!(fromAccount?.displayName || ens?.name);
+    contact?.label || fromAccount?.displayName || ens?.name || truncateAddress(address);
+  const hasResolvedName = !!(contact || fromAccount?.displayName || ens?.name);
 
   return (
     <HStack spacing={1.5}>
@@ -86,7 +88,7 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
             {truncateAddress(address)}
           </Text>
         )}
-        {fromAccount?.displayName && ens?.name && (
+        {!contact && fromAccount?.displayName && ens?.name && (
           <Box
             bg="gray.600"
             px={1}

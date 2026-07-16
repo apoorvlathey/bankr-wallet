@@ -304,6 +304,28 @@
   plus amber Grant permission commitment. Permission variants retain editable
   allowance, recurrence, stream, expiry, and approval-cleanup semantics without
   duplicating origin, signer, chain, or raw caveat data in the primary path.
+- 2026-07-16 shared contact-list audit: passes the Warm Midnight defined-edge
+  list grammar without adding a competing surface or visual language. Identity
+  selection, edit, delete, and handle sorting use separate native buttons with
+  visible focus and named icon targets; selected state remains color-independent
+  through the existing inset edge. Keyboard sorting and filtered-state disabled
+  copy are preserved across More and Send.
+- 2026-07-16 contact-editor commitment audit: `Save contact` now uses the
+  established amber brand variant in both Add and Edit modes. Cancel remains
+  secondary, field focus remains blue, and the shared button recipe preserves
+  native submission, loading, disabled, hover, active, and focus states.
+- 2026-07-16 Send contact-add audit: passes with one named 32px native icon
+  action aligned to the Contacts heading, using the established picker-group
+  hierarchy and shared modal. The group remains visible with a text empty state,
+  so Add is not hidden behind the presence of existing data.
+- 2026-07-16 Send contact-hover audit: selectable contact rows now use the
+  established raised-surface hover token across the full static row container.
+  Selection remains a native identity button and Edit/Delete/Reorder remain
+  separate native controls, avoiding invalid nested interaction.
+- 2026-07-16 Send recipient-copy audit: the input now summarizes accepted
+  identity categories as “Address, name service, wallet, or contact” instead of
+  enumerating protocols and suffixes. The visible placeholder and accessible
+  name stay aligned while the existing resolver support remains unchanged.
 
 ## Changelog
 
@@ -550,3 +572,47 @@
   transaction-style labeled-address tools, collapsed technical payloads, and a
   compact pinned-signer footer with secondary Reject and amber Sign. The
   combined queue's Reject all action now matches its displayed scope.
+- 2026-07-15: added the local Address Book using the Warm Midnight full-screen
+  list grammar, quiet identity rows, accessible handle-only reordering, focused
+  add/edit dialogs, contact-first public address resolution, and a keyboard
+  recipient combobox while retaining raw copy/explorer disclosure.
+- 2026-07-15: extended Add contact to resolve ENS, Basenames, `.wei`, `.gwei`,
+  and `.mega` inline, pairing the asynchronous state with explicit progress,
+  resolved-address confirmation, and corrective errors while persisting only
+  the resolved EVM address.
+- 2026-07-15: tightened the address popover action into an icon-led Add/Edit
+  contact row and removed redundant storage-precedence copy from the focused
+  contact dialog.
+- 2026-07-15: made local contact labels the canonical first text identity on
+  every resolved-address and account/delegate display while preserving ENS and
+  other resolved avatars as independent visual identity metadata.
+- 2026-07-15: enriched Address Book rows through the shared six-hour identity
+  cache and per-chain Multicall3 batches, replacing secondary raw addresses
+  with public primary names and blockies with safely cached avatars when
+  available; forward-resolved Add contact input now seeds the name so only its
+  avatar remains to fetch.
+- 2026-07-15: retained each contact's deterministic blockie as the explicit
+  fallback while a safe onchain avatar loads or when no avatar exists.
+- 2026-07-16: unified Address Book and Send contact rows behind one cached
+  contact-identity projection and safe avatar renderer, so public primary
+  names, onchain avatars, and deterministic blockie fallbacks remain visually
+  and behaviorally synchronized.
+- 2026-07-16: carried that shared identity stack into Send autocomplete rows,
+  adding safe avatar/blockie media and cached public-name matching without
+  changing the keyboard-operable combobox interaction.
+- 2026-07-16: made exact local contact and wallet recipients resolve
+  synchronously from known identity data, eliminating the redundant resolver
+  flash while preserving independent contract-recipient safety checks.
+- 2026-07-16: reused the Address Book's editable, deletable, handle-sortable
+  contact rows inside Send → My contacts. Filtered search pauses ordering, and
+  eligible-subset reordering preserves hidden contacts in their stored slots.
+- 2026-07-16: promoted the shared Add/Edit contact form's `Save contact` action
+  to the Warm Midnight amber commitment treatment while retaining a neutral
+  Cancel action and blue form focus.
+- 2026-07-16: exposed Add contact directly from the Send Contacts group through
+  a right-aligned plus action, retaining the shared name-service-aware editor
+  and an actionable empty state.
+- 2026-07-16: restored the full-row Warm Midnight hover highlight for selectable
+  contacts in Send without changing the quiet Address Book management rows.
+- 2026-07-16: simplified Send's recipient placeholder from a name-service list
+  to a concise address/name-service/wallet/contact capability summary.

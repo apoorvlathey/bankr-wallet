@@ -2426,6 +2426,53 @@ Important constraints:
 
 ### Token Transfer Flow
 
+#### Address Contact Book
+
+More → Address book manages the optional local-only `addressContacts` list.
+The trusted-UI `contactBookRouter.ts` exposes bounded create, label-update,
+delete, and exact-permutation reorder operations; mutations broadcast
+`addressContactsUpdated`, and wallet reset removes the key. Address display
+priority is user contact, WalletChan account display name, cached reverse name,
+eth.sh label, then a middle-truncated address. The shared eth.sh client checks
+the contact repository before egress, so a saved contact never triggers the
+public label endpoint. The add-contact dialog accepts either a raw EVM address
+or any name supported by the shared forward resolver (ENS, Basenames, `.wei`,
+`.gwei`, and `.mega`). It displays the resolved address before submission and
+persists only that normalized address in the contact record. A successfully
+entered service name also seeds the public `ensIdentityCache` as a partial
+identity so the Address book can skip reverse resolution and batch only its
+avatar lookup.
+
+Address book enrichment uses the shared six-hour identity cache. Cache misses
+are reverse-resolved in Multicall3 batches per chain across ENS, Basenames,
+WNS/GNS, and MegaNames; winning-name avatar records are then fetched in batched
+contract reads where the service supports them. The contact label remains the
+primary text, the public primary name replaces the truncated secondary address,
+and a safely rasterized cached avatar replaces the blockie when available.
+Address Book and Send consume the same `useAddressContactIdentities` projection
+and `AddressContactAvatar` renderer, which keeps public-name text, safe avatars,
+and deterministic blockie fallback synchronized across both lists.
+They also mount the same `AddressContactList` for row presentation, label edits,
+deletion confirmation, and pointer/touch/keyboard ordering. Send supplies its
+eligible contact subset to that component; the shared pure order model replaces
+only those contacts' slots in the complete saved order before calling the
+background exact-permutation route. Contacts hidden because they duplicate a
+wallet account therefore retain their stored position. Active search filters
+disable reordering while edit, delete, and selection remain available.
+
+Send exposes My contacts with canonical WalletChan accounts first and saved
+contacts second. Recipient typing uses a keyboard-operable local combobox over
+wallet names, contact labels, cached public primary names, and addresses. Its
+suggestion rows reuse the same safe onchain avatar, deterministic blockie, and
+public-name secondary text as the full contact picker; selection still supplies
+the exact raw address to the existing recipient validation, contract detection,
+pending transaction intake, and Bankr/private-key/seed-phrase signing paths.
+An exact address already present in eligible contacts or wallet accounts uses
+that local identity immediately and passes an empty input to the remote name
+resolver, so picker/autocomplete selections never flash “Resolving…” or issue a
+redundant reverse-name/avatar request. Manual unknown addresses and typed names
+retain the normal resolver path; contract-address detection still runs for both.
+
 1. User clicks a token in TokenHoldings
 2. App.tsx switches to `"transfer"` view with selected token state
 3. TokenTransfer form: recipient address input, amount input with MAX button
@@ -2786,13 +2833,24 @@ ENS (Ethereum mainnet) takes precedence over Basename (Base L2), which takes pre
 1. **Name**: ENS name > Basename > WNS `.wei` name > GNS `.gwei` name > MegaNames `.mega` name > truncated address
 2. **Avatar**: ENS avatar (when ENS name exists) > Basename avatar (when only Basename exists) > GNS avatar text record (when only a GNS name exists) > Mega avatar (when only Mega name exists) > BankrAvatar (Bankr accounts) > BlockieAvatar (wallet-account fallback only). WNS names have no avatar support.
 
-All name services are resolved in parallel for speed via `resolveEnsIdentity()` in `ensUtils.ts`. If ENS name exists, ENS avatar is fetched; Basename avatar is only fetched when no ENS name is found; GNS and Mega avatars are fetched through their `text(tokenId, "avatar")` records when their names win resolution priority. WNS names have no avatar support. Shared request address pills prioritize a matching WalletChan account's `displayName`, then the cached resolved name, then the caller's contract/address label. Resolved avatars are available for wallet and external addresses; Bankr/blockie fallbacks are restricted to addresses present in the user's account list.
+Normal cache misses are resolved through per-chain Multicall3 batches in
+`ensBatchIdentity.ts`; explicit single-address refreshes retain the parallel
+`resolveEnsIdentity()` path in `ensUtils.ts`. If ENS name exists, ENS avatar is
+fetched; Basename avatar is only fetched when no ENS name is found; GNS and Mega
+avatars are fetched through their `text(tokenId, "avatar")` records when their
+names win resolution priority. WNS names have no avatar support. Shared request
+address pills prioritize the local contact label, then a matching WalletChan
+account's `displayName`, then the cached resolved name, then the caller's
+contract/address label. Resolved avatars are available for wallet and external
+addresses; Bankr/blockie fallbacks are restricted to addresses present in the
+user's account list.
 
 ### Display Priority in AccountSwitcher
 
 | Condition                       | Primary Name      | Secondary         | Tag                                |
 | ------------------------------- | ----------------- | ----------------- | ---------------------------------- |
-| User-set displayName + ENS name | displayName       | truncated address | ENS name (gray tag) + account type |
+| Contact label exists            | contact label     | truncated address | account type                         |
+| User-set displayName + ENS name | displayName       | truncated address | ENS name (gray tag) + account type   |
 | User-set displayName, no ENS    | displayName       | truncated address | account type only                  |
 | No displayName, ENS name exists | ENS name          | truncated address | account type only                  |
 | No displayName, no ENS          | truncated address | (none)            | account type only                  |
@@ -2803,7 +2861,8 @@ All name services are resolved in parallel for speed via `resolveEnsIdentity()` 
 AccountSwitcher.tsx
   └── useEnsIdentities(addresses)         # React hook
         └── ensIdentityCache.ts           # Cache read/write (chrome.storage.local)
-              └── ensUtils.ts             # resolveEnsIdentity() — RPC calls
+              ├── ensBatchIdentity.ts     # Multicall reverse-name/avatar enrichment
+              └── ensUtils.ts             # Single-identity/manual-refresh RPC calls
                     ├── getEnsName()      # mainnet reverse resolution
                     ├── getBasename()     # Base L2 reverse resolution
                     ├── getWeiName()      # WNS/GNS reverse resolution (via wei.ts SDK)
@@ -2818,7 +2877,9 @@ AccountSwitcher.tsx
 
 - **Storage key**: `ensIdentityCache` in `chrome.storage.local`
 - **TTL**: 6 hours per entry
-- **Schema**: `Record<lowercaseAddress, { name, avatar, resolvedAt }>`
+- **Schema**: `Record<lowercaseAddress, { name, avatar, resolvedAt, needsAvatar? }>`
+- **Forward-name hint**: Add contact may write `needsAvatar: true`; the next
+  batch keeps that name and fetches only its avatar before clearing the flag.
 - **Manual refresh**: "Refresh ENS Data" button in Account Settings forces re-resolution (ignores cache)
 
 ### Remote Image Sanitization
@@ -2859,7 +2920,8 @@ uses an inert pixel until `avatarImageCache.ts` has produced a safe raster.
 | File                                      | Purpose                                                                     |
 | ----------------------------------------- | --------------------------------------------------------------------------- |
 | `src/lib/ensUtils.ts`                     | ENS/Basename/WNS/GNS/Mega name + avatar resolution, `resolveEnsIdentity()`  |
-| `src/lib/ensIdentityCache.ts`             | Cache read/write, `resolveAndCacheIdentity()`                               |
+| `src/lib/ensBatchIdentity.ts`             | Per-chain Multicall3 reverse-name and avatar-record resolution              |
+| `src/lib/ensIdentityCache.ts`             | Cache read/write, batch refresh, and forward-name hint seeding              |
 | `src/utils/wei.ts`                        | Wei/Gwei Name Service SDK — forward/reverse `.wei` and `.gwei` resolution   |
 | `src/utils/mega.ts`                       | MegaNames utility — ABI, constants, `isMega()` for `.mega` resolution       |
 | `src/hooks/useEnsIdentities.ts`           | React hook: loads cache, resolves stale entries, exposes `refreshAddress()` |
@@ -4156,6 +4218,11 @@ notification clicks. The focused callback implementations remain under
 | `removeCustomToken`                | Remove a manual/custom token through the background-owned `customTokens` write path              |
 | `getAccounts`                      | Get all accounts (metadata only)                                                                |
 | `reorderAccounts`                  | Persist an exact permutation of all account IDs as the canonical picker order; rejects stale, missing, duplicate, or unknown IDs |
+| `getAddressContacts`               | Read the sanitized local-only EVM contact list |
+| `createAddressContact`             | Validate and alphabetically insert a unique address/label contact |
+| `updateAddressContactLabel`        | Update a contact label without changing its manual position |
+| `removeAddressContact`             | Remove a contact by normalized address |
+| `reorderAddressContacts`           | Persist an exact permutation of all saved contact addresses |
 | `getActiveAccount`                 | Get currently active account                                                                    |
 | `setActiveAccount`                 | Set active account by ID (also updates storage address)                                         |
 | `addPrivateKeyAccount`             | Import new private key account                                                                  |
@@ -4184,6 +4251,7 @@ notification clicks. The focused callback implementations remain under
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |
+| `addressContactsUpdated`     | Notifies views that the ordered contact list changed |
 | `walletLockedExternal`       | Force-lock signal (password rotation, agent removal, manual lock) — all surfaces route to unlock screen. Manual lock adds `suppressPasskeyAutoPrompt: true` so only already-open surfaces skip their automatic biometric prompt. |
 | `walletUnlockedExternal`     | Unlock-sync signal — sibling surfaces (sidepanel + full-screen tab) auto-unlock by re-running their post-unlock flow against the SW credential cache |
 | `ping`                       | Check if any extension view is open             |

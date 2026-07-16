@@ -23,6 +23,7 @@
 
 import { ethShLabelsUrl } from "@/constants/externalUrls";
 import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
+import { findAddressContact } from "@/chrome/contactBook/repository";
 
 const STORAGE_PREFIX = "ethShLabels:";
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -47,6 +48,8 @@ export async function getEthShLabels(
   chainId: number,
 ): Promise<string[]> {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return [];
+  const contact = await findAddressContact(address);
+  if (contact) return [contact.label];
   const k = key(chainId, address);
 
   const mem = memCache.get(k);

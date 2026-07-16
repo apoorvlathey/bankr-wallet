@@ -77,6 +77,12 @@ export function createBackgroundMessagePipeline(
     );
     if (accountStateRoute.handled) return accountStateRoute.keepChannelOpen;
 
+    const contactBookRoute = routes.routeBackgroundContactBookMessage(
+      message,
+      sendResponse,
+    );
+    if (contactBookRoute.handled) return contactBookRoute.keepChannelOpen;
+
     const settingsRoute = routes.routeBackgroundSettingsMessage(
       message,
       sendResponse,

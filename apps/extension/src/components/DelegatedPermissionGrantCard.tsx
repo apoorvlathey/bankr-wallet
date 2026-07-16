@@ -5,13 +5,11 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { ExternalLinkIcon } from "@chakra-ui/icons";
 
 import type { Erc7715PermissionGrant } from "@/chrome/pendingErc7715PermissionStorage";
 import type { Account } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
 import ChainIcon from "@/components/ChainIcon";
-import { CopyButton } from "@/components/CopyButton";
 import { TrashIcon } from "@/components/Settings/icons";
 import TokenLogo from "@/components/TokenLogo";
 import {
@@ -27,6 +25,8 @@ import {
   isErc7715TokenApprovalRevocationPermissionType,
 } from "@/lib/erc7715PermissionEditing";
 import type { TokenDisplayMetadata } from "@/lib/tokenMetadataClient";
+import { AddressActions as SharedAddressActions } from "@/components/shared/LabeledAddressPopover";
+import { useAddressContact } from "@/hooks/useAddressContacts";
 
 function AddressActions({
   address,
@@ -39,36 +39,7 @@ function AddressActions({
   label: string;
   showAddress?: boolean;
 }) {
-  const explorerUrl = explorer
-    ? `${explorer.replace(/\/+$/u, "")}/address/${address}`
-    : null;
-
-  return (
-    <HStack spacing={1} flexShrink={0} justify="flex-end">
-      {showAddress && (
-        <Text
-          fontSize="xs"
-          fontFamily="mono"
-          color="text.secondary"
-          whiteSpace="nowrap"
-        >
-          {shortAddress(address)}
-        </Text>
-      )}
-      <CopyButton value={address} />
-      {explorerUrl && (
-        <IconButton
-          aria-label={`View ${label} on explorer`}
-          icon={<ExternalLinkIcon boxSize="11px" />}
-          size="xs"
-          variant="ghost"
-          color="text.secondary"
-          onClick={() => chrome.tabs.create({ url: explorerUrl })}
-          _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
-        />
-      )}
-    </HStack>
-  );
+  return <SharedAddressActions address={address} explorer={explorer} contextLabel={label} compact showAddress={showAddress} />;
 }
 
 function DelegateIdentity({
@@ -84,11 +55,12 @@ function DelegateIdentity({
   resolvedAvatar: string | null;
   explorer?: string;
 }) {
+  const { contact } = useAddressContact(address);
   if (!account) {
     return <AddressActions address={address} explorer={explorer} label="delegate" />;
   }
 
-  const displayName = account.displayName || resolvedName || shortAddress(address);
+  const displayName = contact?.label || account.displayName || resolvedName || shortAddress(address);
 
   return (
     <HStack

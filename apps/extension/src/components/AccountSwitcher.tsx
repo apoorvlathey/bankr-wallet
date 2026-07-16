@@ -23,11 +23,7 @@ import {
 } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
-import {
-  AccountPickerRow,
-  getAccountPickerDisplayName,
-  getAccountPickerSecondaryIdentity,
-} from "@/components/AccountPickerRow";
+import { AccountPickerRow } from "@/components/AccountPickerRow";
 import AccountExplorerMenu from "@/components/AccountExplorerMenu";
 import SortableAccountPickerRows, {
   type SortableRenderState,
@@ -48,10 +44,9 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@/components/ui";
-import { useEnsIdentities } from "@/hooks/useEnsIdentities";
+import { useAccountIdentityLabels } from "@/hooks/useAccountIdentityLabels";
 import { useSeedGroupMap } from "@/hooks/useSeedGroupMap";
 import type { ResolvedChain } from "@/lib/chains";
-
 interface AccountSwitcherProps {
   accounts: Account[];
   activeAccount: Account | null;
@@ -62,8 +57,8 @@ interface AccountSwitcherProps {
   onShowQr?: () => void;
   isPickerOpen?: boolean;
   onPickerOpenChange?: (isOpen: boolean) => void;
+  onAccountsReordered?: (accounts: Account[]) => void;
 }
-
 const QrCodeIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="14px" aria-hidden="true">
     <path
@@ -86,6 +81,7 @@ function AccountSwitcher({
   onShowQr,
   isPickerOpen: controlledPickerOpen,
   onPickerOpenChange,
+  onAccountsReordered,
 }: AccountSwitcherProps) {
   const [uncontrolledPickerOpen, setUncontrolledPickerOpen] = useState(false);
   const isPickerOpen = controlledPickerOpen ?? uncontrolledPickerOpen;
@@ -95,12 +91,7 @@ function AccountSwitcher({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const activeAccountRowRef = useRef<HTMLElement | null>(null);
-
-  const accountAddresses = useMemo(
-    () => accounts.map((account) => account.address),
-    [accounts],
-  );
-  const { identities } = useEnsIdentities(accountAddresses);
+  const { identities, getContactLabel, getDisplayName, getEnsAvatar, getSecondaryIdentity } = useAccountIdentityLabels(accounts);
 
   const setPickerOpen = useCallback(
     (isOpen: boolean) => {
@@ -112,23 +103,6 @@ function AccountSwitcher({
     [controlledPickerOpen, onPickerOpenChange],
   );
 
-  const getEnsName = useCallback(
-    (account: Account) =>
-      identities.get(account.address.toLowerCase())?.name ?? null,
-    [identities],
-  );
-
-  const getEnsAvatar = useCallback(
-    (account: Account) =>
-      identities.get(account.address.toLowerCase())?.avatar ?? null,
-    [identities],
-  );
-
-  const getDisplayName = useCallback(
-    (account: Account) => getAccountPickerDisplayName(account, getEnsName(account)),
-    [getEnsName],
-  );
-
   const normalizedQuery = query.trim().toLowerCase();
   const filteredAccounts = useMemo(() => {
     if (!normalizedQuery) return accounts;
@@ -137,12 +111,13 @@ function AccountSwitcher({
       const identity = identities.get(account.address.toLowerCase());
       return [
         account.displayName,
+        getContactLabel(account),
         identity?.name,
         account.address,
         getWalletTypeLabel(account, seedGroupMap),
       ].some((value) => value?.toLowerCase().includes(normalizedQuery));
     });
-  }, [accounts, identities, normalizedQuery, seedGroupMap]);
+  }, [accounts, getContactLabel, identities, normalizedQuery, seedGroupMap]);
 
   const closePicker = useCallback((restoreFocus = true) => {
     setPickerOpen(false);
@@ -204,6 +179,7 @@ function AccountSwitcher({
     if (!response?.success) {
       throw new Error(response?.error || "Failed to reorder accounts");
     }
+    if (Array.isArray(response.accounts)) onAccountsReordered?.(response.accounts);
   };
 
   const renderAccountRow = (
@@ -211,12 +187,8 @@ function AccountSwitcher({
     sortableState?: SortableRenderState,
   ) => {
     const isActive = account.id === activeAccount?.id;
-    const ensName = getEnsName(account);
     const explorerHref = openExplorer(account);
-    const secondaryIdentity = getAccountPickerSecondaryIdentity(
-      account,
-      ensName,
-    );
+    const secondaryIdentity = getSecondaryIdentity(account);
 
     return (
       <AccountPickerRow

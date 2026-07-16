@@ -167,12 +167,17 @@ function TokenTransfer({
     return (
       <RecipientPicker
         accounts={recipientState.filteredRecipientAccounts}
+        contacts={recipientState.filteredRecipientContacts}
+        allContacts={recipientState.allAddressContacts}
         recipient={recipientState.recipient}
         search={recipientState.recipientSearch}
         onSearchChange={recipientState.setRecipientSearch}
         getAccountDisplayName={recipientState.getAccountDisplayName}
         getAccountAvatar={recipientState.getAccountAvatar}
         onSelect={recipientState.selectRecipientAccount}
+        onSelectAddress={recipientState.selectRecipientAddress}
+        onRemoveContact={recipientState.removeContact}
+        onReorderContacts={recipientState.reorderContacts}
         onBack={recipientState.closeRecipientPicker}
       />
     );

@@ -1,25 +1,18 @@
-import {
-  CheckIcon,
-  ChevronRightIcon,
-  CopyIcon,
-  ExternalLinkIcon,
-  WarningTwoIcon,
-} from "@chakra-ui/icons";
+import { ChevronRightIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
   Checkbox,
   HStack,
-  IconButton,
-  Image,
   Input,
   Spinner,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { useState } from "react";
-import { isResolvableName } from "@/lib/ensUtils";
+import { useEffect, useId, useState } from "react";
 import { useTheme } from "@/theme";
+import { AddressContactAvatar } from "@/components/shared/AddressContactAvatar";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import type { TransferRecipient } from "./hooks/useTransferRecipient";
 
 interface RecipientSectionProps {
@@ -32,7 +25,9 @@ export function RecipientSection({
   explorerUrl,
 }: RecipientSectionProps) {
   const { tokens } = useTheme();
-  const [copied, setCopied] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const [dismissedRecipient, setDismissedRecipient] = useState("");
+  const suggestionListId = useId();
   const {
     recipient,
     setRecipient,
@@ -41,15 +36,19 @@ export function RecipientSection({
     isValid,
     resolvedAddress,
     resolvedName,
-    avatar,
-    cachedRecipientAvatar,
     error,
     otherAccounts,
+    recipientContacts,
     openRecipientPicker,
     isRecipientContract,
     acknowledgeContract,
     setAcknowledgeContract,
+    suggestions,
+    selectRecipientAddress,
   } = recipientState;
+  const showSuggestions = suggestions.length > 0 && dismissedRecipient !== recipient;
+
+  useEffect(() => setActiveSuggestion(0), [recipient, suggestions.length]);
 
   return (
     <Box>
@@ -58,7 +57,7 @@ export function RecipientSection({
           <Text fontSize="sm" fontWeight="600" color="fg.secondary">
             Recipient
           </Text>
-          {otherAccounts.length > 0 && (
+          {otherAccounts.length + recipientContacts.length > 0 && (
             <Button
               size="sm"
               variant="ghost"
@@ -69,7 +68,7 @@ export function RecipientSection({
               rightIcon={<ChevronRightIcon />}
               onClick={openRecipientPicker}
             >
-              Choose my wallet
+              My contacts
             </Button>
           )}
         </HStack>
@@ -82,82 +81,118 @@ export function RecipientSection({
           </HStack>
         )}
         {recipient && !isResolving && isValid && resolvedAddress && (
-          <HStack spacing={0.5}>
-            {avatar && (
-              <Image
-                src={cachedRecipientAvatar || avatar}
-                alt="avatar"
-                boxSize="14px"
-                borderRadius="full"
-                border="1px solid"
-                borderColor="border.default"
-              />
-            )}
-            {isResolvableName(recipient) ? (
-              <Text
-                fontSize="xs"
-                color="text.tertiary"
-                fontFamily="mono"
-                fontWeight="700"
-              >
-                {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
-              </Text>
-            ) : resolvedName ? (
-              <Text fontSize="xs" color="text.tertiary" fontWeight="700">
-                {resolvedName}
-              </Text>
-            ) : null}
-            <IconButton
-              aria-label="Copy address"
-              icon={
-                copied ? (
-                  <CheckIcon boxSize="10px" />
-                ) : (
-                  <CopyIcon boxSize="10px" />
-                )
-              }
-              size="xs"
-              variant="ghost"
-              minW="18px"
-              h="18px"
-              color={copied ? "accent.highlight" : "text.tertiary"}
-              onClick={async () => {
-                await navigator.clipboard.writeText(resolvedAddress);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-            />
-            {explorerUrl && (
-              <IconButton
-                aria-label="View on explorer"
-                icon={<ExternalLinkIcon boxSize="10px" />}
-                size="xs"
-                variant="ghost"
-                minW="18px"
-                h="18px"
-                color="text.tertiary"
-                onClick={() =>
-                  window.open(
-                    `${explorerUrl}/address/${resolvedAddress}`,
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
-                _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-              />
-            )}
-          </HStack>
+          <LabeledAddressPopover
+            address={resolvedAddress}
+            contextLabel="recipient address"
+            explorer={explorerUrl}
+            label={resolvedName || `${resolvedAddress.slice(0, 6)}...${resolvedAddress.slice(-4)}`}
+            maxW="180px"
+          />
         )}
       </HStack>
-      <Input
-        placeholder="0x..., ENS, Basename, .wei, .gwei, or .mega"
-        value={recipient}
-        onChange={(event) => setRecipient(event.target.value)}
-        fontFamily="mono"
-        fontSize="sm"
-        isInvalid={Boolean(recipient) && !isResolving && !isValid}
-      />
+      <Box position="relative">
+        <Input
+          placeholder="Address, name service, wallet, or contact"
+          value={recipient}
+          onChange={(event) => {
+            setDismissedRecipient("");
+            setRecipient(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (!showSuggestions) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActiveSuggestion((index) => (index + 1) % suggestions.length);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveSuggestion((index) => (index - 1 + suggestions.length) % suggestions.length);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              const selected = suggestions[activeSuggestion];
+              if (selected) {
+                selectRecipientAddress(selected.address);
+                setDismissedRecipient(selected.address);
+              }
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setDismissedRecipient(recipient);
+            }
+          }}
+          onBlur={() => window.setTimeout(() => setDismissedRecipient(recipient), 100)}
+          fontFamily="mono"
+          fontSize="sm"
+          isInvalid={Boolean(recipient) && !isResolving && !isValid}
+          role="combobox"
+          aria-label="Recipient address, name service, wallet, or contact"
+          aria-autocomplete="list"
+          aria-expanded={showSuggestions}
+          aria-controls={showSuggestions ? suggestionListId : undefined}
+          aria-activedescendant={showSuggestions ? `${suggestionListId}-${activeSuggestion}` : undefined}
+        />
+        {showSuggestions && (
+          <VStack
+            id={suggestionListId}
+            role="listbox"
+            align="stretch"
+            spacing={0}
+            position="absolute"
+            zIndex={20}
+            top="calc(100% + 6px)"
+            left={0}
+            right={0}
+            bg="surface.raised"
+            border="1px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            boxShadow="overlay"
+            overflow="hidden"
+          >
+            {suggestions.map((suggestion, index) => (
+              <Box
+                key={suggestion.key}
+                id={`${suggestionListId}-${index}`}
+                role="option"
+                aria-selected={index === activeSuggestion}
+                px={3}
+                py={2.5}
+                cursor="pointer"
+                bg={index === activeSuggestion ? "surface.raisedHover" : "transparent"}
+                borderBottom={index < suggestions.length - 1 ? "1px solid" : undefined}
+                borderColor="border.subtle"
+                onMouseEnter={() => setActiveSuggestion(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  selectRecipientAddress(suggestion.address);
+                  setDismissedRecipient(suggestion.address);
+                }}
+              >
+                <HStack justify="space-between" spacing={3}>
+                  <HStack minW={0} spacing={2.5}>
+                    <AddressContactAvatar
+                      address={suggestion.address}
+                      avatar={suggestion.avatar}
+                      fallbackSrc={suggestion.fallbackAvatar}
+                      size={28}
+                    />
+                    <Box minW={0}>
+                      <Text fontSize="sm" fontWeight="600" noOfLines={1}>{suggestion.label}</Text>
+                      <Text
+                        fontSize="xs"
+                        color="fg.muted"
+                        fontFamily={suggestion.secondaryIsAddress ? "mono" : "inherit"}
+                        noOfLines={1}
+                      >
+                        {suggestion.secondaryText}
+                      </Text>
+                    </Box>
+                  </HStack>
+                  <Text flexShrink={0} fontSize="2xs" color="fg.secondary" textTransform="uppercase" letterSpacing="wide">{suggestion.kind}</Text>
+                </HStack>
+              </Box>
+            ))}
+          </VStack>
+        )}
+      </Box>
       {recipient && !isResolving && !isValid && (
         <Text fontSize="xs" color="chart.negative" fontWeight="700" mt={1}>
           {error || "Invalid address or name"}

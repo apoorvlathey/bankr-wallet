@@ -215,8 +215,9 @@ semantic colors, radii, shadows, globals, and component recipes. Midnight uses:
 - Sentence-case labels and weights 400–700; weight 900 remains a Bauhaus tool.
 - Alpha status washes with foreground pairs verified at WCAG AA.
 - The `brand` Button variant is the deliberate amber commitment treatment. Use
-  it for product-entry and mascot-led commitments such as Unlock, and for the
-  final single-transaction `Confirm` action. That Confirm button must not use
+  it for product-entry and mascot-led commitments such as Unlock, explicit
+  Warm Midnight saved-state commitments such as `Save contact`, and the final
+  single-transaction `Confirm` action. Those commitment actions must not use
   the blue `primary` variant. Focus, links, selection, and ordinary
   transactional controls remain blue.
 

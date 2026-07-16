@@ -13,6 +13,7 @@ import type { Account } from "@/chrome/types";
 import { CopyButton } from "@/components/CopyButton";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { useAddressContact } from "@/hooks/useAddressContacts";
 import { truncateAddress } from "@/lib/addressUtils";
 
 interface AccountSettingsIdentityProps {
@@ -81,9 +82,10 @@ export default function AccountSettingsIdentity({
   resolvedAvatar,
   explorerUrl,
 }: AccountSettingsIdentityProps) {
+  const { contact } = useAddressContact(account.address);
   const title =
-    account.displayName || resolvedName || truncateAddress(account.address);
-  const secondaryName = account.displayName && resolvedName ? resolvedName : null;
+    contact?.label || account.displayName || resolvedName || truncateAddress(account.address);
+  const secondaryName = !contact && account.displayName && resolvedName ? resolvedName : null;
 
   return (
     <HStack spacing={3} align="center" minW={0}>
