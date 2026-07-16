@@ -442,7 +442,73 @@ Aggregate row behavior:
 - Long custom-network and testnet names remain readable.
 - Chain logos are round and receive a visibility chip where needed.
 
-### 5.13 Add account
+### 5.13 Activity
+
+- Activity uses one defined-edge list surface below the shared network filter.
+  Date groups are quiet recessed section markers inside that owner; they are
+  not separate cards and do not introduce decorative rules outside the list.
+- Transaction rows reuse the Assets list grid and spacing: compact identity at
+  left, intent and context in the flexible middle column, and tabular financial
+  or status metadata on one trailing rail.
+- Rows use a 64px compact rhythm. Explorer controls stay at the 24px minimum
+  target height so they do not inflate the intent line or detach it from the
+  context line below. Bridge rows add one 2px spacing step between their two
+  lines to offset the denser dual-chain explorer treatment.
+- Keep each row to two scanning lines. Long non-financial intents may span the
+  complete content width; sends reserve the trailing first line for the signed
+  amount. Function selectors are converted to readable sentence case.
+- Intent and context use character-level single-line truncation, preserving the
+  readable beginning of long actions and hostnames instead of dropping the
+  complete final word at compact widths.
+- Outgoing amounts keep a visible minus sign and semantic loss color. Exact
+  1-99,999 base-unit values for 18-decimal assets use `wei`; other tiny values
+  stay as readable decimals when room permits and switch to subscript-zero
+  notation at compact widths. Dust beyond the row's six-decimal summary
+  precision is omitted rather than rendering a misleading zero tail; exact
+  precision remains available in transaction details.
+- Status is an inline icon plus label, never a detached pill. Confirmed,
+  pending, failed, bridge, and force-inclusion states remain understandable
+  without color and share the second trailing line with relative time.
+- The complete transaction identity/content area opens the full-screen detail
+  destination. Explorer actions occupy the first line's rightmost edge while
+  status and relative time occupy the second line's rightmost edge. The row
+  uses an overlay details button with explorer siblings, so explorer clicks
+  never open details and fulfilled bridges expose distinct chain-marked links.
+- Activity, Assets, and Positions retain independent scroll offsets. Activity
+  remains mounted while hidden so its async history load cannot collapse the
+  shared scroll owner, and returning from transaction details reapplies the
+  saved offset after history content is ready.
+- Cached token media follows the same inert-image rule as Assets: transparent,
+  unavailable, or stale cache entries render visible symbol initials.
+- Address-bearing send and clear-signing context resolves against the current
+  contact book and wallet account names instead of freezing the historical
+  label. Contact add/edit broadcasts and account add/rename broadcasts update
+  mounted Activity rows immediately, including while the tab is hidden.
+- Different-asset swaps and bridges use a lightly overlapping horizontal pair
+  of readable token marks in source-to-destination order. Same-asset bridges
+  collapse duplicate marks into one larger token identity; their title and
+  right-edge explorer controls already communicate the chain transition.
+- Website and protocol favicons use the same rounded-square identity frame as
+  Positions and fill a 28px frame edge to edge inside the stable 32px media
+  slot, while tokens and chain identities remain circular. Shape alone
+  therefore separates dapp activity from asset activity at scanning speed.
+- The full filtered history remains available in the Activity scroll owner;
+  the root tab does not silently truncate after ten entries.
+- Preview coverage uses deterministic send, swap, batch, bridge, name-service,
+  pending, and failed entries and is reviewed at compact, popup, popup-window,
+  and sidepanel widths in both themes and all three signing wallet fixtures.
+
+Relevant files:
+
+- `components/Activity/ActivityList.tsx`
+- `components/Activity/ActivityItem.tsx`
+- `components/Activity/ActivityMedia.tsx`
+- `components/Activity/ActivityStatus.tsx`
+- `components/Activity/ActivityExplorerActions.tsx`
+- `components/Activity/useActivityExplorers.ts`
+- `components/Activity/activityModel.ts`
+
+### 5.14 Add account
 
 - The root Add account screen is a concise 2-by-2 account-type launcher.
 - Private key, seed phrase, Bankr API, and view-only setup each open as a
@@ -461,7 +527,7 @@ Aggregate row behavior:
 - Final account-creation actions use the amber brand treatment. Validation,
   encryption, and background account handlers remain unchanged.
 
-### 5.14 Transaction review
+### 5.15 Transaction review
 
 - The screen follows one decision path: requesting dapp and plain-language
   action, estimated balance changes, clear-signed request details, then
@@ -554,8 +620,8 @@ Every displayed `0x` address still follows the repository standard:
 | Homepage dapp dock | Implemented and reviewed | Connected current-tab sites only |
 | Homepage balance/actions | Approved | Stable four-action row; amber Send shortcut |
 | Assets tab | Substantially approved | Chart, controls, rows, sheets, aggregation, low-value behavior |
-| Positions tab | **Next surface** | Needs populated-state Warm Midnight visual review |
-| Activity tab | Pending | Review rows, status hierarchy, and detail transition |
+| Positions tab | Pending | Needs populated-state Warm Midnight visual review |
+| Activity tab | Implemented and reviewed | Shared ledger grid, complete status hierarchy, realistic preview fixtures, and detail transition verified |
 | Homepage loading/empty/error states | Pending | Review after Positions and Activity |
 | Homepage responsive/focus final pass | Pending | Do only after visual composition is locked |
 | Send | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
@@ -567,11 +633,9 @@ Recommended immediate order:
 
 1. Positions populated list.
 2. Positions empty/loading/error states.
-3. Activity list.
-4. Activity-to-detail transition and detail screen.
-5. Homepage loading/empty/RPC/stale states.
-6. Homepage compact and wide responsive polish.
-7. Only then run the broader homepage QA gate.
+3. Homepage loading/empty/RPC/stale states.
+4. Homepage compact and wide responsive polish.
+5. Only then run the broader homepage QA gate.
 
 ## 8. One-surface session protocol
 

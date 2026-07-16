@@ -326,9 +326,55 @@
   identity categories as “Address, name service, wallet, or contact” instead of
   enumerating protocols and suffixes. The visible placeholder and accessible
   name stay aligned while the existing resolver support remains unchanged.
+- 2026-07-16 Activity-ledger audit: passes the mobile financial-list grammar
+  with one defined-edge owner, relationship-based date markers, shared Assets
+  row spacing, left-aligned identity and intent, right-aligned tabular values,
+  signed and color-independent outgoing amounts, icon-plus-text statuses, and
+  native row-button semantics. Direct explorer controls own the first line's
+  trailing edge while status and time own the second; bridge source and
+  destination controls retain their chain marks without nesting interactions.
+  Both themes and all supported signing wallet fixtures passed compact through
+  sidepanel review without overflow; automated Activity accessibility reported
+  no violations.
 
 ## Changelog
 
+- 2026-07-16: rebuilt Activity as one production ledger aligned with Assets and
+  Positions: a single defined-edge owner, internal date markers, compact
+  identity media, a stable two-line intent/context and value/status grid,
+  sentence-case function labels, signed tiny-amount notation, and icon-plus-text
+  status metadata. Kept explorer actions on the intent line's trailing edge,
+  with chain-marked source and destination actions for bridges; kept the
+  complete history visible, and added deterministic mixed-state preview
+  fixtures. Compact, popup, window, and sidepanel layouts were reviewed in both
+  themes; Bankr, private-key, and seed-phrase navigation passed with no
+  overflow, runtime errors, or axe violations.
+- 2026-07-16: tightened the Activity ledger to a 64px row rhythm with 8px
+  vertical insets, a relationship-based 2px line gap only for denser bridge
+  entries, and 24px-high explorer targets so trailing controls no longer
+  inflate the first text line.
+- 2026-07-16: made Activity token media semantic instead of uniformly stacked:
+  different assets use a readable source-to-destination tandem, while
+  same-asset bridges collapse duplicate marks into one larger token identity.
+- 2026-07-16: aligned Activity website identities with the Positions protocol
+  grammar by giving favicons full-bleed 28px rounded-square frames within the
+  stable media slot while preserving circular token and chain marks.
+- 2026-07-16: made Activity address context live: recipient and counterparty
+  addresses now prefer current contact labels, then current wallet account
+  names, and update in place after contact or account mutations without a
+  popup/sidepanel remount.
+- 2026-07-16: switched Activity context copy to character-level ellipsis so a
+  compact row retains the visible beginning of its hostname rather than
+  removing the URL at a word boundary.
+- 2026-07-16: made tiny Activity values precision-aware: exact 18-decimal
+  amounts through 99,999 base units read as wei, wider rows retain readable
+  decimal notation, and compact rows use subscript-zero notation without
+  leaking insignificant fractional dust into the summary.
+- 2026-07-16: made portfolio tabs retain independent scroll offsets, kept
+  Activity history warm while hidden, and registered the homepage with shared
+  screen-stack restoration so transaction-details back navigation returns to
+  the exact ledger position after async history hydration. Activity token media
+  now treats inert or stale cache entries as missing and shows symbol initials.
 - 2026-07-15: rebuilt ERC-7715 permission confirmation on the shared Warm
   Midnight transaction/signature architecture. Queue navigation and Reject all
   now lead the body; dapp identity, human-readable reusable authority, live

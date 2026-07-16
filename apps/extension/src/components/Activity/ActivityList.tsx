@@ -1,7 +1,8 @@
 import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
-import { Box, Button, HStack, Text, VStack } from "@chakra-ui/react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Button, HStack, Text } from "@chakra-ui/react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
+import type { Account } from "@/chrome/types";
 import TxDetailModal from "@/components/TxDetailModal";
 import {
   EmptyState,
@@ -12,12 +13,15 @@ import {
   ListSurface,
 } from "@/components/ui";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { useAddressContacts } from "@/hooks/useAddressContacts";
 import ActivityItem from "./ActivityItem";
+import { buildActivityAddressLabels } from "./activityIdentityModel";
 import { groupActivityByDate } from "./activityModel";
 
 interface ActivityListProps {
   maxItems?: number;
   address?: string;
+  accounts?: Account[];
   hideHeader?: boolean;
   hideCard?: boolean;
   filterChainId?: number | null;
@@ -29,6 +33,7 @@ interface ActivityListProps {
 function TxStatusList({
   maxItems = 5,
   address,
+  accounts = [],
   hideHeader,
   hideCard,
   filterChainId,
@@ -39,6 +44,11 @@ function TxStatusList({
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTx, setSelectedTx] = useState<CompletedTransaction | null>(
     null,
+  );
+  const { contacts } = useAddressContacts();
+  const addressLabels = useMemo(
+    () => buildActivityAddressLabels(accounts, contacts),
+    [accounts, contacts],
   );
 
   useEffect(() => {
@@ -102,8 +112,10 @@ function TxStatusList({
     filterChainId != null
       ? addressFiltered.filter((tx) => tx.chainId === filterChainId)
       : addressFiltered;
-  const displayItems = isExpanded ? history : history.slice(0, maxItems);
-  const hasMore = history.length > maxItems;
+  const displayItems = hideHeader || isExpanded
+    ? history
+    : history.slice(0, maxItems);
+  const hasMore = !hideHeader && history.length > maxItems;
   const dateGroups = groupActivityByDate(displayItems, new Date());
 
   const cachedLogoMap = useCachedAvatarMap(
@@ -120,7 +132,7 @@ function TxStatusList({
     }, [displayItems]),
   );
   const resolveLogo = (url: string | undefined): string | undefined =>
-    (url && cachedLogoMap.get(url)) || url;
+    url ? cachedLogoMap.get(url) : undefined;
 
   const modal = !onSelectTx && selectedTx && (
     <TxDetailModal
@@ -174,38 +186,49 @@ function TxStatusList({
         </HStack>
       )}
 
-      <VStack spacing={4} align="stretch">
+      <ListSurface aria-label="Transaction activity">
         {dateGroups.map((group) => (
-          <Box as="section" key={group.label} aria-label={group.label}>
-            <Text
-              fontSize="xs"
-              fontWeight="600"
-              color="fg.secondary"
-              px={1}
-              mb={2}
+          <Fragment key={group.label}>
+            <Box
+              as="li"
+              role="presentation"
+              minH="36px"
+              px={3}
+              py={2}
+              listStyleType="none"
+              bg="surface.sunken"
+              borderTopWidth="1px"
+              borderTopStyle="solid"
+              borderTopColor="border.subtle"
+              borderBottomWidth="1px"
+              borderBottomStyle="solid"
+              borderBottomColor="border.subtle"
+              _first={{ borderTopWidth: 0 }}
             >
-              {group.label}
-            </Text>
-            <ListSurface
-              bg={hideCard ? "transparent" : "surface.raised"}
-              borderWidth={hideCard ? 0 : "1px"}
-            >
+              <Text
+                fontSize="xs"
+                fontWeight="600"
+                color="fg.secondary"
+                lineHeight="1.4"
+              >
+                {group.label}
+              </Text>
+            </Box>
               {group.txs.map((tx) => (
                 <ActivityItem
                   key={tx.id}
                   tx={tx}
+                  addressLabels={addressLabels}
                   onClick={() => {
                     if (onSelectTx) onSelectTx(tx);
                     else setSelectedTx(tx);
                   }}
                   resolveLogo={resolveLogo}
-                  flush={hideCard}
                 />
               ))}
-            </ListSurface>
-          </Box>
+          </Fragment>
         ))}
-      </VStack>
+      </ListSurface>
 
       {modal}
     </Box>

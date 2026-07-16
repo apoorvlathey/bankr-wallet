@@ -13,6 +13,7 @@ import {
   getScreenTransitionPlan,
   type ScreenTransitionKind,
 } from "./screenTransitionModel";
+import { useScreenScrollRestoration } from "./useScreenScrollRestoration";
 
 // True once the surrounding screen's entry animation has settled.
 // Stable / exit layers always read `true`. Entering layers start at `false`
@@ -58,8 +59,6 @@ interface ScreenMeta {
   depth: number;
 }
 
-// Depth drives hierarchy direction. Anything deeper than `main` pushes in
-// from the right and exits back to the right.
 // eslint-disable-next-line react-refresh/only-export-components
 export const SCREEN_META: Record<AppView, ScreenMeta> = {
   main: { kind: "slide", depth: 0 },
@@ -155,6 +154,8 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     new Map<AppView, { scrollTop: number; focusPath: number[] | null }>(),
   );
   const pendingBackRestoreRef = useRef<AppView | null>(null);
+  const { cancel: cancelScrollRestore, restore: restoreScroll } =
+    useScreenScrollRestoration(containerRef);
   // Set of layer keys whose entry animation has already settled. Layers
   // listed here read `true` from ScreenEnteredContext; layers absent read
   // `false`. The first/initial layer (key=0) is considered entered.
@@ -187,6 +188,8 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     }
 
     lastViewRef.current = view;
+
+    cancelScrollRestore();
 
     const prevMeta = SCREEN_META[prevView];
     const nextMeta = SCREEN_META[view];
@@ -286,17 +289,16 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         },
       };
     });
-  }, [view, children]);
+  }, [view, children, cancelScrollRestore]);
 
   const restoreDestinationState = (destination: AppView) => {
     const root = containerRef.current;
     if (!root) return;
 
     const saved = navigationStateRef.current.get(destination);
-    const scrollOwner = root.querySelector<HTMLElement>(
-      "[data-screen-scroll-owner]",
-    );
-    if (scrollOwner && saved) scrollOwner.scrollTop = saved.scrollTop;
+    if (saved) {
+      restoreScroll(saved.scrollTop);
+    }
 
     let target: HTMLElement | null = null;
     if (saved?.focusPath) {
@@ -378,8 +380,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
     });
   };
 
-  // Prune entered keys that no longer correspond to a live layer so the set
-  // doesn't grow forever across hundreds of navigations.
   useEffect(() => {
     setEnteredKeys((prev) => {
       const liveKeys =

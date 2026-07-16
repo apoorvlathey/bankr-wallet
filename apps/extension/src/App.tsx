@@ -3415,6 +3415,7 @@ function App() {
 
 
         <Container
+          data-screen-scroll-owner
           pt={3}
           pb={4}
           flex="1"
@@ -3534,6 +3535,7 @@ function App() {
             {address && (
               <PortfolioTabs
                 address={address}
+                accounts={accounts}
                 connectedDappChainId={
                   activeDappContext?.connected
                     ? selectedChain?.chainId ?? null

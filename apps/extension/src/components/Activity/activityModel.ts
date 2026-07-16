@@ -2,6 +2,11 @@ import type {
   ClearSignedMeta,
   CompletedTransaction,
 } from "@/chrome/txHistoryStorage";
+import { VIEM_CHAINS } from "@/constants/chainRegistry";
+import {
+  formatActivityAddress,
+  getLiveActivityAddressLabel,
+} from "./activityIdentityModel";
 
 export interface ActivityDateGroup {
   label: string;
@@ -25,6 +30,7 @@ export interface ActivityPresentation {
   intent: string;
   context: string;
   value: string | null;
+  compactValue: string | null;
 }
 
 /** Group transactions by date label. */
@@ -74,6 +80,17 @@ export function getOriginHostname(origin: string): string | null {
   }
 }
 
+export function formatActivityFunctionName(value: string): string {
+  const normalized = value
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .replace(/\b[A-Z][a-z]+\b/g, (word) => word.toLowerCase());
+  if (!normalized) return "Contract interaction";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export function formatTimeAgo(timestamp: number, now: number): string {
   const diff = now - timestamp;
   const minutes = Math.floor(diff / 60000);
@@ -84,13 +101,36 @@ export function formatTimeAgo(timestamp: number, now: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-/** Format a decimal amount string for the compact activity row. */
-export function formatActivityAmount(value: string): string {
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+
+function toSubscript(value: number): string {
+  return String(value)
+    .split("")
+    .map((digit) => SUBSCRIPT_DIGITS[Number(digit)])
+    .join("");
+}
+
+/** Format a decimal amount string for the Activity row. */
+export function formatActivityAmount(
+  value: string,
+  compactTiny = false,
+): string {
   const [integer = "0", decimal = ""] = value.split(".");
   const digits = integer.length;
   if (digits <= 9) {
     const formatted = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    const trimmed = decimal.replace(/0+$/, "").slice(0, 6);
+    const significantDecimal = decimal.replace(/0+$/, "");
+    const firstNonZero = significantDecimal.search(/[1-9]/);
+    if (integer === "0" && firstNonZero >= 6) {
+      const coefficient = significantDecimal
+        .slice(firstNonZero, firstNonZero + 4)
+        .replace(/0+$/, "");
+      if (compactTiny) {
+        return `0.0${toSubscript(firstNonZero)}${coefficient}`;
+      }
+      return `0.${"0".repeat(firstNonZero)}${coefficient}`;
+    }
+    const trimmed = significantDecimal.slice(0, 6).replace(/0+$/, "");
     return trimmed ? `${formatted}.${trimmed}` : formatted;
   }
   if (digits <= 12) {
@@ -105,12 +145,79 @@ export function formatActivityAmount(value: string): string {
   return `${first}.${next}e${digits - 1}`;
 }
 
-function getCounterpartyDisplay(meta: ClearSignedMeta): string {
+function toExactBaseUnits(value: string, decimals: number): bigint | null {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return null;
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
+  const [integer, fraction = ""] = value.split(".");
+  if (fraction.length > decimals) return null;
+  const scale = 10n ** BigInt(decimals);
+  return (
+    BigInt(integer) * scale +
+    BigInt((fraction || "0").padEnd(decimals, "0"))
+  );
+}
+
+function getActivityTokenDecimals(
+  tx: CompletedTransaction,
+  meta: ClearSignedMeta | undefined,
+): number | undefined {
+  if (meta?.tokenDecimals !== undefined) return meta.tokenDecimals;
+
+  if (meta?.tokenAddress) {
+    const tokenAddress = meta.tokenAddress.toLowerCase();
+    const transfer = tx.assetChanges?.erc20Transfers.find(
+      (entry) => entry.token === tokenAddress,
+    );
+    if (transfer?.decimals !== undefined) return transfer.decimals;
+  }
+
+  if (meta?.kind === "nativeSend") {
+    return VIEM_CHAINS[tx.chainId]?.nativeCurrency.decimals;
+  }
+
+  if (tx.transferMeta) {
+    const native = VIEM_CHAINS[tx.chainId]?.nativeCurrency;
+    if (native?.symbol === tx.transferMeta.symbol) return native.decimals;
+  }
+
+  return undefined;
+}
+
+function formatActivityValueLabel(
+  amount: string,
+  symbol: string,
+  prefix: string,
+  decimals: number | undefined,
+  compactTiny: boolean,
+): string {
+  if (decimals === 18) {
+    const baseUnits = toExactBaseUnits(amount, decimals);
+    if (baseUnits !== null && baseUnits >= 1n && baseUnits <= 99_999n) {
+      const formattedBaseUnits = baseUnits
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return `${prefix}${formattedBaseUnits} wei`;
+    }
+  }
+  return `${prefix}${formatActivityAmount(amount, compactTiny)} ${symbol}`;
+}
+
+function getCounterpartyDisplay(
+  meta: ClearSignedMeta,
+  addressLabels?: ReadonlyMap<string, string>,
+): string {
+  if (meta.counterparty) {
+    const liveLabel = getLiveActivityAddressLabel(
+      meta.counterparty,
+      addressLabels,
+    );
+    if (liveLabel) return liveLabel;
+  }
   if (meta.counterpartyLabel) return meta.counterpartyLabel;
   if (meta.counterpartyEns) return meta.counterpartyEns;
   const address = meta.counterparty;
   if (!address) return "";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return formatActivityAddress(address);
 }
 
 function getClearSignedIntent(meta: ClearSignedMeta): string {
@@ -128,9 +235,18 @@ function getClearSignedIntent(meta: ClearSignedMeta): string {
   return meta.intent || meta.contractName || "Contract interaction";
 }
 
-function getActivityValue(tx: CompletedTransaction): string | null {
+function getActivityValue(
+  tx: CompletedTransaction,
+  compactTiny: boolean,
+): string | null {
   if (tx.transferMeta) {
-    return `−${formatActivityAmount(tx.transferMeta.amount)} ${tx.transferMeta.symbol}`;
+    return formatActivityValueLabel(
+      tx.transferMeta.amount,
+      tx.transferMeta.symbol,
+      "−",
+      getActivityTokenDecimals(tx, tx.clearSignedMeta),
+      compactTiny,
+    );
   }
   const meta = tx.clearSignedMeta;
   if (!meta || !meta.tokenSymbol) return null;
@@ -139,11 +255,20 @@ function getActivityValue(tx: CompletedTransaction): string | null {
   if (!meta.amount) return null;
   const prefix =
     meta.kind === "transfer" || meta.kind === "nativeSend" ? "−" : "";
-  return `${prefix}${formatActivityAmount(meta.amount)} ${meta.tokenSymbol}`;
+  return formatActivityValueLabel(
+    meta.amount,
+    meta.tokenSymbol,
+    prefix,
+    getActivityTokenDecimals(tx, meta),
+    compactTiny,
+  );
 }
 
-function getClearSignedContext(meta: ClearSignedMeta): string | null {
-  const counterparty = getCounterpartyDisplay(meta);
+function getClearSignedContext(
+  meta: ClearSignedMeta,
+  addressLabels?: ReadonlyMap<string, string>,
+): string | null {
+  const counterparty = getCounterpartyDisplay(meta, addressLabels);
   if (!counterparty) return null;
   if (meta.kind === "approve") {
     return meta.isRevoke
@@ -203,6 +328,7 @@ export function getActivityStatusModel(
 
 export function getActivityPresentation(
   tx: CompletedTransaction,
+  addressLabels?: ReadonlyMap<string, string>,
 ): ActivityPresentation {
   const originHostname = getOriginHostname(tx.origin);
   const arrow = " → ";
@@ -228,14 +354,20 @@ export function getActivityPresentation(
         : tx.swapMeta
           ? `Swap ${tx.swapMeta.sellTokenSymbol} → ${tx.swapMeta.buyTokenSymbol}`
           : originHostname && tx.functionName
-            ? tx.functionName
+            ? formatActivityFunctionName(tx.functionName)
             : tx.origin;
 
   const contextParts: string[] = [];
   const clearSignedContext = tx.clearSignedMeta
-    ? getClearSignedContext(tx.clearSignedMeta)
+    ? getClearSignedContext(tx.clearSignedMeta, addressLabels)
     : null;
   if (clearSignedContext) contextParts.push(clearSignedContext);
+  if (!clearSignedContext && tx.transferMeta?.recipient) {
+    const recipient =
+      getLiveActivityAddressLabel(tx.transferMeta.recipient, addressLabels) ??
+      formatActivityAddress(tx.transferMeta.recipient);
+    contextParts.push(`To ${recipient}`);
+  }
   if (originHostname) contextParts.push(originHostname);
   if (!originHostname && tx.functionName && tx.functionName !== intent) {
     contextParts.push(tx.functionName);
@@ -248,6 +380,7 @@ export function getActivityPresentation(
     originHostname,
     intent,
     context: contextParts.join(" · "),
-    value: getActivityValue(tx),
+    value: getActivityValue(tx, false),
+    compactValue: getActivityValue(tx, true),
   };
 }

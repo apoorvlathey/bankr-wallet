@@ -28,6 +28,8 @@ export interface ClearSignedMeta {
   amount?: string;
   /** Token/native symbol captured by the confirmation surface. */
   tokenSymbol?: string;
+  /** Decimal precision captured with the formatted amount. */
+  tokenDecimals?: number;
   tokenLogo?: string | null;
   /** ERC-20 contract for approve/transfer records. */
   tokenAddress?: string;

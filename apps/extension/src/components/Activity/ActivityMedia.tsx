@@ -3,6 +3,7 @@ import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import ChainIcon from "@/components/ChainIcon";
 import SafeImage from "@/components/SafeImage";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { INERT_IMAGE_SRC } from "@/hooks/useCachedAvatarSrc";
 import { getInternalSendSymbol } from "./activityModel";
 
 interface ActivityMediaProps {
@@ -46,7 +47,8 @@ function ActivityIcon({
           : undefined
       }
       alt={internalSendSymbol || "favicon"}
-      boxSize="22px"
+      boxSize={originHostname ? "28px" : "20px"}
+      objectFit="cover"
       fallback={
         <Text fontSize="2xs" fontWeight="800" color="text.secondary">
           {fallbackLabel}
@@ -66,18 +68,18 @@ function ChainBadge({
       position="absolute"
       bottom="-2px"
       right="-2px"
-      w="16px"
-      h="16px"
+      w="14px"
+      h="14px"
       borderRadius="full"
       bg={iconChipBg}
-      border="1.5px solid"
-      borderColor="border.subtle"
+      border="1px solid"
+      borderColor="surface.raised"
       display="flex"
       alignItems="center"
       justifyContent="center"
       zIndex={zIndex}
     >
-      <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="11px" />
+      <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="10px" />
     </Box>
   );
 }
@@ -89,14 +91,78 @@ export default function ActivityMedia({
   isDarkTheme,
   resolveLogo,
 }: ActivityMediaProps) {
-  if (tx.swapMeta) {
+  const usableLogo = (logo: string | null | undefined) => {
+    const resolved = resolveLogo(logo ?? undefined);
+    return resolved && resolved !== INERT_IMAGE_SRC ? resolved : undefined;
+  };
+  const renderTokenLogo = (
+    logo: string | undefined,
+    symbol: string,
+    size: "22px" | "24px",
+  ) => {
+    const fallback = (
+      <Text
+        data-testid="activity-token-fallback"
+        fontSize={size === "24px" ? "2xs" : "8px"}
+        fontWeight="800"
+        color="fg.muted"
+        lineHeight="1"
+      >
+        {(symbol || "?").slice(0, 1).toUpperCase()}
+      </Text>
+    );
+
+    if (!logo) return fallback;
+
     return (
-      <Box position="relative" flexShrink={0} w="42px" h="36px">
+      <Image
+        src={logo}
+        alt={symbol}
+        boxSize={size}
+        objectFit="contain"
+        fallback={fallback}
+      />
+    );
+  };
+
+  if (tx.swapMeta) {
+    const sellLogo = usableLogo(tx.swapMeta.sellTokenLogo);
+    const buyLogo = usableLogo(tx.swapMeta.buyTokenLogo);
+    const sellSymbol = tx.swapMeta.sellTokenSymbol.trim();
+    const buySymbol = tx.swapMeta.buyTokenSymbol.trim();
+    const isSameAssetBridge =
+      !!tx.bridge &&
+      !!sellSymbol &&
+      sellSymbol.toLowerCase() === buySymbol.toLowerCase();
+
+    if (isSameAssetBridge) {
+      return (
+        <Box position="relative" flexShrink={0} w="32px" h="32px">
+          <Box
+            bg="surface.sunken"
+            borderRadius="full"
+            w="32px"
+            h="32px"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            overflow="hidden"
+            border="1px solid"
+            borderColor="surface.raised"
+          >
+            {renderTokenLogo(sellLogo || buyLogo, sellSymbol, "24px")}
+          </Box>
+        </Box>
+      );
+    }
+
+    return (
+      <Box position="relative" flexShrink={0} w="50px" h="32px">
         <Box
           position="absolute"
           left={0}
-          top={0}
-          bg="bg.muted"
+          top="2px"
+          bg="surface.sunken"
           borderRadius="full"
           w="28px"
           h="28px"
@@ -108,23 +174,13 @@ export default function ActivityMedia({
           borderColor="surface.raised"
           zIndex={1}
         >
-          {tx.swapMeta.sellTokenLogo ? (
-            <Image
-              src={resolveLogo(tx.swapMeta.sellTokenLogo)}
-              alt={tx.swapMeta.sellTokenSymbol}
-              boxSize="20px"
-            />
-          ) : (
-            <Text fontSize="2xs" fontWeight="700">
-              {tx.swapMeta.sellTokenSymbol.slice(0, 2)}
-            </Text>
-          )}
+          {renderTokenLogo(sellLogo, sellSymbol, "22px")}
         </Box>
         <Box
           position="absolute"
-          left="14px"
-          top={0}
-          bg="bg.muted"
+          left="22px"
+          top="2px"
+          bg="surface.sunken"
           borderRadius="full"
           w="28px"
           h="28px"
@@ -136,36 +192,31 @@ export default function ActivityMedia({
           borderColor="surface.raised"
           zIndex={2}
         >
-          {tx.swapMeta.buyTokenLogo ? (
-            <Image
-              src={resolveLogo(tx.swapMeta.buyTokenLogo)}
-              alt={tx.swapMeta.buyTokenSymbol}
-              boxSize="20px"
-            />
-          ) : (
-            <Text fontSize="2xs" fontWeight="700">
-              {tx.swapMeta.buyTokenSymbol.slice(0, 2)}
-            </Text>
-          )}
+          {renderTokenLogo(buyLogo, buySymbol, "22px")}
         </Box>
-        <ChainBadge tx={tx} iconChipBg={iconChipBg} zIndex={3} />
+        {!tx.bridge && (
+          <ChainBadge tx={tx} iconChipBg={iconChipBg} zIndex={3} />
+        )}
       </Box>
     );
   }
 
+  const isWebsite = !!originHostname;
+
   return (
-    <Box position="relative" flexShrink={0} w="36px" h="36px">
+    <Box position="relative" flexShrink={0} w="32px" h="32px">
       <Box
         bg={isDarkTheme ? "whiteAlpha.800" : iconChipBg}
-        borderRadius="full"
-        w="36px"
-        h="36px"
+        borderRadius={isWebsite ? "md" : "full"}
+        w={isWebsite ? "28px" : "32px"}
+        h={isWebsite ? "28px" : "32px"}
+        m={isWebsite ? "2px" : 0}
         display="flex"
         alignItems="center"
         justifyContent="center"
         overflow="hidden"
-        border={isDarkTheme ? "1px solid" : undefined}
-        borderColor={isDarkTheme ? "border.default" : undefined}
+        border={isWebsite || isDarkTheme ? "1px solid" : undefined}
+        borderColor={isWebsite ? "border.subtle" : "border.default"}
       >
         <ActivityIcon tx={tx} originHostname={originHostname} />
       </Box>

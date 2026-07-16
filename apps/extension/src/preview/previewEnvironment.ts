@@ -1,4 +1,5 @@
 import type { Account, SeedGroup } from "@/chrome/types";
+import type { AddressContact } from "@/chrome/contactBook/repository";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
@@ -23,13 +24,14 @@ import {
 import { previewAssets } from "./previewAssets";
 import { parsePreviewState, type ParsedPreviewState } from "./previewState";
 import type { PreviewWalletType } from "./types";
-import { getPreviewCompletedTransaction } from "./completedTransactionFixture";
+import { getPreviewActivityTransactions } from "./completedTransactionFixture";
 export type PreviewStorageAreaName = "local" | "sync" | "session";
 export type PreviewStorageRecord = Record<string, unknown>;
 
 export interface PreviewEnvironment {
   parsed: ParsedPreviewState;
   accounts: Account[];
+  contacts: AddressContact[];
   activeAccount: Account;
   seedGroups: SeedGroup[];
   pendingTxRequests: PendingTxRequest[];
@@ -186,6 +188,12 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
   return {
     parsed,
     accounts,
+    contacts: [
+      {
+        address: "0xb06a00000000000000000000000000000000dac2",
+        label: "Treasury recipient",
+      },
+    ],
     activeAccount,
     seedGroups: [
       {
@@ -218,8 +226,7 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
     unlocked: route !== "unlock" && route !== "onboarding",
     txHistory:
       route === "portfolio"
-        ? ["confirmed", "pending", "failed"].map((scenario) => {
-            const tx = getPreviewCompletedTransaction(scenario);
+        ? getPreviewActivityTransactions().map((tx) => {
             return {
               ...tx,
               tx: { ...tx.tx, from: activeAccount.address },

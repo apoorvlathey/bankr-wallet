@@ -239,6 +239,60 @@ export function responseForPreviewMessage(
       };
     case "getAccounts":
       return environment.accounts.map((account) => ({ ...account }));
+    case "getAddressContacts":
+      return environment.contacts.map((contact) => ({ ...contact }));
+    case "createAddressContact": {
+      const address = String(message.address ?? "");
+      const label = String(message.label ?? "").trim();
+      if (!address || !label) return { success: false, error: "Invalid contact" };
+      environment.contacts.push({ address: address as `0x${string}`, label });
+      return {
+        success: true,
+        contacts: environment.contacts.map((contact) => ({ ...contact })),
+      };
+    }
+    case "updateAddressContactLabel": {
+      const normalized = String(message.address ?? "").toLowerCase();
+      const contact = environment.contacts.find(
+        (candidate) => candidate.address.toLowerCase() === normalized,
+      );
+      if (!contact) return { success: false, error: "Contact not found" };
+      contact.label = String(message.label ?? "").trim();
+      return {
+        success: true,
+        contacts: environment.contacts.map((candidate) => ({ ...candidate })),
+      };
+    }
+    case "removeAddressContact": {
+      const normalized = String(message.address ?? "").toLowerCase();
+      environment.contacts = environment.contacts.filter(
+        (contact) => contact.address.toLowerCase() !== normalized,
+      );
+      return {
+        success: true,
+        contacts: environment.contacts.map((contact) => ({ ...contact })),
+      };
+    }
+    case "reorderAddressContacts": {
+      const byAddress = new Map(
+        environment.contacts.map((contact) => [contact.address.toLowerCase(), contact]),
+      );
+      const addresses: string[] = Array.isArray(message.addresses)
+        ? message.addresses.filter(
+            (address: unknown): address is string => typeof address === "string",
+          )
+        : [];
+      const reordered: typeof environment.contacts = [];
+      for (const address of addresses) {
+        const contact = byAddress.get(address.toLowerCase());
+        if (contact) reordered.push(contact);
+      }
+      environment.contacts = reordered;
+      return {
+        success: true,
+        contacts: environment.contacts.map((contact) => ({ ...contact })),
+      };
+    }
     case "reorderAccounts": {
       const byId = new Map(environment.accounts.map((account) => [account.id, account]));
       const accountIds = Array.isArray(message.accountIds) ? message.accountIds : [];
@@ -421,6 +475,14 @@ export function responseForPreviewMessage(
       environment.storage.sync.address = next.address;
       environment.storage.sync.displayAddress =
         next.displayName || next.address;
+      return { success: true };
+    }
+    case "updateAccountDisplayName": {
+      const account = environment.accounts.find(
+        (candidate) => candidate.id === message?.accountId,
+      );
+      if (!account) return { success: false, error: "Preview account not found" };
+      account.displayName = String(message?.displayName ?? "").trim() || undefined;
       return { success: true };
     }
     case "setSidePanelMode":
@@ -747,7 +809,6 @@ export function responseForPreviewMessage(
     case "setAgentPassword":
     case "removeAgentPassword":
     case "saveBankrApiKeyAndAddress":
-    case "updateAccountDisplayName":
     case "renameSeedGroup":
     case "removeAccount":
     case "setNetworkHidden":
@@ -852,6 +913,40 @@ export function createPreviewChrome(
           logger,
         );
         if (callback) schedule(() => callback(response));
+        if (
+          response &&
+          typeof response === "object" &&
+          "success" in response &&
+          response.success === true
+        ) {
+          const contactMutation = [
+            "createAddressContact",
+            "updateAddressContactLabel",
+            "removeAddressContact",
+            "reorderAddressContacts",
+          ].includes(String(message?.type));
+          if (contactMutation && "contacts" in response) {
+            schedule(() => {
+              for (const listener of runtimeMessageListeners) {
+                listener(
+                  {
+                    type: "addressContactsUpdated",
+                    contacts: response.contacts,
+                  },
+                  {},
+                  () => {},
+                );
+              }
+            });
+          }
+          if (message?.type === "updateAccountDisplayName") {
+            schedule(() => {
+              for (const listener of runtimeMessageListeners) {
+                listener({ type: "accountsUpdated" }, {}, () => {});
+              }
+            });
+          }
+        }
         return Promise.resolve(response);
       },
       onMessage: {

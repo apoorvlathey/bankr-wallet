@@ -2116,6 +2116,10 @@ Additional fields populated after transaction submission:
 - `functionName` — Human-readable function name extracted from decoded calldata (see Function Name Resolution below)
 - `batchCallOrigins` — optional `{ origin, favicon }[]` captured for cross-dapp batch history entries. It aligns one-to-one with the encoded ERC-7821 calls so TxDetailModal can render each contributing dapp in the decoded call list; old entries fall back to the batch-level `origin/favicon`.
 - `gasData` — Gas fee breakdown fetched asynchronously after tx confirms (see Gas Data Fetching below)
+- `clearSignedMeta.tokenDecimals` — optional additive precision snapshot used
+  by Activity to distinguish exact base-unit values from merely small decimal
+  values. Older entries fall back to receipt transfer metadata or known native
+  chain metadata and remain compatible when precision cannot be proven.
 
 #### GasData Interface
 
@@ -2566,6 +2570,8 @@ resolution is remote-first, local-second:
 - `chrome/clearSignedMetaSnapshot.ts` is the stable facade over the snapshot
   builders and fire-and-forget history attachment in `chrome/clearSigning/`.
   Approve, transfer, native-send, and ERC-7730 metadata retain that priority.
+  Asset snapshot builders persist `tokenDecimals` alongside the formatted
+  amount so compact Activity formatting never has to infer ERC-20 precision.
   If the remote registry misses or has no matching format, the ERC-7730 builder
   falls back to the local registry before recording `clearSignedMeta`; builder
   or history-write failures remain optional and never delay transaction flow.

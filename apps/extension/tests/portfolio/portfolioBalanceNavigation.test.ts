@@ -54,22 +54,104 @@ test(
             Number.isFinite(initialBalance) && initialBalance > 0,
             `${wallet} should load its initial portfolio balance`,
           );
+
+          const scrollOwner = page.locator("[data-screen-scroll-owner]").first();
+          const activityTab = page.getByRole("tab", { name: "Activity" });
+          const assetsTab = page.getByRole("tab", { name: "Assets" });
+          const activityRows = page.getByRole("button", {
+            name: /Open transaction details for/i,
+          });
+          await activityRows.first().waitFor();
+          await page.getByText("To Treasury recipient", { exact: true }).waitFor();
+          await page.evaluate(async () => {
+            await chrome.runtime.sendMessage({
+              type: "updateAddressContactLabel",
+              address: "0xb06a00000000000000000000000000000000dac2",
+              label: "Operations treasury",
+            });
+          });
+          await page.getByText("To Operations treasury", { exact: true }).waitFor();
+
+          assert.ok(
+            (await page.getByRole("button", { name: "View on explorer" }).count()) >
+              0,
+            `${wallet} should render transaction explorer actions`,
+          );
           await page
-            .getByRole("button", { name: /Open transaction details for/i })
+            .getByRole("button", { name: "View on explorer" })
             .first()
             .click();
+          assert.equal(
+            await page
+              .getByRole("heading", { name: "Transaction details" })
+              .count(),
+            0,
+            `${wallet} explorer actions should not open transaction details`,
+          );
+          await page
+            .getByRole("button", { name: "View on Base explorer" })
+            .waitFor({ state: "attached" });
+          await page
+            .getByRole("button", { name: "View on Polygon explorer" })
+            .waitFor({ state: "attached" });
+          assert.equal(
+            (await page.getByTestId("activity-token-fallback").last().textContent())
+              ?.trim(),
+            "B",
+            `${wallet} should replace an inert cached logo with token initials`,
+          );
+
+          const tabScrollTop = await scrollOwner.evaluate((element) => {
+            element.scrollTop = Math.min(
+              320,
+              element.scrollHeight - element.clientHeight,
+            );
+            return element.scrollTop;
+          });
+          assert.ok(tabScrollTop > 0, `${wallet} should have a scrollable portfolio`);
+
+          await assetsTab.evaluate((button: HTMLButtonElement) => button.click());
+          await assetsTab.waitFor();
+          assert.equal(await assetsTab.getAttribute("aria-selected"), "true");
+          await activityTab.evaluate((button: HTMLButtonElement) => button.click());
+          assert.equal(await activityTab.getAttribute("aria-selected"), "true");
+          await page.waitForTimeout(50);
+          const restoredTabScrollTop = await scrollOwner.evaluate(
+            (element) => element.scrollTop,
+          );
+          assert.ok(
+            Math.abs(restoredTabScrollTop - tabScrollTop) <= 2,
+            `${wallet} should preserve scroll when returning to Activity (${tabScrollTop} -> ${restoredTabScrollTop})`,
+          );
+
+          const detailRow = activityRows.nth(4);
+          await detailRow.scrollIntoViewIfNeeded();
+          const detailScrollTop = await scrollOwner.evaluate(
+            (element) => element.scrollTop,
+          );
+          assert.ok(
+            detailScrollTop > 0,
+            `${wallet} should open details from a scrolled Activity list`,
+          );
+          await detailRow.click();
 
           await page
             .getByRole("heading", { name: /Transaction details/i })
             .waitFor();
           await page.getByRole("button", { name: "Go back" }).click();
 
-          await page.getByRole("tab", { name: "Activity" }).waitFor();
+          await activityTab.waitFor();
+          await page.waitForTimeout(500);
           assert.equal(
-            await page
-              .getByRole("tab", { name: "Activity" })
-              .getAttribute("aria-selected"),
+            await activityTab.getAttribute("aria-selected"),
             "true",
+          );
+          const restoredDetailScrollTop = await scrollOwner.evaluate(
+            (element) => element.scrollTop,
+          );
+          assert.ok(
+            Math.abs(restoredDetailScrollTop - detailScrollTop) <= 2,
+            `${wallet} should restore Activity scroll after transaction details (${detailScrollTop} -> ${restoredDetailScrollTop})`,
           );
           await balance.waitFor();
           const restoredBalance = await readNumberFlowValue(balance);

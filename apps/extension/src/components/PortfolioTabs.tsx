@@ -51,6 +51,7 @@ import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfo
 
 interface PortfolioTabsProps {
   address: string;
+  accounts?: import("@/chrome/types").Account[];
   /**
    * Chain selected by the active connected dapp, or null when there is no
    * connected dapp. It is followed while linked; manual filter selection
@@ -73,7 +74,6 @@ interface PortfolioTabsProps {
   ) => void;
   onHideTokens?: () => void;
 }
-
 const PortfolioMenuIcon = (props: IconProps) => (
   <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
     <circle cx="12" cy="5" r="1.75" />
@@ -95,11 +95,15 @@ const PORTFOLIO_VALUE_TIMING = {
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
 };
 
-export default function PortfolioTabs({ address, connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
   const [tabIndex, setTabIndex] = useState(activityTabTrigger > holdingsTabTrigger ? 2 : 0);
+  const tabIndexRef = useRef(tabIndex);
+  tabIndexRef.current = tabIndex;
+  const portfolioRootRef = useRef<HTMLDivElement>(null);
+  const tabScrollPositionsRef = useRef(new Map<number, number>());
   const [holdingsState, setHoldingsState] = useState<TokenHoldingsStateSnapshot | null>(null);
   const holdingsStateRef = useRef<TokenHoldingsStateSnapshot | null>(null);
   holdingsStateRef.current = holdingsState;
@@ -127,6 +131,30 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
   const { unifyBalances, setUnifyBalances } = useUnifyPortfolioBalances();
+
+  const selectTab = useCallback(
+    (nextIndex: number) => {
+      const currentIndex = tabIndexRef.current;
+      if (nextIndex === currentIndex) return;
+
+      const scrollOwner = portfolioRootRef.current?.closest<HTMLElement>(
+        "[data-screen-scroll-owner]",
+      );
+      const currentScrollTop = scrollOwner?.scrollTop ?? 0;
+      tabScrollPositionsRef.current.set(currentIndex, currentScrollTop);
+      const nextScrollTop =
+        tabScrollPositionsRef.current.get(nextIndex) ?? currentScrollTop;
+
+      tabIndexRef.current = nextIndex;
+      setTabIndex(nextIndex);
+      if (scrollOwner) {
+        window.requestAnimationFrame(() => {
+          scrollOwner.scrollTop = nextScrollTop;
+        });
+      }
+    },
+    [],
+  );
 
   // Follow active dapp context changes only while the filter is linked. A
   // manual selection remains detached across browser-tab changes.
@@ -162,9 +190,9 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
   // Switch to Activity tab when activityTabTrigger increments (after tx submission)
   useEffect(() => {
     if (activityTabTrigger > 0) {
-      setTabIndex(2);
+      selectTab(2);
     }
-  }, [activityTabTrigger]);
+  }, [activityTabTrigger, selectTab]);
 
   useEffect(() => {
     if (!isChainMenuOpen) return;
@@ -182,9 +210,9 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
   // out of send/swap without submitting a tx).
   useEffect(() => {
     if (holdingsTabTrigger > 0) {
-      setTabIndex(0);
+      selectTab(0);
     }
-  }, [holdingsTabTrigger]);
+  }, [holdingsTabTrigger, selectTab]);
 
   useEffect(() => {
     if (tabIndex === 0) return;
@@ -425,7 +453,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
 
   return (
     <>
-      <VStack align="stretch" spacing={2}>
+      <VStack ref={portfolioRootRef} align="stretch" spacing={2}>
         <Box px={1}>
           <Text fontSize="sm" color="fg.secondary" fontWeight="500">
             Portfolio balance
@@ -535,7 +563,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
                   bg: "surface.raisedHover",
                 }}
                 _active={{ transform: "none" }}
-                onClick={() => setTabIndex(index)}
+                onClick={() => selectTab(index)}
                 onKeyDown={(event) => {
                   let next = index;
                   if (event.key === "ArrowRight") next = (index + 1) % labels.length;
@@ -544,7 +572,7 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
                   else if (event.key === "End") next = labels.length - 1;
                   else return;
                   event.preventDefault();
-                  setTabIndex(next);
+                  selectTab(next);
                   document.getElementById(`portfolio-tab-${next}`)?.focus();
                 }}
               >
@@ -586,17 +614,27 @@ export default function PortfolioTabs({ address, connectedDappChainId = null, co
               unifyBalances={unifyBalances}
             />
           </Box>
-          {tabIndex === 2 && (
+          {/*
+            Activity stays mounted for the same reason TokenHoldings does: its
+            async history load must not briefly collapse the shared scroll
+            owner when the user changes tabs. Keeping both panels warm also
+            preserves their internal state across tab changes.
+          */}
+          <Box
+            display={tabIndex === 2 ? "block" : "none"}
+            aria-hidden={tabIndex !== 2}
+          >
             <TxStatusList
               maxItems={10}
               address={address}
+              accounts={accounts}
               hideHeader
               hideCard
               filterChainId={filterChainId}
               onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}
             />
-          )}
+          </Box>
         </Box>
       </VStack>
       <AddTokenModal

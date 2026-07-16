@@ -1,157 +1,179 @@
-import { Box, HStack, Image, Text, VStack } from "@chakra-ui/react";
+import { Box, Grid, HStack, Text } from "@chakra-ui/react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
+import { ListItem } from "@/components/ui";
 import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
-import ActivityExplorerActions from "./ActivityExplorerActions";
 import ActivityMedia from "./ActivityMedia";
+import ActivityExplorerActions from "./ActivityExplorerActions";
 import ActivityStatus from "./ActivityStatus";
+import { useActivityExplorers } from "./useActivityExplorers";
 import {
   formatTimeAgo,
   getActivityPresentation,
   getActivityStatusModel,
 } from "./activityModel";
-import { useActivityExplorers } from "./useActivityExplorers";
 
 interface ActivityItemProps {
   tx: CompletedTransaction;
+  addressLabels: ReadonlyMap<string, string>;
   onClick: () => void;
   resolveLogo: (url: string | undefined) => string | undefined;
-  flush: boolean | undefined;
 }
 
 export default function ActivityItem({
   tx,
+  addressLabels,
   onClick,
   resolveLogo,
-  flush,
 }: ActivityItemProps) {
   const iconChipBg = useIconChipBg();
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const explorer = useActivityExplorers(tx);
-  const presentation = getActivityPresentation(tx);
+  const presentation = getActivityPresentation(tx, addressLabels);
   const statusModel = getActivityStatusModel(tx);
+  const explorer = useActivityExplorers(tx);
+  const isOutgoingValue = presentation.value?.startsWith("−") ?? false;
 
   return (
-    <Box
-      as="li"
-      w="full"
-      m={0}
-      p={0}
-      listStyleType="none"
-      borderBottomWidth="1px"
-      borderBottomStyle="solid"
-      borderBottomColor="border.subtle"
-      _last={{ borderBottomWidth: 0 }}
+    <ListItem
+      density="compact"
+      minH="64px"
+      px={3}
+      py={2}
+      gap={3}
+      align="center"
+      overflow="hidden"
     >
-      <HStack spacing={0} align="stretch">
+      <Box
+        as="button"
+        type="button"
+        position="absolute"
+        inset={0}
+        zIndex={0}
+        w="full"
+        h="full"
+        bg="transparent"
+        border={0}
+        appearance="none"
+        cursor="pointer"
+        transitionProperty="background-color, box-shadow"
+        transitionDuration="fast"
+        _hover={{ bg: "surface.raisedHover" }}
+        _active={{ bg: "surface.sunken" }}
+        _focus={{ outline: "none" }}
+        _focusVisible={{
+          zIndex: 1,
+          boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
+        }}
+        aria-label={`Open transaction details for ${presentation.intent}`}
+        onClick={onClick}
+      />
+
+      <Box position="relative" zIndex={1} flexShrink={0} pointerEvents="none">
+        <ActivityMedia
+          tx={tx}
+          originHostname={presentation.originHostname}
+          iconChipBg={iconChipBg}
+          isDarkTheme={isDarkTheme}
+          resolveLogo={resolveLogo}
+        />
+      </Box>
+
+      <Grid
+        position="relative"
+        zIndex={1}
+        pointerEvents="none"
+        flex="1 1 auto"
+        minW={0}
+        templateColumns="minmax(0, 1fr)"
+        rowGap={tx.bridge ? 0.5 : 0}
+        alignItems="center"
+      >
         <HStack
-          as="button"
-          type="button"
-          flex="1 1 auto"
+          gridColumn="1"
           minW={0}
-          minH="72px"
-          spacing={3}
-          align="center"
-          py={3}
-          pl={flush ? 1 : 3}
-          pr={
-            explorer.hasViewableTx || explorer.hasBridgeDestLink
-              ? 2
-              : flush
-                ? 1
-                : 3
-          }
-          textAlign="start"
-          color="fg.primary"
-          bg="transparent"
-          borderWidth={0}
-          cursor="pointer"
-          aria-label={`Open transaction details for ${presentation.intent}`}
-          onClick={onClick}
-          transitionProperty="background-color, box-shadow"
-          transitionDuration="fast"
-          _hover={{ bg: "surface.raisedHover" }}
-          _active={{ bg: "surface.sunken" }}
-          _focus={{ outline: "none" }}
-          _focusVisible={{
-            zIndex: 1,
-            boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
-          }}
+          w="full"
+          spacing={2}
+          justify="space-between"
         >
-          <ActivityMedia
-            tx={tx}
-            originHostname={presentation.originHostname}
-            iconChipBg={iconChipBg}
-            isDarkTheme={isDarkTheme}
-            resolveLogo={resolveLogo}
-          />
-
-          <Box flex="1 1 auto" minW={0}>
-            <HStack spacing={1.5} minW={0}>
-              {tx.clearSignedMeta?.tokenLogo && (
-                <Image
-                  src={resolveLogo(tx.clearSignedMeta.tokenLogo)}
-                  alt=""
-                  boxSize="16px"
-                  borderRadius="full"
-                  flexShrink={0}
-                />
-              )}
-              <Text
-                fontSize="sm"
-                fontWeight="600"
-                color="fg.primary"
-                lineHeight="1.35"
-                noOfLines={1}
-              >
-                {presentation.intent}
-              </Text>
-            </HStack>
-            {presentation.context && (
-              <Text
-                mt={0.5}
-                fontSize="xs"
-                color="fg.secondary"
-                lineHeight="1.35"
-                noOfLines={1}
-              >
-                {presentation.context}
-              </Text>
-            )}
-            {tx.status === "failed" && tx.error && (
-              <Text
-                mt={0.5}
-                fontSize="xs"
-                color="chart.negative"
-                lineHeight="1.35"
-                noOfLines={1}
-              >
-                {tx.error}
-              </Text>
-            )}
-          </Box>
-
-          <VStack
-            spacing={0.5}
-            flex="0 1 auto"
+          <Text
+            flex="1 1 auto"
             minW={0}
-            maxW="46%"
-            align="flex-end"
+            fontSize="sm"
+            fontWeight="600"
+            color="fg.primary"
+            lineHeight="1.35"
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
           >
-            {presentation.value && (
-              <Text
-                fontSize="sm"
-                fontWeight="600"
-                color="fg.primary"
-                lineHeight="1.35"
-                textAlign="end"
-                sx={{ fontVariantNumeric: "tabular-nums" }}
-                noOfLines={1}
+            {presentation.intent}
+          </Text>
+
+          {(presentation.value ||
+            explorer.hasViewableTx ||
+            explorer.hasBridgeDestLink) && (
+            <HStack flexShrink={0} minW={0} spacing={1} justify="flex-end">
+              {presentation.value && (
+                <Text
+                  maxW={{ base: "112px", sm: "160px" }}
+                  fontSize="sm"
+                  fontWeight="600"
+                  color={isOutgoingValue ? "chart.negative" : "fg.primary"}
+                  lineHeight="1.35"
+                  textAlign="end"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                  noOfLines={1}
+                >
+                  <Box as="span" display={{ base: "none", sm: "inline" }}>
+                    {presentation.value}
+                  </Box>
+                  <Box as="span" display={{ base: "inline", sm: "none" }}>
+                    {presentation.compactValue}
+                  </Box>
+                </Text>
+              )}
+              <Box
+                position="relative"
+                zIndex={2}
+                flexShrink={0}
+                pointerEvents="auto"
               >
-                {presentation.value}
-              </Text>
-            )}
+                <ActivityExplorerActions tx={tx} explorer={explorer} />
+              </Box>
+            </HStack>
+          )}
+        </HStack>
+
+        <HStack
+          gridColumn="1"
+          minW={0}
+          w="full"
+          spacing={2}
+          justify="space-between"
+        >
+          <Text
+            flex="1 1 auto"
+            minW={0}
+            fontSize="xs"
+            color="fg.secondary"
+            lineHeight="1.35"
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
+            {presentation.context || tx.chainName}
+          </Text>
+
+          <HStack
+            flexShrink={0}
+            spacing={1}
+            justify="flex-end"
+            color="fg.muted"
+          >
             <ActivityStatus tx={tx} model={statusModel} />
+            <Text aria-hidden="true" fontSize="2xs" color="fg.muted">
+              ·
+            </Text>
             <Text
               fontSize="2xs"
               color="fg.muted"
@@ -162,11 +184,9 @@ export default function ActivityItem({
             >
               {formatTimeAgo(tx.createdAt, Date.now())}
             </Text>
-          </VStack>
+          </HStack>
         </HStack>
-
-        <ActivityExplorerActions tx={tx} explorer={explorer} />
-      </HStack>
-    </Box>
+      </Grid>
+    </ListItem>
   );
 }

@@ -127,6 +127,137 @@ export const previewStressTransaction: CompletedTransaction = {
   },
 };
 
+export function getPreviewActivityTransactions(): CompletedTransaction[] {
+  const shared = {
+    ...previewCompletedTransaction,
+    clearSignedMeta: undefined,
+    assetChanges: undefined,
+    destAssetChanges: undefined,
+    completedAt: undefined,
+    error: undefined,
+    bridge: undefined,
+    swapMeta: undefined,
+    transferMeta: undefined,
+    batchCallOrigins: undefined,
+    functionName: undefined,
+  } satisfies CompletedTransaction;
+
+  return [
+    {
+      ...shared,
+      id: "preview-activity-send",
+      status: "success",
+      origin: "WalletChan",
+      favicon: previewAssets.brand.walletChan,
+      chainName: "Base",
+      chainId: 8453,
+      createdAt: PREVIEW_EPOCH_MS - 30 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 29 * 60_000,
+      transferMeta: {
+        recipient: "0xb06a00000000000000000000000000000000dac2",
+        amount: "0.0000001234",
+        symbol: "ETH",
+        tokenLogo: previewAssets.chains.ethereum,
+      },
+    },
+    {
+      ...shared,
+      id: "preview-activity-swap-pending",
+      status: "pending",
+      origin: "https://app.uniswap.org",
+      favicon: previewAssets.dapps.uniswap,
+      createdAt: PREVIEW_EPOCH_MS - 90 * 60_000,
+      txHash:
+        "0x1d842ed9a61f8e49a1d5ab5f8c0db21e8a2be15be38d1dde7c47b9f1205b78a1",
+      swapMeta: {
+        sellTokenSymbol: "USDC",
+        sellTokenLogo: previewAssets.tokens.usdc,
+        buyTokenSymbol: "ETH",
+        buyTokenLogo: previewAssets.chains.ethereum,
+      },
+    },
+    {
+      ...shared,
+      id: "preview-activity-batch",
+      status: "success",
+      origin: "https://swap.defillama.com",
+      favicon: previewAssets.dapps.aave,
+      createdAt: PREVIEW_EPOCH_MS - 26 * 60 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 26 * 60 * 60_000 + 45_000,
+      functionName: "Batch: approve, swap",
+      batchCallOrigins: [
+        { origin: "https://swap.defillama.com", favicon: previewAssets.dapps.aave },
+        { origin: "https://app.uniswap.org", favicon: previewAssets.dapps.uniswap },
+      ],
+    },
+    {
+      ...shared,
+      id: "preview-activity-bridge",
+      status: "success",
+      origin: "Bridge USDC → Polygon",
+      favicon: previewAssets.brand.walletChan,
+      createdAt: PREVIEW_EPOCH_MS - 3 * 24 * 60 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 3 * 24 * 60 * 60_000 + 90_000,
+      swapMeta: {
+        sellTokenSymbol: "USDC",
+        sellTokenLogo: previewAssets.tokens.usdc,
+        buyTokenSymbol: "USDC",
+        buyTokenLogo: previewAssets.tokens.usdc,
+      },
+      bridge: {
+        sourceChainId: 8453,
+        sourceTxHash:
+          "0x2d842ed9a61f8e49a1d5ab5f8c0db21e8a2be15be38d1dde7c47b9f1205b78a1",
+        destinationChainId: 137,
+        destinationChainName: "Polygon",
+        destinationTxHash:
+          "0x3d842ed9a61f8e49a1d5ab5f8c0db21e8a2be15be38d1dde7c47b9f1205b78a1",
+        bungeeStatusCode: 3,
+        routeName: "Socket",
+      },
+    },
+    {
+      ...shared,
+      id: "preview-activity-name",
+      status: "success",
+      origin: "https://gwei.domains",
+      favicon: previewAssets.dapps.aave,
+      chainName: "Ethereum",
+      chainId: 1,
+      createdAt: PREVIEW_EPOCH_MS - 5 * 24 * 60 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 5 * 24 * 60 * 60_000 + 60_000,
+      functionName: "setPrimaryName",
+    },
+    {
+      ...shared,
+      id: "preview-activity-failed",
+      status: "failed",
+      origin: "https://app.uniswap.org",
+      favicon: previewAssets.dapps.uniswap,
+      createdAt: PREVIEW_EPOCH_MS - 5 * 24 * 60 * 60_000 - 90 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 5 * 24 * 60 * 60_000 - 89 * 60_000,
+      functionName: "execute",
+      error: "Transaction reverted during execution.",
+    },
+    {
+      ...shared,
+      id: "preview-activity-fallback-swap",
+      status: "success",
+      origin: "https://app.uniswap.org",
+      favicon: previewAssets.dapps.uniswap,
+      createdAt: PREVIEW_EPOCH_MS - 6 * 24 * 60 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 6 * 24 * 60 * 60_000 + 60_000,
+      swapMeta: {
+        sellTokenSymbol: "BUILD",
+        sellTokenLogo:
+          "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
+        buyTokenSymbol: "USDC",
+        buyTokenLogo: previewAssets.tokens.usdc,
+      },
+    },
+  ];
+}
+
 export function getPreviewCompletedTransaction(
   scenario: string,
 ): CompletedTransaction {

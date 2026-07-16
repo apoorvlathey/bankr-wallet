@@ -30,6 +30,7 @@ import HiddenPortfolioTokensView from "@/components/HiddenPortfolioTokensView";
 import Settings, { type SettingsTab } from "@/components/Settings";
 import PortfolioTabs from "@/components/PortfolioTabs";
 import TxDetailScreen from "@/components/TxDetailScreen";
+import { ScreenStack } from "@/components/ScreenTransition";
 import SwapView from "@/components/Swap/SwapView";
 import BridgeChainTokenModal from "@/components/Swap/BridgeChainTokenModal";
 import ComponentLab from "./ComponentLab";
@@ -78,26 +79,25 @@ function PortfolioPreview({
   const [selectedTransaction, setSelectedTransaction] =
     useState<ReturnType<typeof getPreviewCompletedTransaction> | null>(null);
 
-  if (selectedTransaction) {
-    return (
-      <PreviewShell>
+  return (
+    <PreviewShell>
+      <ScreenStack view={selectedTransaction ? "txDetail" : "main"}>
+        {selectedTransaction ? (
         <TxDetailScreen
           tx={selectedTransaction}
           onBack={() => setSelectedTransaction(null)}
         />
-      </PreviewShell>
-    );
-  }
-
-  return (
-    <PreviewShell>
-      <Box h="100%" overflowY="auto" p={3}>
-        <PortfolioTabs
-          address={txRequest.tx.from}
-          activityTabTrigger={scenario === "activity-selected" ? 1 : 0}
-          onTransactionClick={setSelectedTransaction}
-        />
-      </Box>
+        ) : (
+          <Box data-screen-scroll-owner h="100%" overflowY="auto" p={3}>
+            <PortfolioTabs
+              address={txRequest.tx.from}
+              accounts={previewAccounts}
+              activityTabTrigger={scenario === "activity-selected" ? 1 : 0}
+              onTransactionClick={setSelectedTransaction}
+            />
+          </Box>
+        )}
+      </ScreenStack>
     </PreviewShell>
   );
 }

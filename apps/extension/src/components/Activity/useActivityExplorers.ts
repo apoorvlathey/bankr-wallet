@@ -11,73 +11,65 @@ export interface ActivityExplorerState {
   handleViewBridgeDest: (event: MouseEvent) => void;
 }
 
+function exactTransactionHash(value: string | undefined): string | null {
+  return value?.match(/0x[a-fA-F0-9]{64}/)?.[0] ?? null;
+}
+
 export function useActivityExplorers(
   tx: CompletedTransaction,
 ): ActivityExplorerState {
   const { networksInfo } = useNetworks();
-  const config = getChainConfig(tx.chainId);
-  const explorerBase =
+  const sourceExplorer =
     getResolvedChainById(tx.chainId, networksInfo)?.explorer ||
-    config.explorer ||
+    getChainConfig(tx.chainId).explorer ||
     "";
+  const bridgeSourceHash = exactTransactionHash(
+    tx.bridge?.sourceTxHash || tx.txHash,
+  );
+  const normalHash = exactTransactionHash(tx.txHash);
+
   const isForceInclusion = !!tx.forceInclusionMeta;
-  const isBridge = !!tx.bridge;
-  const l1ExplorerBase = isForceInclusion
+  const l1Explorer = isForceInclusion
     ? getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer || ""
     : "";
-  const hasViewableTx = isForceInclusion
-    ? !!(tx.forceInclusionMeta!.l1TxHash || tx.txHash)
-    : !!(tx.txHash && explorerBase);
-  const destExplorerBase =
-    isBridge && tx.bridge?.destinationChainId
-      ? getResolvedChainById(tx.bridge.destinationChainId, networksInfo)
-          ?.explorer ||
-        getChainConfig(tx.bridge.destinationChainId).explorer ||
-        ""
-      : "";
-  const hasBridgeDestLink = !!(
-    isBridge && tx.bridge?.destinationTxHash && destExplorerBase
-  );
+  const l1Hash = exactTransactionHash(tx.forceInclusionMeta?.l1TxHash);
+  const l2IsResolved = tx.status === "success" || tx.status === "failed";
+  const preferredForceInclusionHash =
+    l2IsResolved && normalHash && normalHash !== l1Hash ? normalHash : l1Hash;
+  const preferredForceInclusionExplorer =
+    preferredForceInclusionHash === normalHash ? sourceExplorer : l1Explorer;
 
-  const handleViewBridgeDest = (event: MouseEvent) => {
-    event.stopPropagation();
-    const hash = tx.bridge?.destinationTxHash;
-    if (!hash || !destExplorerBase) return;
-    const clean = hash.match(/0x[a-fA-F0-9]{64}/)?.[0];
-    if (clean) {
-      chrome.tabs.create({ url: `${destExplorerBase}/tx/${clean}` });
-    }
-  };
+  const destinationExplorer = tx.bridge?.destinationChainId
+    ? getResolvedChainById(tx.bridge.destinationChainId, networksInfo)?.explorer ||
+      getChainConfig(tx.bridge.destinationChainId).explorer ||
+      ""
+    : "";
+  const destinationHash = exactTransactionHash(tx.bridge?.destinationTxHash);
+
+  const sourceHash = isForceInclusion
+    ? preferredForceInclusionHash
+    : tx.bridge
+      ? bridgeSourceHash
+      : normalHash;
+  const sourceExplorerBase = isForceInclusion
+    ? preferredForceInclusionExplorer
+    : sourceExplorer;
 
   const handleViewTx = (event: MouseEvent) => {
     event.stopPropagation();
-    if (isForceInclusion) {
-      const l1Hash = tx.forceInclusionMeta!.l1TxHash;
-      const txHashIsL2 = tx.txHash && tx.txHash !== l1Hash;
-      const l2Resolved = tx.status === "success" || tx.status === "failed";
-      if (l2Resolved && txHashIsL2 && explorerBase) {
-        const hash = tx.txHash!.match(/0x[a-fA-F0-9]{64}/)?.[0];
-        if (hash) {
-          chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
-          return;
-        }
-      }
-      if (l1Hash && l1ExplorerBase) {
-        chrome.tabs.create({ url: `${l1ExplorerBase}/tx/${l1Hash}` });
-        return;
-      }
-    }
-    if (tx.txHash && explorerBase) {
-      const hash = tx.txHash.match(/0x[a-fA-F0-9]{64}/)?.[0];
-      if (hash) {
-        chrome.tabs.create({ url: `${explorerBase}/tx/${hash}` });
-      }
-    }
+    if (!sourceHash || !sourceExplorerBase) return;
+    chrome.tabs.create({ url: `${sourceExplorerBase}/tx/${sourceHash}` });
+  };
+
+  const handleViewBridgeDest = (event: MouseEvent) => {
+    event.stopPropagation();
+    if (!destinationHash || !destinationExplorer) return;
+    chrome.tabs.create({ url: `${destinationExplorer}/tx/${destinationHash}` });
   };
 
   return {
-    hasViewableTx,
-    hasBridgeDestLink,
+    hasViewableTx: !!(sourceHash && sourceExplorerBase),
+    hasBridgeDestLink: !!(destinationHash && destinationExplorer),
     handleViewTx,
     handleViewBridgeDest,
   };
