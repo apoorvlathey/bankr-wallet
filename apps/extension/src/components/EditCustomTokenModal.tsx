@@ -260,7 +260,7 @@ export default function EditCustomTokenModal({
             <Button
               type="submit"
               form="edit-token-form"
-              variant="primary"
+              variant="brand"
               isDisabled={!symbol || !decimals || saving}
               isLoading={saving && !confirmingRemove}
             >

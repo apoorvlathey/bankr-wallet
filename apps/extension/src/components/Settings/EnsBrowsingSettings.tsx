@@ -640,6 +640,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
                   </HStack>
                   <Button
                     size="sm"
+                    variant="brand"
                     onClick={saveGateway}
                     isDisabled={!canSave || pending !== null}
                     leftIcon={justSaved ? <CheckIcon /> : undefined}

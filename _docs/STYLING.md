@@ -216,9 +216,10 @@ semantic colors, radii, shadows, globals, and component recipes. Midnight uses:
 - Alpha status washes with foreground pairs verified at WCAG AA.
 - The `brand` Button variant is the deliberate amber commitment treatment. Use
   it for product-entry and mascot-led commitments such as Unlock, explicit
-  Warm Midnight saved-state commitments such as `Save contact`, and the final
-  single-transaction `Confirm` action. Those commitment actions must not use
-  the blue `primary` variant. Focus, links, selection, and ordinary
+  Warm Midnight saved-state commitments (`Save`, `Save changes`, `Save contact`,
+  and equivalent save labels), and the final single-transaction `Confirm`
+  action. Saved-state and final commitment actions must always use `brand`,
+  never the blue `primary` variant. Focus, links, selection, and ordinary
   transactional controls remain blue.
 
 `tests/ui/themeContrast.test.ts` protects the core text, action, and status pairs.

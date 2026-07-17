@@ -786,7 +786,7 @@ function AccountSettings({
             secondaryAction={<Button variant="secondary" onClick={closeApiKeyForm}>Cancel</Button>}
             primaryAction={
               <Button
-                variant="primary"
+                variant="brand"
                 onClick={handleSaveApiKey}
                 isLoading={isSubmittingApiKey || isResolvingAddress}
                 loadingText={isResolvingAddress ? "Resolving…" : "Saving…"}
@@ -879,7 +879,7 @@ function AccountSettings({
                     />
                     {seedGroupDirty && (
                       <Button
-                        variant="primary"
+                        variant="brand"
                         onClick={handleSaveSeedGroupName}
                         isLoading={isSavingSeedGroup}
                         minW="76px"

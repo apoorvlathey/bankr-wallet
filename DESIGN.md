@@ -96,7 +96,7 @@
 
 ## Components and states
 
-- Button hierarchy: one filled primary, neutral secondary, quiet tertiary. Destructive red is loud only inside a destructive confirmation.
+- Button hierarchy: one filled primary, neutral secondary, quiet tertiary. Saved-state commitments (`Save`, `Save changes`, and equivalent labels) and final commitment actions use the amber `brand` treatment rather than blue `primary`. Destructive red is loud only inside a destructive confirmation.
 - States: default, hover, pressed, focus-visible, disabled, loading, invalid/error, and selected where applicable. Weight never changes between states.
 - Inputs: visible labels, 44px minimum touch height, 16px input text, inline corrective errors, retained values.
 - Lists and financial data: light row separators, aligned columns, tabular numerals, no heavy cell grid.
@@ -211,6 +211,12 @@
 
 ## Slop audit
 
+- 2026-07-17 saved-state commitment audit: all extension actions labeled `Save`,
+  `Save changes`, `Save contact`, or an equivalent saved-state action use the
+  shared amber `brand` button variant. This includes Bankr credential changes,
+  account and seed-group names, custom-token metadata, ENS gateway settings,
+  custom-network overrides, contacts, and RPC endpoints; blue `primary` remains
+  reserved for ordinary interaction and transactional controls.
 - Date: 2026-07-10.
 - Result: Phase 1 foundation passes after fixing seven system-level tells: violet
   action styling, colored focus/modal glow, resting shadows, `transition: all`,

@@ -243,7 +243,7 @@ function EditChain({
       ) : undefined}
       primaryAction={isCustom ? (
         forceAllowed ? (
-          <Button variant="highlight" onClick={forceSave}>
+          <Button variant="brand" onClick={forceSave}>
             Save anyway
           </Button>
         ) : (

@@ -84,12 +84,14 @@ identity assets, and blue reserved for transactional/focus roles.
 - Amber is WalletChan's brand signature. Use it for the brand Unlock action,
   selected Warm Midnight accents, the emphasized homepage Send shortcut, the
   final single-transaction `Confirm` action, the EIP-7702 `Set delegate`
-  commitment action, the Address Book `Save contact` commitment, and small
-  identity/attention moments.
+  commitment action, all saved-state commitments (`Save`, `Save changes`,
+  `Save contact`, and equivalent save labels), and small identity/attention
+  moments. Saved-state commitments always use the amber `brand` button variant.
 - Blue remains the default transactional, selection, link, and focus family
   unless a surface has received an explicit Warm Midnight exception. The final
   single-transaction `Confirm` button is one such exception and must use the
-  amber `brand` variant, not `primary`.
+  amber `brand` variant, not `primary`; saved-state commitments follow the same
+  rule.
 - Green and red are semantic gain/receive and loss/send/error colors.
 - Chain, token, protocol, account, and dapp artwork keeps its real colors.
 - Amber must not fill every action. Its scarcity is what makes WalletChan
