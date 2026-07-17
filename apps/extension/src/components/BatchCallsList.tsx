@@ -728,8 +728,8 @@ export function BatchCallsList({
   originPerCall?: TxCallOrigin[];
   originCallIndex?: number;
 }) {
-  const [expandedCalls, setExpandedCalls] = useState<Set<number>>(() =>
-    calls.length === 1 ? new Set([0]) : new Set(),
+  const [expandedCalls, setExpandedCalls] = useState<Set<number>>(
+    () => new Set(),
   );
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<
     Record<number, string>

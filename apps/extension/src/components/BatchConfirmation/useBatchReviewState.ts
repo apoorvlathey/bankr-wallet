@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useDisclosure } from "@chakra-ui/react";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 
-export function getSmartExpandedCalls(callCount: number): Set<number> {
-  return callCount === 1 ? new Set([0]) : new Set();
+export function getInitialExpandedCalls(): Set<number> {
+  return new Set();
 }
 
 export function useBatchReviewState(requestId: string, callCount: number) {
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(() =>
-    getSmartExpandedCalls(callCount),
+    getInitialExpandedCalls(),
   );
   const previousRequestId = useRef(requestId);
   const previousCallCount = useRef(callCount);
@@ -32,7 +32,7 @@ export function useBatchReviewState(requestId: string, callCount: number) {
     const callCountChanged = previousCallCount.current !== callCount;
 
     if (requestChanged || callCountChanged) {
-      setExpandedCalls(getSmartExpandedCalls(callCount));
+      setExpandedCalls(getInitialExpandedCalls());
     }
     if (requestChanged || callCountChanged) {
       setDecodedFunctionNames({});

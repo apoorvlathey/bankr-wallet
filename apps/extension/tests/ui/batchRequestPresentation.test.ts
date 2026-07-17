@@ -2,14 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { getBatchEncodingBlockedReason } from "../../src/components/BatchConfirmation/helpers";
-import { getSmartExpandedCalls } from "../../src/components/BatchConfirmation/useBatchReviewState";
+import { getInitialExpandedCalls } from "../../src/components/BatchConfirmation/useBatchReviewState";
 import { createPreviewBatchScenario } from "../../src/preview/fixtures";
 
-test("smart batch call expansion opens only single-call requests", () => {
-  assert.deepEqual([...getSmartExpandedCalls(0)], []);
-  assert.deepEqual([...getSmartExpandedCalls(1)], [0]);
-  assert.deepEqual([...getSmartExpandedCalls(2)], []);
-  assert.deepEqual([...getSmartExpandedCalls(100)], []);
+test("batch calls remain collapsed initially", () => {
+  assert.deepEqual([...getInitialExpandedCalls()], []);
 });
 
 test("unsafe batch confirmation explains the corrective action on the button", async () => {

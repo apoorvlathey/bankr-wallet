@@ -42,6 +42,10 @@ prompts but must never reach a signing or submission path.
 
 5. **Read `_docs/SECURITY.md`** and verify changes against the pre-commit security checklist. This is critical for any changes to message handlers, storage, crypto, content scripts, or session management.
 
+**After making any changes, before handing work back to the user:**
+
+6. **Run `pnpm build:extension`** and confirm it succeeds. This is required even when targeted tests or typechecks already passed, so `apps/extension/build/` is always refreshed and ready for the user to reload and test in the browser.
+
 **After making significant changes:**
 
 - **Update `_docs/IMPLEMENTATION.md`** if you modified:
