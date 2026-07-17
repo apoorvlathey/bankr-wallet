@@ -6,6 +6,7 @@ import { PASSKEY_RP_ID } from "./record";
 import { loadPasskeyUnlockRecord } from "./repository";
 import { assertCurrentMasterAuthorization } from "../masterAuthorization";
 import {
+  getCachedMnemonicKey,
   getCachedPassword,
   resolvePasswordType,
 } from "../sessionCache";
@@ -18,6 +19,7 @@ export interface PasskeyUnlockStatus {
   credentialId?: string;
   prfSalt?: string;
   mnemonicCapable?: boolean;
+  mnemonicSessionReady?: boolean;
 }
 
 export function stalePasskeyCeremonyResult(): {
@@ -102,6 +104,10 @@ export async function handleGetPasskeyUnlockStatus(): Promise<PasskeyUnlockStatu
     credentialId: record.credentialId,
     prfSalt: record.prfSalt,
     mnemonicCapable,
+    mnemonicSessionReady:
+      mnemonicCapable &&
+      getCachedMnemonicKey()?.keyId ===
+        (record.version === 2 ? record.mnemonicKeyId : undefined),
   };
 }
 

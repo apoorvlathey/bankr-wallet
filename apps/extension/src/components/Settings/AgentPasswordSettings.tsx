@@ -33,11 +33,12 @@ function AgentPasswordSettings({
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
+    masterPassword?: string;
     agentPassword?: string;
     confirmPassword?: string;
   }>({});
 
-  // Form states for removing agent password
+  // Explicit master-password proof is shared by set/remove flows.
   const [masterPassword, setMasterPassword] = useState("");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [removeError, setRemoveError] = useState("");
@@ -53,7 +54,7 @@ function AgentPasswordSettings({
   // Auto-focus password input when entering set or remove mode
   useEffect(() => {
     if (viewMode === "set") {
-      setTimeout(() => passwordInputRef.current?.focus(), 100);
+      setTimeout(() => masterPasswordInputRef.current?.focus(), 100);
     } else if (viewMode === "remove") {
       setTimeout(() => masterPasswordInputRef.current?.focus(), 100);
     }
@@ -80,6 +81,9 @@ function AgentPasswordSettings({
 
   const validateSetPassword = (): boolean => {
     const newErrors: typeof errors = {};
+    if (!masterPassword) {
+      newErrors.masterPassword = "Master password is required";
+    }
     const agentPasswordError = newPasswordPolicyError(
       agentPassword,
       "Agent password",
@@ -101,12 +105,22 @@ function AgentPasswordSettings({
     try {
       const response = await new Promise<{ success: boolean; error?: string }>((resolve) => {
         chrome.runtime.sendMessage(
-          { type: "setAgentPassword", agentPassword },
+          { type: "setAgentPassword", agentPassword, masterPassword },
           resolve
         );
       });
 
       if (!response.success) {
+        if (
+          response.error === "Invalid master password" ||
+          response.error === "Master password is required"
+        ) {
+          setErrors((current) => ({
+            ...current,
+            masterPassword: response.error,
+          }));
+          return;
+        }
         if (response.error?.includes("Must be unlocked with master password")) {
           if (onSessionExpired) {
             onSessionExpired();
@@ -142,6 +156,7 @@ function AgentPasswordSettings({
       // Reset form and go back to settings (onComplete refreshes parent state)
       setAgentPassword("");
       setConfirmPassword("");
+      setMasterPassword("");
       onComplete();
     } finally {
       setIsSubmitting(false);
@@ -228,20 +243,39 @@ function AgentPasswordSettings({
   if (viewMode === "set") {
     return (
       <SetAgentPasswordView
+        masterPassword={masterPassword}
         password={agentPassword}
         confirmPassword={confirmPassword}
+        showMasterPassword={showMasterPassword}
         showPassword={showPassword}
         errors={errors}
         submitting={isSubmitting}
+        masterPasswordInputRef={masterPasswordInputRef}
         passwordInputRef={passwordInputRef}
+        onMasterPasswordChange={(value) => {
+          setMasterPassword(value);
+          setErrors((current) => ({
+            ...current,
+            masterPassword: undefined,
+          }));
+        }}
         onPasswordChange={(value) => {
           setAgentPassword(value);
-          setErrors({});
+          setErrors((current) => ({
+            ...current,
+            agentPassword: undefined,
+          }));
         }}
         onConfirmChange={(value) => {
           setConfirmPassword(value);
-          setErrors({});
+          setErrors((current) => ({
+            ...current,
+            confirmPassword: undefined,
+          }));
         }}
+        onToggleMasterVisibility={() =>
+          setShowMasterPassword(!showMasterPassword)
+        }
         onToggleVisibility={() => setShowPassword(!showPassword)}
         onSubmit={handleSetAgentPassword}
         onBack={handleBack}

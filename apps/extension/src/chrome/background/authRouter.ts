@@ -9,7 +9,6 @@ import {
   getCurrentSessionId,
   getAutoLockTimeout,
   getCachedPassword,
-  getPasswordType,
   isApiKeyCached,
   isWalletUnlocked,
   resolvePasswordType,
@@ -308,7 +307,8 @@ export function createBackgroundAuthMessageRouter(
       case "getCachedPassword":
         void (async () => {
           let hasCached = dependencies.getCachedPassword() !== null;
-          if (!hasCached && (await dependencies.getAutoLockTimeout()) === 0) {
+          const shouldRestore = !hasCached && !dependencies.isWalletUnlocked();
+          if (shouldRestore && (await dependencies.getAutoLockTimeout()) === 0) {
             if (await dependencies.tryRestoreSession(dependencies.handleUnlockWallet)) {
               hasCached = dependencies.getCachedPassword() !== null;
             }
@@ -346,7 +346,10 @@ export function createBackgroundAuthMessageRouter(
       case "setAgentPassword":
       case "removeAgentPassword": {
         const operation = message.type === "setAgentPassword"
-          ? () => dependencies.handleSetAgentPassword(message.agentPassword)
+          ? () => dependencies.handleSetAgentPassword(
+              typeof message.agentPassword === "string" ? message.agentPassword : "",
+              typeof message.masterPassword === "string" ? message.masterPassword : "",
+            )
           : () => dependencies.handleRemoveAgentPassword(message.masterPassword);
         dependencies.runSerializedAuthTransition(async () => {
           const result = await operation();
@@ -361,13 +364,11 @@ export function createBackgroundAuthMessageRouter(
         });
         return HANDLED_ASYNC;
       }
-
       case "isAgentPasswordEnabled":
         void dependencies.readLocal("agentPasswordEnabled").then(({ agentPasswordEnabled }) => {
           sendResponse({ enabled: !!agentPasswordEnabled });
         });
         return HANDLED_ASYNC;
-
       case "getPasswordType":
         dependencies.resolvePasswordType(dependencies.handleUnlockWallet).then((passwordType) => {
           sendResponse({ passwordType });

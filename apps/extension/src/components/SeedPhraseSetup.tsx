@@ -43,6 +43,8 @@ type Mode = "choose" | "nameGenerated" | "import" | "pick";
 interface SeedPhraseSetupProps {
   onBack: () => void;
   onComplete: () => void;
+  /** Reassert a live mnemonic capability after a passkey Never-session restore. */
+  ensureMnemonicAccess?: () => Promise<{ ready: boolean }>;
   /** When provided, collect mnemonic + selected derivation indices without saving (for onboarding flow where wallet isn't unlocked yet). */
   onCollect?: (
     mnemonic: string,
@@ -52,7 +54,12 @@ interface SeedPhraseSetupProps {
   ) => void;
 }
 
-function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
+function SeedPhraseSetup({
+  onBack,
+  onComplete,
+  ensureMnemonicAccess,
+  onCollect,
+}: SeedPhraseSetupProps) {
   const toast = useThemedToast();
 
   // When rendered inside onboarding (`onCollect` set), match the outer layout
@@ -78,11 +85,20 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   // Set after the import mnemonic validates — drives the picker step.
   const [pickerMnemonic, setPickerMnemonic] = useState<string | null>(null);
 
+  const ensureSeedAccess = async (): Promise<boolean> => {
+    if (onCollect || !ensureMnemonicAccess) return true;
+    return (await ensureMnemonicAccess()).ready;
+  };
+
   const handleGenerate = async () => {
     setIsSubmitting(true);
     setError(null);
 
     try {
+      if (!(await ensureSeedAccess())) {
+        setIsSubmitting(false);
+        return;
+      }
       // Generate in renderer memory first. Persisting the encrypted phrase and
       // account happens only after the user explicitly confirms they saved it.
       // Pressing Back before confirmation therefore cannot leave a hidden,
@@ -126,6 +142,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         );
         return;
       }
+      if (!(await ensureSeedAccess())) return;
 
       const response = await new Promise<{
         success: boolean;
@@ -169,6 +186,12 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
       setError("Seed phrase must be exactly 12 words");
       return;
     }
+    setIsSubmitting(true);
+    if (!(await ensureSeedAccess())) {
+      setIsSubmitting(false);
+      return;
+    }
+    setIsSubmitting(false);
     // Picker handles validation + initial fetch + loading state itself.
     setPickerMnemonic(trimmed);
     setMode("pick");
@@ -185,6 +208,10 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
           displayName.trim() || undefined,
           accountDisplayName.trim() || undefined,
         );
+        setIsSubmitting(false);
+        return;
+      }
+      if (!(await ensureSeedAccess())) {
         setIsSubmitting(false);
         return;
       }

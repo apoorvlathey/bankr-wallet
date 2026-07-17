@@ -1,16 +1,14 @@
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
 import { invalidateAuthCeremonies } from "../authTransition";
 import { encryptVaultKey, tryDecryptVaultKey } from "../crypto";
+import { validateV2MnemonicMasterRecovery } from "../mnemonic/integrity";
 import { validateGeneralVaultMasterRecovery } from "../vault/generalIntegrity";
 import {
   clearInMemoryAuthCache,
   clearSessionStorage,
-  getAutoLockTimeout,
-  getCachedPassword,
   getCachedVaultKey,
   revokePersistedSessionRecoveryKey,
   resolvePasswordType,
-  tryRestoreSessionAlreadySerialized,
 } from "../sessionCache";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
@@ -21,6 +19,7 @@ import { handleUnlockWallet } from "./walletUnlock";
 /** Sets an agent password after proving the current master recovery path. */
 export async function handleSetAgentPassword(
   agentPassword: string,
+  masterPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
   if ((await resolvePasswordType(handleUnlockWallet, true)) !== "master") {
     return {
@@ -43,87 +42,71 @@ export async function handleSetAgentPassword(
   if (agentPasswordError) {
     return { success: false, error: agentPasswordError };
   }
-
-  try {
-    const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
-      "encryptedVaultKeyMaster",
-    );
-    if (!encryptedVaultKeyMaster) {
-      return { success: false, error: "No vault key found" };
-    }
-
-    let password = getCachedPassword();
-    if (!password) {
-      const autoLockTimeout = await getAutoLockTimeout();
-      if (autoLockTimeout === 0) {
-        const restored = await tryRestoreSessionAlreadySerialized(
-          handleUnlockWallet,
-        );
-        if (restored) {
-          password = getCachedPassword();
-        }
-      }
-    }
-
-    if (!password) {
-      return {
-        success: false,
-        error: "Session expired. Please unlock the wallet again.",
-      };
-    }
-
-    // Equal master/agent passwords would resolve every unlock as master.
-    if (agentPassword === password) {
-      return {
-        success: false,
-        error: "Agent password must differ from master password",
-      };
-    }
-    const matchesMaster = await tryDecryptVaultKey(
-      encryptedVaultKeyMaster,
-      agentPassword,
-    );
-    if (matchesMaster) {
-      return {
-        success: false,
-        error: "Agent password must differ from master password",
-      };
-    }
-
-    const vaultKeyBytes = await tryDecryptVaultKey(
-      encryptedVaultKeyMaster,
-      password,
-    );
-    if (!vaultKeyBytes) {
-      return { success: false, error: "Failed to decrypt vault key" };
-    }
-
-    const generalIntegrity = await validateGeneralVaultMasterRecovery(
-      vaultKeyBytes,
-      password,
-    );
-    if (!generalIntegrity.success) {
-      return {
-        success: false,
-        error: `${generalIntegrity.error}. Agent password was not changed.`,
-      };
-    }
-
-    const encryptedVaultKeyAgent = await encryptVaultKey(
-      vaultKeyBytes,
-      agentPassword,
-    );
-    await chrome.storage.local.set({
-      encryptedVaultKeyAgent,
-      agentPasswordEnabled: true,
-    });
-
-    // The current master-keyed session remains valid; do not clear it.
-    return { success: true };
-  } catch (error) {
-    console.error("[authHandlers]", error);
-    return { success: false, error: "Failed to set agent password" };
+  if (typeof masterPassword !== "string" || !masterPassword) {
+    return { success: false, error: "Master password is required" };
   }
+
+  return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
+    let vaultKeyBytes: Uint8Array | null = null;
+    try {
+      const { encryptedVaultKeyMaster } = await chrome.storage.local.get(
+        "encryptedVaultKeyMaster",
+      );
+      if (!encryptedVaultKeyMaster) {
+        return { success: false, error: "No vault key found" };
+      }
+
+      vaultKeyBytes = await tryDecryptVaultKey(
+        encryptedVaultKeyMaster,
+        masterPassword,
+      );
+      if (!vaultKeyBytes) {
+        return { success: false, error: "Invalid master password" };
+      }
+
+      // Check equality only after authenticating the supplied master proof, so
+      // two identical but incorrect inputs still report an invalid master.
+      if (agentPassword === masterPassword) {
+        return {
+          success: false,
+          error: "Agent password must differ from master password",
+        };
+      }
+
+      const [generalIntegrity, mnemonicIntegrity] = await Promise.all([
+        validateGeneralVaultMasterRecovery(vaultKeyBytes, masterPassword),
+        validateV2MnemonicMasterRecovery(masterPassword),
+      ]);
+      const recoveryError = !generalIntegrity.success
+        ? generalIntegrity.error
+        : !mnemonicIntegrity.success
+          ? mnemonicIntegrity.error
+          : null;
+      if (recoveryError) {
+        return {
+          success: false,
+          error: `${recoveryError}. Agent password was not changed.`,
+        };
+      }
+
+      const encryptedVaultKeyAgent = await encryptVaultKey(
+        vaultKeyBytes,
+        agentPassword,
+      );
+      await chrome.storage.local.set({
+        encryptedVaultKeyAgent,
+        agentPasswordEnabled: true,
+      });
+
+      // The current master-keyed session remains valid; do not clear it.
+      return { success: true };
+    } catch (error) {
+      console.error("[authHandlers]", error);
+      return { success: false, error: "Failed to set agent password" };
+    } finally {
+      vaultKeyBytes?.fill(0);
+    }
+  });
 }
 
 /** Removes the agent factor only after explicit full master recovery proof. */

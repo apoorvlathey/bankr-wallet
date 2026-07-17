@@ -11,7 +11,7 @@ import {
   readStoredAutoLockTimeout,
   setCachedAutoLockTimeout,
 } from "./autoLockPolicy";
-import { getPasswordType } from "./cacheAccess";
+import { getPasswordType, isWalletUnlocked } from "./cacheAccess";
 import * as memoryCache from "./inMemoryCache";
 import {
   getSessionPassword,
@@ -87,6 +87,15 @@ async function restoreSessionWithinAuthTransition(
   if (timeout !== 0) {
     await clearSessionStorage();
     return false;
+  }
+
+  // A passkey master session intentionally has no cached plaintext password.
+  // Treating that absence as a lost session would cold-restore the persisted
+  // general capability, rotate the auth epoch, and discard the live-only V2
+  // mnemonic key. Restoration is therefore idempotent for one coherent,
+  // expiry-checked live authorization generation.
+  if (getPasswordType() !== null && isWalletUnlocked()) {
+    return true;
   }
 
   const session = await readPersistedSessionRecord();

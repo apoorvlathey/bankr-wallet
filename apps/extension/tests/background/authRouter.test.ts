@@ -215,6 +215,27 @@ test("unlocked-state checks restore only an explicit Never session", async () =>
   assert.equal(restoreCalls, 1);
 });
 
+test("cached-password checks do not cold-restore a live passkey session", async () => {
+  let restoreCalls = 0;
+  const capture = responseCapture();
+  const route = createBackgroundAuthMessageRouter({
+    getCachedPassword: () => null,
+    isWalletUnlocked: () => true,
+    getAutoLockTimeout: async () => 0,
+    tryRestoreSession: async () => {
+      restoreCalls += 1;
+      return true;
+    },
+  });
+
+  assert.deepEqual(route({ type: "getCachedPassword" }, capture.sendResponse), {
+    handled: true,
+    keepChannelOpen: true,
+  });
+  assert.deepEqual(await capture.response, { hasCachedPassword: false });
+  assert.equal(restoreCalls, 0);
+});
+
 test("password and auto-lock mutations retain serialized invalidation rules", async () => {
   const events: string[] = [];
   const passwordCapture = responseCapture();
@@ -255,5 +276,46 @@ test("password and auto-lock mutations retain serialized invalidation rules", as
     "invalidate",
     "transition",
     "timeout:300000",
+  ]);
+});
+
+test("agent-factor setup forwards explicit master proof inside the auth transition", async () => {
+  const events: string[] = [];
+  const capture = responseCapture(events);
+  const route = createBackgroundAuthMessageRouter({
+    runSerializedAuthTransition: async (operation) => {
+      events.push("transition:start");
+      const result = await operation();
+      events.push("transition:end");
+      return result;
+    },
+    handleSetAgentPassword: async (agentPassword, masterPassword) => {
+      events.push(`set:${agentPassword}:${masterPassword}`);
+      return { success: true };
+    },
+    invalidateAuthCeremonies: () => {
+      events.push("invalidate");
+      return "epoch";
+    },
+  });
+
+  assert.deepEqual(
+    route(
+      {
+        type: "setAgentPassword",
+        agentPassword: "agent-password",
+        masterPassword: "master-password",
+      },
+      capture.sendResponse,
+    ),
+    { handled: true, keepChannelOpen: true },
+  );
+  assert.deepEqual(await capture.response, { success: true });
+  assert.deepEqual(events, [
+    "transition:start",
+    "set:agent-password:master-password",
+    "invalidate",
+    "transition:end",
+    "response",
   ]);
 });

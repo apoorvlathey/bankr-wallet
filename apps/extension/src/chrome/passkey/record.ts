@@ -9,6 +9,11 @@ export interface PasskeyWrappedKey {
   iv: string;
 }
 
+/**
+ * Compatibility decoder for pre-release/local development profiles. No
+ * published WalletChan extension version emitted V1 passkey records; the UI
+ * deliberately requires reconfiguration before new local-account setup.
+ */
 export interface PasskeyUnlockRecordV1 {
   version: 1;
   rpId: string;

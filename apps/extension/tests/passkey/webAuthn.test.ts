@@ -4,7 +4,7 @@ import test from "node:test";
 
 type Listener = (...args: unknown[]) => void;
 
-test("passkey creation reuses creation-time PRF and falls back once when absent", async () => {
+test("passkey creation and session unlock share the bounded PRF ceremony", async () => {
   const originalDescriptors = new Map(
     ["window", "document", "navigator", "PublicKeyCredential"].map((key) => [
       key,
@@ -100,6 +100,30 @@ test("passkey creation reuses creation-time PRF and falls back once when absent"
       second.prfKeyMaterial,
       Buffer.from(assertionPrf).toString("base64url"),
     );
+
+    const sentMessages: Record<string, unknown>[] = [];
+    const unlocked = await passkey.requestPasskeySessionUnlock(
+      {
+        authCeremonyEpoch: "auth-epoch",
+        credentialId: second.credentialId,
+        prfSalt: second.prfSalt,
+      },
+      async (message) => {
+        sentMessages.push(message);
+        return { success: true, passwordType: "master" };
+      },
+    );
+    assert.deepEqual(unlocked, { success: true, passwordType: "master" });
+    assert.equal(getCalls, 2);
+    assert.deepEqual(sentMessages, [
+      {
+        type: "unlockWithPasskey",
+        authCeremonyEpoch: "auth-epoch",
+        credentialId: second.credentialId,
+        prfSalt: second.prfSalt,
+        prfKeyMaterial: Buffer.from(assertionPrf).toString("base64url"),
+      },
+    ]);
     assert.equal(listeners.size, 0);
   } finally {
     for (const [key, descriptor] of originalDescriptors) {

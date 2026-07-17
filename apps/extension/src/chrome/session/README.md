@@ -30,6 +30,11 @@ callers should import. This folder contains the independently auditable layers.
 - Passkey restoration persists no password, PRF output, API key, private key,
   seed phrase, or mnemonic key. Its exact-size general capability is bound to
   the session ID, master authority, and current validated passkey record.
+- A coherent live `{ general vault key, password type }` generation makes
+  restoration an idempotent success after the authoritative timeout check. It
+  does not invoke unlock, rotate the auth epoch, or replace a fresh V2 passkey
+  session's live-only mnemonic key. Missing plaintext password is expected in
+  a passkey session and is not a cold-worker signal.
 - Exactly one credential kind may exist. Unknown, ambiguous, tampered, stale,
   or type-inconsistent state clears both halves and returns locked.
 - Factor removal revokes the local `sessionEncKey` recovery half before the
@@ -46,8 +51,8 @@ callers should import. This folder contains the independently auditable layers.
   until a fresh explicit password or passkey authentication succeeds.
 - A persisted password type may confirm the wrapper that actually decrypted;
   it can never upgrade an agent restore to master.
-- Restoration rechecks the authoritative timeout after unlock and rotates the
-  auth epoch only after a complete successful restore.
+- Cold restoration rechecks the authoritative timeout after unlock and rotates
+  the auth epoch only after a complete successful rehydration.
 - Lower session modules do not import the `sessionCache.ts` facade or auth
   handlers; callers inject the unlock function into `restoration.ts`.
 

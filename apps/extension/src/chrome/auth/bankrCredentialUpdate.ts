@@ -70,7 +70,7 @@ export async function prepareApiKeyUpdateWithCachedPassword(
   let vaultKey = getCachedVaultKey();
   let password = getCachedPassword();
 
-  if (!password) {
+  if (!password && !vaultKey) {
     const autoLockTimeout = await getAutoLockTimeout();
     if (autoLockTimeout === 0) {
       const restored = await tryRestoreSession(handleUnlockWallet);

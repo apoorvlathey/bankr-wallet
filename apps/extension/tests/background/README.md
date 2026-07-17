@@ -12,8 +12,9 @@ These tests mirror `src/chrome/background/` and freeze transport behavior:
 - shared transaction-confirm claims and exact Bankr/private-key/seed handler
   arguments, plus reset-barrier ordering for swaps and sponsored submission;
 - Bankr remote-signer proof, master-auth epoch, atomic account/credential
-  commit, Never-session recovery, agent secret blocking, and best-effort
-  post-commit mirrors;
+  commit, cold Never-session recovery, live passwordless-passkey no-op behavior
+  for cached-password checks/private-key import, agent secret blocking, and
+  best-effort post-commit mirrors;
 - connected-origin read-only RPC forwarding with exact durable result payloads;
 - connected provider rejection, ERC-7715 lock routing, signature-method/EIP-712
   validation, and chain-switch notification cooldown/effect ordering;

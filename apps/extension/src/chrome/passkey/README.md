@@ -35,7 +35,11 @@ authorization decision.
 
 ## Compatibility and security invariants
 
-- Frozen released V1 raw-PRF records and V2 HKDF records remain readable.
+- Frozen V1 raw-PRF fixtures model unreleased/local development profiles. No
+  published extension version emitted V1 passkey records; they remain readable
+  only to avoid stranding local developer state, and the UI deliberately
+  requires V2 reconfiguration before any new local-account setup. V2 HKDF
+  records are the shipped format.
 - PRF output is never persisted or cached after the ceremony.
 - Explicit Never persistence receives only the unwrapped general key and a
   stable record fingerprint. It never receives/persists PRF output, password,

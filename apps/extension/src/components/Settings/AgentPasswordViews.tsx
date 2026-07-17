@@ -137,14 +137,23 @@ export function AgentPasswordStatusView({
 }
 
 interface SetViewProps {
+  masterPassword: string;
   password: string;
   confirmPassword: string;
+  showMasterPassword: boolean;
   showPassword: boolean;
-  errors: { agentPassword?: string; confirmPassword?: string };
+  errors: {
+    masterPassword?: string;
+    agentPassword?: string;
+    confirmPassword?: string;
+  };
   submitting: boolean;
+  masterPasswordInputRef: RefObject<HTMLInputElement>;
   passwordInputRef: RefObject<HTMLInputElement>;
+  onMasterPasswordChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onConfirmChange: (value: string) => void;
+  onToggleMasterVisibility: () => void;
   onToggleVisibility: () => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -163,10 +172,51 @@ export function SetAgentPasswordView(props: SetViewProps) {
           <Text fontSize="lg" fontWeight="600">Create a separate limited password</Text>
           <Text fontSize="sm" color="fg.secondary" lineHeight="1.5">
             Share this only with agents you trust. It cannot reveal private
-            keys, but it can authorize transactions and messages.
+            keys, but it can authorize transactions and messages. Confirm your
+            current master password before enabling it.
           </Text>
         </VStack>
         <VStack spacing={4} align="stretch">
+          <FormControl isInvalid={!!props.errors.masterPassword}>
+            <FormLabel>Current master password</FormLabel>
+            <InputGroup>
+              <Input
+                ref={props.masterPasswordInputRef}
+                type={props.showMasterPassword ? "text" : "password"}
+                placeholder="Enter master password"
+                value={props.masterPassword}
+                maxLength={MAX_PASSWORD_LENGTH}
+                onChange={(event) =>
+                  props.onMasterPasswordChange(event.target.value)
+                }
+                onKeyDown={(event) =>
+                  event.key === "Enter" && props.onSubmit()
+                }
+                pr="3rem"
+                autoComplete="current-password"
+              />
+              <InputRightElement w="44px" h="44px">
+                <IconButton
+                  aria-label={
+                    props.showMasterPassword
+                      ? "Hide master password"
+                      : "Show master password"
+                  }
+                  icon={
+                    props.showMasterPassword ? <ViewOffIcon /> : <ViewIcon />
+                  }
+                  minW="40px"
+                  h="40px"
+                  variant="ghost"
+                  onClick={props.onToggleMasterVisibility}
+                  color="fg.secondary"
+                />
+              </InputRightElement>
+            </InputGroup>
+            <FormErrorMessage>
+              {props.errors.masterPassword}
+            </FormErrorMessage>
+          </FormControl>
           <FormControl isInvalid={!!props.errors.agentPassword}>
             <FormLabel>Agent password</FormLabel>
             <InputGroup>
@@ -254,6 +304,7 @@ export function RemoveAgentPasswordView(props: RemoveViewProps) {
               type={props.showPassword ? "text" : "password"}
               placeholder="Enter master password"
               value={props.password}
+              maxLength={MAX_PASSWORD_LENGTH}
               onChange={(event) => props.onPasswordChange(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && props.onSubmit()}
               pr="3rem"

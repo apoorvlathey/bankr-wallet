@@ -92,6 +92,9 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
     const sessionModule = await import("../../src/chrome/sessionCache");
     const transitionModule = await import("../../src/chrome/authTransition");
     const seedModule = await import("../../src/chrome/mnemonic/derivation");
+    const seedAccountHandlers = await import(
+      "../../src/chrome/mnemonic/accountHandlers"
+    );
     const signerModule = await import("../../src/chrome/localSigner");
 
     const mnemonic =
@@ -119,9 +122,9 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
       authCeremonyEpoch: transitionModule.getAuthCeremonyEpoch(),
     });
 
-    async function installCurrentWallet(
+    const installCurrentWallet = async (
       options: { withSeedAccount?: boolean } = {},
-    ) {
+    ) => {
       const vaultKeyBytes = cryptoModule.generateVaultKey();
       const vaultKey = await cryptoModule.importVaultKey(vaultKeyBytes);
       local.encryptedVaultKeyMaster = await cryptoModule.encryptVaultKey(
@@ -171,14 +174,6 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
             createdAt: 1,
           },
         ];
-        local.seedGroups = [
-          {
-            id: "seed-group",
-            name: "Seed #1",
-            createdAt: 1,
-            accountCount: 1,
-          },
-        ];
       } else {
         local.accounts = [
           {
@@ -190,7 +185,7 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
         ];
       }
       return { vaultKeyBytes, vaultKey };
-    }
+    };
 
     await t.test(
       "password-only users keep their v1 mnemonic vault unchanged",
@@ -292,6 +287,51 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
           mnemonic,
         );
 
+        const liveAuthEpoch = transitionModule.getAuthCeremonyEpoch();
+        let redundantUnlockCalls = 0;
+        assert.equal(
+          await sessionModule.tryRestoreSession(async (credential) => {
+            redundantUnlockCalls += 1;
+            return authModule.handleUnlockWallet(credential);
+          }),
+          true,
+        );
+        assert.equal(
+          redundantUnlockCalls,
+          0,
+          "a live passwordless passkey session must not be cold-restored",
+        );
+        assert.equal(
+          transitionModule.getAuthCeremonyEpoch(),
+          liveAuthEpoch,
+          "a no-op restore must preserve the account-mutation epoch",
+        );
+        assert.equal(
+          sessionModule.getCachedMnemonicKey(),
+          mnemonicKey,
+          "a no-op restore must preserve live V2 mnemonic authority",
+        );
+
+        const preparedBankrUpdate =
+          await authModule.prepareApiKeyUpdateWithCachedPassword(
+            "replacement-bankr-api-key",
+          );
+        assert.equal(preparedBankrUpdate.success, true);
+        assert.equal(transitionModule.getAuthCeremonyEpoch(), liveAuthEpoch);
+        assert.equal(sessionModule.getCachedMnemonicKey(), mnemonicKey);
+
+        const addedSeed = await seedAccountHandlers.addSeedPhraseGroup({
+          mnemonic: secondMnemonic,
+          indices: [0],
+          name: "Biometric import",
+        });
+        assert.equal(addedSeed.success, true, addedSeed.error);
+        assert.equal(sessionModule.getCachedMnemonicKey(), mnemonicKey);
+        const freshStatus =
+          await passkeyModule.handleGetPasskeyUnlockStatus();
+        assert.equal(freshStatus.mnemonicCapable, true);
+        assert.equal(freshStatus.mnemonicSessionReady, true);
+
         sessionModule.clearInMemoryAuthCache();
         assert.equal(
           await sessionModule.tryRestoreSession(authModule.handleUnlockWallet),
@@ -303,6 +343,9 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
           null,
           "cold Never restore retains only routine signing authority",
         );
+        const coldStatus = await passkeyModule.handleGetPasskeyUnlockStatus();
+        assert.equal(coldStatus.mnemonicCapable, true);
+        assert.equal(coldStatus.mnemonicSessionReady, false);
         assert.equal(
           sessionModule.getPrivateKeyFromCache("seed-account"),
           seedModule.derivePrivateKey(mnemonic, 0),
@@ -838,6 +881,70 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
             );
           }
         }
+      },
+    );
+
+    await t.test(
+      "passkey master sessions can set an agent factor with explicit master proof",
+      async () => {
+        reset();
+        const { vaultKeyBytes } = await installCurrentWallet({
+          withSeedAccount: true,
+        });
+        await mnemonicModule.storeMnemonic("seed-group", mnemonic, {
+          kind: "password",
+          password: masterPassword,
+        });
+        const credential = payload();
+        const setup = await passkeyModule.handleSetupPasskeyUnlockWithPassword(
+          credential,
+          masterPassword,
+        );
+        assert.equal(setup.success, true);
+        local.encryptedVaultKeyAgent = null;
+        local.agentPasswordEnabled = false;
+        sessionModule.clearInMemoryAuthCache();
+
+        const biometric = await passkeyModule.handleUnlockWithPasskey({
+          ...credential,
+          authCeremonyEpoch: transitionModule.getAuthCeremonyEpoch(),
+        });
+        assert.equal(biometric.success, true);
+        assert.equal(sessionModule.getCachedPassword(), null);
+        assert.equal(sessionModule.getPasswordType(), "master");
+
+        const identicalButWrong = await authModule.handleSetAgentPassword(
+          "wrong-master-password",
+          "wrong-master-password",
+        );
+        assert.equal(identicalButWrong.success, false);
+        assert.equal(identicalButWrong.error, "Invalid master password");
+
+        const rejected = await authModule.handleSetAgentPassword(
+          "replacement-agent-password",
+          "wrong-master-password",
+        );
+        assert.equal(rejected.success, false);
+        assert.equal(rejected.error, "Invalid master password");
+        assert.equal(local.encryptedVaultKeyAgent, null);
+        assert.equal(local.agentPasswordEnabled, false);
+
+        const accepted = await authModule.handleSetAgentPassword(
+          "replacement-agent-password",
+          masterPassword,
+        );
+        assert.equal(accepted.success, true, accepted.error);
+        assert.equal(local.agentPasswordEnabled, true);
+        const recovered = await cryptoModule.tryDecryptVaultKey(
+          local.encryptedVaultKeyAgent as Parameters<
+            typeof cryptoModule.tryDecryptVaultKey
+          >[0],
+          "replacement-agent-password",
+        );
+        assert.deepEqual(recovered, vaultKeyBytes);
+        recovered?.fill(0);
+        assert.equal(sessionModule.getCachedPassword(), null);
+        assert.equal(sessionModule.getPasswordType(), "master");
       },
     );
 

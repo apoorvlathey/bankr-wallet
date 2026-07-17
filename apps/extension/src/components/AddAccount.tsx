@@ -5,14 +5,12 @@ import {
   HStack,
   Text,
   Input,
-  Button,
   FormControl,
   FormLabel,
   FormErrorMessage,
   InputGroup,
   InputRightElement,
   IconButton,
-  Badge,
   Image,
   Spinner,
 } from "@chakra-ui/react";
@@ -28,13 +26,11 @@ import {
 } from "@chakra-ui/icons";
 import { isAddress } from "@ethersproject/address";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
-import {
-  SeedIcon,
-} from "@/components/shared/AccountTypeIcons";
 import { LocalAccountBiometricGateStatus } from "@/components/AddAccount/LegacyBiometricUpgradeNotice";
 import { AddAccountTypeSelectionScreen } from "@/components/AddAccount/AddAccountTypeSelectionScreen";
 import { AddAccountActionBar } from "@/components/AddAccount/AddAccountActionBar";
 import { PrivateKeyAccountSection } from "@/components/AddAccount/PrivateKeyAccountSection";
+import { SeedPhraseAccountSection } from "@/components/AddAccount/SeedPhraseAccountSection";
 import { useLocalAccountBiometricGate } from "@/components/AddAccount/useLocalAccountBiometricGate";
 import type { AccountType } from "@/components/AddAccountTypeGrid";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
@@ -43,13 +39,6 @@ import { isResolvableName } from "@/lib/ensUtils";
 import {
   AppHeader,
   AppScreen,
-  ListItem,
-  ListItemActions,
-  ListItemContent,
-  ListItemDescription,
-  ListItemMedia,
-  ListItemTitle,
-  ListSurface,
   ScreenBody,
   ScreenSection,
 } from "@/components/ui";
@@ -103,7 +92,11 @@ function AddAccount({
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const [showSeedSetup, setShowSeedSetup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const needsBiometricUpgrade = useLocalAccountBiometricGate();
+  const {
+    needsUpgrade: needsBiometricUpgrade,
+    isAuthenticating: isMnemonicAuthenticating,
+    ensureMnemonicAccess,
+  } = useLocalAccountBiometricGate();
   const [pickingGroupId, setPickingGroupId] = useState<string | null>(null);
   const [impersonatorCopied, setImpersonatorCopied] = useState(false);
   const [errors, setErrors] = useState<{
@@ -160,6 +153,35 @@ function AddAccount({
       setPrivateKeyBackup({ isGenerated, isConfirmed });
     },
     [],
+  );
+
+  const openSeedSetup = useCallback(async () => {
+    const access = await ensureMnemonicAccess();
+    if (access.ready) setShowSeedSetup(true);
+  }, [ensureMnemonicAccess]);
+
+  const openSeedPicker = useCallback(
+    async (seedGroupId: string) => {
+      const access = await ensureMnemonicAccess();
+      if (access.ready) setPickingGroupId(seedGroupId);
+    },
+    [ensureMnemonicAccess],
+  );
+
+  const handleAccountTypeSelect = useCallback(
+    async (type: AccountType) => {
+      if (type === "seedPhrase") {
+        const access = await ensureMnemonicAccess();
+        if (!access.ready && access.reason !== "legacy-upgrade-required") {
+          return;
+        }
+        setAccountType(type);
+        if (access.ready && seedGroups.length === 0) setShowSeedSetup(true);
+        return;
+      }
+      setAccountType(type);
+    },
+    [ensureMnemonicAccess, seedGroups.length],
   );
 
   // Derive address when private key changes
@@ -354,6 +376,8 @@ function AddAccount({
 
   const handlePickerDerive = async (indices: number[]) => {
     if (!pickingGroupId) return;
+    const access = await ensureMnemonicAccess();
+    if (!access.ready) return;
     setIsSubmitting(true);
     try {
       const response = await new Promise<{
@@ -403,6 +427,7 @@ function AddAccount({
           if (seedGroups.length === 0) setAccountType(null);
         }}
         onComplete={onAccountAdded}
+        ensureMnemonicAccess={ensureMnemonicAccess}
       />
     );
   }
@@ -421,7 +446,7 @@ function AddAccount({
           existingIndices: existingIndicesByGroup.get(pickingGroupId) || [],
         }}
         variant="panel"
-        isSubmitting={isSubmitting}
+        isSubmitting={isSubmitting || isMnemonicAuthenticating}
         onBack={() => setPickingGroupId(null)}
         onSubmit={handlePickerDerive}
         submitLabel={(count) =>
@@ -450,16 +475,7 @@ function AddAccount({
       <AddAccountTypeSelectionScreen
         hasBankrAccount={hasBankrAccount}
         onBack={onBack}
-        onSelect={(type) => {
-          setAccountType(type);
-          if (
-            type === "seedPhrase" &&
-            seedGroups.length === 0 &&
-            needsBiometricUpgrade === false
-          ) {
-            setShowSeedSetup(true);
-          }
-        }}
+        onSelect={(type) => void handleAccountTypeSelect(type)}
       />
     );
   }
@@ -507,57 +523,11 @@ function AddAccount({
           )}
 
           {accountType === "seedPhrase" && needsBiometricUpgrade === false && (
-            <ScreenSection
-              title={seedGroups.length > 0 ? "Saved seed phrases" : "Set up a seed phrase"}
-              description={
-                seedGroups.length > 0
-                  ? "Derive another address or set up a new phrase."
-                  : "Import a 12-word phrase or create a new one."
-              }
-            >
-              {seedGroups.length > 0 ? (
-                <ListSurface>
-                  {seedGroups.map((group) => (
-                    <ListItem key={group.id}>
-                      <ListItemMedia>
-                        <SeedIcon boxSize="18px" color="accent.primary" />
-                      </ListItemMedia>
-                      <ListItemContent>
-                        <HStack spacing={2}>
-                          <ListItemTitle>{group.name}</ListItemTitle>
-                          <Badge variant="subtle" fontSize="xs">
-                            {group.accountCount}{" "}
-                            {group.accountCount === 1 ? "account" : "accounts"}
-                          </Badge>
-                        </HStack>
-                        <ListItemDescription>Stored seed phrase</ListItemDescription>
-                      </ListItemContent>
-                      <ListItemActions>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setPickingGroupId(group.id)}
-                        >
-                          Derive
-                        </Button>
-                      </ListItemActions>
-                    </ListItem>
-                  ))}
-                </ListSurface>
-              ) : (
-                <Box
-                  p={4}
-                  bg="surface.raised"
-                  border="1px solid"
-                  borderColor="border.subtle"
-                  borderRadius="lg"
-                >
-                  <Text color="fg.secondary" fontSize="sm">
-                    Your phrase will be encrypted before it is stored on this device.
-                  </Text>
-                </Box>
-              )}
-            </ScreenSection>
+            <SeedPhraseAccountSection
+              groups={seedGroups}
+              isAuthenticating={isMnemonicAuthenticating}
+              onDerive={(groupId) => void openSeedPicker(groupId)}
+            />
           )}
 
           {accountType === "impersonator" && (
@@ -819,6 +789,7 @@ function AddAccount({
         accountType={accountType}
         needsBiometricUpgrade={needsBiometricUpgrade}
         isSubmitting={isSubmitting}
+        isAuthenticating={isMnemonicAuthenticating}
         canAddPrivateKey={
           !!derivedAddress &&
           (!privateKeyBackup.isGenerated || privateKeyBackup.isConfirmed)
@@ -831,7 +802,7 @@ function AddAccount({
         canAddImpersonator={impersonatorIsValid && !impersonatorIsResolving}
         seedGroupCount={seedGroups.length}
         onAddAccount={handleSubmit}
-        onSetupSeedPhrase={() => setShowSeedSetup(true)}
+        onSetupSeedPhrase={() => void openSeedSetup()}
       />
     </AppScreen>
   );

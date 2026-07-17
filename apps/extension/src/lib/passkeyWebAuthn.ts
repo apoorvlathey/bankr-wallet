@@ -41,6 +41,20 @@ export interface PasskeyCredentialPayload {
   prfKeyMaterial: string;
 }
 
+export interface PasskeySessionUnlockStatus {
+  authCeremonyEpoch?: string;
+  credentialId?: string;
+  prfSalt?: string;
+}
+
+export type PasskeySessionUnlockResult =
+  | { success: true; passwordType?: "master" }
+  | { success: false; error: string };
+
+type SendPasskeyUnlockMessage = (
+  message: Record<string, unknown>,
+) => Promise<unknown>;
+
 function randomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
@@ -317,6 +331,56 @@ export async function getPasskeyUnlockPrfOutput(
   }
 
   return base64UrlEncode(new Uint8Array(prfOutput));
+}
+
+/**
+ * Runs the shared renderer-side assertion and asks the service worker to
+ * hydrate a fresh passkey master session. Callers decide what capability they
+ * need after hydration; this helper never treats `passwordType: "master"` as
+ * proof that a plaintext password or mnemonic key is present.
+ */
+export async function requestPasskeySessionUnlock(
+  status: PasskeySessionUnlockStatus,
+  sendMessage: SendPasskeyUnlockMessage = (message) =>
+    chrome.runtime.sendMessage(message),
+): Promise<PasskeySessionUnlockResult> {
+  if (
+    !status.authCeremonyEpoch ||
+    !status.credentialId ||
+    !status.prfSalt
+  ) {
+    return {
+      success: false,
+      error: "Biometric unlock is not available for this wallet",
+    };
+  }
+
+  const prfKeyMaterial = await getPasskeyUnlockPrfOutput(
+    status.credentialId,
+    status.prfSalt,
+  );
+  const response = await sendMessage({
+    type: "unlockWithPasskey",
+    credentialId: status.credentialId,
+    prfSalt: status.prfSalt,
+    prfKeyMaterial,
+    authCeremonyEpoch: status.authCeremonyEpoch,
+  });
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    !("success" in response)
+  ) {
+    return { success: false, error: "Biometric unlock failed" };
+  }
+  if ((response as { success?: unknown }).success === true) {
+    return { success: true, passwordType: "master" };
+  }
+  const error = (response as { error?: unknown }).error;
+  return {
+    success: false,
+    error: typeof error === "string" ? error : "Biometric unlock failed",
+  };
 }
 
 export function getPasskeyErrorMessage(error: unknown): string {

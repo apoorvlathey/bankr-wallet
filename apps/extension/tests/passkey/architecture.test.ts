@@ -108,6 +108,7 @@ test("status reads frozen V1/V2 records without mutation and advertises mnemonic
     assert.equal(status.configured, true);
     assert.equal(status.credentialId, FROZEN_PASSKEY_FIXTURE.v1.credentialId);
     assert.equal(status.mnemonicCapable, false);
+    assert.equal(status.mnemonicSessionReady, false);
     assert.deepEqual(chromeHarness.writes, []);
 
     chromeHarness.stores.local.passkeyUnlock = structuredClone(
@@ -129,12 +130,23 @@ test("status reads frozen V1/V2 records without mutation and advertises mnemonic
     status = await handleGetPasskeyUnlockStatus();
     assert.equal(status.configured, true);
     assert.equal(status.mnemonicCapable, true);
+    assert.equal(status.mnemonicSessionReady, false);
     assert.deepEqual(chromeHarness.writes, []);
+
+    const sessionModule = await import("../../src/chrome/sessionCache");
+    sessionModule.setCachedMnemonicKey({
+      key: {} as CryptoKey,
+      keyId: FROZEN_PASSKEY_FIXTURE.v2.mnemonicKeyId,
+    });
+    status = await handleGetPasskeyUnlockStatus();
+    assert.equal(status.mnemonicSessionReady, true);
+    sessionModule.clearInMemoryAuthCache();
 
     (chromeHarness.stores.local.mnemonicVault as { keyId: string }).keyId =
       "different-key";
     status = await handleGetPasskeyUnlockStatus();
     assert.equal(status.mnemonicCapable, false);
+    assert.equal(status.mnemonicSessionReady, false);
     assert.deepEqual(chromeHarness.writes, []);
   } finally {
     chromeHarness.restore();

@@ -7,6 +7,7 @@ interface AddAccountActionBarProps {
   accountType: AccountType;
   needsBiometricUpgrade: boolean | null;
   isSubmitting: boolean;
+  isAuthenticating: boolean;
   canAddPrivateKey: boolean;
   privateKeyBackup: { isGenerated: boolean; isConfirmed: boolean };
   onPrivateKeyBackupChange: (isConfirmed: boolean) => void;
@@ -21,6 +22,7 @@ export function AddAccountActionBar({
   accountType,
   needsBiometricUpgrade,
   isSubmitting,
+  isAuthenticating,
   canAddPrivateKey,
   privateKeyBackup,
   onPrivateKeyBackupChange,
@@ -57,8 +59,8 @@ export function AddAccountActionBar({
           onClick={
             accountType === "seedPhrase" ? onSetupSeedPhrase : onAddAccount
           }
-          isLoading={isSubmitting}
-          loadingText="Adding…"
+          isLoading={isSubmitting || isAuthenticating}
+          loadingText={isAuthenticating ? "Authenticating…" : "Adding…"}
           isDisabled={
             (accountType === "privateKey" && !canAddPrivateKey) ||
             (accountType === "bankr" && !canAddBankr) ||

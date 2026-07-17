@@ -9,8 +9,8 @@ import { clearPortfolioHoldingsLocalMirror } from "@/chrome/portfolio/holdingsCa
 import BiometricUnlockSetup from "@/components/BiometricUnlockSetup";
 import {
   getPasskeyErrorMessage,
-  getPasskeyUnlockPrfOutput,
   isPasskeyUnlockSupported,
+  requestPasskeySessionUnlock,
 } from "@/lib/passkeyWebAuthn";
 import UnlockView from "@/components/UnlockView";
 import { getUnlockMascotState } from "@/components/unlockMascotState";
@@ -228,23 +228,7 @@ function UnlockScreen({
       if (!autoPrompt) setError("");
 
       try {
-        const prfKeyMaterial = await getPasskeyUnlockPrfOutput(
-          passkeyStatus.credentialId,
-          passkeyStatus.prfSalt,
-        );
-
-        const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
-          chrome.runtime.sendMessage(
-            {
-              type: "unlockWithPasskey",
-              credentialId: passkeyStatus.credentialId,
-              prfSalt: passkeyStatus.prfSalt,
-              prfKeyMaterial,
-              authCeremonyEpoch: passkeyStatus.authCeremonyEpoch,
-            },
-            resolve,
-          );
-        });
+        const result = await requestPasskeySessionUnlock(passkeyStatus);
 
         if (result.success) {
           void playInteractionSound("unlockSuccess");

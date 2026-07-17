@@ -24,7 +24,9 @@
   fields behind the advanced disclosure.
 - The remaining chain screens own network list and add-chain flows.
 - Authentication screens own password, biometric, agent-factor, auto-lock, and
-  sound preference flows.
+  sound preference flows. Agent-factor creation explicitly collects the
+  current master password even during a passwordless passkey master session;
+  the background remains responsible for validating that recovery proof.
 
 Settings components call trusted renderer message routes but do not reproduce
 background authorization, storage, RPC, or cryptographic policy. New settings

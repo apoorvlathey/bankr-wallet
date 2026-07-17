@@ -198,11 +198,51 @@ test("Bankr credential verification and auth epoch precede the atomic commit", a
   ]);
 });
 
-test("private-key import restores only Never sessions before vault fallback", async () => {
+test("passwordless passkey private-key import keeps the live vault capability", async () => {
+  const liveVaultKey = {} as CryptoKey;
+  let restoreCalls = 0;
+  let receivedPassword: unknown;
+  let receivedEpoch: unknown;
+  const dependencies = createDependencies({
+    getCachedPassword: () => null,
+    getCachedVaultKey: () => liveVaultKey,
+    getAutoLockTimeout: async () => 0,
+    tryRestoreSession: async () => {
+      restoreCalls += 1;
+      return true;
+    },
+    handleAddPrivateKeyAccount: async (
+      _key,
+      password,
+      _displayName,
+      authEpoch,
+    ) => {
+      receivedPassword = password;
+      receivedEpoch = authEpoch;
+      return { success: true };
+    },
+  });
+
+  assert.deepEqual(
+    (
+      await dispatch(dependencies, {
+        type: "addPrivateKeyAccount",
+        privateKey: "0xkey",
+      })
+    ).response,
+    { success: true },
+  );
+  assert.equal(restoreCalls, 0);
+  assert.equal(receivedPassword, null);
+  assert.equal(receivedEpoch, "epoch-1");
+});
+
+test("locked Never password session restores before private-key import", async () => {
   let restored = false;
   let receivedPassword: unknown;
   const dependencies = createDependencies({
     getCachedPassword: () => (restored ? "restored-password" : null),
+    getCachedVaultKey: () => null,
     getAutoLockTimeout: async () => 0,
     tryRestoreSession: async () => {
       restored = true;

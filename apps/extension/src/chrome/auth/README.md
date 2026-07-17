@@ -26,6 +26,14 @@ composition root or a focused unit test.
   before publishing any cache capability.
 - Master-only writes capture and re-check the authentication ceremony epoch at
   the storage commit boundary.
+- General-vault mutations accept the live vault capability of a passwordless
+  passkey session and never trigger restoration solely because plaintext
+  password is absent. Any required cold restoration completes before the
+  mutation captures its auth epoch.
+- Creating an agent factor requires both a live master session and the current
+  master password supplied in that request. The handler proves the general and
+  V2 mnemonic master-recovery paths before publishing the agent wrapper; a
+  cached password is never used as implicit confirmation.
 - Agent authentication may sign routine requests but cannot rotate factors,
   reveal secrets, or change durable credentials.
 - `authTransition.ts`, `masterAuthorization.ts`, and `sessionCache.ts` remain in

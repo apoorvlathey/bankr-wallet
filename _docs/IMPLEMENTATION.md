@@ -193,7 +193,7 @@ The extension supports four distinct account types that can be used simultaneous
 - **BIP39**: 12-word mnemonics (128-bit entropy) using `@scure/bip39`
 - **BIP44**: Derivation path `m/44'/60'/0'/0/{index}` using `@scure/bip32`
 - **Seed Groups**: Each mnemonic creates a "group" that can derive multiple accounts. Groups have user-editable names (default "Seed #N").
-- **Storage**: Mnemonics are encrypted separately in `mnemonicVault`. V2 uses a dedicated random mnemonic key (not the general/agent vault key), with a master-password wrapper in the vault and an independent V2 passkey wrapper. Each phrase ciphertext is bound to its key/group ID with AES-GCM AAD. V1 master-password-encrypted entries remain readable and are converted to V2 only during an atomic successful passkey setup; password-only users are not rewritten on unlock. Existing V1 passkeys retain routine signing but cannot perform biometric mnemonic operations until re-enabled. Derived private keys remain in `pkVault` for routine signing.
+- **Storage**: Mnemonics are encrypted separately in `mnemonicVault`. V2 uses a dedicated random mnemonic key (not the general/agent vault key), with a master-password wrapper in the vault and an independent V2 passkey wrapper. Each phrase ciphertext is bound to its key/group ID with AES-GCM AAD. V1 master-password-encrypted entries remain readable and are converted to V2 only during an atomic successful passkey setup; password-only users are not rewritten on unlock. V1 passkey records existed only in unreleased/local development builds. They remain readable to avoid stranding developer profiles, but all new local-account setup is intentionally upgrade-gated until biometric unlock is re-enabled as V2. Derived private keys remain in `pkVault` for routine signing.
 - **Byte conversion**: Uses native `bytesToHex()` from `cryptoUtils.ts` instead of Node.js `Buffer` (not available in browser service worker)
 - **Files**: the stable `mnemonicStorage.ts` encrypted-vault facade over the `mnemonic/` audit domain: `derivation.ts` (BIP39/44), `record.ts` / `crypto.ts` / `repository.ts` / `operations.ts` / `recovery.ts` (encrypted storage and recovery), `masterAccess.ts` (master-only call-stack capability), `integrity.ts` (master-wrapper/account proof), `addressPreview.ts` (secret-free public address derivation), `accountPersistence.ts` (shared collision, compensation, and cache-refresh boundary), and `accountHandlers.ts` (add/derive orchestration). UI entry points remain `SeedPhraseSetup.tsx` and `RevealSeedPhraseModal.tsx`.
 - **Display**: Account dropdown shows seed group name + derivation index (e.g., "Seed #1 · #0"). Account settings shows derivation index in type label.
@@ -3175,10 +3175,12 @@ WebAuthn PRF output
 - Chrome + platform authenticator + WebAuthn PRF are required. WebAuthn omits
   explicit `rp.id` / `rpId`, so Chrome uses the extension origin as the
   relying party and native prompts show `chrome-extension://...`.
-- V1 records wrap only the general vault key and remain accepted for existing
-  users, including Bankr/private-key/seed-derived-key signing. They do not gain
-  access to recovery phrases. Removing and re-enabling biometric unlock with
-  the master password performs the atomic V1 → V2 upgrade.
+- V1 records wrap only the general vault key. They existed only in
+  unreleased/local development builds, not any published extension version.
+  The compatibility decoder avoids stranding those local profiles and retains
+  routine signing, but Add Account deliberately blocks every new local-account
+  path until biometric unlock is removed and re-enabled as V2 with the master
+  password.
 - V2 records use purpose-separated HKDF subkeys to wrap both the general vault
   key and a dedicated mnemonic key. Setup also creates/converts the matching V2
   `mnemonicVault` in the same `chrome.storage.local.set()` call; neither half can
@@ -3189,7 +3191,9 @@ WebAuthn PRF output
   check remain readable by authenticating their existing entries; an empty
   early V2 passkey record requires an explicit master-password upgrade before
   biometric seed access. `getPasskeyUnlockStatus.mnemonicCapable` reports this
-  distinction so Settings offers the upgrade instead of claiming full access.
+  stored-record distinction, while `mnemonicSessionReady` reports whether the
+  current in-memory authorization generation actually holds the matching key.
+  Settings offers the upgrade instead of claiming full access.
   Settings → Add Account uses the same status to hide private-key and seed
   create/import/derive controls before any secret enters renderer state; a
   signing-only legacy biometric session instead links directly to Biometric
@@ -3218,6 +3222,13 @@ WebAuthn PRF output
   V2 assertion or explicit master-password path. Browser close, manual lock,
   factor removal, password rotation, reset, timeout change, malformed state,
   or passkey-record replacement revokes/fails the capability closed.
+- Add Account checks `mnemonicSessionReady` before entering seed setup, before
+  generating/importing, before opening an existing-group address picker, and
+  again before persistence. When a cold-restored V2 session lacks the live-only
+  key, the renderer runs the same WebAuthn PRF assertion and `unlockWithPasskey`
+  hydration used by the unlock screen, then proceeds only after refreshed
+  status proves the mnemonic key is live. Cancelling leaves all staged input in
+  the current trusted renderer and performs no background mutation.
 - Normal transaction/signature confirmations use the hydrated API key/private-key vault caches.
 - Master-authorized vault mutations that only need the vault key work after
   biometric unlock without a cached plaintext password. This includes adding
@@ -3265,6 +3276,11 @@ WebAuthn PRF output
   WebAuthn ceremony to `setupPasskeyUnlockWithPassword`. A biometric session
   therefore stays in Settings instead of being routed through the generic
   unlock screen. Cancelling returns to the biometric status screen.
+- Settings → Agent Password also collects the explicit current master password
+  even when the active master session came from a passkey. The serialized
+  setter unwraps and validates complete general-vault and V2 mnemonic recovery
+  before writing `encryptedVaultKeyAgent`; passkey authority alone never stands
+  in for plaintext master-password proof.
 - `authTransition.ts` serializes session restoration plus
   lock/unlock/setup/removal/agent-factor/password/reset mutations across open
   views. Each WebAuthn ceremony carries a random
@@ -3571,14 +3587,18 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 │    4. Store the random AES key separately as local.sessionEncKey            │
 │                                                                             │
 │  On Service Worker Restart (credentials lost):                              │
-│    1. Handler checks: getCachedApiKey() === null                            │
+│    1. Handler confirms no coherent live wallet capability remains           │
 │    2. If auto-lock is "Never" (timeout === 0):                              │
 │       - Call tryRestoreSession()                                            │
-│       - Read encryptedSessionPassword from session storage                  │
-│       - Decrypt password                                                    │
-│       - Call handleUnlockWallet(password) to restore credentials            │
-│       - Re-store session password for future restarts                       │
+│       - Recover either the password or factor-bound general vault key       │
+│       - Call handleUnlockWallet(credential) to restore credentials          │
+│       - Re-store the matching native session envelope                       │
 │    3. Operation continues with restored credentials                         │
+│                                                                             │
+│  During A Live Passkey Session:                                             │
+│    1. Plaintext cached password is null by design                           │
+│    2. Coherent vault-key + master-type state still means unlocked           │
+│    3. tryRestoreSession() is a no-op and preserves epoch/mnemonic authority │
 │                                                                             │
 │  On Manual Lock:                                                            │
 │    1. Wait for any earlier wallet-secret mutation to finish                 │
@@ -3625,10 +3645,20 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 - Manual lock shares the wallet-secret operation serializer with account and
   recovery-material mutations. It never clears a cached data key underneath a
   mutation that already linearized first.
+- A fresh passkey assertion creates a passwordless master session. A missing
+  `getCachedPassword()` value is therefore not evidence that the wallet is
+  locked. `tryRestoreSession()` first re-reads the authoritative timeout and
+  then returns success without rehydrating when one coherent, expiry-checked
+  live capability generation already exists. This preserves the current auth
+  epoch and the live-only V2 mnemonic key. Only genuinely cold state consumes
+  the persisted envelope; cold passkey restore intentionally recovers the
+  general vault capability but not mnemonic authority.
 
 **Handlers with Session Restoration**:
 
-The following message handlers attempt session restoration when auto-lock is "Never" and credentials are not cached:
+The following message handlers may attempt session restoration when auto-lock
+is "Never" and their required coherent capability is not live. Passwordless
+passkey sessions must not restore merely because `getCachedPassword()` is null:
 
 | Handler                            | Purpose                                  |
 | ---------------------------------- | ---------------------------------------- |
@@ -3646,7 +3676,7 @@ The following message handlers attempt session restoration when auto-lock is "Ne
 | `deriveSeedAccount`                | Derive new account from seed phrase      |
 | `revealPrivateKey`                 | Reveal private key (security-sensitive)  |
 | `revealSeedPhrase`                 | Reveal seed phrase (security-sensitive)  |
-| `setAgentPassword`                 | Set agent password (in authHandlers.ts)  |
+| `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
 | `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API or PK/SP EIP-7702 local signing |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; custom/non-default Set is master-only at queue and confirm/broadcast, while canonical default and revoke retain routine agent-capable signing; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |
@@ -3670,31 +3700,44 @@ agent-capable. `delegation/storage.ts` owns the unchanged nested
 
 **CRITICAL: Adding New Handlers**
 
-When adding any new message handler that requires `getCachedPassword()` or `getCachedApiKey()`, you MUST include session restoration logic. Without it, the handler will fail when auto-lock is "Never" and the service worker has restarted.
+When adding a message handler that consumes cached authorization, distinguish a
+genuinely cold worker from a live passwordless passkey session. A passkey
+session intentionally has no cached plaintext password. Never use
+`getCachedPassword() === null` alone as a locked-state or restoration signal.
 
 **Required pattern:**
 
 ```typescript
-let password = getCachedPassword();
-
-// If no cached password, try session restoration (for "Never" auto-lock mode)
-if (!password) {
+// Restore only when the coherent wallet capability generation is absent.
+if (!isWalletUnlocked()) {
   const autoLockTimeout = await getAutoLockTimeout();
   if (autoLockTimeout === 0) {
-    const restored = await tryRestoreSession(handleUnlockWallet);
-    if (restored) {
-      password = getCachedPassword();
-    }
+    await tryRestoreSession(handleUnlockWallet);
   }
 }
 
-if (!password) {
+const password = getCachedPassword();
+const vaultKey = getCachedVaultKey();
+if (!isWalletUnlocked() || (!password && !vaultKey)) {
   sendResponse({ success: false, error: "Wallet must be unlocked" });
   return;
 }
+
+// Capture an auth epoch only after any necessary cold restoration.
+const operationAuthEpoch = getAuthCeremonyEpoch();
 ```
 
-**Why this matters**: Chrome MV3 service workers are frequently suspended and restarted. When this happens, all in-memory state (including cached credentials) is lost. The session restoration mechanism recovers credentials from `chrome.storage.session`, but only if the handler explicitly calls it.
+Then validate the operation-specific capability: Bankr work needs an API key;
+general-vault writes may use either a password or vault key; V2 seed writes need
+the live mnemonic key. `tryRestoreSession()` cannot synthesize an explicit
+master password and cold passkey restoration deliberately cannot restore the
+mnemonic key.
+
+**Why this matters**: Chrome MV3 service workers are frequently suspended and
+restarted, so a genuinely cold handler must recover a Never session. Rehydrating
+an already-live passkey session is also unsafe: it changes the authorization
+generation and replaces its richer fresh-assertion capabilities with the
+narrower cold-restored capability set.
 
 **Storage Schema** (in `chrome.storage.session`):
 

@@ -191,17 +191,25 @@ async function addPrivateKeyAccount(
       error: "Adding accounts requires master password",
     };
   }
-  const operationAuthEpoch = dependencies.getAuthCeremonyEpoch();
   let password = message.password || dependencies.getCachedPassword();
-  if (!password && (await dependencies.getAutoLockTimeout()) === 0) {
+  let vaultKey = dependencies.getCachedVaultKey();
+  if (
+    !password &&
+    !vaultKey &&
+    (await dependencies.getAutoLockTimeout()) === 0
+  ) {
     const restored = await dependencies.tryRestoreSession(
       dependencies.handleUnlockWallet,
     );
-    if (restored) password = dependencies.getCachedPassword();
+    if (restored) {
+      password = dependencies.getCachedPassword();
+      vaultKey = dependencies.getCachedVaultKey();
+    }
   }
-  if (!password && !dependencies.getCachedVaultKey()) {
+  if (!password && !vaultKey) {
     return { success: false, error: "Wallet is locked" };
   }
+  const operationAuthEpoch = dependencies.getAuthCeremonyEpoch();
   return dependencies.handleAddPrivateKeyAccount(
     message.privateKey,
     password,

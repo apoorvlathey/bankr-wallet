@@ -190,11 +190,15 @@ key, and the separate cached mnemonic key,
 but intentionally does not cache the plaintext master password. Operations
 whose cryptography needs only those capabilities (private-key/seed-phrase account
 creation, seed account derivation, and Bankr API credential creation/update)
-accept them as a valid master session. Existing V1 passkeys hydrate only the
-general vault key, retain routine signing compatibility, and require removal and
-re-enablement with the master password before biometric mnemonic actions. Seed/private
-key reveal, master-password rotation, agent-password wrapping, and passkey
-removal still require explicit master-password verification. Agent sessions
+accept them as a valid master session. V1 passkeys existed only in unreleased
+local development builds. Their decoder retains routine signing compatibility
+to avoid stranding developer profiles, while the UI intentionally requires V2
+reconfiguration before every new local-account setup path. Seed/private-key
+reveal, master-password rotation, agent-password wrapping, and passkey removal
+still require explicit master-password verification. Agent-factor setup accepts
+a fresh or cold-restored passkey master session only after the user separately
+enters a master password that proves complete general and V2 mnemonic recovery.
+Agent sessions
 can unwrap only the general vault key for routine signing, so every seed operation
 is guarded by the background-resolved password type before mnemonic decryption.
 Routine transaction/message signing and canonical WalletChan EIP-7702 batch
@@ -1058,6 +1062,16 @@ These must always hold true. Violations indicate a security bug.
    without treating absent/corrupt state as indefinite unlock.
 
 7. **Session restore only works for "Never" auto-lock** - `tryRestoreSession()` checks `autoLockTimeout === 0` before attempting restoration.
+   After that authoritative timeout read, a coherent live authorization
+   generation makes restoration an idempotent success: no persisted envelope
+   is consumed, no unlock callback runs, no auth epoch rotates, and a fresh V2
+   passkey session retains its live-only mnemonic key. A null cached plaintext
+   password alone is never treated as a lost session because passkey master
+   sessions are passwordless by design.
+   Cold passkey restoration intentionally omits the mnemonic key. Seed setup,
+   import, preview, derive, and persistence must query the live capability and
+   complete a fresh WebAuthn assertion before continuing; persisted V2 record
+   capability alone is not sufficient.
    Password and passkey-vault restoration additionally require native memory-backed
    `chrome.storage.session` (available in WalletChan's supported Chrome and
    Firefox versions). The fallback for browsers/forks without it stores only
@@ -1326,17 +1340,26 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Does manual lock attempt the local recovery key first and the session half independently, accepting either confirmed deletion but showing a blocking retry state if neither succeeds?
 - [ ] On simultaneous recovery-half failure, do all open wallet surfaces purge renderer auth state, suppress passkey auto-prompting, and receive the retry state while the worker blocks routine restoration?
 - [ ] Does session restore still require `autoLockTimeout === 0`?
+- [ ] Does a coherent live passkey session make restoration a no-op that
+      preserves its auth epoch and V2 mnemonic key?
 - [ ] Does factor removal revoke the local Never-session recovery half before
       its factor commit, preserving the factor if revocation fails?
 - [ ] Do capability-only/view-only sessions require both an expiry-checked
       vault key and password type rather than accepting either partial alone?
 
-### If you added a new message handler that uses getCachedPassword() or getCachedApiKey():
+### If you added a message handler that uses cached authorization capabilities:
 
-- [ ] Does the handler include session restoration logic for "Never" auto-lock mode?
-- [ ] Pattern: if credentials are null, check `autoLockTimeout === 0`, then call `tryRestoreSession(handleUnlockWallet)`
+- [ ] Does the handler restore a "Never" session only when the coherent wallet
+      capability generation is absent?
+- [ ] Does it avoid treating a null cached password as a lock signal? Fresh
+      passkey sessions intentionally have no plaintext password.
+- [ ] Does it re-read the operation-specific capability after a necessary cold
+      restore and capture any auth epoch only after restoration completes?
+- [ ] Are both fresh-passkey and cold-worker Never paths covered by tests?
 - [ ] Is the handler added to the "Handlers with Session Restoration" table in IMPLEMENTATION.md?
-- [ ] Without this, the handler will fail after service worker restarts when auto-lock is "Never"
+- [ ] Without restoration, a cold handler fails after worker restart; with a
+      redundant live restore, it can discard mnemonic authority or invalidate
+      an in-flight master authorization.
 
 ### If you added new storage keys:
 

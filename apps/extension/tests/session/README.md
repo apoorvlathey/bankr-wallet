@@ -11,6 +11,11 @@ fallback-browser, factor-revocation, storage-failure, and lock/restore race
 coverage is fail-closed. Architecture coverage pins one-way dependencies and size
 budgets beneath the stable `sessionCache.ts` facade.
 
+`tests/mnemonic/passkeyV2.test.ts` also exercises the fresh passkey side of the
+boundary: a redundant restore is a no-op, leaves the auth epoch and mnemonic
+key intact, and permits subsequent Bankr preparation and seed import. The
+background router tests separately freeze passwordless private-key import.
+
 `passkeyNeverSession.test.ts` exercises cold-restored production signature and
 Bankr submission handlers for the three signing wallet types and keeps
 impersonator accounts reject-only. `passkeyNeverLocalTransactions.test.ts`
