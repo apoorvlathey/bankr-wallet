@@ -885,6 +885,12 @@ import { Circle, Square, Triangle, Check, ChevronDown } from "lucide-react";
 
 **Mobile-First Approach**: Use Chakra's responsive array/object syntax.
 
+Extension surface identity must not depend on viewport height. A Chrome side
+panel can be shorter than the 600px action popup when the browser window is
+small. Resolve popup, tab, and side-panel contexts from Chrome's extension-view
+identity, apply the side-panel `100dvh` shell before first paint, and keep one
+`data-screen-scroll-owner` region responsible for vertical overflow.
+
 **Breakpoints** (Chakra defaults):
 
 | Name   | Value  | Description |

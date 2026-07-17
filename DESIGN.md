@@ -89,7 +89,10 @@
 - Signature layout move: each screen reads as a short decision path: context, outcome, details, action.
 - Density: balanced. Use unboxed sections and one outer surface owner rather than nested cards.
 - Scanning: F pattern with primary identity and outcome top-left and numeric values right-aligned.
-- Responsive: mobile-first. Popup 360x600, window 480x720, sidepanel 420x760 are first-class viewports.
+- Responsive: mobile-first. Popup 360x600, window 480x720, sidepanel 420x760,
+  and short browser-window side panels are first-class viewports. Surface
+  identity is independent of height; the shell fills the available viewport
+  and one inner region owns vertical scrolling.
 
 ## Components and states
 
@@ -267,6 +270,10 @@
   their `to` / `from` counterparties now read as one compact identity group.
   Tightened line boxes remove the apparent blank row without shrinking the
   counterparty explorer action below its 24px accessible target.
+- 2026-07-17 short-height surface audit: passes the mobile shell contract with
+  height-independent side-panel identity, pre-paint dynamic viewport sizing,
+  an explicit zero-min-height flex chain, and one bounded vertical scroll
+  owner. No palette, typography, target, focus, or motion behavior changed.
 - 2026-07-14 force-inclusion route audit: passes with a text-first destination
   and L1 path, paired chain identities, no new interactive target, and no
   reliance on icon color to communicate the execution route.
@@ -385,6 +392,10 @@
 
 ## Changelog
 
+- 2026-07-17: made extension surface detection independent of viewport height.
+  Short Chrome side panels now receive the full dynamic viewport shell before
+  React paints and retain a single scroll owner instead of falling back to the
+  fixed 360x600 action-popup canvas.
 - 2026-07-17: tightened confirmed ERC-20 identity typography so token symbols
   sit closer to their `to` / `from` counterparty line while the token mark stays
   vertically centered against the complete two-line identity stack and the

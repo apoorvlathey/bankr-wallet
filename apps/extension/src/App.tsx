@@ -118,6 +118,10 @@ import {
 import { useRpcIssueAlert } from "@/app/home/useRpcIssueAlert";
 import WaitingForOnboardingScreen from "@/app/screens/WaitingForOnboardingScreen";
 import CrossDappBatchRequestScreen from "@/app/screens/CrossDappBatchRequestScreen";
+import {
+  applyExtensionSurfaceClass,
+  detectExtensionSurface,
+} from "@/app/extensionSurface";
 import AppBootstrapTransition from "@/app/AppBootstrapTransition";
 import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
 import { useManualWalletLock } from "@/app/hooks/useManualWalletLock";
@@ -232,7 +236,6 @@ function App() {
   const [sidePanelMode, setSidePanelMode] = useState(false);
   const [isInSidePanel, setIsInSidePanel] = useState(false);
   const [isFullscreenTab, setIsFullscreenTab] = useState(false);
-  const [, setIsPopupWindow] = useState(false);
   const [failedTxError, setFailedTxError] =
     useState<FailedTransactionError | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] =
@@ -314,7 +317,6 @@ function App() {
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
-  const isPopupWindowRef = useRef(false);
   const { establishKeepalivePort, sendMessageWithRetry } =
     useRuntimeMessaging();
 
@@ -611,27 +613,10 @@ function App() {
       return response?.supported || false;
     };
 
-    const detectSidePanelContext = () => {
-      // Detect if we're running in a sidepanel context by checking window dimensions
-      // Sidepanel typically has more height than the popup's fixed 680px
-      const isWideEnough = window.innerWidth >= 300;
-      const isTall = window.innerHeight > 700;
-      return isWideEnough && isTall;
-    };
-
-    const detectFullscreenContext = () => {
-      // Fullscreen tab has much larger width than popup (360px) or sidepanel (~400px)
-      // Also check if we're not in a popup window context
-      const isWide = window.innerWidth > 500;
-      const isTall = window.innerHeight > 700;
-      // Check if we're a top-level window (not popup)
-      const isTopLevel = window.top === window.self;
-      return isWide && isTall && isTopLevel;
-    };
-
     const initSidePanel = async () => {
       const supported = await checkSidePanelSupport();
       setSidePanelSupported(supported);
+      let preferenceEnabled = false;
 
       if (supported) {
         // Check if sidepanel mode has been explicitly set
@@ -648,6 +633,7 @@ function App() {
             });
             if (response?.success) {
               setSidePanelMode(true);
+              preferenceEnabled = true;
               console.log("Sidepanel mode enabled by default");
             } else {
               setSidePanelMode(false);
@@ -657,74 +643,23 @@ function App() {
           }
         } else {
           setSidePanelMode(storedMode);
+          preferenceEnabled = storedMode;
         }
       }
 
-      // Check if we're in a popup-type window (created by chrome.windows.create)
-      // This is authoritative and doesn't depend on dimensions — important because
-      // macOS fullscreen can resize popup windows, causing dimension-based detection to fail
-      let inPopupWindow = false;
-      try {
-        const currentWindow = await chrome.windows.getCurrent();
-        inPopupWindow = currentWindow.type === "popup";
-      } catch {
-        // Fallback: not in a popup window
-      }
-      setIsPopupWindow(inPopupWindow);
-      isPopupWindowRef.current = inPopupWindow;
-
-      // Detect if currently in fullscreen tab first (takes priority)
-      // But never if we're in a popup window (macOS fullscreen can resize popups)
-      const inFullscreen = !inPopupWindow && detectFullscreenContext();
+      const surface = await detectExtensionSurface({
+        sidePanelSupported: supported,
+        sidePanelPreferenceEnabled: preferenceEnabled,
+      });
+      const inFullscreen = surface === "fullscreen-tab";
       setIsFullscreenTab(inFullscreen);
-
-      // Detect if currently in sidepanel (only if not fullscreen and not popup window)
-      const inSidePanel =
-        !inPopupWindow && !inFullscreen && detectSidePanelContext();
+      const inSidePanel = surface === "sidepanel";
       setIsInSidePanel(inSidePanel);
-
-      // Add/remove body class for CSS
-      document.body.classList.remove(
-        "sidepanel-mode",
-        "fullscreen-mode",
-        "popup-window-mode",
-      );
-      if (inPopupWindow) {
-        document.body.classList.add("popup-window-mode");
-      } else if (inFullscreen) {
-        document.body.classList.add("fullscreen-mode");
-      } else if (inSidePanel) {
-        document.body.classList.add("sidepanel-mode");
-      }
+      applyExtensionSurfaceClass(surface);
     };
 
     initSidePanel();
-
-    // Listen for window resize to update sidepanel/fullscreen detection
-    const handleResize = () => {
-      // Never reclassify a popup window — macOS fullscreen can resize it
-      if (isPopupWindowRef.current) return;
-
-      const isWide = window.innerWidth > 500;
-      const isTall = window.innerHeight > 700;
-      const isTopLevel = window.top === window.self;
-      const inFullscreen = isWide && isTall && isTopLevel;
-      const inSidePanel = !inFullscreen && isTall;
-
-      setIsFullscreenTab(inFullscreen);
-      setIsInSidePanel(inSidePanel);
-
-      document.body.classList.remove("sidepanel-mode", "fullscreen-mode");
-      if (inFullscreen) {
-        document.body.classList.add("fullscreen-mode");
-      } else if (inSidePanel) {
-        document.body.classList.add("sidepanel-mode");
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-    // The viewport mode listener is registered once for this popup instance.
+    // Surface identity is fixed for the lifetime of this renderer document.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3357,13 +3292,14 @@ function App() {
   };
 
   return (
-    <Box bg="surface.base" h="100%" display="flex" flexDirection="column">
+    <Box bg="surface.base" h="100%" minH={0} display="flex" flexDirection="column">
       {/* Fullscreen centered wrapper */}
       <Box
         maxW={isFullscreenTab ? "480px" : "100%"}
         mx="auto"
         w="100%"
         h="100%"
+        minH={0}
         display="flex"
         flexDirection="column"
       >
@@ -3387,12 +3323,12 @@ function App() {
           }}
         />
 
-
         <Container
           data-screen-scroll-owner
           pt={3}
           pb={4}
           flex="1"
+          minH={0}
           display="flex"
           flexDirection="column"
           overflowY="auto"

@@ -21,6 +21,7 @@ import {
   finishPasskeyPrompt,
 } from "@/components/passkeyPromptGate";
 import { playInteractionSound } from "@/sounds/soundManager";
+import { detectExtensionSurface } from "@/app/extensionSurface";
 
 interface UnlockScreenProps {
   onUnlock: () => void;
@@ -104,22 +105,19 @@ function UnlockScreen({
     const init = async () => {
       const supported = await checkSidePanelSupport();
       setSidePanelSupported(supported);
+      let sidePanelPreferenceEnabled = false;
 
       if (supported) {
         const mode = await checkSidePanelMode();
         setSidePanelMode(mode);
+        sidePanelPreferenceEnabled = mode;
       }
 
-      // Detect if currently in sidepanel. Popup windows can be the same height
-      // as the sidepanel, so don't rely on dimensions alone.
-      let inPopupWindow = false;
-      try {
-        const currentWindow = await chrome.windows.getCurrent();
-        inPopupWindow = currentWindow.type === "popup";
-      } catch {
-        inPopupWindow = false;
-      }
-      setIsInSidePanel(supported && !inPopupWindow && window.innerHeight > 620);
+      const surface = await detectExtensionSurface({
+        sidePanelSupported: supported,
+        sidePanelPreferenceEnabled,
+      });
+      setIsInSidePanel(surface === "sidepanel");
 
       const [biometricSupported, biometricStatus] = await Promise.all([
         isPasskeyUnlockSupported(),

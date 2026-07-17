@@ -6,10 +6,12 @@ import "./index.css";
 import { NetworksProvider } from "@/contexts/NetworksContext";
 import { bootstrapThemeAttribute } from "@/theme/bootstrap";
 import { preloadAvatarCache } from "@/lib/avatarCacheClient";
+import { bootstrapExtensionSurfaceClass } from "@/app/extensionSurface";
 
 // Resolve and apply the active theme to <html data-theme=...> BEFORE React
 // renders so the very first paint matches the user's selection (no flash).
 bootstrapThemeAttribute();
+bootstrapExtensionSurfaceClass();
 void preloadAvatarCache().catch(() => {});
 
 ReactDOM.render(
