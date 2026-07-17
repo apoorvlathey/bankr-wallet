@@ -31,11 +31,12 @@ import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
 import {
   SeedIcon,
 } from "@/components/shared/AccountTypeIcons";
-import PrivateKeyInput from "@/components/shared/PrivateKeyInput";
-import {
-  AddAccountTypeGrid,
-  type AccountType,
-} from "@/components/AddAccountTypeGrid";
+import { LocalAccountBiometricGateStatus } from "@/components/AddAccount/LegacyBiometricUpgradeNotice";
+import { AddAccountTypeSelectionScreen } from "@/components/AddAccount/AddAccountTypeSelectionScreen";
+import { AddAccountActionBar } from "@/components/AddAccount/AddAccountActionBar";
+import { PrivateKeyAccountSection } from "@/components/AddAccount/PrivateKeyAccountSection";
+import { useLocalAccountBiometricGate } from "@/components/AddAccount/useLocalAccountBiometricGate";
+import type { AccountType } from "@/components/AddAccountTypeGrid";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
@@ -51,7 +52,6 @@ import {
   ListSurface,
   ScreenBody,
   ScreenSection,
-  StickyActionBar,
 } from "@/components/ui";
 
 interface Account {
@@ -72,6 +72,7 @@ interface SeedGroup {
 interface AddAccountProps {
   onBack: () => void;
   onAccountAdded: () => void;
+  onOpenBiometricSettings: () => void;
 }
 
 const accountTypeTitles: Record<AccountType, string> = {
@@ -81,13 +82,17 @@ const accountTypeTitles: Record<AccountType, string> = {
   impersonator: "View-only account",
 };
 
-function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
+function AddAccount({
+  onBack,
+  onAccountAdded,
+  onOpenBiometricSettings,
+}: AddAccountProps) {
   const toast = useThemedToast();
 
   const [accountType, setAccountType] = useState<AccountType | null>(null);
   const [privateKey, setPrivateKey] = useState("");
   const [derivedAddress, setDerivedAddress] = useState<string | null>(null);
-  const [privateKeyBackupReady, setPrivateKeyBackupReady] = useState(true);
+  const [privateKeyBackup, setPrivateKeyBackup] = useState({ isGenerated: false, isConfirmed: true });
   const [displayName, setDisplayName] = useState("");
   const [bankrAddress, setBankrAddress] = useState("");
   const [bankrApiKey, setBankrApiKey] = useState("");
@@ -98,6 +103,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const [showSeedSetup, setShowSeedSetup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const needsBiometricUpgrade = useLocalAccountBiometricGate();
   const [pickingGroupId, setPickingGroupId] = useState<string | null>(null);
   const [impersonatorCopied, setImpersonatorCopied] = useState(false);
   const [errors, setErrors] = useState<{
@@ -151,7 +157,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
 
   const handleGeneratedBackupStateChange = useCallback(
     (isGenerated: boolean, isConfirmed: boolean) => {
-      setPrivateKeyBackupReady(!isGenerated || isConfirmed);
+      setPrivateKeyBackup({ isGenerated, isConfirmed });
     },
     [],
   );
@@ -181,9 +187,9 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
 
     try {
       if (accountType === "privateKey") {
-        if (!privateKeyBackupReady) {
+        if (privateKeyBackup.isGenerated && !privateKeyBackup.isConfirmed) {
           setErrors({
-            privateKey: "Reveal or copy the generated key, then confirm you saved it",
+            privateKey: "Confirm that you saved the generated private key",
           });
           setIsSubmitting(false);
           return;
@@ -389,7 +395,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
   };
 
   // Render SeedPhraseSetup when seed phrase is selected
-  if (showSeedSetup) {
+  if (showSeedSetup && needsBiometricUpgrade === false) {
     return (
       <SeedPhraseSetup
         onBack={() => {
@@ -403,7 +409,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
 
   // Render the multi-select picker when the user opens an existing seed
   // group to derive more addresses.
-  if (pickingGroupId) {
+  if (pickingGroupId && needsBiometricUpgrade === false) {
     const group = seedGroups.find((g) => g.id === pickingGroupId);
     const groupTitle = group?.name || "Seed Phrase";
     return (
@@ -441,24 +447,25 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
 
   if (!accountType) {
     return (
-      <AppScreen>
-        <AppHeader title="Add account" onBack={onBack} />
-        <ScreenBody pt={5}>
-          <ScreenSection title="Choose an account type">
-            <AddAccountTypeGrid
-              hasBankrAccount={hasBankrAccount}
-              onSelect={(type) => {
-                setAccountType(type);
-                if (type === "seedPhrase" && seedGroups.length === 0) {
-                  setShowSeedSetup(true);
-                }
-              }}
-            />
-          </ScreenSection>
-        </ScreenBody>
-      </AppScreen>
+      <AddAccountTypeSelectionScreen
+        hasBankrAccount={hasBankrAccount}
+        onBack={onBack}
+        onSelect={(type) => {
+          setAccountType(type);
+          if (
+            type === "seedPhrase" &&
+            seedGroups.length === 0 &&
+            needsBiometricUpgrade === false
+          ) {
+            setShowSeedSetup(true);
+          }
+        }}
+      />
     );
   }
+
+  const isLocalAccount =
+    accountType === "privateKey" || accountType === "seedPhrase";
 
   return (
     <AppScreen>
@@ -470,7 +477,7 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
           // as an "imported" key and bypassing its backup acknowledgement.
           setPrivateKey("");
           setDerivedAddress(null);
-          setPrivateKeyBackupReady(true);
+          setPrivateKeyBackup({ isGenerated: false, isConfirmed: true });
           setBankrApiKey("");
           setShowBankrApiKey(false);
           setAccountType(null);
@@ -479,27 +486,27 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
       />
       <ScreenBody pt={5}>
         <VStack spacing={6} align="stretch">
-          {accountType === "privateKey" && (
-          <ScreenSection
-            title="Import private key"
-            description="The key is encrypted before it is stored locally on this device."
-          >
-            <PrivateKeyInput
+          {isLocalAccount && (
+            <LocalAccountBiometricGateStatus
+              needsUpgrade={needsBiometricUpgrade}
+              onOpenBiometricSettings={onOpenBiometricSettings}
+            />
+          )}
+
+          {accountType === "privateKey" && needsBiometricUpgrade === false && (
+            <PrivateKeyAccountSection
               privateKey={privateKey}
               onPrivateKeyChange={setPrivateKey}
               derivedAddress={derivedAddress}
               error={errors.privateKey}
-              onClearError={() =>
-                setErrors((prev) => ({ ...prev, privateKey: undefined }))
-              }
-              safetyNotice="Never share this key with anyone."
-              requireGeneratedBackupConfirmation
-              onGeneratedBackupStateChange={handleGeneratedBackupStateChange}
+              onClearError={() => setErrors((prev) => ({ ...prev, privateKey: undefined }))}
+              backup={privateKeyBackup}
+              onBackupChange={(isConfirmed) => setPrivateKeyBackup((current) => ({ ...current, isConfirmed }))}
+              onBackupStateChange={handleGeneratedBackupStateChange}
             />
-          </ScreenSection>
-        )}
+          )}
 
-          {accountType === "seedPhrase" && (
+          {accountType === "seedPhrase" && needsBiometricUpgrade === false && (
             <ScreenSection
               title={seedGroups.length > 0 ? "Saved seed phrases" : "Set up a seed phrase"}
               description={
@@ -775,7 +782,8 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
           </ScreenSection>
         )}
 
-          {accountType !== "seedPhrase" && (
+          {accountType !== "seedPhrase" &&
+            (!isLocalAccount || needsBiometricUpgrade === false) && (
             <ScreenSection
               title="Account name"
               description="Optional. You can change this later."
@@ -807,33 +815,23 @@ function AddAccount({ onBack, onAccountAdded }: AddAccountProps) {
         </VStack>
       </ScreenBody>
 
-      <StickyActionBar
-        primaryAction={
-          <Button
-            variant="brand"
-            onClick={
-              accountType === "seedPhrase"
-                ? () => setShowSeedSetup(true)
-                : handleSubmit
-            }
-            isLoading={isSubmitting}
-            loadingText="Adding…"
-            isDisabled={
-              (accountType === "privateKey" &&
-                (!derivedAddress || !privateKeyBackupReady)) ||
-              (accountType === "bankr" &&
-                (!bankrAddress.trim() || !bankrApiKey.trim())) ||
-              (accountType === "impersonator" &&
-                (!impersonatorIsValid || impersonatorIsResolving))
-            }
-          >
-            {accountType === "seedPhrase"
-              ? seedGroups.length > 0
-                ? "Add another seed phrase"
-                : "Set up seed phrase"
-              : "Add account"}
-          </Button>
+      <AddAccountActionBar
+        accountType={accountType}
+        needsBiometricUpgrade={needsBiometricUpgrade}
+        isSubmitting={isSubmitting}
+        canAddPrivateKey={
+          !!derivedAddress &&
+          (!privateKeyBackup.isGenerated || privateKeyBackup.isConfirmed)
         }
+        privateKeyBackup={privateKeyBackup}
+        onPrivateKeyBackupChange={(isConfirmed) =>
+          setPrivateKeyBackup((current) => ({ ...current, isConfirmed }))
+        }
+        canAddBankr={!!bankrAddress.trim() && !!bankrApiKey.trim()}
+        canAddImpersonator={impersonatorIsValid && !impersonatorIsResolving}
+        seedGroupCount={seedGroups.length}
+        onAddAccount={handleSubmit}
+        onSetupSeedPhrase={() => setShowSeedSetup(true)}
       />
     </AppScreen>
   );

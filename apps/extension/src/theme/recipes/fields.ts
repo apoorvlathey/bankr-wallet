@@ -173,8 +173,29 @@ export function buildSelect(t: ThemeTokens) {
 }
 
 export function buildCheckbox(t: ThemeTokens) {
+  const commitmentVariant = {
+    control: {
+      _checked: {
+        bg: "accent.highlight",
+        borderColor: "accent.highlight",
+        color: "accentFg.highlight",
+        _hover: {
+          bg: "accent.highlight",
+          borderColor: "accent.highlight",
+        },
+      },
+      _indeterminate: {
+        bg: "accent.highlight",
+        borderColor: "accent.highlight",
+        color: "accentFg.highlight",
+      },
+    },
+  };
+
   // Preserve Chakra's existing Bauhaus checkbox treatment.
-  if (t.colorMode !== "dark") return {};
+  if (t.colorMode !== "dark") {
+    return { variants: { commitment: commitmentVariant } };
+  }
 
   return {
     baseStyle: {
@@ -247,6 +268,9 @@ export function buildCheckbox(t: ThemeTokens) {
     },
     defaultProps: {
       size: "md",
+    },
+    variants: {
+      commitment: commitmentVariant,
     },
   };
 }

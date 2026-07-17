@@ -97,8 +97,22 @@
 ## Components and states
 
 - Button hierarchy: one filled primary, neutral secondary, quiet tertiary. Saved-state commitments (`Save`, `Save changes`, and equivalent labels) and final commitment actions use the amber `brand` treatment rather than blue `primary`. Destructive red is loud only inside a destructive confirmation.
+- Seed phrase setup uses amber for Continue actions that advance recovery
+  material into account creation, including imported phrases.
+- Seed address selection is a commitment exception to ordinary blue selection:
+  selected import/derive checkmarks and their final action use semantic amber.
 - States: default, hover, pressed, focus-visible, disabled, loading, invalid/error, and selected where applicable. Weight never changes between states.
 - Inputs: visible labels, 44px minimum touch height, 16px input text, inline corrective errors, retained values.
+- Secret-backup acknowledgments sit at the trailing edge of their warning
+  action region, centered directly above the final button, and use amber only for the
+  checked commitment state. The checkbox is the acknowledgment and does not
+  require a separate reveal or copy action. Generated recovery phrases begin
+  concealed so revealing the secret remains deliberate. Backup action regions
+  use a compact 32px acknowledgment row and an 8px relationship gap.
+- Generated recovery-phrase setup follows the trust sequence: show and save the
+  secret first, then collect optional group and first-account labels. Helper
+  copy beneath generated and imported account labels explains their
+  relationship to derivation #0.
 - Lists and financial data: light row separators, aligned columns, tabular numerals, no heavy cell grid.
 - Overlays: popovers for small contextual choices; action sheets for 2 to 6 choices; full screens for search, selection, configuration, and transaction detail; dialogs only for blocking decisions.
 - Empty/loading/error: actionable empty copy, geometry-matching skeletons, recoverable errors with a next step.
@@ -211,6 +225,14 @@
 
 ## Slop audit
 
+- 2026-07-17 generated-seed flow audit: recovery comes before customization,
+  recovery begins concealed, backup acknowledgment sits adjacent to Continue,
+  optional names are grouped by proximity, and the first-account helper text
+  removes ambiguity without adding another decision.
+- 2026-07-17 generated-private-key acknowledgment audit: the native checkbox
+  remains keyboard-operable and visibly focused, aligns to the action edge,
+  and uses semantic amber tokens for its checked state without introducing a
+  second prerequisite interaction.
 - 2026-07-17 saved-state commitment audit: all extension actions labeled `Save`,
   `Save changes`, `Save contact`, or an equivalent saved-state action use the
   shared amber `brand` button variant. This includes Bankr credential changes,

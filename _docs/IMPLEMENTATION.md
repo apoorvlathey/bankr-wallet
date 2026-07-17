@@ -197,7 +197,14 @@ The extension supports four distinct account types that can be used simultaneous
 - **Byte conversion**: Uses native `bytesToHex()` from `cryptoUtils.ts` instead of Node.js `Buffer` (not available in browser service worker)
 - **Files**: the stable `mnemonicStorage.ts` encrypted-vault facade over the `mnemonic/` audit domain: `derivation.ts` (BIP39/44), `record.ts` / `crypto.ts` / `repository.ts` / `operations.ts` / `recovery.ts` (encrypted storage and recovery), `masterAccess.ts` (master-only call-stack capability), `integrity.ts` (master-wrapper/account proof), `addressPreview.ts` (secret-free public address derivation), `accountPersistence.ts` (shared collision, compensation, and cache-refresh boundary), and `accountHandlers.ts` (add/derive orchestration). UI entry points remain `SeedPhraseSetup.tsx` and `RevealSeedPhraseModal.tsx`.
 - **Display**: Account dropdown shows seed group name + derivation index (e.g., "Seed #1 · #0"). Account settings shows derivation index in type label.
-- **Address picker (shared)**: `components/SeedAddressPicker.tsx` is the single picker UI used by both flows: (1) new-import in `SeedPhraseSetup`, and (2) "Derive Addresses" on an existing seed group in `AddAccount`. Each row renders avatar (ENS or blockie), ENS name, BIP44 index, truncated address, portfolio USD total (`fetchPortfolio`, aborted on unmount), a copy button, and an Etherscan-mainnet link. The picker calls the background `previewSeedAddresses` handler, which accepts EITHER a raw `mnemonic` (import flow, no auth) OR a `seedGroupId` (existing-group flow, decrypts the stored mnemonic — requires an unlocked master session, including biometric). Paginates 5 at a time. Existing-group mode initial-fetches `0..maxExistingIndex + 5` so users see their already-added real accounts in context (locked as "added"). `addSeedPhraseGroup` and `deriveSeedAccount` both accept `indices: number[]` — bankr/seed collisions are silently skipped, PK collisions still convert in place, and view-only impersonators are ignored so they can coexist with imported seed accounts. `addSeedPhraseGroup` prevalidates that at least one selected index can be imported or converted before creating a seed group or writing `mnemonicVault`; duplicate-only imports fail without persisting seed material. Generate flow is unchanged (always derives index 0; nothing to discover on a fresh mnemonic).
+- **Generated phrase setup order**: Settings → Add Account generates and shows
+  the recovery phrase first. After the user acknowledges saving it, a separate
+  optional naming step labels the seed group and its first derived account.
+  The mnemonic remains only in renderer memory until that final step submits
+  `addSeedPhraseGroup`; backing out before submission persists nothing. The
+  generated phrase starts concealed, and an amber backup checkbox in the
+  sticky action region must be checked before Continue advances to naming.
+- **Address picker (shared)**: `components/SeedAddressPicker.tsx` is the single picker UI used by both flows: (1) new-import in `SeedPhraseSetup`, and (2) "Derive Addresses" on an existing seed group in `AddAccount`. Each row renders avatar (ENS or blockie), ENS name, BIP44 index, truncated address, portfolio USD total (`fetchPortfolio`, aborted on unmount), a copy button, and an Etherscan-mainnet link. Selected new addresses use the amber commitment checkbox treatment, and the import/derive submit action uses `brand`. The picker calls the background `previewSeedAddresses` handler, which accepts EITHER a raw `mnemonic` (import flow, no auth) OR a `seedGroupId` (existing-group flow, decrypts the stored mnemonic — requires an unlocked master session, including biometric). Paginates 5 at a time. Existing-group mode initial-fetches `0..maxExistingIndex + 5` so users see their already-added real accounts in context (locked as "added"). `addSeedPhraseGroup` and `deriveSeedAccount` both accept `indices: number[]` — bankr/seed collisions are silently skipped, PK collisions still convert in place, and view-only impersonators are ignored so they can coexist with imported seed accounts. `addSeedPhraseGroup` prevalidates that at least one selected index can be imported or converted before creating a seed group or writing `mnemonicVault`; duplicate-only imports fail without persisting seed material. Generate flow is unchanged (always derives index 0; nothing to discover on a fresh mnemonic).
 
 #### PK → Seed Phrase Account Conversion
 
@@ -3183,6 +3190,10 @@ WebAuthn PRF output
   early V2 passkey record requires an explicit master-password upgrade before
   biometric seed access. `getPasskeyUnlockStatus.mnemonicCapable` reports this
   distinction so Settings offers the upgrade instead of claiming full access.
+  Settings → Add Account uses the same status to hide private-key and seed
+  create/import/derive controls before any secret enters renderer state; a
+  signing-only legacy biometric session instead links directly to Biometric
+  Unlock settings for master-password reconfiguration.
 - `passkeyUnlock` lives only in `chrome.storage.local`; it is not synced.
 - Passkey unlock sets `passwordType` to `"master"` but does not cache or store the master password.
 - Passkey setup stores the local wrapper only after backend master-session

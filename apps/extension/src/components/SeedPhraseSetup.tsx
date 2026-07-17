@@ -7,17 +7,16 @@ import {
   Input,
   Button,
   FormControl,
+  FormHelperText,
   FormLabel,
   FormErrorMessage,
   IconButton,
   SimpleGrid,
   Spinner,
   Textarea,
-  type ButtonProps,
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import {
-  ArrowBackIcon,
   CopyIcon,
   CheckIcon,
   ViewIcon,
@@ -26,22 +25,20 @@ import {
   DownloadIcon,
 } from "@chakra-ui/icons";
 import { IconBox } from "@/theme";
+import { BackupConfirmationCheckbox } from "@/components/shared/BackupConfirmationCheckbox";
+import { SetupFrame } from "@/components/SeedPhraseSetup/SetupFrame";
 import SeedAddressPicker from "./SeedAddressPicker";
 import {
-  AppHeader,
-  AppScreen,
   ListItem,
   ListItemContent,
   ListItemDescription,
   ListItemMedia,
   ListItemTitle,
   ListSurface,
-  ScreenBody,
   ScreenSection,
-  StickyActionBar,
 } from "@/components/ui";
 
-type Mode = "choose" | "generate" | "import" | "pick";
+type Mode = "choose" | "nameGenerated" | "import" | "pick";
 
 interface SeedPhraseSetupProps {
   onBack: () => void;
@@ -54,50 +51,6 @@ interface SeedPhraseSetupProps {
     accountDisplayName?: string,
   ) => void;
 }
-
-// Lifted to module scope so identity is stable across renders — otherwise
-// re-defining these on every render remounts the entire subtree on each
-// keystroke and kills focus on the name inputs.
-const SetupFrame = ({
-  isOnboarding,
-  title,
-  onBack,
-  action,
-  children,
-}: {
-  isOnboarding: boolean;
-  title: string;
-  onBack: () => void;
-  action?: React.ReactElement<ButtonProps>;
-  children: React.ReactNode;
-}) =>
-  isOnboarding ? (
-    <VStack spacing={6} w="full" maxW="400px" align="stretch">
-      <HStack w="full" justify="space-between" align="center">
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-        />
-        <Text fontWeight="700" fontSize="md" color="fg.primary" flex={1} textAlign="center" mx={2}>
-          {title}
-        </Text>
-        <Box w="32px" flexShrink={0} />
-      </HStack>
-      {children}
-      {action}
-    </VStack>
-  ) : (
-    <AppScreen>
-      <AppHeader title={title} onBack={onBack} />
-      <ScreenBody pt={5}>
-        <VStack spacing={6} align="stretch">{children}</VStack>
-      </ScreenBody>
-      {action && <StickyActionBar primaryAction={action} />}
-    </AppScreen>
-  );
 
 function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps) {
   const toast = useThemedToast();
@@ -114,10 +67,12 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
   const [importedMnemonic, setImportedMnemonic] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [accountDisplayName, setAccountDisplayName] = useState("");
-  const [showMnemonic, setShowMnemonic] = useState(true);
+  const [showMnemonic, setShowMnemonic] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [generatedStepComplete, setGeneratedStepComplete] = useState(false);
+  const [generatedBackupConfirmed, setGeneratedBackupConfirmed] =
+    useState(false);
   const [mnemonicCopied, setMnemonicCopied] = useState(false);
 
   // Set after the import mnemonic validates — drives the picker step.
@@ -147,6 +102,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
       }
 
       setGeneratedMnemonic(response.mnemonic);
+      setGeneratedStepComplete(false);
+      setGeneratedBackupConfirmed(false);
+      setShowMnemonic(false);
       setIsSubmitting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate seed phrase");
@@ -160,7 +118,6 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
     setError(null);
     try {
       if (onCollect) {
-        setConfirmed(true);
         onCollect(
           generatedMnemonic,
           [0],
@@ -189,7 +146,6 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
         throw new Error(response.error || "Failed to save seed phrase");
       }
 
-      setConfirmed(true);
       toast({
         title: "Account added",
         description: "Seed phrase account has been created",
@@ -268,30 +224,42 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
     }
   };
 
-  // After generating: show the mnemonic grid and confirm button
-  if (generatedMnemonic) {
+  // After generating: show the mnemonic before collecting optional names.
+  if (generatedMnemonic && !generatedStepComplete) {
     const words = generatedMnemonic.split(" ");
     return (
       <SetupFrame
         isOnboarding={isOnboarding}
         title="Save your seed phrase"
         onBack={() => {
-              if (!confirmed) {
-                setGeneratedMnemonic(null);
-                setMode("choose");
-              } else {
-                onComplete();
-              }
+          setGeneratedMnemonic(null);
+          setGeneratedBackupConfirmed(false);
+          setMode("choose");
         }}
+        actionSummary={
+          <BackupConfirmationCheckbox
+            isChecked={generatedBackupConfirmed}
+            label="I’ve saved my seed phrase"
+            onChange={setGeneratedBackupConfirmed}
+          />
+        }
         action={
           <Button
             variant="brand"
             w="full"
-            onClick={handleConfirmGenerated}
+            onClick={() => {
+              if (onCollect) {
+                handleConfirmGenerated();
+              } else {
+                setGeneratedStepComplete(true);
+                setMode("nameGenerated");
+              }
+            }}
             isLoading={isSubmitting}
-            loadingText="Saving…"
+            loadingText="Continuing…"
+            isDisabled={!generatedBackupConfirmed}
           >
-            I’ve saved my seed phrase
+            Continue
           </Button>
         }
       >
@@ -379,16 +347,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
             <ListItem
               interactive
               isDisabled={isSubmitting}
-              onClick={() => {
-                if (onCollect) {
-                  // Skip the intermediate "name your account" screen during
-                  // onboarding — generate immediately and jump to the mnemonic
-                  // display. Naming happens later in settings.
-                  handleGenerate();
-                } else {
-                  setMode("generate");
-                }
-              }}
+              onClick={handleGenerate}
             >
               <ListItemMedia>
                 <IconBox
@@ -432,68 +391,65 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
               </ListItemContent>
             </ListItem>
           </ListSurface>
+          {error && (
+            <Text mt={3} fontSize="sm" color="status.error.emphasis" fontWeight="600">
+              {error}
+            </Text>
+          )}
         </ScreenSection>
       </SetupFrame>
     );
   }
 
-  // Generate mode form (display name + generate button)
-  if (mode === "generate") {
+  // The generated phrase is acknowledged before optional account naming.
+  if (mode === "nameGenerated") {
     return (
       <SetupFrame
         isOnboarding={isOnboarding}
-        title="Generate seed phrase"
-        onBack={() => setMode("choose")}
+        title="Name your seed phrase"
+        onBack={() => {
+          setShowMnemonic(false);
+          setGeneratedStepComplete(false);
+        }}
         action={
           <Button
             variant="brand"
             w="full"
-            onClick={handleGenerate}
+            onClick={handleConfirmGenerated}
             isLoading={isSubmitting}
-            loadingText="Generating…"
+            loadingText="Adding…"
           >
-            Generate seed phrase
+            Add account
           </Button>
         }
       >
-          {onCollect ? (
-            <Box
-              bg="surface.sunken"
-              border="1px solid"
-              borderColor="border.subtle"
-              borderRadius="md"
-              p={3}
-            >
-              <Text fontSize="sm" color="fg.secondary">
-                A new 12-word recovery phrase will be generated for your wallet. You can name your account later from settings.
-              </Text>
-            </Box>
-          ) : (
-            <ScreenSection
-              title="Name your seed group"
-              description="Both names are optional and can be changed later."
-            >
-              <VStack spacing={4} align="stretch">
-                <FormControl>
-                  <FormLabel>Group name (optional)</FormLabel>
-                  <Input
-                    placeholder="e.g., My Seed Wallet"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
-                </FormControl>
+          <ScreenSection
+            title="Name your seed group"
+            description="Both names are optional and can be changed later."
+          >
+            <VStack spacing={4} align="stretch">
+              <FormControl>
+                <FormLabel>Group name (optional)</FormLabel>
+                <Input
+                  placeholder="e.g., My Seed Wallet"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+              </FormControl>
 
-                <FormControl>
-                  <FormLabel>Account display name (optional)</FormLabel>
-                  <Input
-                    placeholder="e.g., Main Account"
-                    value={accountDisplayName}
-                    onChange={(e) => setAccountDisplayName(e.target.value)}
-                  />
-                </FormControl>
-              </VStack>
-            </ScreenSection>
-          )}
+              <FormControl>
+                <FormLabel>Account display name (optional)</FormLabel>
+                <Input
+                  placeholder="e.g., Main Account"
+                  value={accountDisplayName}
+                  onChange={(e) => setAccountDisplayName(e.target.value)}
+                />
+                <FormHelperText>
+                  This names the first account generated from this seed phrase.
+                </FormHelperText>
+              </FormControl>
+            </VStack>
+          </ScreenSection>
 
           {error && (
             <Box bg="status.error.bg" border="1px solid" borderColor="status.error.border" borderRadius="md" p={3}>
@@ -547,7 +503,7 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
       onBack={() => setMode("choose")}
       action={
         <Button
-          variant="primary"
+          variant="brand"
           w="full"
           onClick={handleImport}
           isLoading={isSubmitting}
@@ -604,6 +560,9 @@ function SeedPhraseSetup({ onBack, onComplete, onCollect }: SeedPhraseSetupProps
                     value={accountDisplayName}
                     onChange={(e) => setAccountDisplayName(e.target.value)}
                   />
+                  <FormHelperText>
+                    This names the first account imported from this seed phrase.
+                  </FormHelperText>
                 </FormControl>
               </>
             )}

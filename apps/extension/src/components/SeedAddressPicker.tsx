@@ -148,6 +148,7 @@ function AddressRow({
       _focusVisible={{ boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)" }}
     >
       <Checkbox
+        variant="commitment"
         isChecked={checked}
         isDisabled={locked}
         onChange={onToggle}
@@ -530,7 +531,7 @@ function SeedAddressPicker({
         </Box>
       )}
       <Button
-        variant="primary"
+        variant="brand"
         w="full"
         onClick={handleSubmit}
         isLoading={isSubmitting}

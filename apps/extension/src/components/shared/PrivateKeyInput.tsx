@@ -12,7 +12,6 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Checkbox,
 } from "@chakra-ui/react";
 import {
   ExternalLinkIcon,
@@ -25,6 +24,7 @@ import {
 import { generatePrivateKey } from "@/utils/privateKeyUtils";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { CopyButton } from "@/components/CopyButton";
+import { BackupConfirmationCheckbox } from "./BackupConfirmationCheckbox";
 
 type PkMode = "import" | "generate";
 
@@ -38,6 +38,9 @@ interface PrivateKeyInputProps {
   autoFocus?: boolean;
   safetyNotice?: string;
   requireGeneratedBackupConfirmation?: boolean;
+  generatedBackupConfirmed?: boolean;
+  onGeneratedBackupConfirmedChange?: (isConfirmed: boolean) => void;
+  showGeneratedBackupConfirmation?: boolean;
   onGeneratedBackupStateChange?: (
     isGenerated: boolean,
     isConfirmed: boolean,
@@ -54,6 +57,9 @@ export default function PrivateKeyInput({
   autoFocus,
   safetyNotice,
   requireGeneratedBackupConfirmation = false,
+  generatedBackupConfirmed,
+  onGeneratedBackupConfirmedChange,
+  showGeneratedBackupConfirmation = true,
   onGeneratedBackupStateChange,
 }: PrivateKeyInputProps) {
   const [pkMode, setPkMode] = useState<PkMode>("import");
@@ -61,10 +67,10 @@ export default function PrivateKeyInput({
   const [pkCopied, setPkCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showUpdateGlow, setShowUpdateGlow] = useState(false);
-  const [hasInteractedWithGeneratedKey, setHasInteractedWithGeneratedKey] =
+  const [internalBackupConfirmed, setInternalBackupConfirmed] =
     useState(false);
-  const [generatedBackupConfirmed, setGeneratedBackupConfirmed] =
-    useState(false);
+  const backupConfirmed =
+    generatedBackupConfirmed ?? internalBackupConfirmed;
   const regenerationTimerRef = useRef<number | null>(null);
   const glowTimerRef = useRef<number | null>(null);
 
@@ -82,15 +88,20 @@ export default function PrivateKeyInput({
   useEffect(() => {
     onGeneratedBackupStateChange?.(
       pkMode === "generate",
-      pkMode !== "generate" ||
-        (hasInteractedWithGeneratedKey && generatedBackupConfirmed),
+      pkMode !== "generate" || backupConfirmed,
     );
   }, [
-    generatedBackupConfirmed,
-    hasInteractedWithGeneratedKey,
+    backupConfirmed,
     onGeneratedBackupStateChange,
     pkMode,
   ]);
+
+  const updateBackupConfirmation = (isConfirmed: boolean) => {
+    if (generatedBackupConfirmed === undefined) {
+      setInternalBackupConfirmed(isConfirmed);
+    }
+    onGeneratedBackupConfirmedChange?.(isConfirmed);
+  };
 
   const markGeneratedValuesUpdated = () => {
     if (glowTimerRef.current !== null) {
@@ -107,8 +118,7 @@ export default function PrivateKeyInput({
     onPrivateKeyChange(generatePrivateKey());
     setShowPrivateKey(false);
     setPkCopied(false);
-    setHasInteractedWithGeneratedKey(false);
-    setGeneratedBackupConfirmed(false);
+    updateBackupConfirmation(false);
     markGeneratedValuesUpdated();
   };
 
@@ -150,8 +160,7 @@ export default function PrivateKeyInput({
             }
             setIsRegenerating(false);
             setShowUpdateGlow(false);
-            setHasInteractedWithGeneratedKey(false);
-            setGeneratedBackupConfirmed(false);
+            updateBackupConfirmation(false);
             onPrivateKeyChange("");
           }}
           _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
@@ -295,10 +304,7 @@ export default function PrivateKeyInput({
                     icon={showPrivateKey ? <ViewOffIcon /> : <ViewIcon />}
                     size="xs"
                     variant="ghost"
-                    onClick={() => {
-                      setShowPrivateKey(!showPrivateKey);
-                      setHasInteractedWithGeneratedKey(true);
-                    }}
+                    onClick={() => setShowPrivateKey(!showPrivateKey)}
                     color="text.secondary"
                     tabIndex={-1}
                   />
@@ -310,7 +316,6 @@ export default function PrivateKeyInput({
                     onClick={async () => {
                       await navigator.clipboard.writeText(privateKey);
                       setPkCopied(true);
-                      setHasInteractedWithGeneratedKey(true);
                       setTimeout(() => setPkCopied(false), 2000);
                     }}
                     color={pkCopied ? "accent.highlight" : "fg.secondary"}
@@ -342,20 +347,15 @@ export default function PrivateKeyInput({
                 Never share with anyone.
               </Text>
             </Box>
-            {requireGeneratedBackupConfirmation && (
-              <Checkbox
-                mt={3}
-                isChecked={generatedBackupConfirmed}
-                isDisabled={!hasInteractedWithGeneratedKey}
-                onChange={(event) =>
-                  setGeneratedBackupConfirmed(event.target.checked)
-                }
-                colorScheme="yellow"
-              >
-                <Text fontSize="sm" color="fg.primary" fontWeight="600">
-                  I saved this private key
-                </Text>
-              </Checkbox>
+            {requireGeneratedBackupConfirmation &&
+              showGeneratedBackupConfirmation && (
+              <Box mt={3}>
+                <BackupConfirmationCheckbox
+                  isChecked={backupConfirmed}
+                  label="I saved this private key"
+                  onChange={updateBackupConfirmation}
+                />
+              </Box>
             )}
           </FormControl>
         </VStack>

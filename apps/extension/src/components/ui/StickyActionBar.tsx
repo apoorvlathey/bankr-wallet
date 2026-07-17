@@ -5,12 +5,13 @@ export interface StickyActionBarProps extends BoxProps {
   primaryAction: ReactNode;
   secondaryAction?: ReactNode;
   summary?: ReactNode;
+  summaryGap?: BoxProps["marginBottom"];
 }
 
 /** Non-scrolling bottom action region for one primary or a secondary/primary pair. */
 export const StickyActionBar = forwardRef<HTMLDivElement, StickyActionBarProps>(
   function StickyActionBar(
-    { primaryAction, secondaryAction, summary, ...rest },
+    { primaryAction, secondaryAction, summary, summaryGap = 3, ...rest },
     ref,
   ) {
     return (
@@ -31,7 +32,7 @@ export const StickyActionBar = forwardRef<HTMLDivElement, StickyActionBarProps>(
         pb="calc(12px + env(safe-area-inset-bottom, 0px))"
       >
         {summary && (
-          <Box minW={0} mb={3}>
+          <Box minW={0} mb={summaryGap}>
             {summary}
           </Box>
         )}

@@ -368,7 +368,11 @@ function AccountManagementPreview({
   if (scenario === "add") {
     return (
       <PreviewShell>
-        <AddAccount onBack={() => {}} onAccountAdded={() => {}} />
+        <AddAccount
+          onBack={() => {}}
+          onAccountAdded={() => {}}
+          onOpenBiometricSettings={() => {}}
+        />
       </PreviewShell>
     );
   }

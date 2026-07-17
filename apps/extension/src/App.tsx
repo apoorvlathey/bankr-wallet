@@ -2366,8 +2366,8 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <AddAccount
-              onBack={() => setView("main")}
+            <AddAccount onBack={() => setView("main")}
+              onOpenBiometricSettings={() => { setSettingsInitialTab("biometricUnlock"); setView("settings"); }}
               onAccountAdded={async () => {
                 // Account creation makes the new account the global default.
                 // Adopt it only in the tab where the user completed the flow;

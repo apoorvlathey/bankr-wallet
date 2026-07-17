@@ -37,3 +37,6 @@ the visible token symbol across transaction and permission-review surfaces.
 
 Feature-specific state and one-off child components stay in their owning
 domain. Domain-free screen/list primitives belong in `components/ui/` instead.
+
+`BackupConfirmationCheckbox.tsx` is the shared amber commitment control used
+when a private key or recovery phrase must be acknowledged before continuing.

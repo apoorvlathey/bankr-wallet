@@ -219,8 +219,10 @@ semantic colors, radii, shadows, globals, and component recipes. Midnight uses:
   Warm Midnight saved-state commitments (`Save`, `Save changes`, `Save contact`,
   and equivalent save labels), and the final single-transaction `Confirm`
   action. Saved-state and final commitment actions must always use `brand`,
-  never the blue `primary` variant. Focus, links, selection, and ordinary
-  transactional controls remain blue.
+  never the blue `primary` variant. Focus, links, ordinary selection, and
+  ordinary transactional controls remain blue. Recovery-material address
+  selection is a commitment exception: use Checkbox `variant="commitment"`
+  so selected derived/imported accounts carry amber.
 
 `tests/ui/themeContrast.test.ts` protects the core text, action, and status pairs.
 Use `/preview/components` for the interactive state matrix and the production
