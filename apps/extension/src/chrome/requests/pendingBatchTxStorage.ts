@@ -12,6 +12,13 @@ const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
 const MAX_PENDING_BATCH_REQUESTS = 20;
 const MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN = 5;
 
+/** Bind before intake authorization so Bankr rows are never validated untagged. */
+export function bindPendingBatchTxRequestCredential(
+  request: PinnedBatchTxRequest,
+): Promise<PinnedBatchTxRequest> {
+  return bindPendingBankrCredential(request);
+}
+
 export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   return data[STORAGE_KEY] || [];
@@ -20,7 +27,7 @@ export async function getPendingBatchTxRequests(): Promise<PendingBatchTxRequest
 export async function savePendingBatchTxRequest(
   request: PinnedBatchTxRequest,
 ): Promise<void> {
-  const boundRequest = await bindPendingBankrCredential(request);
+  const boundRequest = await bindPendingBatchTxRequestCredential(request);
   await withStorageLock(STORAGE_LOCK_KEY, async () => {
     const requests = await getPendingBatchTxRequests();
     if (requests.some((pending) => pending.id === request.id)) {

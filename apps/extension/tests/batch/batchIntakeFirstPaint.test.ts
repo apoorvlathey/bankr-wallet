@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer, type ViteDevServer } from "vite";
 
-type WalletType = "bankr" | "privateKey" | "seedPhrase";
+type WalletType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
 
 type Hooks = {
   account: { id: string; address: string; type: WalletType };
@@ -122,7 +122,10 @@ test("batch review is published before slow intake work for every signing wallet
           if (id === "\0first-paint-lifecycle") {
             return `export const pendingRequestLifecycleErrors = { authorizationRevoked: "revoked" };
               export const capturePendingRequestAuthorizationCommitSnapshot = async () => ({ isCurrent: () => true });
-              export const validatePendingRequestAuthorization = async () => ({ authorized: true });`;
+              export const validatePendingRequestAuthorization = async (_kind, request) =>
+                request.accountType !== "bankr" || request.bankrCredentialTag === "${"a".repeat(64)}"
+                  ? ({ authorized: true })
+                  : ({ authorized: false, error: "The Bankr credential changed", code: 4100 });`;
           }
           if (id === "\0first-paint-runtime") {
             return `export const writeResultToStorage = async (key, value) => {
@@ -130,7 +133,11 @@ test("batch review is published before slow intake work for every signing wallet
             };`;
           }
           if (id === "\0first-paint-pending") {
-            return `export const savePendingBatchTxRequest = async (request) => {
+            return `export const bindPendingBatchTxRequestCredential = async (request) =>
+                request.accountType === "bankr"
+                  ? ({ ...request, bankrCredentialTag: "${"a".repeat(64)}" })
+                  : request;
+              export const savePendingBatchTxRequest = async (request) => {
                 const hooks = globalThis.__walletchanBatchFirstPaint;
                 hooks.pending = request;
                 hooks.events.push("save");
@@ -232,8 +239,28 @@ test("batch review is published before slow intake work for every signing wallet
         0,
       );
       assert.deepEqual(hooks.events.slice(0, 3), ["save", "publish", "open"]);
+      assert.equal(hooks.pending?.bankrCredentialTag, "a".repeat(64));
       assert.ok(hooks.events.indexOf("ready") > hooks.events.indexOf("open"));
       assert.ok(hooks.events.indexOf("ack") > hooks.events.indexOf("ready"));
+    });
+
+    await t.test("view-only intake remains credential-free and review-only", async () => {
+      hooks.account = { id: "impersonator-account", address, type: "impersonator" };
+      hooks.events = [];
+      hooks.pending = null;
+      await handleWalletSendCalls(
+        params,
+        "impersonator-bundle",
+        "https://dapp.example",
+        null,
+        1,
+        "https://dapp.example",
+        2,
+        0,
+      );
+      assert.deepEqual(hooks.events.slice(0, 3), ["save", "publish", "open"]);
+      assert.equal(hooks.pending?.bankrCredentialTag, undefined);
+      assert.ok(hooks.events.includes("ack"));
     });
   } finally {
     await server?.close();

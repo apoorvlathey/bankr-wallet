@@ -3859,6 +3859,10 @@ requests are stored persistently in `chrome.storage.local`:
   moved out of their original queue.
 - Bankr transaction, signature, and ERC-5792 pending rows also carry a
   non-secret SHA-256 tag of the authenticated API-key ciphertext generation.
+  ERC-5792 intake attaches this tag before its first authorization check and
+  persists that same generation; the storage boundary rejects a pre-bound row
+  if credential rotation made its tag stale instead of silently retargeting
+  the reviewed request.
   Confirmation recomputes that tag at the last safe point; changing the global
   Bankr credential invalidates every older prompt instead of silently signing
   it through a different remote wallet. Pre-upgrade Bankr prompts without a

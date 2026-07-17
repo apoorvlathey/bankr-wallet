@@ -17,6 +17,7 @@ import {
 import { writeResultToStorage } from "../transactions/runtime";
 import {
   getPendingBatchTxRequestById,
+  bindPendingBatchTxRequestCredential,
   markPendingBatchTxRequestReady,
   removePendingBatchTxRequest,
   savePendingBatchTxRequest,
@@ -138,21 +139,23 @@ export async function handleWalletSendCalls(
     }
 
     const trustedOrigin = senderOrigin ?? origin;
-    const pendingRequest = pinnedBatchTxRequest(account, {
-      id: bundleId,
-      params: normalizedParams,
-      origin,
-      favicon,
-      chainName: CHAIN_NAMES[chainId] || `Chain ${chainId}`,
-      chainId,
-      timestamp: Date.now(),
-      intakeStatus: "validating",
-      tabId,
-      frameId,
-      senderOrigin,
-      requestChainId: chainId,
-      walletConnect,
-    });
+    const pendingRequest = await bindPendingBatchTxRequestCredential(
+      pinnedBatchTxRequest(account, {
+        id: bundleId,
+        params: normalizedParams,
+        origin,
+        favicon,
+        chainName: CHAIN_NAMES[chainId] || `Chain ${chainId}`,
+        chainId,
+        timestamp: Date.now(),
+        intakeStatus: "validating",
+        tabId,
+        frameId,
+        senderOrigin,
+        requestChainId: chainId,
+        walletConnect,
+      }),
+    );
 
     const authorizationSnapshot =
       await capturePendingRequestAuthorizationCommitSnapshot(pendingRequest);

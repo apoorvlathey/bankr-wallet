@@ -87,6 +87,17 @@ export async function bindPendingBankrCredential<
   if (!bankrCredentialTag) {
     throw new Error("Bankr credential is unavailable. Unlock and try again.");
   }
+  // Binding can happen at intake and again at the storage boundary. Preserve
+  // an already-bound request only when it still names the current generation;
+  // never silently retarget an authorized prompt to a newer credential.
+  if (
+    request.bankrCredentialTag !== undefined &&
+    request.bankrCredentialTag !== bankrCredentialTag
+  ) {
+    throw new Error(
+      "The Bankr credential changed. Review a new request before continuing.",
+    );
+  }
   return { ...request, bankrCredentialTag };
 }
 

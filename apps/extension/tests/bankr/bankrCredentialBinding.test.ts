@@ -183,21 +183,20 @@ test("legacy and malformed credential states fail safely", async () => {
   assert.match(legacyTag ?? "", /^[0-9a-f]{64}$/);
 });
 
-test("caller-supplied tags cannot override the current credential binding", async () => {
-  await txStorage.savePendingTxRequest({
-    ...base("overwrite-untrusted-tag"),
-    bankrCredentialTag: "f".repeat(64),
-    tx: {
-      from: "0x0000000000000000000000000000000000000001",
-      to: "0x0000000000000000000000000000000000000002",
-      value: "0x0",
-      data: "0x",
-      chainId: 1,
-    },
-  });
-  assert.equal(
-    store.pendingTxRequests[0].bankrCredentialTag,
-    await binding.getCurrentBankrCredentialTag(),
+test("an already-bound request cannot be retargeted to another credential generation", async () => {
+  await assert.rejects(
+    txStorage.savePendingTxRequest({
+      ...base("reject-stale-tag"),
+      bankrCredentialTag: "f".repeat(64),
+      tx: {
+        from: "0x0000000000000000000000000000000000000001",
+        to: "0x0000000000000000000000000000000000000002",
+        value: "0x0",
+        data: "0x",
+        chainId: 1,
+      },
+    }),
+    /credential changed/i,
   );
-  assert.notEqual(store.pendingTxRequests[0].bankrCredentialTag, "f".repeat(64));
+  assert.equal(store.pendingTxRequests, undefined);
 });
