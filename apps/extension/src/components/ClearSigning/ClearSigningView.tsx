@@ -79,9 +79,8 @@ export function ClearSigningView(props: ClearSigningViewProps) {
       borderRadius={embedded ? 0 : undefined}
       boxShadow={cardShadow}
     >
-      {/* Header — title + small "via Owner" attribution sitting tight on the
-          same row. Owner name is the source of the human-readable copy, not a
-          safety claim, so it stays muted. */}
+      {/* Header — title plus descriptor-owner attribution for calldata. The
+          signature request surface intentionally shows only the action title. */}
       {!hideHeader && (
         <>
           <HStack mb={2} align="baseline" spacing={2}>
@@ -95,7 +94,7 @@ export function ClearSigningView(props: ClearSigningViewProps) {
             >
               {state.intent || "Action"}
             </Text>
-            {state.ownerName && (
+            {props.kind === "calldata" && state.ownerName && (
               <Text
                 fontSize="10px"
                 color="fg.muted"
