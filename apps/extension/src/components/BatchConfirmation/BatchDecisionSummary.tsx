@@ -113,7 +113,8 @@ export function BatchDecisionSummary({
                   value: outerEncodedBatch.value,
                   chainId,
                 },
-                label: `Batch transaction (${calls.length} calls)`,
+                label: "Batch transaction",
+                detail: `(${calls.length} ${calls.length === 1 ? "call" : "calls"})`,
               }
         }
         eip7702Delegate={eip7702Delegate}

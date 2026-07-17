@@ -768,3 +768,9 @@
   amber identity feedback, address, copy, and explorer tools; the request
   simulation retry also consumes the same catalog/MetaMask logo fallback as
   Transaction details.
+- 2026-07-17: compacted expanded batch gas rows to three meaningful native-fee
+  digits while retaining bigint-exact tooltip and assistive text. The call
+  label now owns the remaining row width, preventing Bankr fee precision from
+  collapsing request context at popup widths. Call count sits on a dedicated
+  metadata line beneath the batch label, while Bankr fee-management provenance
+  aligns with the right-hand amount column.

@@ -17,8 +17,8 @@ import {
 import { WarningIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { GasEstimate } from "@/chrome/gasEstimation";
 import {
-  formatEth,
   formatEthCompact,
+  formatEthExact,
   formatGwei,
   formatWeiToUsd,
 } from "@/lib/gasFormatUtils";
@@ -67,6 +67,7 @@ interface TxGasInput {
     gas?: string;
   };
   label: string;
+  detail?: string;
 }
 
 interface MultiTxGasEstimateDisplayProps {
@@ -1261,20 +1262,51 @@ function MultiTxGasEstimateDisplay({
                   align="flex-start"
                   spacing={2}
                 >
-                  <Text
-                    fontSize="xs"
-                    color="text.tertiary"
-                    fontWeight="600"
-                    maxW="55%"
-                    wordBreak="break-word"
-                    lineHeight="1.35"
+                  <VStack
+                    align="flex-start"
+                    spacing={0}
+                    flex="1"
+                    minW={0}
                   >
-                    {preserveOrphans(item.label)}
-                  </Text>
-                  <HStack spacing={1} flexShrink={0}>
-                    <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" textAlign="right">
-                      {formatEth(callCost, sym)}
+                    <Text
+                      fontSize="xs"
+                      color="text.tertiary"
+                      fontWeight="600"
+                      wordBreak="break-word"
+                      lineHeight="1.35"
+                    >
+                      {preserveOrphans(item.label)}
                     </Text>
+                    {item.detail && (
+                      <Text
+                        fontSize="2xs"
+                        color="text.tertiary"
+                        fontWeight="600"
+                        lineHeight="1.35"
+                      >
+                        {item.detail}
+                      </Text>
+                    )}
+                  </VStack>
+                  <HStack spacing={1} flexShrink={0}>
+                    <Tooltip
+                      label={formatEthExact(callCost, sym)}
+                      fontSize="2xs"
+                      hasArrow
+                      openDelay={300}
+                    >
+                      <Text
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="text.primary"
+                        fontFamily="mono"
+                        textAlign="right"
+                        cursor="help"
+                        aria-label={`Exact gas fee: ${formatEthExact(callCost, sym)}`}
+                      >
+                        {formatEthCompact(callCost, sym)}
+                      </Text>
+                    </Tooltip>
                     {costUsd && (
                       <Text fontSize="xs" color="text.tertiary" fontWeight="600">
                         ({costUsd})
@@ -1294,9 +1326,24 @@ function MultiTxGasEstimateDisplay({
                     Total
                   </Text>
                   <HStack spacing={1}>
-                    <Text fontSize="xs" fontWeight="700" color="text.primary" fontFamily="mono" textAlign="right">
-                      {formatEth(totalCostWei, sym)}
-                    </Text>
+                    <Tooltip
+                      label={formatEthExact(totalCostWei, sym)}
+                      fontSize="2xs"
+                      hasArrow
+                      openDelay={300}
+                    >
+                      <Text
+                        fontSize="xs"
+                        fontWeight="700"
+                        color="text.primary"
+                        fontFamily="mono"
+                        textAlign="right"
+                        cursor="help"
+                        aria-label={`Exact total gas fee: ${formatEthExact(totalCostWei, sym)}`}
+                      >
+                        {formatEthCompact(totalCostWei, sym)}
+                      </Text>
+                    </Tooltip>
                     {usdDisplay && (
                       <Text fontSize="xs" color="text.tertiary" fontWeight="600">
                         ({usdDisplay})
@@ -1396,7 +1443,14 @@ function MultiTxGasEstimateDisplay({
             )}
 
             {accountType === "bankr" && (
-              <Text fontSize="2xs" color="text.tertiary" fontWeight="600" fontStyle="italic">
+              <Text
+                w="full"
+                textAlign="right"
+                fontSize="2xs"
+                color="text.tertiary"
+                fontWeight="600"
+                fontStyle="italic"
+              >
                 Gas managed by Bankr API
               </Text>
             )}
