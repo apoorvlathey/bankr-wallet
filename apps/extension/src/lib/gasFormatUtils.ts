@@ -10,6 +10,45 @@ export function formatEth(wei: string, symbol = "ETH"): string {
   return `${formatted} ${symbol}`;
 }
 
+/** Exact native-token amount without floating-point conversion. */
+export function formatEthExact(wei: string, symbol = "ETH"): string {
+  const raw = BigInt(wei);
+  const negative = raw < 0n;
+  const absolute = negative ? -raw : raw;
+  const whole = absolute / 10n ** 18n;
+  const fraction = (absolute % 10n ** 18n)
+    .toString()
+    .padStart(18, "0")
+    .replace(/0+$/, "");
+  const amount = fraction ? `${whole}.${fraction}` : whole.toString();
+  return `${negative ? "-" : ""}${amount} ${symbol}`;
+}
+
+/**
+ * Compact exact native-token fee. Keeps three meaningful fractional digits and
+ * all leading zeroes, so a non-zero fee can never render as zero.
+ */
+export function formatEthFee(wei: string, symbol = "ETH"): string {
+  const raw = BigInt(wei);
+  if (raw === 0n) return `0 ${symbol}`;
+
+  const negative = raw < 0n;
+  const absolute = negative ? -raw : raw;
+  const whole = absolute / 10n ** 18n;
+  const fraction = (absolute % 10n ** 18n).toString().padStart(18, "0");
+  const firstMeaningful = fraction.search(/[1-9]/u);
+  const visibleFractionLength =
+    whole > 0n ? 3 : Math.min(18, Math.max(3, firstMeaningful + 3));
+  const visibleFraction = fraction
+    .slice(0, visibleFractionLength)
+    .replace(/0+$/, "");
+  const amount = visibleFraction
+    ? `${whole}.${visibleFraction}`
+    : whole.toString();
+
+  return `${negative ? "-" : ""}${amount} ${symbol}`;
+}
+
 /**
  * Compact native-token fee for constrained confirmation footers.
  * Keeps three significant fractional digits without switching to scientific

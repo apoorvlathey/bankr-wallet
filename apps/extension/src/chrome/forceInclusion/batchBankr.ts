@@ -21,6 +21,7 @@ import {
   L1_RECEIPT_TIMEOUT,
   writeForceInclusionProgress,
 } from "./l1Client";
+import { buildForceInclusionL1GasData } from "./l1GasData";
 import { extractL2Hash } from "./singleOutcome";
 
 export async function processForceInclusionBatchBankr(
@@ -156,6 +157,7 @@ export async function processForceInclusionBatchBankr(
     await updateTxInHistory(bundleId, {
       status: "pending",
       txHash: resultHash,
+      gasData: buildForceInclusionL1GasData(receipt, info.l1ChainId),
       forceInclusionMeta: {
         l1TxHash: l1Hash,
         l1ChainId: info.l1ChainId,

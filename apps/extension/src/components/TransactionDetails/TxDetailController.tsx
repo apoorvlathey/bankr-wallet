@@ -22,9 +22,9 @@ import AdvancedDetails from "./AdvancedDetails";
 import BridgeSummary from "./BridgeSummary";
 import ClearSigningSummary from "./ClearSigningSummary";
 import DecodedFunctionSummary from "./DecodedFunctionSummary";
-import ReceiptDetails from "./ReceiptDetails";
 import StatusHeader from "./StatusHeader";
 import SwapSummary from "./SwapSummary";
+import TransactionMeta from "./TransactionMeta";
 import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
 import { useAssetChangeData } from "./useAssetChangeData";
@@ -324,18 +324,14 @@ export function TxDetailController({
           </ScreenSection>
         )}
 
-        <ScreenSection title="Receipt">
-          <ReceiptDetails
-            tx={tx}
-            nativeSym={nativeSym}
-            txFee={txFee}
-            estimatedMaxCost={estimatedMaxCost}
-            displayTimestamp={displayTimestamp}
-            explorerBase={explorerBase}
-            onViewExplorer={handleViewOnExplorer}
-            formatWeiUsd={formatWeiUsd}
-          />
-        </ScreenSection>
+        <TransactionMeta
+          tx={tx}
+          nativeSym={nativeSym}
+          txFee={txFee}
+          estimatedMaxCost={estimatedMaxCost}
+          displayTimestamp={displayTimestamp}
+          formatWeiUsd={formatWeiUsd}
+        />
 
         <AdvancedDetails
           tx={tx}

@@ -199,6 +199,7 @@ export async function processForceInclusionLocal(
       info,
       l1Hash,
       extractL2Hash(receipt),
+      receipt,
       progress,
     );
   } catch (error: any) {

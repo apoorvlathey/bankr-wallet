@@ -252,6 +252,21 @@
   from expert gas editing. One-line, 42px native buttons retain visible focus,
   explicit selected state, text labels, and tabular fiat estimates; raw gas
   diagnostics appear only when Custom makes them actionable.
+- 2026-07-17 transaction-details metadata audit: passes after replacing the
+  receipt table with identity and gas-fee pills plus a quiet closing timestamp.
+  The existing status-line explorer action remains the single transaction-hash
+  affordance, while sequential-call context remains visible without key/value
+  rows or a nested card. The gas pill leads with fiat, retains a bigint-exact
+  three-significant-digit native subtitle and full-precision tooltip, and sits
+  opposite the signer with comfortable inset padding; the centered closing
+  timestamp is deliberately low-opacity.
+- 2026-07-17 request-identity alignment audit: requesting hostnames remain
+  geometrically centered at rest and on interaction; the external-link cue is
+  overlaid beside the label so its hover/focus reveal causes no layout shift.
+- 2026-07-17 transaction-impact proximity audit: confirmed ERC-20 symbols and
+  their `to` / `from` counterparties now read as one compact identity group.
+  Tightened line boxes remove the apparent blank row without shrinking the
+  counterparty explorer action below its 24px accessible target.
 - 2026-07-14 force-inclusion route audit: passes with a text-first destination
   and L1 path, paired chain identities, no new interactive target, and no
   reliance on icon color to communicate the execution route.
@@ -370,6 +385,10 @@
 
 ## Changelog
 
+- 2026-07-17: tightened confirmed ERC-20 identity typography so token symbols
+  sit closer to their `to` / `from` counterparty line while the token mark stays
+  vertically centered against the complete two-line identity stack and the
+  full keyboard-accessible explorer target is retained.
 - 2026-07-16: replaced Transaction details' filled error alert with a neutral
   defined-edge failure receipt. Semantic red is confined to the status marker,
   the message follows the screen's normal hierarchy, technical diagnostics use

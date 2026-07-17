@@ -148,6 +148,7 @@ export default function Erc20TransferGroupRow({
                 color="text.tertiary"
                 fontSize="2xs"
                 fontWeight="600"
+                lineHeight="1.2"
                 onClick={() => setExpanded((value) => !value)}
                 aria-expanded={expanded}
                 _hover={{ bg: "transparent", color: "text.secondary" }}

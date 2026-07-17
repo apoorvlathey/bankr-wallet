@@ -62,6 +62,7 @@ test("history root paths remain policy-free identity-preserving facades", async 
 test("history implementations keep one-way audit boundaries", async () => {
   const names = [
     "history/types.ts",
+    "history/gasDataPolicy.ts",
     "history/assetTransferParser.ts",
     "history/repository.ts",
     "history/maintenance.ts",
@@ -89,6 +90,10 @@ test("history implementations keep one-way audit boundaries", async () => {
     );
   }
   assert.doesNotMatch(sources["history/types.ts"], /chrome\.|fetchRpcResult/);
+  assert.doesNotMatch(
+    sources["history/gasDataPolicy.ts"],
+    /chrome\.|fetchRpcResult/,
+  );
   assert.doesNotMatch(
     sources["history/assetTransferParser.ts"],
     /chrome\.|fetchRpcResult|resolveTokenMetadata/,
@@ -125,6 +130,7 @@ test("history facades and implementations stay audit-sized", async () => {
     "assetChangesExtractor.ts": 15,
     "receiptEnrichment.ts": 20,
     "history/types.ts": 190,
+    "history/gasDataPolicy.ts": 35,
     "history/assetTransferParser.ts": 80,
     "history/repository.ts": 90,
     "history/maintenance.ts": 80,

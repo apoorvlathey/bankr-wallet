@@ -28,6 +28,7 @@ const DOMAIN_MODULES = [
     "forceInclusion/batchLocalBroadcast.ts",
     "forceInclusion/batchLocalReceipts.ts",
     "forceInclusion/receiptRpc.ts",
+    "forceInclusion/l1GasData.ts",
     "forceInclusion/receiptNotification.ts",
     "forceInclusion/receiptSideEffects.ts",
     "forceInclusion/receiptHistory.ts",

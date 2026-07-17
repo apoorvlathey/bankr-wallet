@@ -8,6 +8,7 @@ import { trackBatchForceInclusionCompletion } from "./batchCompletion";
 import type { PreparedLocalForceInclusionBatch } from "./batchLocalPreparation";
 import type { ForceInclusionBroadcastResult } from "./batchTypes";
 import { L1_RECEIPT_TIMEOUT } from "./l1Client";
+import { buildForceInclusionL1GasData } from "./l1GasData";
 import { extractL2Hash } from "./singleOutcome";
 
 export async function finalizeLocalForceInclusionBatch(args: {
@@ -92,6 +93,10 @@ export async function finalizeLocalForceInclusionBatch(args: {
           status: "pending",
           txHash: resultHash,
           broadcastUncertain: false,
+          gasData: buildForceInclusionL1GasData(
+            receipt,
+            prepared.l1Chain.id,
+          ),
           forceInclusionMeta: {
             l1TxHash: result.l1TxHash!,
             l1ChainId: prepared.l1Chain.id,

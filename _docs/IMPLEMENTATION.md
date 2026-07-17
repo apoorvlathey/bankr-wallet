@@ -2001,7 +2001,7 @@ In sidepanel mode, the view navigates back immediately without the animation (si
 
 ### Receipt Polling & Flashblocks
 
-After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s. OP Stack force-inclusion L2 hashes are derived from the confirmed L1 deposit rather than broadcast into the L2 mempool, so a missing `eth_getTransactionByHash` result is expected during derivation and is never classified as a mempool drop. Those hashes receive a 15-minute polling window around the expected 1-10 minute inclusion delay. Startup recovery reopens older force-inclusion entries that were incorrectly terminalized by the former 60-second mempool heuristic.
+After a tx is broadcast, `txReceiptPoller.startReceiptPolling(txId, txHash, chainId)` polls `eth_getTransactionReceipt` until a receipt is found or the 10-minute timeout elapses. Default cadence: 2s initial, 1.5× exponential backoff up to 30s. OP Stack force-inclusion L2 hashes are derived from the confirmed L1 deposit rather than broadcast into the L2 mempool, so a missing `eth_getTransactionByHash` result is expected during derivation and is never classified as a mempool drop. Those hashes receive a 15-minute polling window around the expected 1-10 minute inclusion delay. The fee-bearing L1 deposit receipt is projected into the transaction's existing `gasData` history field as soon as it confirms; derived L2 finalization preserves that record instead of replacing it with the zero-cost L2 deposit receipt. Startup recovery backfills the L1 gas record for older successful force-inclusion entries as well as reopening entries incorrectly terminalized by the former 60-second mempool heuristic.
 
 Local PK/seed broadcasts are prepared and signed exactly once. The transaction
 hash is derived from those serialized bytes before the RPC effect. A transport
@@ -2137,6 +2137,7 @@ interface GasData {
   gasUsed: string; // decimal string
   gasLimit: string; // decimal string
   effectiveGasPrice: string; // decimal string (wei)
+  feeSource?: "forceInclusionL1"; // authoritative paid L1 deposit fee
   // OP Stack L2 only (Base 8453, Unichain 130)
   l1Fee?: string; // decimal string (wei)
   l1GasUsed?: string; // decimal string
@@ -2161,7 +2162,7 @@ The resolved name is stored in tx history via `updateTxInHistory()`.
 
 Gas data is not available at confirmation time (tx hasn't been mined). It's fetched asynchronously:
 
-1. **After tx success**: `fetchAndStoreGasData()` in `transactions/displayMetadata.ts` runs fire-and-forget, calling `eth_getTransactionByHash` (gasLimit) and `eth_getTransactionReceipt` (gasUsed, effectiveGasPrice). For OP Stack L2s (Base 8453, Unichain 130), L1 fee fields (`l1Fee`, `l1GasUsed`, `l1GasPrice`) are extracted from the receipt. Flashblocks-capable chains pass through the shared sealed-receipt gate before gas data is persisted; transaction, batch, and receipt-polling paths share the same receipt projection, and Transaction details reconciliation updates cached gas data alongside asset changes.
+1. **After tx success**: `fetchAndStoreGasData()` in `transactions/displayMetadata.ts` runs fire-and-forget, calling `eth_getTransactionByHash` (gasLimit) and `eth_getTransactionReceipt` (gasUsed, effectiveGasPrice). For OP Stack L2s (Base 8453, Unichain 130), L1 fee fields (`l1Fee`, `l1GasUsed`, `l1GasPrice`) are extracted from the receipt. Flashblocks-capable chains pass through the shared sealed-receipt gate before gas data is persisted; transaction, batch, and receipt-polling paths share the same receipt projection, and Transaction details reconciliation updates cached gas data alongside asset changes. Force inclusion is the exception: its paid L1 deposit receipt is tagged with `feeSource: "forceInclusionL1"`, and the history repository preserves it against every later untagged L2 gas enrichment while still accepting asset-change updates.
 2. **On-demand in TxDetailModal**: For older transactions missing `gasData`, the modal fetches directly via RPC when opened.
 3. **Graceful degradation**: Errors are silently ignored (non-critical data).
 

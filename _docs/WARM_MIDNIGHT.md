@@ -564,7 +564,7 @@ Relevant files:
 - Transaction details is the post-submission counterpart to transaction review,
   not a separate dashboard. It follows the same readable hierarchy: requesting
   identity and network status, actual balance changes, human-readable action,
-  receipt, then technical diagnostics.
+  compact transaction metadata, then technical diagnostics.
 - Confirmed, pending, and failed state always pairs its semantic color with an
   icon and text. Failure detail follows the status immediately; bridge progress
   names its terminal or in-flight state.
@@ -590,11 +590,14 @@ Relevant files:
   fallback receipts identify the submitted call number without presenting the
   execution as atomic. Force inclusion uses one L1-deposit/L2-inclusion ledger,
   and broadcast uncertainty remains an explicit in-progress state.
-- The Receipt ledger owns signing account, paid or maximum network fee,
-  timestamp, transaction hash, and copy. The primary correct-chain explorer
-  action sits beside the chain in the status line; force-inclusion's distinct
-  L1/L2 links remain in the receipt. These facts must not be repeated across
-  unrelated cards.
+- Compact post-submission metadata owns the paid or maximum gas-fee pill, the
+  signing-account identity pill, sequential-call context, and centered quiet
+  timestamp. Fiat leads the comfortably padded gas pill, with three meaningful
+  native decimals beneath and full native precision available on hover and in
+  its accessible name. The
+  transaction hash is not repeated: the primary correct-chain explorer action
+  sits beside the chain in the status line. Force-inclusion's distinct L1/L2
+  links remain in its progress ledger.
 - Function, From/To, raw value, calldata/deploy bytes, and gas diagnostics live
   behind one native Advanced details disclosure. Technical surfaces use one
   defined edge, quiet separators, and no resting shadow.

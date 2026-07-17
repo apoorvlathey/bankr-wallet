@@ -40,6 +40,7 @@ export function Erc20TokenIdentity({
     <Text
       fontSize="sm"
       fontWeight="700"
+      lineHeight="1.2"
       color="inherit"
       noOfLines={1}
       maxW="120px"
@@ -120,6 +121,7 @@ export default function Erc20TransferRow({
                 fontWeight="600"
                 fontSize="2xs"
                 fontFamily="mono"
+                lineHeight="1.2"
                 color="text.tertiary"
                 onClick={() => chrome.tabs.create({ url: cpLink })}
                 rightIcon={<ExternalLinkIcon boxSize={2.5} />}
@@ -136,6 +138,7 @@ export default function Erc20TransferRow({
               <Text
                 fontSize="2xs"
                 fontFamily="mono"
+                lineHeight="1.2"
                 color="text.tertiary"
                 noOfLines={1}
               >

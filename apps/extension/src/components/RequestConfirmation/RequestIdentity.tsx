@@ -73,11 +73,12 @@ export function RequestIdentity({
           type="button"
           role="group"
           aria-label={`Open ${originHostname || origin}`}
-          spacing={1.5}
+          spacing={0}
           minH="24px"
           minW={0}
-          maxW="full"
+          maxW="calc(100% - 18px)"
           color="fg.primary"
+          position="relative"
           onClick={onOpenOrigin}
           borderRadius="sm"
           _focusVisible={{ boxShadow: "outline" }}
@@ -93,7 +94,11 @@ export function RequestIdentity({
           </Text>
           <ExternalLinkIcon
             boxSize="10px"
-            flexShrink={0}
+            position="absolute"
+            left="100%"
+            top="50%"
+            ml={1.5}
+            transform="translateY(-50%)"
             color="fg.muted"
             opacity={0}
             transition="opacity 150ms ease-out"

@@ -66,6 +66,31 @@ test("history storage preserves ordering, locking, cleanup, and notifications", 
       changedKeys: ["status", "txHash"],
     });
 
+    const l1Gas = {
+      gasUsed: "120000",
+      gasLimit: "140000",
+      effectiveGasPrice: "25000000000",
+      feeSource: "forceInclusionL1" as const,
+    };
+    harness.stores.local.txHistory = [
+      transaction("force-gas", {
+        gasData: l1Gas,
+        forceInclusionMeta: {
+          l1TxHash: "0xl1",
+          l1ChainId: 1,
+          l2ChainId: 8453,
+        },
+      }),
+    ];
+    await repository.updateTxInHistory("force-gas", {
+      gasData: {
+        gasUsed: "100000",
+        gasLimit: "100000",
+        effectiveGasPrice: "0",
+      },
+    });
+    assert.deepEqual((await repository.getTxById("force-gas"))?.gasData, l1Gas);
+
     const old = Date.now() - 10_000;
     harness.stores.local.txHistory = [
       transaction("stale", { createdAt: old }),

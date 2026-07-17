@@ -30,7 +30,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `DelegationReceipt.tsx` | Render EIP-7702 enable/revoke results with delegate and policy context | Address tools delegated to the shared labeled-address popover |
 | `Erc7715RevokeReceipt.tsx` | Render a confirmed permission revocation as the shared summary ledger rather than reusing its pre-confirmation warning card | Address and token tools delegated to shared popovers |
 | `DecodedFunctionSummary.tsx` | Render the existing calldata decoder's resolved function, contract, and optional native payment when no clear-signed summary exists | Address actions delegated to the shared labeled-address popover |
-| `ReceiptDetails.tsx` | Render signer, fee, timestamp, hash, and copy as one post-submission ledger | Copy and transaction-hash explorer actions delegated to shared components |
+| `TransactionMeta.tsx` | Render the signing identity, gas fee, sequential-batch context, and timestamp as compact post-submission metadata | None |
 | `AdvancedDetails.tsx` | Own the single technical disclosure, scroll its heading into view on user expansion, and compose raw transaction plus gas diagnostics | Scrolls the existing detail viewport only |
 | `RawTransactionDetails.tsx` | Render function, transfer, addresses, value, calldata, and deploy data inside the advanced owner; publish the existing decoder's resolved function name | Copy/explorer actions delegated to shared components |
 | `GasDetails.tsx` | Render confirmed or estimated gas diagnostics inside the advanced owner | None |
@@ -43,7 +43,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `forceInclusionState.ts` | Pure L1/L2 progress derivation | None |
 | `tokenMetadata.ts` | Pure token-metadata request collection and record enrichment | None |
 | `useAssetChangeData.ts` | Enrich token metadata, backfill asset changes, and fetch native/token prices | Runtime messages only |
-| `useGasData.ts` | Fetch missing receipt gas data and derive display values | Bounded RPC reads only |
+| `useGasData.ts` | Read persisted receipt gas data, fetch missing ordinary receipt gas, and derive display values; force-inclusion history supplies its fee-bearing L1 gas record | Bounded RPC reads only |
 
 ## Dependency direction
 
@@ -59,9 +59,9 @@ large hook.
 
 ## Behavior invariants
 
-- Preserve the receipt-first information order: requesting identity and status,
+- Preserve the post-submission information order: requesting identity and status,
   failure (when present), bridge route, balance changes, human-readable summary,
-  receipt, then one advanced technical disclosure.
+  compact transaction metadata, then one advanced technical disclosure.
 - Force-inclusion state comes from the distinct L1/L2 hash invariant; do not
   infer stages from error strings.
 - Wallet-type-neutral history rendering must remain shared across Bankr,
@@ -73,7 +73,10 @@ large hook.
   compact subscript-zero notation rather than rounding to zero.
 - Token identities reuse the request-review `TokenLogo` fallback. Missing,
   rejected, and still-rasterizing remote logos must show the token symbol rather
-  than an invisible inert image.
+  than an invisible inert image. Keep the symbol and its `to` / `from`
+  counterparty visually tight while preserving the counterparty explorer
+  action's 24px minimum target. Vertically center the token mark against the
+  complete symbol-and-counterparty identity stack.
 - When no structured clear-signing summary exists, the already-mounted calldata
   decoder may promote its resolved function name into a lightweight summary;
   the summary must not start a second decode or show a zero-value payment row.

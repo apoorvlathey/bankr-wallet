@@ -5,6 +5,7 @@ import { showNotification } from "../transactions/notification";
 import { writeResultToStorage } from "../transactions/runtime";
 import type { PendingTxRequest } from "../requests/pendingTxStorage";
 import { updateTxInHistory } from "../txHistoryStorage";
+import { buildForceInclusionL1GasData } from "./l1GasData";
 import type { ForceInclusionProgressWriter } from "./types";
 
 export function extractL2Hash(receipt: TransactionReceipt): string | undefined {
@@ -22,6 +23,7 @@ export async function finishSingleForceInclusion(
   info: ForceInclusionChainInfo,
   l1Hash: string,
   l2Hash: string | undefined,
+  l1Receipt: TransactionReceipt,
   progress: ForceInclusionProgressWriter,
 ): Promise<void> {
   const resultHash = l2Hash || l1Hash;
@@ -30,6 +32,7 @@ export async function finishSingleForceInclusion(
     status: "pending",
     txHash: resultHash,
     broadcastUncertain: false,
+    gasData: buildForceInclusionL1GasData(l1Receipt, info.l1ChainId),
     forceInclusionMeta: {
       l1TxHash: l1Hash,
       l1ChainId: info.l1ChainId,

@@ -110,6 +110,8 @@ export interface GasData {
   gasUsed: string;
   gasLimit: string;
   effectiveGasPrice: string;
+  /** Marks the paid L1 deposit fee that owns force-inclusion accounting. */
+  feeSource?: "forceInclusionL1";
   l1Fee?: string;
   l1GasUsed?: string;
   l1GasPrice?: string;

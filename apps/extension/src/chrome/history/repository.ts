@@ -1,4 +1,5 @@
 import { withStorageLock } from "../storageLock";
+import { selectHistoryGasData } from "./gasDataPolicy";
 import type { CompletedTransaction } from "./types";
 
 /** Released storage key. Changing it requires an explicit migration. */
@@ -51,7 +52,16 @@ export async function updateTxInHistory(
     const index = history.findIndex((tx) => tx.id === txId);
     if (index === -1) return;
 
-    history[index] = { ...history[index], ...updates };
+    const protectedUpdates = Object.prototype.hasOwnProperty.call(
+      updates,
+      "gasData",
+    )
+      ? {
+          ...updates,
+          gasData: selectHistoryGasData(history[index], updates.gasData),
+        }
+      : updates;
+    history[index] = { ...history[index], ...protectedUpdates };
     await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
     notifyTxHistoryUpdated(history[index], Object.keys(updates));
   });

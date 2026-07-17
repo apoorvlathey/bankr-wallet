@@ -40,6 +40,10 @@ Receipt ownership:
   fifteen-minute receipt-polling window around the expected one-to-ten-minute
   OP Stack derivation delay.
 - `receiptHistory.ts` applies terminal status and gas data.
+- `l1GasData.ts` projects the fee-bearing L1 deposit receipt and prevents the
+  zero-cost derived L2 receipt from overwriting that paid fee. The history
+  repository enforces the tagged L1 record against every later enrichment
+  writer. Startup recovery backfills older completed rows.
 - `receiptSideEffects.ts` mirrors EIP-7702/ERC-7715 state and advances split or
   bridge flows only after receipt application.
 - `receiptRpc.ts` and `receiptNotification.ts` isolate RPC normalization and UI
