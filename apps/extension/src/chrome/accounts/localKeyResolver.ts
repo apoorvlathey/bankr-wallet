@@ -2,7 +2,6 @@ import type { Hex } from "viem";
 
 import { handleUnlockWallet } from "../authHandlers";
 import {
-  getAutoLockTimeout,
   getCachedVaultKey,
   getPrivateKeyFromCache,
   setCachedVault,
@@ -19,12 +18,9 @@ export async function getLocalPrivateKeyForAccount(
 
   const vaultKey = getCachedVaultKey();
   if (!vaultKey) {
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      const restored = await tryRestoreSession(handleUnlockWallet);
-      if (restored) {
-        privateKey = getPrivateKeyFromCache(accountId);
-      }
+    const restored = await tryRestoreSession(handleUnlockWallet);
+    if (restored) {
+      privateKey = getPrivateKeyFromCache(accountId);
     }
   }
 

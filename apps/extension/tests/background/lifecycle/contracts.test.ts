@@ -251,6 +251,7 @@ test("action fallback, trusted ports, and notification clicks retain behavior", 
 
   let connect!: (port: any) => void;
   let disconnectListener!: () => void;
+  let portMessageListener!: (message: unknown) => void;
   registerTrustedUiPortLifecycle({
     connectEvent: { addListener: (listener) => (connect = listener) },
     isTrustedWalletUiSender: (sender) => sender.id === "trusted",
@@ -262,10 +263,22 @@ test("action fallback, trusted ports, and notification clicks retain behavior", 
   connect({
     name: "ui-keepalive",
     sender: { id: "trusted" },
+    disconnect: () => events.push("trusted-port:disconnect"),
+    onMessage: {
+      addListener: (listener: (message: unknown) => void) =>
+        (portMessageListener = listener),
+    },
     onDisconnect: { addListener: (listener: () => void) => (disconnectListener = listener) },
   });
+  portMessageListener({ type: "wallet-ui-keepalive" });
+  portMessageListener({ type: "unexpected" });
   disconnectListener();
-  assert.deepEqual(events.slice(-3), ["port:disconnect", "ui:+", "ui:-"]);
+  assert.deepEqual(events.slice(-4), [
+    "port:disconnect",
+    "ui:+",
+    "trusted-port:disconnect",
+    "ui:-",
+  ]);
 
   let notification!: (id: string) => Promise<void>;
   registerNotificationClickLifecycle({

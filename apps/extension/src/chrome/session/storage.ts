@@ -7,12 +7,12 @@
  * `__session__` key prefix for non-secret renderer/service-worker state and
  * clear those keys on `runtime.onStartup`.
  *
- * SECURITY: Password-session restoration is disabled when this fallback is
- * active. Persisting both the encrypted password and its key in local storage
- * would let an offline copy of a closed browser profile recover the password
- * before the next onStartup cleanup. `persistence.ts` keeps Never-mode
- * credentials in memory only on these browsers and proactively removes
- * records written by older builds. `persistence.ts` owns that policy.
+ * SECURITY: Secret-bearing session restoration is disabled when this fallback
+ * is active. Persisting both an encrypted password/general vault capability
+ * and its key in local storage would let an offline copy of a closed browser
+ * profile recover it before the next onStartup cleanup. The persistence layers
+ * keep credentials in memory only on these browsers and proactively remove
+ * records written by older builds.
  */
 
 const PREFIX = "__session__";

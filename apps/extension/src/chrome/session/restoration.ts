@@ -1,4 +1,4 @@
-/** Serialized native Never-session restoration and password-type recovery. */
+/** Serialized native session restoration and password-type recovery. */
 
 import {
   invalidateAuthCeremonies,
@@ -7,7 +7,6 @@ import {
 } from "../authTransition";
 import type { PasswordType } from "../types";
 import {
-  getAutoLockTimeout,
   readStoredAutoLockTimeout,
   setCachedAutoLockTimeout,
 } from "./autoLockPolicy";
@@ -66,7 +65,6 @@ export async function resolvePasswordType(
 ): Promise<PasswordType | null> {
   const cached = getPasswordType();
   if (cached !== null) return cached;
-  if ((await getAutoLockTimeout()) !== 0) return null;
 
   if (authTransitionAlreadySerialized) {
     await tryRestoreSessionAlreadySerialized(unlockFn);
@@ -84,10 +82,6 @@ async function restoreSessionWithinAuthTransition(
   // Re-read authoritative sync storage inside the serialized transition.
   const timeout = await readStoredAutoLockTimeout();
   setCachedAutoLockTimeout(timeout);
-  if (timeout !== 0) {
-    await clearSessionStorage();
-    return false;
-  }
 
   // A passkey master session intentionally has no cached plaintext password.
   // Treating that absence as a lost session would cold-restore the persisted
@@ -113,7 +107,6 @@ async function restoreSessionWithinAuthTransition(
 
   if (
     !sessionId ||
-    session.autoLockNever !== true ||
     !credentialKind
   ) {
     if (
@@ -129,10 +122,17 @@ async function restoreSessionWithinAuthTransition(
 
   let restoredPassword: string | null = null;
   let restoredPasskeyCredential: RestoredPasskeySessionCredential | null = null;
+  let restoredPasskeyTiming: {
+    startedAt: number;
+    autoLockTimeout: number;
+    expiresAt: number | null;
+  } | null = null;
   try {
     let unlockCredential: string | RestoredPasskeySessionCredential;
     if (credentialKind === "password") {
       if (
+        timeout !== 0 ||
+        session.autoLockNever !== true ||
         !session.encryptedSessionPassword ||
         session.encryptedSessionVaultKey
       ) {
@@ -160,6 +160,29 @@ async function restoreSessionWithinAuthTransition(
         await clearSessionStorage();
         return false;
       }
+      const expectedNeverMarker = timeout === 0;
+      const hasAuthenticatedTiming = passkeyCredential.startedAt !== null;
+      if (
+        session.autoLockNever !== expectedNeverMarker ||
+        passkeyCredential.autoLockTimeout !== timeout ||
+        (!hasAuthenticatedTiming && timeout !== 0) ||
+        (hasAuthenticatedTiming &&
+          session.sessionStartedAt !== passkeyCredential.startedAt) ||
+        (timeout !== 0 &&
+          (passkeyCredential.expiresAt === null ||
+            Date.now() >= passkeyCredential.expiresAt))
+      ) {
+        passkeyCredential.vaultKeyBytes.fill(0);
+        await clearSessionStorage();
+        return false;
+      }
+      if (hasAuthenticatedTiming) {
+        restoredPasskeyTiming = {
+          startedAt: passkeyCredential.startedAt!,
+          autoLockTimeout: passkeyCredential.autoLockTimeout,
+          expiresAt: passkeyCredential.expiresAt,
+        };
+      }
       restoredPasskeyCredential = createRestoredPasskeySessionCredential(
         passkeyCredential.vaultKeyBytes,
         passkeyCredential.passkeyBinding,
@@ -176,7 +199,12 @@ async function restoreSessionWithinAuthTransition(
     // A setting change while unlock was in flight must win over restoration.
     const currentTimeout = await readStoredAutoLockTimeout();
     setCachedAutoLockTimeout(currentTimeout);
-    if (currentTimeout !== 0) {
+    if (
+      currentTimeout !== timeout ||
+      (restoredPasskeyTiming?.expiresAt !== null &&
+        restoredPasskeyTiming?.expiresAt !== undefined &&
+        Date.now() >= restoredPasskeyTiming.expiresAt)
+    ) {
       await clearAllAuthState();
       return false;
     }
@@ -192,6 +220,11 @@ async function restoreSessionWithinAuthTransition(
     }
 
     const resolvedPasswordType = result.passwordType;
+    memoryCache.setAuthSessionHardExpiry(
+      credentialKind === "passkey-vault"
+        ? restoredPasskeyTiming?.expiresAt ?? null
+        : null,
+    );
     memoryCache.setCurrentSessionId(sessionId);
     memoryCache.setCachedPasswordType(resolvedPasswordType);
     if (credentialKind === "password") {
@@ -210,6 +243,7 @@ async function restoreSessionWithinAuthTransition(
         sessionId,
         restoredPasskeyCredential.vaultKeyBytes,
         restoredPasskeyCredential.passkeyBinding,
+        restoredPasskeyTiming ?? { autoLockTimeout: 0 },
       );
     } else {
       await clearSessionStorage();

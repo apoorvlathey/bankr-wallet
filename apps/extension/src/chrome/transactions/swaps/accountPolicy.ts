@@ -2,7 +2,6 @@ import { getStoredResolvedChainById } from "@/lib/chains";
 import { getAccountById } from "../../accountStorage";
 import { handleUnlockWallet } from "../../authHandlers";
 import {
-  getAutoLockTimeout,
   getCachedVaultKey,
   getPrivateKeyFromCache,
   setCachedVault,
@@ -64,7 +63,7 @@ export async function resolveLocalSwapPrivateKey(
   if (privateKey) return privateKey;
 
   const vaultKey = getCachedVaultKey();
-  if (!vaultKey && (await getAutoLockTimeout()) === 0) {
+  if (!vaultKey) {
     const restored = await tryRestoreSession(handleUnlockWallet);
     if (restored) privateKey = getPrivateKeyFromCache(account.id);
   }

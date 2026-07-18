@@ -88,6 +88,7 @@ export async function readPersistedSessionRecord(): Promise<
 > {
   return getSessionItems<unknown>([
     "sessionId",
+    "sessionStartedAt",
     "autoLockNever",
     "encryptedSessionPassword",
     "encryptedSessionVaultKey",

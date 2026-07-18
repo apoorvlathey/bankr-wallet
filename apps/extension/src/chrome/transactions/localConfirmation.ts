@@ -16,7 +16,6 @@ import {
 } from "./runtime";
 import { beginPendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import {
-  getAutoLockTimeout,
   getCachedVaultKey,
   getPrivateKeyFromCache,
   setCachedApiKey,
@@ -38,12 +37,9 @@ async function resolveLocalTransactionKey(
   if (privateKey) return { ok: true, privateKey };
 
   if (!getCachedVaultKey()) {
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      const { handleUnlockWallet } = await import("../authHandlers");
-      if (await tryRestoreSession(handleUnlockWallet)) {
-        privateKey = getPrivateKeyFromCache(account.id);
-      }
+    const { handleUnlockWallet } = await import("../authHandlers");
+    if (await tryRestoreSession(handleUnlockWallet)) {
+      privateKey = getPrivateKeyFromCache(account.id);
     }
   }
   if (privateKey) return { ok: true, privateKey };

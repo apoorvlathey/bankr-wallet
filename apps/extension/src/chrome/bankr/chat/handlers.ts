@@ -14,7 +14,6 @@ import {
 } from "./storage";
 import {
   getCachedApiKey,
-  getAutoLockTimeout,
   tryRestoreSession,
 } from "../../sessionCache";
 import { handleUnlockWallet } from "../../authHandlers";
@@ -43,16 +42,12 @@ export async function handleSubmitChatPrompt(
   // Get cached API key
   let apiKey = getCachedApiKey();
 
-  // If no cached API key, try session restoration (for "Never" auto-lock mode)
-  // This handles the case where service worker restarted while user was chatting
+  // If no cached API key, try an expiry-checked session restoration. This
+  // handles a service-worker restart while the user is chatting.
   if (!apiKey) {
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      // Auto-lock is "Never" - try to restore session
-      const restored = await tryRestoreSession(handleUnlockWallet);
-      if (restored) {
-        apiKey = getCachedApiKey();
-      }
+    const restored = await tryRestoreSession(handleUnlockWallet);
+    if (restored) {
+      apiKey = getCachedApiKey();
     }
   }
 

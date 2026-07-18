@@ -1,7 +1,6 @@
 import { handleUnlockWallet } from "../authHandlers";
 import { loadDecryptedApiKey } from "../crypto";
 import {
-  getAutoLockTimeout,
   getCachedApiKey,
   getCachedPassword,
   setCachedApiKey,
@@ -13,7 +12,7 @@ export async function getUnlockedBankrApiKey(): Promise<string | null> {
   let apiKey = getCachedApiKey();
   if (apiKey) return apiKey;
 
-  if (!getCachedPassword() && (await getAutoLockTimeout()) === 0) {
+  if (!getCachedPassword()) {
     await tryRestoreSession(handleUnlockWallet);
     apiKey = getCachedApiKey();
   }

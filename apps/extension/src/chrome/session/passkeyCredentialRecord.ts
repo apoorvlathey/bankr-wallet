@@ -1,10 +1,11 @@
-/** Bounded persisted record for a Never-mode passkey vault capability. */
+/** Bounded persisted records for passkey vault session capabilities. */
 
 import {
   decodeBase64Exact,
 } from "../cryptoUtils";
+import { isValidAutoLockTimeout } from "./timeoutValues";
 
-export const PASSKEY_SESSION_CREDENTIAL_VERSION = 1;
+export const PASSKEY_SESSION_CREDENTIAL_VERSION = 2;
 export const PASSKEY_SESSION_VAULT_KEY_BYTES = 32;
 export const PASSKEY_SESSION_IV_BYTES = 12;
 export const PASSKEY_SESSION_TAG_BYTES = 16;
@@ -17,10 +18,28 @@ export interface EncryptedPasskeySessionCredentialV1 {
   passkeyBinding: string;
 }
 
+export interface EncryptedPasskeySessionCredentialV2 {
+  version: 2;
+  data: string;
+  iv: string;
+  passkeyBinding: string;
+  startedAt: number;
+  autoLockTimeout: number;
+  expiresAt: number | null;
+}
+
+export type EncryptedPasskeySessionCredential =
+  | EncryptedPasskeySessionCredentialV1
+  | EncryptedPasskeySessionCredentialV2;
+
 export interface DecodedPasskeySessionCredential {
+  version: 1 | 2;
   ciphertext: Uint8Array;
   iv: Uint8Array;
   passkeyBinding: string;
+  startedAt: number | null;
+  autoLockTimeout: number;
+  expiresAt: number | null;
 }
 
 function hasExactKeys(
@@ -40,15 +59,21 @@ export function decodePasskeySessionCredential(
 ): DecodedPasskeySessionCredential | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
-  if (
-    !hasExactKeys(candidate, [
+  const isV1 =
+    candidate.version === 1 &&
+    hasExactKeys(candidate, ["version", "data", "iv", "passkeyBinding"]);
+  const isV2 =
+    candidate.version === PASSKEY_SESSION_CREDENTIAL_VERSION &&
+    hasExactKeys(candidate, [
       "version",
       "data",
       "iv",
       "passkeyBinding",
-    ]) ||
-    candidate.version !== PASSKEY_SESSION_CREDENTIAL_VERSION
-  ) {
+      "startedAt",
+      "autoLockTimeout",
+      "expiresAt",
+    ]);
+  if (!isV1 && !isV2) {
     return null;
   }
 
@@ -63,9 +88,39 @@ export function decodePasskeySessionCredential(
   );
   if (!ciphertext || !iv || !binding) return null;
 
+  if (isV2) {
+    const { startedAt, autoLockTimeout, expiresAt } = candidate;
+    if (
+      !Number.isSafeInteger(startedAt) ||
+      (startedAt as number) <= 0 ||
+      !isValidAutoLockTimeout(autoLockTimeout) ||
+      (autoLockTimeout === 0
+        ? expiresAt !== null
+        : !Number.isSafeInteger(expiresAt) ||
+          (expiresAt as number) !==
+            (startedAt as number) + autoLockTimeout)
+    ) {
+      return null;
+    }
+
+    return {
+      version: 2,
+      ciphertext,
+      iv,
+      passkeyBinding: candidate.passkeyBinding as string,
+      startedAt: startedAt as number,
+      autoLockTimeout,
+      expiresAt: expiresAt as number | null,
+    };
+  }
+
   return {
+    version: 1,
     ciphertext,
     iv,
     passkeyBinding: candidate.passkeyBinding as string,
+    startedAt: null,
+    autoLockTimeout: 0,
+    expiresAt: null,
   };
 }

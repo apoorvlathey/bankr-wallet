@@ -141,7 +141,7 @@ async function readCachedApiKey(
   dependencies: BackgroundBankrCredentialDependencies,
 ): Promise<{ apiKey: string | null }> {
   let apiKey = dependencies.getCachedApiKey();
-  if (!apiKey && (await dependencies.getAutoLockTimeout()) === 0) {
+  if (!apiKey) {
     const restored = await dependencies.tryRestoreSession(
       dependencies.handleUnlockWallet,
     );

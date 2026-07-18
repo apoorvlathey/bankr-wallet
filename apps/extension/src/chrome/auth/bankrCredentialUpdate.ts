@@ -6,7 +6,6 @@ import {
 import { getAuthCeremonyEpoch } from "../authTransition";
 import { assertCurrentMasterAuthorization } from "../masterAuthorization";
 import {
-  getAutoLockTimeout,
   getCachedPassword,
   getCachedVaultKey,
   getPasswordType,
@@ -71,13 +70,10 @@ export async function prepareApiKeyUpdateWithCachedPassword(
   let password = getCachedPassword();
 
   if (!password && !vaultKey) {
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      const restored = await tryRestoreSession(handleUnlockWallet);
-      if (restored) {
-        password = getCachedPassword();
-        vaultKey = getCachedVaultKey();
-      }
+    const restored = await tryRestoreSession(handleUnlockWallet);
+    if (restored) {
+      password = getCachedPassword();
+      vaultKey = getCachedVaultKey();
     }
   }
 

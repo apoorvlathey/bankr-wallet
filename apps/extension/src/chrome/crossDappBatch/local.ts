@@ -19,7 +19,6 @@ import {
   guardPendingRequestEffectLease,
 } from "../requests/pendingRequestResolution";
 import {
-  getAutoLockTimeout,
   getCachedVaultKey,
   getPrivateKeyFromCache,
   setCachedApiKey,
@@ -223,10 +222,8 @@ async function resolveLocalKey(
 > {
   let privateKey = getPrivateKeyFromCache(args.accountId);
   if (!privateKey && !getCachedVaultKey()) {
-    if ((await getAutoLockTimeout()) === 0) {
-      const restored = await tryRestoreSession(handleUnlockWallet);
-      if (restored) privateKey = getPrivateKeyFromCache(args.accountId);
-    }
+    const restored = await tryRestoreSession(handleUnlockWallet);
+    if (restored) privateKey = getPrivateKeyFromCache(args.accountId);
   }
   if (!privateKey) {
     const cachedVaultKey = getCachedVaultKey();

@@ -280,7 +280,7 @@ export function createBackgroundAuthMessageRouter(
         void (async () => {
           await dependencies.getAutoLockTimeout();
           let unlocked = dependencies.isWalletUnlocked();
-          if (!unlocked && (await dependencies.getAutoLockTimeout()) === 0) {
+          if (!unlocked) {
             if (await dependencies.tryRestoreSession(dependencies.handleUnlockWallet)) {
               unlocked = true;
             }
@@ -308,7 +308,7 @@ export function createBackgroundAuthMessageRouter(
         void (async () => {
           let hasCached = dependencies.getCachedPassword() !== null;
           const shouldRestore = !hasCached && !dependencies.isWalletUnlocked();
-          if (shouldRestore && (await dependencies.getAutoLockTimeout()) === 0) {
+          if (shouldRestore) {
             if (await dependencies.tryRestoreSession(dependencies.handleUnlockWallet)) {
               hasCached = dependencies.getCachedPassword() !== null;
             }

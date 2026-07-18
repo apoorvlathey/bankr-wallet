@@ -190,14 +190,14 @@ test("successful passkey hydration preserves the external unlock broadcast", asy
   assert.deepEqual(broadcasts, [{ type: "walletUnlockedExternal" }]);
 });
 
-test("unlocked-state checks restore only an explicit Never session", async () => {
+test("unlocked-state checks attempt expiry-checked finite session restoration", async () => {
   let timeoutReads = 0;
   let restoreCalls = 0;
   const capture = responseCapture();
   const route = createBackgroundAuthMessageRouter({
     getAutoLockTimeout: async () => {
       timeoutReads += 1;
-      return 0;
+      return 900_000;
     },
     isWalletUnlocked: () => false,
     tryRestoreSession: async () => {
@@ -211,7 +211,7 @@ test("unlocked-state checks restore only an explicit Never session", async () =>
     keepChannelOpen: true,
   });
   assert.equal(await capture.response, true);
-  assert.equal(timeoutReads, 2);
+  assert.equal(timeoutReads, 1);
   assert.equal(restoreCalls, 1);
 });
 

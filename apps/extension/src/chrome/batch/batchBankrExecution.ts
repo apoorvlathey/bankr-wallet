@@ -18,7 +18,7 @@ import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pe
 import { beginPendingRequestEffectLease, guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import { writeResultToStorage } from "../transactions/runtime";
 import { fetchRawTransactionReceipt, toBundleReceipt, extractAssetChangesWhenReceiptAvailable } from "../receiptEnrichment";
-import { getCachedApiKey, getCachedPassword, getAutoLockTimeout, tryRestoreSession, setCachedApiKey } from "../sessionCache";
+import { getCachedApiKey, getCachedPassword, tryRestoreSession, setCachedApiKey } from "../sessionCache";
 import { startReceiptPolling } from "../forceInclusion/receiptPoller";
 import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
 import { showNotification } from "../transactions/notification";
@@ -91,11 +91,8 @@ export async function handleConfirmBatchTransaction(
 
   if (!apiKey) {
     if (!getCachedPassword()) {
-      const autoLockTimeout = await getAutoLockTimeout();
-      if (autoLockTimeout === 0) {
-        await tryRestoreSession(handleUnlockWallet);
-        apiKey = getCachedApiKey();
-      }
+      await tryRestoreSession(handleUnlockWallet);
+      apiKey = getCachedApiKey();
     }
 
     if (!apiKey) {

@@ -3,6 +3,7 @@ import { isAddress } from "@ethersproject/address";
 import { isResolvableName, resolveNameToAddress } from "@/lib/ensUtils";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
+import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
 
 export type OnboardingStep =
   | "welcome"
@@ -77,9 +78,11 @@ export function useOnboardingController() {
     null,
   );
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
+  const stopKeepaliveHeartbeatRef = useRef<(() => void) | null>(null);
   const onboardingOwnerIdRef = useRef(getOrCreateOnboardingOwnerId());
 
   useEffect(() => {
+    let disposed = false;
     const checkExistingSetup = async () => {
       if (isArcBrowser()) {
         console.log(
@@ -119,17 +122,38 @@ export function useOnboardingController() {
         setIsCheckingSetup(false);
       }
 
-      if (!keepAlivePortRef.current) {
+      if (!disposed && !keepAlivePortRef.current) {
         try {
-          keepAlivePortRef.current = chrome.runtime.connect({
+          const port = chrome.runtime.connect({
             name: "ui-keepalive",
           });
+          keepAlivePortRef.current = port;
+          port.onDisconnect.addListener(() => {
+            if (keepAlivePortRef.current !== port) return;
+            stopKeepaliveHeartbeatRef.current?.();
+            stopKeepaliveHeartbeatRef.current = null;
+            keepAlivePortRef.current = null;
+          });
+          stopKeepaliveHeartbeatRef.current =
+            startUiKeepaliveHeartbeat(port);
         } catch {
           // Ignore connection errors.
         }
       }
     };
     checkExistingSetup();
+    return () => {
+      disposed = true;
+      stopKeepaliveHeartbeatRef.current?.();
+      stopKeepaliveHeartbeatRef.current = null;
+      const port = keepAlivePortRef.current;
+      keepAlivePortRef.current = null;
+      try {
+        port?.disconnect();
+      } catch {
+        // The onboarding page or extension context may already be closed.
+      }
+    };
   }, []);
 
   const resolveAddress = async (input: string): Promise<string | null> => {

@@ -25,10 +25,13 @@ import {
 import { stalePasskeyCeremonyResult } from "./status";
 import {
   clearAllAuthState,
-  getAutoLockTimeout,
   setCurrentSessionId,
   storePasskeySessionAtomic,
 } from "../sessionCache";
+import {
+  readStoredAutoLockTimeout,
+  setCachedAutoLockTimeout,
+} from "../session/autoLockPolicy";
 import { getPasskeySessionBinding } from "./sessionBinding";
 
 export async function handleUnlockWithPasskey(
@@ -97,15 +100,18 @@ export async function handleUnlockWithPasskey(
     }
 
     await clearAllAuthState();
-    let persistedSessionId: string | null = null;
-    if ((await getAutoLockTimeout()) === 0) {
-      persistedSessionId = crypto.randomUUID();
-      await storePasskeySessionAtomic(
-        persistedSessionId,
-        unwrapped.vaultKeyBytes,
-        await getPasskeySessionBinding(record),
-      );
-    }
+    const autoLockTimeout = await readStoredAutoLockTimeout();
+    setCachedAutoLockTimeout(autoLockTimeout);
+    const sessionStartedAt = Date.now();
+    const expiresAt =
+      autoLockTimeout === 0 ? null : sessionStartedAt + autoLockTimeout;
+    const persistedSessionId = crypto.randomUUID();
+    await storePasskeySessionAtomic(
+      persistedSessionId,
+      unwrapped.vaultKeyBytes,
+      await getPasskeySessionBinding(record),
+      { autoLockTimeout, startedAt: sessionStartedAt, expiresAt },
+    );
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       unwrapped.vaultKeyBytes,
       "master",
@@ -115,7 +121,16 @@ export async function handleUnlockWithPasskey(
       await clearAllAuthState();
       return hydrated;
     }
-    if (persistedSessionId) setCurrentSessionId(persistedSessionId);
+    const currentTimeout = await readStoredAutoLockTimeout();
+    setCachedAutoLockTimeout(currentTimeout);
+    if (currentTimeout !== autoLockTimeout) {
+      await clearAllAuthState();
+      return {
+        success: false,
+        error: "Auto-lock setting changed during biometric unlock",
+      };
+    }
+    setCurrentSessionId(persistedSessionId, expiresAt);
     invalidateAuthCeremonies();
 
     // Usage metadata is non-essential. Never turn successful hydration into a

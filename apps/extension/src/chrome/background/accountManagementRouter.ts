@@ -195,8 +195,7 @@ async function addPrivateKeyAccount(
   let vaultKey = dependencies.getCachedVaultKey();
   if (
     !password &&
-    !vaultKey &&
-    (await dependencies.getAutoLockTimeout()) === 0
+    !vaultKey
   ) {
     const restored = await dependencies.tryRestoreSession(
       dependencies.handleUnlockWallet,

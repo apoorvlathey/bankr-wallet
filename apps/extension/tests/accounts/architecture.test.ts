@@ -73,18 +73,15 @@ test("legacy migration and local effects preserve their security order", async (
   assert.ok(typeCheck < addressCheck && addressCheck < failure);
 });
 
-test("local key resolution restores only Never sessions before decrypt fallback", async () => {
+test("local key resolution delegates restoration policy before decrypt fallback", async () => {
   const resolver = await readChromeModule("accounts/localKeyResolver.ts");
   const initialCache = resolver.indexOf("getPrivateKeyFromCache(accountId)");
-  const timeout = resolver.indexOf("getAutoLockTimeout()");
-  const neverGate = resolver.indexOf("autoLockTimeout === 0");
   const restore = resolver.indexOf("tryRestoreSession(handleUnlockWallet)");
   const vaultFallback = resolver.indexOf("const cachedVaultKey");
   const cacheCommit = resolver.indexOf("setCachedVault(vault)");
   const finalLookup = resolver.lastIndexOf("getPrivateKeyFromCache(accountId)");
 
-  assert.ok(initialCache >= 0 && initialCache < timeout);
-  assert.ok(timeout < neverGate && neverGate < restore);
+  assert.ok(initialCache >= 0 && initialCache < restore);
   assert.ok(restore < vaultFallback && vaultFallback < cacheCommit);
   assert.ok(cacheCommit < finalLookup);
   assert.match(resolver, /if \(!vault\) return null/);

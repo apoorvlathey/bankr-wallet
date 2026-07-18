@@ -25,14 +25,15 @@ let cachedPasswordType: PasswordType | null = null;
 let cachedVaultKey: CryptoKey | null = null;
 let cachedMnemonicKey: CachedMnemonicKey | null = null;
 let authCacheTimestamp = 0;
+let authSessionHardExpiresAt: number | null = null;
 
 let currentSessionId: string | null = null;
 let activeUIConnections = 0;
 
 function isCacheEntryValid(timestamp: number, timeout: number): boolean {
   return (
-    timeout === 0 ||
-    (timestamp > 0 && Date.now() - timestamp < timeout)
+    (authSessionHardExpiresAt === null || Date.now() < authSessionHardExpiresAt) &&
+    (timeout === 0 || (timestamp > 0 && Date.now() - timestamp < timeout))
   );
 }
 
@@ -46,6 +47,7 @@ export function clearInMemoryAuthCache(): void {
   cacheTimestamp = 0;
   vaultCacheTimestamp = 0;
   authCacheTimestamp = 0;
+  authSessionHardExpiresAt = null;
   currentSessionId = null;
 }
 
@@ -138,8 +140,18 @@ export function getCurrentSessionId(): string | null {
   return currentSessionId;
 }
 
-export function setCurrentSessionId(id: string | null): void {
+export function setCurrentSessionId(
+  id: string | null,
+  hardExpiresAt?: number | null,
+): void {
   currentSessionId = id;
+  if (hardExpiresAt !== undefined) {
+    authSessionHardExpiresAt = hardExpiresAt;
+  }
+}
+
+export function setAuthSessionHardExpiry(expiresAt: number | null): void {
+  authSessionHardExpiresAt = expiresAt;
 }
 
 export function incrementUIConnections(): void {

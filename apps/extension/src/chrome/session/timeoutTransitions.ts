@@ -40,9 +40,14 @@ export async function setAutoLockTimeout(timeout: number): Promise<boolean> {
   const previousTimeout = await readStoredAutoLockTimeout();
   await writeAutoLockTimeout(timeout);
 
-  if (timeout !== 0 && previousTimeout === 0) {
+  // A passkey envelope authenticates the timeout selected at unlock. Revoke
+  // every old envelope before applying a different policy so no stale
+  // capability can be reinterpreted under the new duration.
+  if (timeout !== previousTimeout) {
     await clearSessionStorage();
-  } else if (
+    memoryCache.setAuthSessionHardExpiry(null);
+  }
+  if (
     timeout === 0 &&
     previousTimeout !== 0 &&
     (getCachedApiKey() !== null || getCachedVault() !== null)
@@ -66,7 +71,10 @@ export async function handleAutoLockTimeoutStorageChange(
   const previousTimeout = normalizeAutoLockTimeout(oldValue);
   const nextTimeout = normalizeAutoLockTimeout(newValue);
   setCachedAutoLockTimeout(nextTimeout);
-  if (previousTimeout === 0 && nextTimeout !== 0) {
-    await runSerializedAuthTransition(() => clearSessionStorage());
+  if (previousTimeout !== nextTimeout) {
+    await runSerializedAuthTransition(async () => {
+      await clearSessionStorage();
+      memoryCache.setAuthSessionHardExpiry(null);
+    });
   }
 }

@@ -2,7 +2,6 @@ import { signMessageViaApi } from "../bankr/signing";
 import { encryptWithVaultKey } from "../crypto";
 import { signTypedData } from "../localSigner";
 import {
-  getAutoLockTimeout,
   getCachedApiKey,
   getCachedPassword,
   getCachedVaultKey,
@@ -67,7 +66,7 @@ export async function createSponsoredTransferAuthorization(input: {
     let privateKey = getPrivateKeyFromCache(account.id);
     if (!privateKey) {
       const vaultKey = getCachedVaultKey();
-      if (!vaultKey && (await getAutoLockTimeout()) === 0) {
+      if (!vaultKey) {
         const restored = await tryRestoreSession(handleUnlockWallet);
         if (restored) privateKey = getPrivateKeyFromCache(account.id);
       }
@@ -95,10 +94,8 @@ export async function createSponsoredTransferAuthorization(input: {
   } else {
     let apiKey = getCachedApiKey();
     if (!apiKey && !getCachedPassword()) {
-      if ((await getAutoLockTimeout()) === 0) {
-        await tryRestoreSession(handleUnlockWallet);
-        apiKey = getCachedApiKey();
-      }
+      await tryRestoreSession(handleUnlockWallet);
+      apiKey = getCachedApiKey();
     }
     if (!apiKey) {
       return { success: false, error: "Wallet must be unlocked" };

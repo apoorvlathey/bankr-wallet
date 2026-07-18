@@ -5,12 +5,13 @@ callers should import. This folder contains the independently auditable layers.
 
 | Module | Responsibility | Secret-bearing state |
 | --- | --- | --- |
-| `inMemoryCache.ts` | Decrypted capabilities, timestamps, and all-or-nothing expiry | Password, API key, general/mnemonic keys, private-key cache |
+| `inMemoryCache.ts` | Decrypted capabilities, sliding timestamps, authenticated passkey hard deadline, and all-or-nothing expiry | Password, API key, general/mnemonic keys, private-key cache |
 | `autoLockPolicy.ts` | Validate, normalize, cache, and store the timeout setting | None |
+| `timeoutValues.ts` | Pure finite/Never timeout allowlist shared by policy and persisted-record validation | None |
 | `cacheAccess.ts` | Expiry-aware selectors, wallet predicates, and private-key lookup | Reads in-memory capabilities only |
 | `teardown.ts` | All-or-nothing memory and persisted-session clearing | Clears every session capability |
 | `timeoutTransitions.ts` | Default initialization, timed/Never persistence, and serialized storage changes | Password only while creating a Never envelope |
-| `restoration.ts` | Authoritative Never re-read, branded unlock proof, type binding, timeout recheck, and failure teardown | Bounded decrypted password or passkey vault capability during unlock |
+| `restoration.ts` | Authoritative password-Never/passkey finite-or-Never re-read, branded unlock proof, type binding, timeout/deadline rechecks, and failure teardown | Bounded decrypted password or passkey vault capability during unlock |
 | `storage.ts` | Cross-browser `chrome.storage.session` adapter and legacy fallback cleanup | Opaque session fields only |
 | `persistence.ts` | Shared recovery half plus native password envelope | Bounded plaintext password during immediate wrap/unwrap |
 | `passkeyCredentialRecord.ts` | Exact versioned passkey-session record codec | None |
@@ -29,7 +30,9 @@ callers should import. This folder contains the independently auditable layers.
   privileged extension pages are part of the secret-bearing trust boundary.
 - Passkey restoration persists no password, PRF output, API key, private key,
   seed phrase, or mnemonic key. Its exact-size general capability is bound to
-  the session ID, master authority, and current validated passkey record.
+  the session ID, master authority, current validated passkey record, selected
+  timeout, start time, and absolute expiry. Finite restoration preserves that
+  original hard deadline; it cannot mint another full timeout.
 - A coherent live `{ general vault key, password type }` generation makes
   restoration an idempotent success after the authoritative timeout check. It
   does not invoke unlock, rotate the auth epoch, or replace a fresh V2 passkey
@@ -51,8 +54,8 @@ callers should import. This folder contains the independently auditable layers.
   until a fresh explicit password or passkey authentication succeeds.
 - A persisted password type may confirm the wrapper that actually decrypted;
   it can never upgrade an agent restore to master.
-- Cold restoration rechecks the authoritative timeout after unlock and rotates
-  the auth epoch only after a complete successful rehydration.
+- Cold restoration rechecks the authoritative timeout and finite deadline after
+  unlock and rotates the auth epoch only after complete successful rehydration.
 - Lower session modules do not import the `sessionCache.ts` facade or auth
   handlers; callers inject the unlock function into `restoration.ts`.
 

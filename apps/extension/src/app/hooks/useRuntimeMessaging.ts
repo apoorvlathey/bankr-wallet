@@ -1,4 +1,5 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
 
 type RuntimeMessage = {
   type: string;
@@ -7,7 +8,10 @@ type RuntimeMessage = {
 
 export function useRuntimeMessaging() {
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
+  const stopKeepaliveHeartbeatRef = useRef<(() => void) | null>(null);
   const reconnectingRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disposedRef = useRef(false);
 
   /**
    * Try to wake up the service worker using chrome.runtime.connect.
@@ -81,12 +85,16 @@ export function useRuntimeMessaging() {
    * Automatically reconnects if the port disconnects (e.g., service worker restarts).
    */
   const establishKeepalivePort = useCallback(() => {
-    if (reconnectingRef.current) return;
+    if (disposedRef.current || reconnectingRef.current) return;
 
     // Disconnect existing port if any
-    if (keepAlivePortRef.current) {
+    const previousPort = keepAlivePortRef.current;
+    stopKeepaliveHeartbeatRef.current?.();
+    stopKeepaliveHeartbeatRef.current = null;
+    keepAlivePortRef.current = null;
+    if (previousPort) {
       try {
-        keepAlivePortRef.current.disconnect();
+        previousPort.disconnect();
       } catch {
         // Ignore disconnect errors
       }
@@ -97,20 +105,56 @@ export function useRuntimeMessaging() {
       keepAlivePortRef.current = port;
 
       port.onDisconnect.addListener(() => {
+        if (keepAlivePortRef.current !== port) return;
+        stopKeepaliveHeartbeatRef.current?.();
+        stopKeepaliveHeartbeatRef.current = null;
         keepAlivePortRef.current = null;
         // Service worker may have restarted - reconnect after a short delay
         // Only reconnect if extension context is still valid
-        if (chrome.runtime?.id) {
+        if (!disposedRef.current && chrome.runtime?.id) {
           reconnectingRef.current = true;
-          setTimeout(() => {
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
             reconnectingRef.current = false;
             establishKeepalivePort();
           }, 100);
         }
       });
+
+      stopKeepaliveHeartbeatRef.current = startUiKeepaliveHeartbeat(port, {
+        onError: () => {
+          if (keepAlivePortRef.current !== port) return;
+          try {
+            port.disconnect();
+          } catch {
+            // onDisconnect owns reconnection when the port is already closed.
+          }
+        },
+      });
     } catch {
       keepAlivePortRef.current = null;
     }
+  }, []);
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      reconnectingRef.current = false;
+      if (reconnectTimerRef.current !== null) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      stopKeepaliveHeartbeatRef.current?.();
+      stopKeepaliveHeartbeatRef.current = null;
+      const port = keepAlivePortRef.current;
+      keepAlivePortRef.current = null;
+      try {
+        port?.disconnect();
+      } catch {
+        // The extension context or port may already be gone.
+      }
+    };
   }, []);
 
   return { establishKeepalivePort, sendMessageWithRetry };

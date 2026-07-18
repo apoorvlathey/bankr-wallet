@@ -1,7 +1,6 @@
 import { handleUnlockWallet } from "../authHandlers";
 import { decryptWithVaultKey } from "../crypto";
 import {
-  getAutoLockTimeout,
   getCachedVaultKey,
   tryRestoreSession,
 } from "../sessionCache";
@@ -13,7 +12,7 @@ import {
 
 export async function ensureSponsoredVaultKey(): Promise<CryptoKey | null> {
   let vaultKey = getCachedVaultKey();
-  if (!vaultKey && (await getAutoLockTimeout()) === 0) {
+  if (!vaultKey) {
     await tryRestoreSession(handleUnlockWallet);
     vaultKey = getCachedVaultKey();
   }

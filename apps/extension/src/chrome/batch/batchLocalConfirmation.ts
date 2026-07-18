@@ -10,7 +10,7 @@ import type { PendingBatchTxRequest } from "../erc5792Types";
 import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import { beginPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
-import { getPrivateKeyFromCache, getCachedVaultKey, getAutoLockTimeout, tryRestoreSession, setCachedVault, setCachedApiKey } from "../sessionCache";
+import { getPrivateKeyFromCache, getCachedVaultKey, tryRestoreSession, setCachedVault, setCachedApiKey } from "../sessionCache";
 import { decryptAllKeys } from "../vaultCrypto";
 import type { GasEstimate } from "../gasEstimation";
 
@@ -71,12 +71,9 @@ export async function confirmLocalBatchWithExecutors(
   if (!privateKey) {
     const vaultKey = getCachedVaultKey();
     if (!vaultKey) {
-      const autoLockTimeout = await getAutoLockTimeout();
-      if (autoLockTimeout === 0) {
-        const restored = await tryRestoreSession(handleUnlockWallet);
-        if (restored) {
-          privateKey = getPrivateKeyFromCache(account.id);
-        }
+      const restored = await tryRestoreSession(handleUnlockWallet);
+      if (restored) {
+        privateKey = getPrivateKeyFromCache(account.id);
       }
     }
 

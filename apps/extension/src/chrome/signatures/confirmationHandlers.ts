@@ -13,7 +13,6 @@ import { removePendingSignatureRequest } from "../requests/pendingSignatureStora
 import { revalidatePendingSignatureBeforeRelease } from "../requests/pendingSignatureRelease";
 import type { SignatureResult } from "../transactions/runtime";
 import {
-  getAutoLockTimeout,
   getCachedApiKey,
   getCachedPassword,
   getCachedVaultKey,
@@ -51,13 +50,10 @@ export async function handleConfirmSignatureRequest(
   if (!privateKey) {
     const vaultKey = getCachedVaultKey();
     if (!vaultKey) {
-      const autoLockTimeout = await getAutoLockTimeout();
-      if (autoLockTimeout === 0) {
-        const { handleUnlockWallet } = await import("../authHandlers");
-        const restored = await tryRestoreSession(handleUnlockWallet);
-        if (restored) {
-          privateKey = getPrivateKeyFromCache(account.id);
-        }
+      const { handleUnlockWallet } = await import("../authHandlers");
+      const restored = await tryRestoreSession(handleUnlockWallet);
+      if (restored) {
+        privateKey = getPrivateKeyFromCache(account.id);
       }
     }
 
@@ -166,14 +162,10 @@ export async function handleConfirmSignatureRequestBankr(
   let apiKey = getCachedApiKey();
   if (!apiKey) {
     if (!getCachedPassword()) {
-      const { getAutoLockTimeout } = await import("../sessionCache");
-      const autoLockTimeout = await getAutoLockTimeout();
-      if (autoLockTimeout === 0) {
-        const { tryRestoreSession } = await import("../sessionCache");
-        const { handleUnlockWallet } = await import("../authHandlers");
-        await tryRestoreSession(handleUnlockWallet);
-        apiKey = getCachedApiKey();
-      }
+      const { tryRestoreSession } = await import("../sessionCache");
+      const { handleUnlockWallet } = await import("../authHandlers");
+      await tryRestoreSession(handleUnlockWallet);
+      apiKey = getCachedApiKey();
     }
 
     if (!apiKey) {

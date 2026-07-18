@@ -41,9 +41,10 @@ authorization decision.
   requires V2 reconfiguration before any new local-account setup. V2 HKDF
   records are the shipped format.
 - PRF output is never persisted or cached after the ceremony.
-- Explicit Never persistence receives only the unwrapped general key and a
-  stable record fingerprint. It never receives/persists PRF output, password,
-  API/private keys, seed phrase, or mnemonic key.
+- Native finite-or-Never session persistence receives only the unwrapped
+  general key and a stable record fingerprint. It never receives/persists PRF
+  output, password, API/private keys, seed phrase, or mnemonic key. Finite
+  timing is authenticated and restoration cannot reset its absolute deadline.
 - General and mnemonic wrappers use different derivation purposes.
 - Setup/removal are master-only, ceremony-epoch-bound operations.
 - V2 setup commits mnemonic protection and the passkey record atomically; a

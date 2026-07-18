@@ -704,7 +704,7 @@ src/
 │   │   ├── cacheAccess.ts  # Expiry-aware selectors and wallet predicates
 │   │   ├── teardown.ts     # All-or-nothing memory/session clearing
 │   │   ├── timeoutTransitions.ts # Default and timed/Never transitions
-│   │   ├── restoration.ts # Serialized native Never-session recovery
+│   │   ├── restoration.ts # Serialized password-Never/passkey timed recovery
 │   │   ├── persistence.ts   # Native Never password envelope/shared recovery half
 │   │   ├── passkeyPersistence.ts # Native Never passkey-vault envelope
 │   │   ├── passkeyCredentialRecord.ts # Exact passkey-session record codec
@@ -3226,22 +3226,27 @@ WebAuthn PRF output
   registration ceremony and uses it directly when the authenticator returns
   it, avoiding a second biometric prompt. Authenticators that omit
   creation-time PRF results fall back to one assertion to obtain the output.
-- Passkey unlock loads the configured `autoLockTimeout` before hydrating
-  in-memory credentials so timed auto-lock applies to biometric sessions.
-- When the authoritative timeout is exactly `0`, passkey unlock persists only
-  an encrypted 32-byte general vault capability for native-session recovery.
-  A fresh AES-GCM key is split between memory-backed `storage.session`
-  ciphertext and `local.sessionEncKey`; AAD binds the ciphertext to the
-  session ID, master authority, and a stable fingerprint of the current
-  validated passkey record. No master password, PRF output, Bankr API key,
-  private/derived key, seed phrase, or mnemonic key is persisted.
+- Passkey unlock re-reads the authoritative configured `autoLockTimeout`
+  before hydration and again before committing success. With native
+  `storage.session`, every passkey session persists only an encrypted 32-byte
+  general vault capability. A fresh AES-GCM key is split between the
+  memory-backed session ciphertext and `local.sessionEncKey`; V2 AAD binds the
+  ciphertext to the session ID, master authority, current validated passkey
+  fingerprint, session start, selected timeout, and absolute expiry. Finite
+  restoration requires an exact current-timeout match and `now < expiresAt`;
+  repeated worker restarts preserve rather than reset that deadline. V1
+  session envelopes remain accepted only for explicit Never compatibility.
+  No master password, PRF output, Bankr API key, private/derived key, seed
+  phrase, or mnemonic key is persisted.
 - After MV3 service-worker suspension, the restored general capability
   rehydrates Bankr/private-key/already-derived seed signing without another
   WebAuthn ceremony. V2 mnemonic-decryption authority is intentionally not
   restored, so seed creation/import/derive and phrase recovery require a fresh
   V2 assertion or explicit master-password path. Browser close, manual lock,
-  factor removal, password rotation, reset, timeout change, malformed state,
-  or passkey-record replacement revokes/fails the capability closed.
+  factor removal, password rotation, reset, malformed state,
+  passkey-record replacement, expiry, or any timeout change revokes/fails the
+  capability closed. Browsers without native `storage.session` retain only
+  non-secret metadata and cannot cold-restore either finite or Never sessions.
 - Add Account checks `mnemonicSessionReady` before entering seed setup, before
   generating/importing, before opening an existing-group address picker, and
   again before persistence. When a cold-restored V2 session lacks the live-only
@@ -3354,11 +3359,14 @@ Wallet lock flow for secure credential management:
 
 `sessionCache.ts` remains the export-only compatibility API used by handlers.
 Under `chrome/session/`, `inMemoryCache.ts` owns one decrypted capability
-generation, `autoLockPolicy.ts` owns timeout normalization/storage caching,
-`cacheAccess.ts` owns expiry-aware selectors, and `teardown.ts` owns complete
+generation, `timeoutValues.ts` owns the pure duration allowlist,
+`autoLockPolicy.ts` owns timeout normalization/storage caching,
+`cacheAccess.ts` owns expiry-aware selectors, including the authenticated hard
+expiry installed by finite passkey restoration, and `teardown.ts` owns complete
 memory/persistence clearing. `timeoutTransitions.ts` owns finite-default and
-timed/Never transitions; `restoration.ts` owns serialized authoritative Never
-recovery, unlock proof, password-type binding, post-unlock timeout recheck, and
+timed/Never transitions; `restoration.ts` owns serialized authoritative
+password-Never/passkey finite-or-Never recovery, unlock proof, password-type
+binding, post-unlock timeout/expiry rechecks, and
 auth-epoch invalidation. `persistence.ts` owns password/shared recovery state,
 `passkeyPersistence.ts` plus `passkeyCredentialRecord.ts` own the exact
 factor-bound general-vault capability, and `storage.ts` owns the cross-browser
@@ -3372,9 +3380,11 @@ adapter. Lower layers never import the facade or authentication handlers.
   - Viewing the main wallet interface
   - Confirming any pending transactions or signature requests
 - Unlock persists across popup open/close cycles (until cache expires)
-- With explicit Never and native `storage.session`, both password and passkey
-  sessions survive service-worker suspension. Passkey restoration rehydrates
-  routine signing authority without persisting wallet plaintext secrets.
+- With native `storage.session`, passkey sessions survive service-worker
+  suspension until their authenticated finite deadline, or for the browser
+  session under explicit Never. Password restoration remains Never-only.
+  Passkey restoration rehydrates routine signing authority without persisting
+  wallet plaintext secrets.
 - Switching a live passwordless biometric session from timed to Never cannot
   export its non-extractable cached key or synthesize a persisted capability.
   It remains live in the current worker; the next explicit passkey unlock under
@@ -3554,7 +3564,7 @@ Users can configure the auto-lock timeout via Settings → Auto-Lock:
 - `isWalletUnlocked()` accepts the legacy Bankr/private-key cache paths or one
   coherent, expiry-checked `{ general vault key, password type }` generation.
   This keeps view-only-only wallets unlocked after master, agent, biometric,
-  and Never-session hydration while rejecting either partial capability alone.
+  and native-session hydration while rejecting either partial capability alone.
 - Changes take effect immediately (no restart required)
 - **Validation**: `setAutoLockTimeout` validates against allowed values and returns `false` for invalid values
 
@@ -3565,21 +3575,26 @@ Users can configure the auto-lock timeout via Settings → Auto-Lock:
 | `getAutoLockTimeout` | Get current timeout value                                |
 | `setAutoLockTimeout` | Set new timeout value (validated against allowed values) |
 
-#### Session Restoration (Auto-Lock "Never" Mode)
+#### Native Session Restoration (Password Never; Passkey Finite/Never)
 
-When auto-lock is set to "Never", the extension stores session data in `chrome.storage.session` to allow seamless credential recovery after service worker restarts. This prevents the annoying "Wallet is locked" prompts that would otherwise occur when Chrome suspends and restarts the service worker.
+The extension stores a split encrypted session capability in
+`chrome.storage.session` to recover from MV3 service-worker restarts without
+mistaking worker lifetime for the configured auto-lock policy. Password
+sessions are restorable only under explicit Never. Passkey sessions are
+restorable under finite settings only before their authenticated absolute
+deadline, and under Never until browser-session storage is cleared.
 
-This password restoration is enabled only when the browser provides native,
+This restoration is enabled only when the browser provides native,
 memory-backed `chrome.storage.session`. Supported Chrome and Firefox builds do.
 The local-storage compatibility fallback for browsers/forks without that API
-remains available for non-secret session state, but Never mode is
-in-memory-only there: persisting both password-recovery halves in the profile
+remains available for non-secret session state, but restoration is unavailable
+there: persisting both recovery halves in the profile
 would expose them to an offline profile copy after the browser closes. Updated
 workers proactively delete fallback password artifacts written by older builds.
 That cleanup also crosses browser capability upgrades: stale `__session__*`
 local ciphertext/metadata is removed after native session storage appears, and
 the local key half is removed only when it is not protecting a valid current
-native Never session.
+native restorable session.
 
 **Why This Is Needed**:
 
@@ -3587,7 +3602,8 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 
 1. All in-memory state is cleared (`cachedApiKey`, `cachedVault`, `cachedVaultKey`, etc.)
 2. The `suspend` event clears cached credentials
-3. Without session restoration, users would see unlock prompts even with auto-lock "Never"
+3. Without session restoration, a finite passkey session would be shortened to
+   worker lifetime, and Never would not survive a worker restart
 
 **How It Works**:
 
@@ -3595,24 +3611,27 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Session Restoration Architecture                         │
 │                                                                             │
-│  On Unlock (when auto-lock is "Never"):                                     │
+│  On Unlock:                                                                 │
 │    1. Generate session ID: crypto.randomUUID()                              │
-│    2. Encrypt password with random AES-256-GCM key                          │
+│    2. Never password: encrypt password with a random AES-256-GCM key        │
+│       Finite/Never passkey: encrypt only the 32-byte general vault key      │
 │    3. Store in chrome.storage.session:                                      │
 │       - sessionId: unique session identifier                                │
 │       - sessionStartedAt: timestamp                                         │
-│       - autoLockNever: true                                                 │
-│       - encryptedSessionPassword: { data, iv }                              │
+│       - autoLockNever: outer consistency marker                            │
+│       - encryptedSessionPassword OR encryptedSessionVaultKey                │
 │       - passwordType: "master" or "agent"                                  │
 │    4. Store the random AES key separately as local.sessionEncKey            │
+│    5. Passkey V2 AAD authenticates start, timeout, and absolute expiry      │
 │                                                                             │
 │  On Service Worker Restart (credentials lost):                              │
 │    1. Handler confirms no coherent live wallet capability remains           │
-│    2. If auto-lock is "Never" (timeout === 0):                              │
-│       - Call tryRestoreSession()                                            │
+│    2. Call tryRestoreSession():                                             │
+│       - Password requires timeout === 0                                     │
+│       - Passkey requires exact timeout match and now < authenticated expiry │
 │       - Recover either the password or factor-bound general vault key       │
 │       - Call handleUnlockWallet(credential) to restore credentials          │
-│       - Re-store the matching native session envelope                       │
+│       - Re-store it without changing the passkey's original deadline        │
 │    3. Operation continues with restored credentials                         │
 │                                                                             │
 │  During A Live Passkey Session:                                             │
@@ -3628,8 +3647,8 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 │    5. Every open UI blocks/retries; routine restore stays blocked in worker │
 │                                                                             │
 │  On Auto-Lock Setting Change:                                               │
-│    - "Never" → timed: Clear session storage (no more restoration)           │
-│    - Timed → "Never" (while unlocked): Store session for restoration        │
+│    - Any timeout change revokes the old authenticated envelope              │
+│    - Timed → "Never": persist a cached password; passkey needs assertion    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -3648,7 +3667,8 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
   inside the secret-bearing trust boundary; `TRUSTED_CONTEXTS` is the default
   access level and does not narrow storage to the worker alone.
 - Browsers without native `storage.session` do not persist a restorable
-  password; a service-worker restart safely returns them to the unlock screen.
+  password or passkey capability; a worker restart safely returns them to the
+  unlock screen.
 - Restoration runs through the same serialized auth-transition queue as
   manual lock and factor/password changes. A lock that arrives during restore
   executes immediately afterward and clears the restored state; a restore
@@ -3660,7 +3680,7 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
   deletion makes the session non-restorable. If neither succeeds, the worker
   broadcasts `walletLockFailedExternal`; every open renderer purges its auth
   state, suppresses biometric auto-prompting, and stays on a blocking retry
-  surface. A worker-local barrier also rejects background Never restoration
+  surface. A worker-local barrier also rejects background restoration
   until a fresh explicit password or passkey authentication succeeds.
 - Manual lock shares the wallet-secret operation serializer with account and
   recovery-material mutations. It never clears a cached data key underneath a
@@ -3676,8 +3696,8 @@ Chrome MV3 service workers are frequently suspended/restarted to save resources.
 
 **Handlers with Session Restoration**:
 
-The following message handlers may attempt session restoration when auto-lock
-is "Never" and their required coherent capability is not live. Passwordless
+The following message handlers may attempt centralized, expiry-checked session
+restoration when their required coherent capability is not live. Passwordless
 passkey sessions must not restore merely because `getCachedPassword()` is null:
 
 | Handler                            | Purpose                                  |
@@ -3730,10 +3750,8 @@ session intentionally has no cached plaintext password. Never use
 ```typescript
 // Restore only when the coherent wallet capability generation is absent.
 if (!isWalletUnlocked()) {
-  const autoLockTimeout = await getAutoLockTimeout();
-  if (autoLockTimeout === 0) {
-    await tryRestoreSession(handleUnlockWallet);
-  }
+  // The primitive owns password-Never and passkey finite/Never policy.
+  await tryRestoreSession(handleUnlockWallet);
 }
 
 const password = getCachedPassword();
@@ -3754,7 +3772,7 @@ master password and cold passkey restoration deliberately cannot restore the
 mnemonic key.
 
 **Why this matters**: Chrome MV3 service workers are frequently suspended and
-restarted, so a genuinely cold handler must recover a Never session. Rehydrating
+restarted, so a genuinely cold handler must recover an eligible session. Rehydrating
 an already-live passkey session is also unsafe: it changes the authorization
 generation and replaces its richer fresh-assertion capabilities with the
 narrower cold-restored capability set.
@@ -3765,8 +3783,9 @@ narrower cold-restored capability set.
 | -------------------------- | ------- | ------------------------------------ |
 | `sessionId`                | string  | Unique session identifier            |
 | `sessionStartedAt`         | number  | Timestamp when session started       |
-| `autoLockNever`            | boolean | Whether auto-lock is "Never"         |
+| `autoLockNever`            | boolean | Outer Never/finite consistency marker |
 | `encryptedSessionPassword` | object  | Encrypted password `{ data, iv }`; the separate 32-byte key half is `chrome.storage.local.sessionEncKey` |
+| `encryptedSessionVaultKey` | object  | Exact encrypted passkey general-key capability; V2 authenticates binding and finite timing metadata |
 
 **Message Types**:
 
@@ -3775,14 +3794,27 @@ narrower cold-restored capability set.
 | `validateSession`   | Check if session is valid (returns { valid, sessionId }) |
 | `tryRestoreSession` | Attempt to restore session (returns boolean)             |
 
-**UI Port Reconnection**:
+**UI Port Heartbeat and Reconnection**:
 
-The UI (App.tsx) maintains a keepalive port to the service worker. When the service worker restarts:
+The main wallet UI (`app/hooks/useRuntimeMessaging.ts`) and onboarding page
+maintain trusted keepalive ports to the service worker. Chrome 114+ no longer
+counts opening a long-lived port as worker activity, so
+`app/uiKeepalive.ts` sends an immediate, secret-free
+`wallet-ui-keepalive` pulse and repeats it every 20 seconds while the renderer
+is open. This is below Chrome's 30-second MV3 idle deadline. The pulse keeps the
+worker hosting the in-memory session alive but never refreshes auth cache
+timestamps, so 1/5/15/30-minute and longer finite settings still expire through
+the normal cache getters. If Chrome nevertheless suspends the worker, an
+unexpired passkey session may cold-restore only to its original authenticated
+deadline; password sessions remain cold-restorable only under exact Never.
+
+When the service worker restarts unexpectedly:
 
 1. The port disconnects
 2. `onDisconnect` listener detects this
 3. After 100ms delay, `establishKeepalivePort()` reconnects
-4. This ensures `activeUIConnections` tracking remains accurate
+4. The new port sends its immediate pulse and resumes the 20-second heartbeat
+5. This ensures `activeUIConnections` tracking remains accurate
 
 The port does not make expired credentials valid. Cache getters still enforce
 `autoLockTimeout`; reconnecting the sidepanel after the timeout has elapsed
@@ -3790,7 +3822,10 @@ must route to unlock, not revive the previous session. When the last UI port
 disconnects, the cache timestamps are reset so the idle countdown starts from
 close time.
 
-**See**: `src/App.tsx` → `establishKeepalivePort()` for the automatic reconnection implementation.
+**See**: `src/app/hooks/useRuntimeMessaging.ts` and
+`src/app/uiKeepalive.ts` for heartbeat/reconnection behavior, and
+`src/chrome/background/lifecycle/trustedUiPorts.ts` for exact trusted-sender and
+pulse-shape enforcement.
 
 #### Password Caching for API Key Changes
 
@@ -4172,8 +4207,8 @@ non-secret account read/order/name/global-selection/tab-selection routes are
 delegated separately to `background/accountStateRouter.ts`.
 `background/accountManagementRouter.ts` owns the trusted-UI transport and
 orchestration for the serialized legacy migration, master-gated Bankr,
-view-only, private-key, and seed account/group mutations, Never-session private
-key import recovery, and disconnect-before-delete removal. Storage locks,
+view-only, private-key, and seed account/group mutations, centralized
+private-key import recovery, and disconnect-before-delete removal. Storage locks,
 credential preparation, auth epochs, sponsored-intent exclusion, dapp
 revocation, and mutation handlers remain injected boundaries.
 `background/secretManagementRouter.ts` separately owns direct trusted-sender
