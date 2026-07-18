@@ -42,6 +42,7 @@ export interface SignatureConfirmationScreenProps {
   chainName: string;
   advancedDetails?: ReactNode;
   actionSummary?: ReactNode;
+  actionNotice?: ReactNode;
   confirmAction: ReactNode;
   rejectAction?: ReactNode;
 }
@@ -133,6 +134,7 @@ export function SignatureConfirmationScreen({
   chainName,
   advancedDetails,
   actionSummary,
+  actionNotice,
   confirmAction,
   rejectAction,
 }: SignatureConfirmationScreenProps) {
@@ -206,6 +208,7 @@ export function SignatureConfirmationScreen({
         advanced
       }
       actionSummary={actionSummary}
+      actionNotice={actionNotice}
       confirmAction={confirmAction}
       rejectAction={rejectAction}
     />

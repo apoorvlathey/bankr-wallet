@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
 import { ConfirmationScreen } from "@/components/ui";
+import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -197,7 +198,6 @@ function TransactionConfirmation({
         <TransactionContext
           txRequest={txRequest}
           actionLabel={decodedActionFallback}
-          accountType={accountType}
           explorer={explorer}
           nativeSymbol={metadata.nativeSymbol}
           nativePriceUsd={review.nativePriceUsd}
@@ -251,6 +251,9 @@ function TransactionConfirmation({
           onGasOverrides={review.setGasOverrides}
           onGasValidityChange={review.setGasValid}
         />
+      }
+      actionNotice={
+        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
       }
       confirmAction={
         accountType === "impersonator" ? (

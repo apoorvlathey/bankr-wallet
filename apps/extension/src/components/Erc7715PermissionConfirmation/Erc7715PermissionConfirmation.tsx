@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { Button, Spinner } from "@chakra-ui/react";
 
 import { CopyButton } from "@/components/CopyButton";
+import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChainById } from "@/lib/chains";
@@ -173,6 +174,9 @@ function Erc7715PermissionConfirmation({
       }
       actionSummary={
         <PermissionDecisionSummary address={editedRequest.from} />
+      }
+      actionNotice={
+        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
       }
       confirmAction={
         canGrant ? (

@@ -225,6 +225,10 @@
 
 ## Slop audit
 
+- 2026-07-18 view-only signing audit: transaction, batch, signature, and
+  ERC-7715 prompts share one compact amber warning in the sticky decision bar,
+  immediately above the reject-only action; the scrollable request content no
+  longer repeats account capability state.
 - 2026-07-18 Swap/Bridge audit: rebuilt the wallet-sized form around one compact
   pay/receive intent module; combined token and network identity instead of
   exposing separate selectors; reused Send's 24px-target amber rounded-square

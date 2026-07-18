@@ -15,16 +15,12 @@ import type { parseApproveCalldata } from "@/lib/erc20Approve";
 import { DelegationRevokeNotice, DelegationSetNotice } from "./DelegationNotices";
 import { RequestStatus } from "./RequestStatus";
 import { TransactionInfoCard } from "./TransactionInfoCard";
-import type {
-  ConfirmationState,
-  TransactionAccountType,
-} from "./types";
+import type { ConfirmationState } from "./types";
 import type { SplitPriorTxState } from "./useSplitPriorTxState";
 
 interface TransactionContextProps {
   txRequest: PendingTxRequest;
   actionLabel: string | null;
-  accountType?: TransactionAccountType;
   explorer?: string;
   nativeSymbol: string;
   nativePriceUsd: number | null;
@@ -49,7 +45,6 @@ interface TransactionContextProps {
 export function TransactionContext({
   txRequest,
   actionLabel,
-  accountType,
   explorer,
   nativeSymbol,
   nativePriceUsd,
@@ -210,7 +205,6 @@ export function TransactionContext({
       />
 
       <RequestStatus
-        accountType={accountType}
         confirmDisabledReason={confirmDisabledReason}
         error={requestError}
         gasValid={gasValid}

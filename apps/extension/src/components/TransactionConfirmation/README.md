@@ -23,7 +23,7 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 | `AdvancedDetails.tsx` | Force inclusion, calldata, digest, Tenderly, and batch controls. |
 | `DelegationNotices.tsx` | EIP-7702 consequences. |
 | `QueueNavigation.tsx` | Pending-request navigation. |
-| `RequestStatus.tsx` | Async, error, impersonator, and split feedback. |
+| `RequestStatus.tsx` | Async, error, and split feedback. |
 | `ConfirmationActions.tsx` | Confirm/reject arrangement and single-transaction simulation-warning projection. |
 | `StateScreens.tsx` | Force-inclusion progress and success animation. |
 | `CopyButton.tsx` | Inline clipboard feedback. |

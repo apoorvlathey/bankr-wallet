@@ -40,3 +40,8 @@ domain. Domain-free screen/list primitives belong in `components/ui/` instead.
 
 `BackupConfirmationCheckbox.tsx` is the shared amber commitment control used
 when a private key or recovery phrase must be acknowledged before continuing.
+
+`ViewOnlySigningNotice.tsx` is the shared action-bar warning used by
+transaction, batch, signature, and ERC-7715 prompts pinned to a view-only
+account. It remains immediately above the reject-only action rather than in
+the scrollable request content.

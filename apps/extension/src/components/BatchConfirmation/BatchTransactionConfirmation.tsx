@@ -15,6 +15,7 @@ import {
 } from "@/theme";
 import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
 import { ConfirmationScreen } from "@/components/ui";
+import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { CopyButton } from "@/components/CopyButton";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { QueueNavigation } from "@/components/RequestConfirmation/QueueNavigation";
@@ -250,8 +251,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           actionSummary={batchActionSummary}
           state={actions.state}
           error={actions.error}
-          accountType={accountType}
-          customConfirm={!!customConfirmHandler}
           warnings={<RequestWarnings
             borders={tokens.borders}
             simulationReverted={review.simulationReverted}
@@ -309,6 +308,11 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           onGasValidityChange={review.setGasValid}
           onAnyFailedChange={review.setAnyTxMayRevert}
         />}
+        actionNotice={
+          accountType === "impersonator" && !customConfirmHandler
+            ? <ViewOnlySigningNotice />
+            : undefined
+        }
         confirmAction={canConfirmBatch ? <ConfirmAction
           customConfirm={!!customConfirmHandler}
           confirmDisabledReason={confirmDisabledReason}

@@ -33,6 +33,7 @@ export interface ConfirmationScreenProps
   advancedDetails?: ReactNode;
   advancedLabel?: string;
   actionSummary?: ReactNode;
+  actionNotice?: ReactNode;
   confirmAction: ReactNode;
   rejectAction?: ReactNode;
 }
@@ -63,6 +64,7 @@ export const ConfirmationScreen = forwardRef<
     advancedDetails,
     advancedLabel = "Advanced details",
     actionSummary,
+    actionNotice,
     confirmAction,
     rejectAction,
     ...screenProps
@@ -107,6 +109,7 @@ export const ConfirmationScreen = forwardRef<
 
       <StickyActionBar
         summary={actionSummary}
+        notice={actionNotice}
         primaryAction={confirmAction}
         secondaryAction={rejectAction}
       />

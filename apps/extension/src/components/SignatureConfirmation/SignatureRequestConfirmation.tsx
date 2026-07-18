@@ -6,6 +6,7 @@ import {
   ClearSigningView,
 } from "@/components/ClearSigning/ClearSigningView";
 import { CopyButton } from "@/components/CopyButton";
+import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import Erc7710DelegationDisplay from "@/components/Erc7710DelegationDisplay";
 import SiweMessageDisplay from "@/components/SiweMessageDisplay";
@@ -368,6 +369,9 @@ function SignatureRequestConfirmation({
             }
           />
         ) : undefined
+      }
+      actionNotice={
+        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
       }
       confirmAction={confirmButton}
       rejectAction={canSign ? rejectButton : undefined}

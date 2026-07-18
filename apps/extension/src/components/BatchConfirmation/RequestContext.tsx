@@ -7,8 +7,6 @@ interface RequestContextProps {
   actionSummary?: string | null;
   state: ConfirmationState;
   error: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
-  customConfirm: boolean;
   warnings: ReactNode;
   smartAccountSetup: ReactNode;
 }
@@ -19,8 +17,6 @@ export function RequestContext({
   actionSummary,
   state,
   error,
-  accountType,
-  customConfirm,
   warnings,
   smartAccountSetup,
 }: RequestContextProps) {
@@ -109,20 +105,6 @@ export function RequestContext({
             Submitting batch…
           </Text>
         </HStack>
-      )}
-
-      {accountType === "impersonator" && !customConfirm && (
-        <Box
-          bg="accent.highlight"
-          border="1px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          p={3}
-        >
-          <Text color="accentFg.highlight" fontSize="sm" fontWeight="700">
-            Connected via an impersonated account. Signing is disabled.
-          </Text>
-        </Box>
       )}
     </VStack>
   );

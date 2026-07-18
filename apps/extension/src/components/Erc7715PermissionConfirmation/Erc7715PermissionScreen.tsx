@@ -26,6 +26,7 @@ interface Erc7715PermissionScreenProps {
   limits: ReactNode;
   advancedDetails: ReactNode;
   actionSummary: ReactNode;
+  actionNotice?: ReactNode;
   confirmAction: ReactNode;
   rejectAction?: ReactNode;
 }
@@ -50,6 +51,7 @@ export function Erc7715PermissionScreen({
   limits,
   advancedDetails,
   actionSummary,
+  actionNotice,
   confirmAction,
   rejectAction,
 }: Erc7715PermissionScreenProps) {
@@ -118,6 +120,7 @@ export function Erc7715PermissionScreen({
         </InlineDisclosure>
       }
       actionSummary={actionSummary}
+      actionNotice={actionNotice}
       confirmAction={confirmAction}
       rejectAction={rejectAction}
     />
