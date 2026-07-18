@@ -41,7 +41,19 @@ function getNotificationIconUrl(
     const extensionRoot = getRuntimeUrl("/");
     return iconPath.startsWith(extensionRoot) ? iconPath : undefined;
   }
-  return getRuntimeUrl(iconPath.replace(/^\/+/, ""));
+
+  const normalizedPath = iconPath.replace(/^\/+/, "");
+  const bundledSvgMatch = normalizedPath.match(
+    /^chainIcons\/([^/]+)\.svg$/i,
+  );
+
+  // Chrome's native notification bridge does not reliably render SVG icons
+  // (notably on macOS). Use the generated raster copy for notifications while
+  // retaining the sharper SVG everywhere inside the extension UI.
+  const notificationPath = bundledSvgMatch
+    ? `notificationChainIcons/${bundledSvgMatch[1]}.png`
+    : normalizedPath;
+  return getRuntimeUrl(notificationPath);
 }
 
 export function createDappChainSwitchNotificationHandler(

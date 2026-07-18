@@ -1,6 +1,6 @@
 ---
 name: walletchan-chain-research
-description: Research and verify EVM chain metadata for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, map official testnet chain IDs to a mainnet logo, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
+description: Research and verify EVM chain metadata and notification-safe icon assets for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, map official testnet chain IDs to a mainnet logo, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
 ---
 
 # WalletChan Chain Research
@@ -29,15 +29,29 @@ description: Research and verify EVM chain metadata for WalletChan chain additio
    Add `--icon-out apps/extension/public/chainIcons/<name>.<ext>` to download
    the best chain icon. The script chooses the extension from `content-type`
    when possible.
-4. Read `references/walletchan-fields.md` before editing code. Use it to map
+4. Make every downloaded SVG icon notification-safe before finishing the chain
+   addition. Chrome's native notification bridge does not reliably render SVG,
+   so preserve the SVG for the registry and extension UI, then automatically
+   generate its 128x128 PNG counterpart:
+   ```bash
+   apps/extension/scripts/generate-notification-chain-icons.sh
+   ```
+   Confirm that
+   `apps/extension/public/notificationChainIcons/<same-basename>.png` exists,
+   is a valid 128x128 PNG, and is included in `apps/extension/build/` after the
+   required extension build. Do not create a duplicate when the downloaded
+   chain icon is already a raster format such as PNG or WebP; notifications use
+   that bundled raster directly. Treat a missing PNG counterpart for an SVG as
+   an incomplete chain addition.
+5. Read `references/walletchan-fields.md` before editing code. Use it to map
    verified facts into `apps/extension/src/constants/chainRegistry.ts` and the
    website swap API allowlist.
-5. Treat EIP-7702 separately from “the chain supports type-4 txs”. WalletChan's
+6. Treat EIP-7702 separately from “the chain supports type-4 txs”. WalletChan's
    automatic atomic path requires the configured default delegate contract to be
    deployed and non-empty on the chain.
-6. Report uncertainty explicitly. If a source cannot verify a field, leave the
+7. Report uncertainty explicitly. If a source cannot verify a field, leave the
    risky flag false or omit the optional ID instead of guessing.
-7. Research current public testnets from the chain operator's documentation and
+8. Research current public testnets from the chain operator's documentation and
    verify every candidate with `eth_chainId` when an RPC is available. Add the
    resulting IDs to the mainnet entry's `testnetChainIds` array so custom-added
    testnets reuse its icon and testnet overlay. Exclude local/dev networks and
@@ -74,6 +88,7 @@ When finishing a chain research task, include:
 - Proposed `ChainEntry` values, including explicit true/false support flags.
 - Verified `testnetChainIds`, including the reason for any retained legacy ID.
 - Which swap/bridge/7702 facts were verified and from where.
-- Icon source and local path, if downloaded.
+- Icon source and local UI path, if downloaded. For an SVG, also report the
+  generated notification PNG path and its 128x128 validation.
 - Files changed and validation commands run.
 - Any flags intentionally left false with the reason.
