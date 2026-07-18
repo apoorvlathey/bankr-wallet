@@ -19,3 +19,9 @@ export interface NetworkEntry {
 export type NetworksInfo = {
   [name: string]: NetworkEntry;
 };
+
+/** Chains covered by one live RPC observation and the unhealthy subset. */
+export interface RpcHealthReport {
+  checkedChainIds: number[];
+  unhealthyChainIds: number[];
+}

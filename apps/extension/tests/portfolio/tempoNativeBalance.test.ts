@@ -36,7 +36,7 @@ test("Tempo's eth_getBalance sentinel is never queried or verified", async () =>
   assert.deepEqual(result.tokens, []);
   assert.equal(result.totalValueUsd, 0);
   assert.deepEqual([...result.verifiedTokenKeys], []);
-  assert.deepEqual(result.rpcIssueChainIds, []);
+  assert.deepEqual(result.rpcHealth.unhealthyChainIds, []);
 });
 
 test("real Tempo TIP-20 balances remain eligible portfolio assets", () => {

@@ -1,5 +1,5 @@
 import type { DefiPosition, PortfolioToken } from "@/chrome/portfolio/api";
-import type { NetworksInfo } from "@/types";
+import type { NetworksInfo, RpcHealthReport } from "@/types";
 
 export interface LoadPortfolioOptions {
   forceSnapshot?: boolean;
@@ -27,7 +27,7 @@ export interface TokenHoldingsProps {
   onSwapClick?: (token: PortfolioToken) => void;
   hideHeader?: boolean;
   hideCard?: boolean;
-  onRpcIssuesChange?: (chainIds: number[]) => void;
+  onRpcIssuesChange?: (report: RpcHealthReport) => void;
   filterChainId?: number | null;
   onShowAllNetworks?: () => void;
   searchQuery?: string;

@@ -5,6 +5,7 @@ import {
   reduceRpcIssueAlertState,
   RPC_ISSUE_ALERT_REVEAL_DELAY_MS,
 } from "./rpcIssueAlertModel";
+import type { RpcHealthReport } from "@/types";
 
 export function useRpcIssueAlert() {
   const [state, dispatch] = useReducer(
@@ -25,8 +26,8 @@ export function useRpcIssueAlert() {
     return () => window.clearTimeout(timer);
   }, [state.pendingSince, state.reportedChainIds]);
 
-  const reportRpcIssues = useCallback((chainIds: number[]) => {
-    dispatch({ type: "report", chainIds, now: Date.now() });
+  const reportRpcIssues = useCallback((report: RpcHealthReport) => {
+    dispatch({ type: "report", ...report, now: Date.now() });
   }, []);
   const dismissRpcIssues = useCallback(() => {
     dispatch({ type: "dismiss" });

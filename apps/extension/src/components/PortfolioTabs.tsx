@@ -38,6 +38,7 @@ import {
 } from "@/components/portfolioChainFilterState";
 import { PortfolioOptionsSheet } from "@/components/Portfolio/PortfolioOptionsSheet";
 import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfolioBalances";
+import type { RpcHealthReport } from "@/types";
 
 interface PortfolioTabsProps {
   address: string;
@@ -55,7 +56,7 @@ interface PortfolioTabsProps {
   refreshTrigger?: number;
   onTokenClick?: (token: PortfolioToken) => void;
   onSwapClick?: (token: PortfolioToken) => void;
-  onRpcIssuesChange?: (chainIds: number[]) => void;
+  onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onTransactionClick?: (tx: CompletedTransaction) => void;
   quickActions?: ReactNode;
   onChainBalancesChange?: (

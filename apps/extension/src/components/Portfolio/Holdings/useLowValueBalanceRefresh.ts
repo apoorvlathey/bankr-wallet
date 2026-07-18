@@ -10,6 +10,7 @@ import {
 } from "@/components/tokenHoldingsUtils";
 import { holdingsCacheKey, writeHoldingsSnapshot } from "./cache";
 import type { HoldingsState } from "./useHoldingsState";
+import type { RpcHealthReport } from "@/types";
 
 interface UseLowValueBalanceRefreshOptions {
   address: string;
@@ -17,7 +18,7 @@ interface UseLowValueBalanceRefreshOptions {
   lowValueTokens: PortfolioToken[];
   showLowValueTokens: boolean;
   state: HoldingsState;
-  onRpcIssuesChange?: (chainIds: number[]) => void;
+  onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onSnapshotsChanged?: () => void;
 }
 
@@ -63,7 +64,7 @@ export function useLowValueBalanceRefresh({
       const onchain = await fetchOnchainBalances(address, tokensToRefresh, {
         preserveZeroBalanceTokens: true,
       });
-      onRpcIssuesChange?.(onchain.rpcIssueChainIds);
+      onRpcIssuesChange?.(onchain.rpcHealth);
 
       for (const token of onchain.tokens) {
         const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
@@ -93,7 +94,7 @@ export function useLowValueBalanceRefresh({
         allTokenKeys,
         hiddenTokenKeys,
         onchainFetchedTokenKeys: nextFetchedKeys,
-        rpcIssueChainIds: onchain.rpcIssueChainIds,
+        rpcIssueChainIds: onchain.rpcHealth.unhealthyChainIds,
         apiUnavailable,
         timestamp: fetchedAt,
       });

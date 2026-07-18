@@ -23,13 +23,14 @@ import {
 } from "./transforms";
 import type { LoadPortfolioOptions } from "./types";
 import type { HoldingsState } from "./useHoldingsState";
+import type { RpcHealthReport } from "@/types";
 
 interface UsePortfolioLoaderOptions {
   address: string;
   chainReloadKey: string;
   showLowValueTokens: boolean;
   state: HoldingsState;
-  onRpcIssuesChange?: (chainIds: number[]) => void;
+  onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onSnapshotsChanged?: () => void;
 }
 
@@ -231,7 +232,7 @@ export function usePortfolioLoader({
               { preserveZeroBalanceTokens: true },
             );
             if (!isCurrentLoad()) return;
-            onRpcIssuesChange?.(onchain.rpcIssueChainIds);
+            onRpcIssuesChange?.(onchain.rpcHealth);
             for (const token of onchain.tokens) {
               const key = getPortfolioTokenKey(
                 token.chainId,
@@ -261,7 +262,7 @@ export function usePortfolioLoader({
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
               onchainFetchedTokenKeys: verifiedKeys,
-              rpcIssueChainIds: onchain.rpcIssueChainIds,
+              rpcIssueChainIds: onchain.rpcHealth.unhealthyChainIds,
               apiUnavailable: catalog.apiUnavailable,
               timestamp: fetchedAt,
             });
@@ -269,11 +270,10 @@ export function usePortfolioLoader({
             void applyEnrichedCatalog(
               displayTokens,
               verifiedKeys,
-              onchain.rpcIssueChainIds,
+              onchain.rpcHealth.unhealthyChainIds,
             );
           } catch {
             if (!isCurrentLoad()) return;
-            onRpcIssuesChange?.([]);
             setLoading(false);
             const verifiedKeys = new Set(verifiedBalanceKeysRef.current);
             setOnchainFetchedTokenKeys(verifiedKeys);
@@ -302,7 +302,6 @@ export function usePortfolioLoader({
         setError(
           error instanceof Error ? error.message : "Failed to load portfolio",
         );
-        onRpcIssuesChange?.([]);
         setPortfolioBalanceRefreshing(false);
         setLoading(false);
       }

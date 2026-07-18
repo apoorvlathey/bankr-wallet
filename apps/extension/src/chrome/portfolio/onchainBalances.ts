@@ -10,6 +10,7 @@ import { getPortfolioTokenKey } from "./hiddenTokens";
 import { getStoredRpcUrl } from "@/lib/chains";
 import { secureHttpTransport } from "../network/rpcClient";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
+import type { RpcHealthReport } from "@/types";
 
 /** Multicall3 is deployed at the same address on all supported chains */
 const MULTICALL3_ADDRESS: Address =
@@ -31,6 +32,9 @@ const MULTICALL_BATCH_SIZE = 100;
 
 /** RPC request timeout in ms – short enough to not block UI on rate limits */
 const RPC_TIMEOUT = 8_000;
+
+/** Avoid classifying a single transient timeout/rate-limit burst as downtime. */
+const RPC_HEALTH_CONFIRMATION_DELAY_MS = 2_000;
 
 /** Cached viem clients keyed by chainId and invalidated when RPC URL changes */
 const clientCache = new Map<number, { rpcUrl: string; client: PublicClient }>();
@@ -65,7 +69,7 @@ export async function fetchOnchainBalances(
 ): Promise<{
   tokens: PortfolioToken[];
   totalValueUsd: number;
-  rpcIssueChainIds: number[];
+  rpcHealth: RpcHealthReport;
   verifiedTokenKeys: Set<string>;
 }> {
   // Some EVM-compatible chains expose an eth_getBalance sentinel even though
@@ -88,6 +92,7 @@ export async function fetchOnchainBalances(
   // Clone tokens so we can mutate
   const updated = eligibleTokens.map((t) => ({ ...t }));
   const rpcIssueChainIds = new Set<number>();
+  const checkedChainIds = new Set<number>();
   const verifiedTokenKeys = new Set<string>();
 
   // Fetch balances per chain in parallel
@@ -135,6 +140,7 @@ export async function fetchOnchainBalances(
       }
 
       if (calls.length === 0) return;
+      checkedChainIds.add(chainId);
 
       // Process in chunks to avoid oversized RPC requests
       for (let i = 0; i < calls.length; i += MULTICALL_BATCH_SIZE) {
@@ -199,9 +205,7 @@ export async function fetchOnchainBalances(
       }
 
       if (successfulBalanceReads === 0 && failedBalanceReads > 0) {
-        try {
-          await client.getBlockNumber();
-        } catch {
+        if (await confirmRpcUnavailable(client)) {
           rpcIssueChainIds.add(chainId);
         }
       }
@@ -221,9 +225,29 @@ export async function fetchOnchainBalances(
   return {
     tokens: filtered,
     totalValueUsd,
-    rpcIssueChainIds: Array.from(rpcIssueChainIds),
+    rpcHealth: {
+      checkedChainIds: Array.from(checkedChainIds),
+      unhealthyChainIds: Array.from(rpcIssueChainIds),
+    },
     verifiedTokenKeys,
   };
+}
+
+async function confirmRpcUnavailable(client: PublicClient): Promise<boolean> {
+  try {
+    await client.getBlockNumber();
+    return false;
+  } catch {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, RPC_HEALTH_CONFIRMATION_DELAY_MS);
+    });
+    try {
+      await client.getBlockNumber();
+      return false;
+    } catch {
+      return true;
+    }
+  }
 }
 
 async function fetchChunkBalancesIndividually(
