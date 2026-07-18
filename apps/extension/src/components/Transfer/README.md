@@ -50,6 +50,9 @@ existing direct and lazy imports retain the same default-export contract.
   independent and still runs for the resolved raw address.
 - `hooks/useTransferPreparation.ts` owns amount/calldata state and pure transfer
   preparation, including slider sound semantics and deployment preconditions.
+- `hooks/useNativeMaxAmount.ts` reuses trusted-wallet gas estimation to reserve
+  a chain-specific native fee before MAX/100%; `model/nativeMaxAmount.ts` owns
+  the exact bigint subtraction and conservative fee-tier policy.
 - `hooks/useSponsoredTransfer.ts` owns premium eligibility, durable ERC-3009
   recovery checks, intent IDs, acknowledgement, and sponsored submission.
 - `model/sponsoredTransferPolicy.ts` owns the temporary Base-USDC sponsorship

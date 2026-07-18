@@ -186,6 +186,12 @@ the restraint rules in `_docs/WARM_MIDNIGHT.md`.
 - The initial native placeholder is refreshed from the shared portfolio token
   catalog after load so current balance, price, and metadata replace its
   zero-value bootstrap fields without changing the selected asset identity.
+- For native assets, Send's MAX action and 100% slider reserve gas before
+  filling the input. The renderer reuses the trusted-wallet gas estimator,
+  prices its already-buffered gas limit at the highest available fee tier,
+  adds 10% fee headroom, and subtracts the result with bigint precision. The
+  estimate refreshes for the resolved recipient or calldata; ERC-20 MAX remains
+  the full token balance.
 
 The extension supports four distinct account types that can be used simultaneously:
 

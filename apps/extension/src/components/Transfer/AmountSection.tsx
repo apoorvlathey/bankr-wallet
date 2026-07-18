@@ -34,6 +34,7 @@ export function AmountSection({ token, preparation }: AmountSectionProps) {
     handleSliderChangeStart,
     handleSliderChangeEnd,
     setMaxAmount,
+    isMaxAmountReady,
     toggleAmountMode,
     hasPrice,
     balanceNum,
@@ -142,6 +143,12 @@ export function AmountSection({ token, preparation }: AmountSectionProps) {
               h="full"
               px={1.5}
               onClick={setMaxAmount}
+              isDisabled={!isMaxAmountReady}
+              title={
+                isMaxAmountReady
+                  ? "Use the maximum spendable balance"
+                  : "Calculating gas reserve"
+              }
               _hover={{ bg: "surface.sunken" }}
             >
               MAX

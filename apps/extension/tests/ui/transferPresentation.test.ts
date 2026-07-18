@@ -74,3 +74,18 @@ test("Send token selector hugs its content inside the asset card inset", async (
     /sx=\{\{ "> button": \{ maxWidth: "144px" \} \}\}/u,
   );
 });
+
+test("native MAX preparation is shared by every signing wallet type", async () => {
+  const source = await readFile(
+    new URL("../../src/components/Transfer/TokenTransfer.tsx", import.meta.url),
+    "utf8",
+  );
+  const preparationCall = source.match(
+    /useTransferPreparation\(\{[\s\S]*?\}\);/u,
+  )?.[0];
+
+  assert.ok(preparationCall);
+  assert.match(preparationCall, /fromAddress/u);
+  assert.match(preparationCall, /resolvedAddress/u);
+  assert.doesNotMatch(preparationCall, /accountType/u);
+});

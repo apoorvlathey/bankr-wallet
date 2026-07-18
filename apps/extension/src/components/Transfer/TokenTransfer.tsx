@@ -50,7 +50,9 @@ function TokenTransfer({
   });
   const preparation = useTransferPreparation({
     token: catalog.selectedToken,
+    fromAddress,
     recipient: recipientState.recipient,
+    resolvedAddress: recipientState.resolvedAddress,
   });
 
   const allChains = useMemo(() => {

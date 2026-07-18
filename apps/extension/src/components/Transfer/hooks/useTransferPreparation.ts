@@ -1,24 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import {
   snapBalanceSliderValue,
   useSliderValueSound,
 } from "@/sounds/useSliderValueSound";
 import { formatTokenAmount } from "../formatting";
+import { useNativeMaxAmount } from "./useNativeMaxAmount";
 
 interface UseTransferPreparationOptions {
   token: PortfolioToken | null;
+  fromAddress: string;
   recipient: string;
+  resolvedAddress: string | null;
 }
 
 export function useTransferPreparation({
   token,
+  fromAddress,
   recipient,
+  resolvedAddress,
 }: UseTransferPreparationOptions) {
   const sliderSound = useSliderValueSound();
   const [amount, setAmount] = useState("");
   const [isUsdMode, setIsUsdMode] = useState(false);
   const [sliderValue, setSliderValue] = useState(0);
+  const [isMaxSelected, setIsMaxSelected] = useState(false);
   const [hexData, setHexData] = useState("");
   const [isHexDataExpanded, setIsHexDataExpanded] = useState(false);
   const [isContractDeployment, setIsContractDeployment] = useState(false);
@@ -34,6 +40,16 @@ export function useTransferPreparation({
   const hasNativeCalldata =
     Boolean(isNativeToken) && !hexDataIsEmpty && isHexDataValid;
 
+  const nativeMaxAmount = useNativeMaxAmount({
+    token,
+    fromAddress,
+    resolvedAddress,
+    data: hasNativeCalldata ? trimmedHexData : "0x",
+    isContractDeployment,
+  });
+  const effectiveMaxAmount = isNativeToken ? nativeMaxAmount : token?.balance;
+  const isMaxAmountReady = Boolean(token && effectiveMaxAmount !== null);
+
   useEffect(() => {
     if (isContractDeployment && !hasNativeCalldata) {
       setIsContractDeployment(false);
@@ -48,6 +64,9 @@ export function useTransferPreparation({
 
   const tokenAmount = useMemo(() => {
     if (!token) return "";
+    if (isNativeToken && isMaxSelected) {
+      return nativeMaxAmount ?? "";
+    }
     if (!amount) return hasNativeCalldata ? "0" : "";
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount < 0) return "";
@@ -59,7 +78,16 @@ export function useTransferPreparation({
       return converted.toFixed(token.decimals);
     }
     return amount;
-  }, [amount, hasNativeCalldata, hasPrice, isUsdMode, token]);
+  }, [
+    amount,
+    hasNativeCalldata,
+    hasPrice,
+    isMaxSelected,
+    isNativeToken,
+    isUsdMode,
+    nativeMaxAmount,
+    token,
+  ]);
 
   const isAmountValid = (): boolean => {
     if (!token || tokenAmount === "") return false;
@@ -69,16 +97,22 @@ export function useTransferPreparation({
     return numericAmount <= parseFloat(token.balance);
   };
 
-  const setAmountFromSlider = (percentage: number) => {
-    if (!token) return;
+  const setAmountFromSlider = useCallback((percentage: number) => {
+    if (!token) return false;
     if (percentage === 0) {
       setAmount("");
+      setIsMaxSelected(false);
     } else if (percentage === 100) {
+      if (effectiveMaxAmount === null || effectiveMaxAmount === undefined) {
+        return false;
+      }
+      const maxAmountNum = parseFloat(effectiveMaxAmount);
       setAmount(
         isUsdMode && hasPrice
-          ? (balanceNum * token.priceUsd).toFixed(2)
-          : token.balance,
+          ? (Math.floor(maxAmountNum * token.priceUsd * 100) / 100).toFixed(2)
+          : effectiveMaxAmount,
       );
+      setIsMaxSelected(true);
     } else {
       const tokenAmountAtPercentage = (balanceNum * percentage) / 100;
       setAmount(
@@ -88,8 +122,10 @@ export function useTransferPreparation({
             ? "0"
             : parseFloat(tokenAmountAtPercentage.toPrecision(6)).toString(),
       );
+      setIsMaxSelected(false);
     }
-  };
+    return true;
+  }, [balanceNum, effectiveMaxAmount, hasPrice, isUsdMode, token]);
 
   const syncSliderFromAmount = (value: string) => {
     if (!token) return;
@@ -107,18 +143,14 @@ export function useTransferPreparation({
 
   const updateAmount = (value: string) => {
     if (!/^\d*\.?\d*$/.test(value)) return;
+    setIsMaxSelected(false);
     setAmount(value);
     syncSliderFromAmount(value);
   };
 
   const setMaxAmount = () => {
-    if (!token) return;
+    if (!token || !setAmountFromSlider(100)) return;
     setSliderValue(100);
-    setAmount(
-      isUsdMode && hasPrice
-        ? (balanceNum * token.priceUsd).toFixed(2)
-        : token.balance,
-    );
   };
 
   const toggleAmountMode = () => {
@@ -141,15 +173,27 @@ export function useTransferPreparation({
 
   const handleSliderChange = (value: number) => {
     const snapped = snapBalanceSliderValue(value);
+    if (snapped === 100 && !isMaxAmountReady) return;
     if (!sliderSound.onValueChange(snapped)) return;
-    setSliderValue(snapped);
-    setAmountFromSlider(snapped);
+    if (setAmountFromSlider(snapped)) setSliderValue(snapped);
   };
+
+  useEffect(() => {
+    if (isMaxSelected && isMaxAmountReady) {
+      setAmountFromSlider(100);
+    }
+  }, [
+    effectiveMaxAmount,
+    isMaxAmountReady,
+    isMaxSelected,
+    setAmountFromSlider,
+  ]);
 
   const resetForSelection = () => {
     setAmount("");
     setIsUsdMode(false);
     setSliderValue(0);
+    setIsMaxSelected(false);
     setHexData("");
     setIsHexDataExpanded(false);
   };
@@ -164,6 +208,7 @@ export function useTransferPreparation({
     handleSliderChangeEnd: (value: number) =>
       sliderSound.onChangeEnd(snapBalanceSliderValue(value)),
     setMaxAmount,
+    isMaxAmountReady,
     toggleAmountMode,
     hasPrice,
     balanceNum,
