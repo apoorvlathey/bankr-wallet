@@ -25,13 +25,13 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
-import ChainIcon from "@/components/ChainIcon";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
 import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { formatTokenAmount, formatTokenAmountFromBase } from "@/lib/tokenFormatUtils";
 import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
+import { RequestChainContext } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -301,23 +301,20 @@ function SwapConfirmation({
     >
       <VStack spacing={2} align="stretch">
         {/* Header */}
-        <HStack spacing={2}>
+        <HStack spacing={2} ml={-1}>
           <IconButton
-            aria-label="Back"
-            icon={<ArrowBackIcon />}
+            aria-label="Go back"
+            icon={<ArrowBackIcon boxSize={5} />}
             variant="ghost"
-            size="sm"
             onClick={onCancel}
             isDisabled={isSubmitting}
-            minW="auto"
+            minW="44px" w="44px" h="44px" flexShrink={0}
           />
         </HStack>
 
-        {/* Title banner — cool secondary accent (Bauhaus blue / Midnight cyan)
-            with a Bauhaus-only warm corner ornament. Mirrors the title-banner
-            pattern used by BatchTransactionConfirmation. */}
+        {/* Confirmation banner — amber marks the final wallet commitment. */}
         <Box
-          bg="accent.secondary"
+          bg="accent.highlight"
           border="1px solid"
           borderColor="border.default"
           borderRadius="lg"
@@ -338,27 +335,14 @@ function SwapConfirmation({
               borderColor="border.default"
             />
           )}
-          <HStack justify="center" spacing={2}>
+          <HStack justify="center">
             <Text
               fontWeight="700"
               fontSize="sm"
-              color="accentFg.secondary"
+              color="accentFg.highlight"
             >
               {titleLabel}
             </Text>
-            {isBatched && (
-              <Badge
-                bg="accent.highlight"
-                color="accentFg.highlight"
-                border="1.5px solid"
-                borderColor="border.default"
-                fontSize="2xs"
-                fontWeight="700"
-                px={1.5}
-              >
-                ATOMIC
-              </Badge>
-            )}
           </HStack>
         </Box>
 
@@ -423,13 +407,13 @@ function SwapConfirmation({
               h="1px"
               bg="border.subtle"
             />
-            {/* Arrow circle — cool secondary accent in either palette */}
+            {/* Amber keeps the confirmation path visually continuous. */}
             <Box
               position="absolute"
               top="50%"
               left="50%"
               transform="translate(-50%, -50%)"
-              bg="accent.secondary"
+              bg="accent.highlight"
               borderRadius="full"
               w="28px"
               h="28px"
@@ -440,7 +424,7 @@ function SwapConfirmation({
               borderColor="border.default"
               zIndex={1}
             >
-              <ArrowDownIcon boxSize={4} color="accentFg.secondary" />
+              <ArrowDownIcon boxSize={4} color="accentFg.highlight" />
             </Box>
           </Box>
 
@@ -480,7 +464,7 @@ function SwapConfirmation({
             )}
             <VStack spacing={0} align="flex-start" flex={1} minW={0}>
               <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-                You receive (est.)
+                You get (est.)
               </Text>
               <Text fontSize="md" fontWeight="700" color="text.primary" noOfLines={1}>
                 {formatOutputAmount(buyAmount, buyTokenDecimals)} {buyTokenInfo.symbol.toUpperCase()}
@@ -506,48 +490,16 @@ function SwapConfirmation({
               {isBridge ? "Route" : "Network"}
             </Text>
             <HStack spacing={1.5}>
-              <Badge
-                fontSize="xs"
-                bg="whiteAlpha.900"
-                color="accent.secondary"
-                border="1.5px solid"
-                borderColor="accent.secondary"
-                fontWeight="700"
-                px={2}
-                py={0.5}
-                display="flex"
-                alignItems="center"
-                gap={1}
-              >
-                <ChainIcon chainId={chainId} chainName={chainName} size="12px" withChip />
-                {chainName}
-              </Badge>
+              <RequestChainContext chainId={chainId} chainName={chainName} showPreposition={false} />
               {isBridge && destChainConfig && (
                 <>
                   <Text fontSize="xs" fontWeight="900" color="text.secondary">
                     →
                   </Text>
-                  <Badge
-                    fontSize="xs"
-                    bg="whiteAlpha.900"
-                    color="accent.secondary"
-                    border="1.5px solid"
-                    borderColor="accent.secondary"
-                    fontWeight="700"
-                    px={2}
-                    py={0.5}
-                    display="flex"
-                    alignItems="center"
-                    gap={1}
-                  >
-                    <ChainIcon
-                      chainId={bridgeMeta!.destinationChainId}
-                      chainName={bridgeMeta!.destinationChainName}
-                      size="12px"
-                      withChip
-                    />
-                    {bridgeMeta!.destinationChainName}
-                  </Badge>
+                  <RequestChainContext
+                    chainId={bridgeMeta!.destinationChainId}
+                    chainName={bridgeMeta!.destinationChainName} showPreposition={false}
+                  />
                 </>
               )}
             </HStack>
@@ -676,8 +628,8 @@ function SwapConfirmation({
                   _hover={{ bg: "surface.raisedHover" }}
                 >
                   <Badge
-                    bg={accent}
-                    color={accentFg}
+                    bg={isDarkTheme ? "surface.raisedHover" : accent}
+                    color={isDarkTheme ? "accent.highlight" : accentFg}
                     fontSize="2xs"
                     fontWeight="700"
                     px={1.5}
@@ -841,13 +793,13 @@ function SwapConfirmation({
             <HStack
               justify="center"
               py={3}
-              bg="accent.secondary"
+              bg="accent.highlight"
               border="1px solid"
               borderColor="border.default"
               borderRadius="lg"
             >
-              <Spinner size="sm" color="accentFg.secondary" />
-              <Text fontSize="sm" color="accentFg.secondary" fontWeight="600">
+              <Spinner size="sm" color="accentFg.highlight" />
+              <Text fontSize="sm" color="accentFg.highlight" fontWeight="600">
                 {isBridge ? "Bridging..." : "Submitting swap..."}
               </Text>
             </HStack>
@@ -857,7 +809,7 @@ function SwapConfirmation({
                 Cancel
               </Button>
               <Button
-                variant="highlight"
+                variant="brand"
                 flex={1}
                 onClick={onConfirm}
                 isDisabled={isConfirmDisabled}

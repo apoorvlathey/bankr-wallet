@@ -52,6 +52,7 @@ import {
   WalletConnectView,
   WatchAssetConfirmation,
 } from "@/app/lazyScreens";
+import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
 
 /**
  * Detects if we're running in Arc browser using CSS variable
@@ -2419,16 +2420,6 @@ function App() {
                 }
                 // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
-              onSwapInstead={(token) => {
-                const tokenChain = getResolvedChainById(token.chainId, networksInfo);
-                if (tokenChain && tokenChain.name !== chainName) {
-                  setChainName(tokenChain.name);
-                  chrome.storage.sync.set({ chainName: tokenChain.name });
-                }
-                setTransferToken(null);
-                setSwapInitialSellToken(token);
-                setView("swap");
-              }}
             />
           </Suspense>
         </Box>
@@ -3464,11 +3455,12 @@ function App() {
                     <HomeQuickActions
                       hasConnectedApps={walletConnectSessionCount > 0}
                       onSend={() => {
-                        setTransferToken(null);
+                        setTransferToken(resolveSendEntryToken(null, networksInfo));
                         setView("transfer");
                       }}
                       onSwap={() => {
                         setSwapInitialBuyToken(undefined);
+                        setSwapInitialSellToken(undefined);
                         setView("swap");
                       }}
                       onShield={() => setView("shield")}
@@ -3490,7 +3482,7 @@ function App() {
                     setChainName(tokenChain.name);
                     chrome.storage.sync.set({ chainName: tokenChain.name });
                   }
-                  setTransferToken(token);
+                  setTransferToken(resolveSendEntryToken(token, networksInfo));
                   setView("transfer");
                 }}
                 onSwapClick={(token) => {

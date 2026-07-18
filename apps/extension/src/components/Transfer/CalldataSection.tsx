@@ -56,129 +56,137 @@ export function CalldataSection({
 
   return (
     <>
-      <Box>
-        <HStack
-          as="button"
-          type="button"
-          w="full"
-          spacing={1}
-          align="center"
-          onClick={() => setIsHexDataExpanded(!isHexDataExpanded)}
-          cursor="pointer"
-          _hover={{ opacity: 0.8 }}
-          transition="opacity 0.15s"
-        >
-          {isHexDataExpanded ? (
-            <ChevronDownIcon boxSize="14px" color="text.secondary" />
-          ) : (
-            <ChevronRightIcon boxSize="14px" color="text.secondary" />
-          )}
-          <Text fontSize="sm" fontWeight="600" color="fg.secondary">
-            Advanced transaction data
-          </Text>
-          <Text fontSize="2xs" fontWeight="500" color="fg.muted">
-            Optional
-          </Text>
-          {!isHexDataExpanded && !hexDataIsEmpty && !isHexDataValid && (
-            <Text
-              ml="auto"
-              fontSize="2xs"
-              fontWeight="600"
-              color="chart.negative"
-            >
-              Invalid
-            </Text>
-          )}
-        </HStack>
-        <Collapse in={isHexDataExpanded} animateOpacity>
-          <Box mt={1.5}>
-            {(canShowDeployToggle || !isContractDeployment) && (
-              <HStack justify="flex-end" spacing={1.5} mb={1}>
-                {canShowDeployToggle ? (
-                  <>
-                    {isContractDeployment ? (
-                      <Button
-                        aria-label="Advanced transaction mode"
-                        size="sm"
-                        variant="ghost"
-                        minH="32px"
-                        px={2}
-                        leftIcon={<SettingsIcon boxSize="14px" />}
-                        color="accent.secondary"
-                        fontSize="xs"
-                        onClick={deployToggle.onOpen}
-                      >
-                        Contract deployment
-                      </Button>
-                    ) : (
-                      <IconButton
-                        aria-label="Advanced transaction mode"
-                        icon={<SettingsIcon boxSize="14px" />}
-                        size="sm"
-                        variant="ghost"
-                        minW="32px"
-                        h="32px"
-                        color="text.tertiary"
-                        onClick={deployToggle.onOpen}
-                      />
-                    )}
-                    <ActionSheet
-                      isOpen={deployToggle.isOpen}
-                      onClose={deployToggle.onClose}
-                      title="Transaction mode"
-                      description="Choose how WalletChan should use the transaction data below."
-                      choices={[
-                        {
-                          id: "transfer",
-                          label: "Standard transfer",
-                          description:
-                            "Send to the recipient and include the bytes as transaction data.",
-                          isSelected: !isContractDeployment,
-                        },
-                        {
-                          id: "deployment",
-                          label: "Contract deployment",
-                          description: hasNativeCalldata
-                            ? "Treat the bytes as deployment bytecode and omit the recipient."
-                            : "Add valid transaction data to enable contract deployment.",
-                          isSelected: isContractDeployment,
-                          isDisabled: !hasNativeCalldata,
-                        },
-                      ]}
-                      onSelect={(mode) =>
-                        setIsContractDeployment(mode === "deployment")
-                      }
-                    />
-                  </>
-                ) : (
-                  <Tooltip
-                    label={decodeDisabledReason || "Decode calldata"}
-                    fontSize="xs"
-                    hasArrow
-                    isDisabled={canOpenDecoder}
-                  >
-                    <Box as="span" display="inline-block">
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        h="22px"
-                        px={1.5}
-                        leftIcon={<Search2Icon boxSize="12px" />}
-                        iconSpacing={1.5}
-                        color="accent.secondary"
-                        fontSize="2xs"
-                        fontWeight="600"
-                        isDisabled={!canOpenDecoder}
-                        onClick={decodeModal.onOpen}
-                        _hover={{ bg: "bg.muted" }}
-                      >
-                        Decode
-                      </Button>
-                    </Box>
-                  </Tooltip>
-                )}
-              </HStack>
+      <Box
+        pt={3}
+        borderTop={tokens.borders.thin}
+        borderColor="border.subtle"
+      >
+        <HStack w="full" minH="32px" spacing={1.5} align="center">
+          <HStack
+            as="button"
+            type="button"
+            flex="1"
+            minW={0}
+            spacing={1}
+            align="center"
+            onClick={() => setIsHexDataExpanded(!isHexDataExpanded)}
+            cursor="pointer"
+            aria-expanded={isHexDataExpanded}
+            _hover={{ opacity: 0.8 }}
+            transition="opacity 0.15s"
+          >
+            {isHexDataExpanded ? (
+              <ChevronDownIcon boxSize="14px" color="text.secondary" />
+            ) : (
+              <ChevronRightIcon boxSize="14px" color="text.secondary" />
             )}
+            <Text fontSize="sm" fontWeight="600" color="fg.secondary">
+              Advanced transaction data
+            </Text>
+            <Text fontSize="2xs" fontWeight="500" color="fg.muted">
+              Optional
+            </Text>
+            {!isHexDataExpanded && !hexDataIsEmpty && !isHexDataValid && (
+              <Text
+                ml="auto"
+                fontSize="2xs"
+                fontWeight="600"
+                color="chart.negative"
+              >
+                Invalid
+              </Text>
+            )}
+          </HStack>
+          {isHexDataExpanded &&
+            (canShowDeployToggle || !isContractDeployment) &&
+            (canShowDeployToggle ? (
+              isContractDeployment ? (
+                <Button
+                  aria-label="Advanced transaction mode"
+                  size="sm"
+                  variant="ghost"
+                  minH="32px"
+                  px={2}
+                  leftIcon={<SettingsIcon boxSize="14px" />}
+                  color="accent.secondary"
+                  fontSize="xs"
+                  onClick={deployToggle.onOpen}
+                >
+                  Contract deployment
+                </Button>
+              ) : (
+                <IconButton
+                  aria-label="Advanced transaction mode"
+                  icon={<SettingsIcon boxSize="14px" />}
+                  size="sm"
+                  variant="ghost"
+                  minW="32px"
+                  h="32px"
+                  flexShrink={0}
+                  color="text.tertiary"
+                  onClick={deployToggle.onOpen}
+                  _hover={{ bg: "surface.raisedHover", color: "fg.primary" }}
+                />
+              )
+            ) : (
+              <Tooltip
+                label={decodeDisabledReason || "Decode calldata"}
+                fontSize="xs"
+                hasArrow
+                isDisabled={canOpenDecoder}
+              >
+                <Box as="span" display="inline-block" flexShrink={0}>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    h="26px"
+                    px={1.5}
+                    leftIcon={<Search2Icon boxSize="12px" />}
+                    iconSpacing={1.5}
+                    color="accent.secondary"
+                    fontSize="2xs"
+                    fontWeight="600"
+                    isDisabled={!canOpenDecoder}
+                    onClick={decodeModal.onOpen}
+                    _hover={{ bg: "surface.raisedHover" }}
+                  >
+                    Decode
+                  </Button>
+                </Box>
+              </Tooltip>
+            ))}
+        </HStack>
+        {canShowDeployToggle && (
+          <ActionSheet
+            isOpen={deployToggle.isOpen}
+            onClose={deployToggle.onClose}
+            title="Transaction mode"
+            description="Choose how WalletChan should use the transaction data below."
+            choices={[
+              {
+                id: "transfer",
+                label: "Standard transfer",
+                description:
+                  "Send to the recipient and include the bytes as transaction data.",
+                isSelected: !isContractDeployment,
+              },
+              {
+                id: "deployment",
+                label: "Contract deployment",
+                description: hasNativeCalldata
+                  ? "Treat the bytes as deployment bytecode and omit the recipient."
+                  : "Add valid transaction data to enable contract deployment.",
+                isSelected: isContractDeployment,
+                isDisabled: !hasNativeCalldata,
+              },
+            ]}
+            onSelect={(mode) =>
+              setIsContractDeployment(mode === "deployment")
+            }
+          />
+        )}
+        <Collapse in={isHexDataExpanded} animateOpacity>
+          <Box mt={2}>
             <Textarea
               placeholder="0x..."
               value={hexData}

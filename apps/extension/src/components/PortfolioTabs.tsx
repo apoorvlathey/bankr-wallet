@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
   Box,
   HStack,
@@ -26,17 +26,7 @@ import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { getVisibleChains } from "@/lib/chains";
-import {
-  FullScreenPicker,
-  FullScreenPickerEmpty,
-  FullScreenPickerGroup,
-  FullScreenPickerSearch,
-  ListItem,
-  ListItemContent,
-  ListItemDescription,
-  ListItemMedia,
-  ListItemTitle,
-} from "@/components/ui";
+import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import NumberFlow, { type Format } from "@number-flow/react";
 import {
@@ -124,8 +114,6 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   );
   const filterChainId = chainFilterState.filterChainId;
   const selectedChain = filterChainId !== null ? visibleChains.find((c) => c.chainId === filterChainId) : null;
-  const [chainSearch, setChainSearch] = useState("");
-  const chainSearchInputRef = useRef<HTMLInputElement>(null);
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
   const [isAssetSearchOpen, setIsAssetSearchOpen] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
@@ -178,33 +166,12 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     );
   }, []);
 
-  // "All Networks" is index 0, chains start at index 1
-  const filteredChains = useMemo(() => {
-    const q = chainSearch.trim().toLowerCase();
-    if (!q) return visibleChains;
-    return visibleChains.filter(
-      (c) => c.name.toLowerCase().includes(q) || String(c.chainId).includes(q),
-    );
-  }, [visibleChains, chainSearch]);
-
   // Switch to Activity tab when activityTabTrigger increments (after tx submission)
   useEffect(() => {
     if (activityTabTrigger > 0) {
       selectTab(2);
     }
   }, [activityTabTrigger, selectTab]);
-
-  useEffect(() => {
-    if (!isChainMenuOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsChainMenuOpen(false);
-        setChainSearch("");
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isChainMenuOpen]);
 
   // Switch to Holdings tab when holdingsTabTrigger increments (e.g. user backs
   // out of send/swap without submitting a tx).
@@ -663,76 +630,22 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
 
       {isChainMenuOpen && (
         <FullScreenPickerLayer>
-          <FullScreenPicker
+          <NetworkSelectorScreen
             title="Filter by network"
-            onBack={() => {
+            networks={visibleChains.map((chain) => ({
+              chainId: chain.chainId,
+              name: chain.name,
+              nativeSymbol: chain.nativeCurrency.symbol,
+              balanceUsd: holdingsState?.chainTotals.get(chain.chainId) ?? 0,
+            }))}
+            selectedChainId={filterChainId}
+            includeAllNetworks
+            onSelect={(chainId) => {
+              selectPortfolioChain(chainId);
               setIsChainMenuOpen(false);
-              setChainSearch("");
             }}
-            controls={
-              <FullScreenPickerSearch
-                ref={chainSearchInputRef}
-                label="Search networks"
-                placeholder="Name or chain ID"
-                value={chainSearch}
-                onChange={(event) => setChainSearch(event.target.value)}
-                autoFocus
-              />
-            }
-          >
-            <FullScreenPickerGroup label="Networks">
-              {!chainSearch.trim() && (
-                <ListItem
-                  interactive
-                  as="button"
-                  isSelected={filterChainId === null}
-                  onClick={() => {
-                    selectPortfolioChain(null);
-                    setIsChainMenuOpen(false);
-                    setChainSearch("");
-                  }}
-                >
-                  <ListItemContent>
-                    <ListItemTitle>All networks</ListItemTitle>
-                    <ListItemDescription>Show the complete portfolio</ListItemDescription>
-                  </ListItemContent>
-                </ListItem>
-              )}
-              {filteredChains.map((chain) => (
-                <ListItem
-                  interactive
-                  key={chain.chainId}
-                  as="button"
-                  isSelected={filterChainId === chain.chainId}
-                  onClick={() => {
-                    selectPortfolioChain(chain.chainId);
-                    setIsChainMenuOpen(false);
-                    setChainSearch("");
-                  }}
-                >
-                  <ListItemMedia>
-                    <ChainIcon
-                      chainId={chain.chainId}
-                      chainName={chain.name}
-                      size="24px"
-                      withChip
-                    />
-                  </ListItemMedia>
-                  <ListItemContent>
-                    <ListItemTitle>{chain.name}</ListItemTitle>
-                    <ListItemDescription>Chain ID {chain.chainId}</ListItemDescription>
-                  </ListItemContent>
-                </ListItem>
-              ))}
-            </FullScreenPickerGroup>
-            {filteredChains.length === 0 && (
-              <FullScreenPickerEmpty
-                mt={4}
-                title="No matching networks"
-                description="Try another name or chain ID."
-              />
-            )}
-          </FullScreenPicker>
+            onBack={() => setIsChainMenuOpen(false)}
+          />
         </FullScreenPickerLayer>
       )}
     </>

@@ -76,7 +76,7 @@ export default function SlippageSettings({
         aria-label={`Slippage settings, currently ${displayPercent}%`}
         variant="ghost"
         size="sm"
-        minH="36px"
+        minH="32px"
         px={2}
         color="fg.secondary"
         fontSize="xs"
@@ -87,7 +87,7 @@ export default function SlippageSettings({
           sheet.onOpen();
         }}
       >
-        {displayPercent}% slippage
+        Slippage {displayPercent}%
       </Button>
 
       <Drawer
@@ -121,7 +121,7 @@ export default function SlippageSettings({
                       key={bps}
                       type="button"
                       flex={1}
-                      variant={isSelected ? "primary" : "outline"}
+                      variant={isSelected ? "brand" : "outline"}
                       aria-pressed={isSelected}
                       onClick={() => handlePresetClick(bps)}
                     >
@@ -155,7 +155,7 @@ export default function SlippageSettings({
             </VStack>
           </DrawerBody>
           <DrawerFooter px={4} pb="calc(16px + env(safe-area-inset-bottom, 0px))">
-            <Button w="full" variant="primary" onClick={sheet.onClose}>
+            <Button w="full" variant="brand" onClick={sheet.onClose}>
               Done
             </Button>
           </DrawerFooter>

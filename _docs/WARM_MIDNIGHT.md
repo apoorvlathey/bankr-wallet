@@ -677,8 +677,8 @@ Every displayed `0x` address still follows the repository standard:
 | Transaction details | Implemented and reviewed | Receipt-first request hierarchy, actual changes, bridge route, and one advanced disclosure verified across transaction states and signing wallets |
 | Homepage loading/empty/error states | Pending | Review after Positions and Activity |
 | Homepage responsive/focus final pass | Pending | Do only after visual composition is locked |
-| Send | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
-| Swap/Bridge | Mobile baseline exists; Warm Midnight review pending | Handle as its own fresh session |
+| Send | Implemented and reviewed | Amber Review send commitment, compact amber balance slider, quiet optional-data boundary, no Swap detour |
+| Swap/Bridge | Implemented and reviewed | Compact chain-aware intent form, holdings-first picker, progressive route detail, custom slippage, and amber commitment path |
 | Confirmations and signing | Transaction review implemented; signing review pending | Transaction uses the Warm Midnight decision path; preserve information-first trust hierarchy |
 | Settings/account management | Mobile baseline exists; Warm Midnight review pending | Review by leaf surface, not as one large rewrite |
 

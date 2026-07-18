@@ -109,7 +109,13 @@ export function TokenSelectionSection({
             </Text>
           )}
         </VStack>
-        <Box ml="auto" flex="0 1 auto" minW={0} maxW="132px">
+        <Box
+          ml="auto"
+          flex="0 1 auto"
+          minW={0}
+          maxW="144px"
+          sx={{ "> button": { maxWidth: "144px" } }}
+        >
           <TokenSelector
             holdings={holdings}
             tokenList={tokenList}
@@ -122,6 +128,7 @@ export function TokenSelectionSection({
             customTokenLoading={customTokenLoading}
             customTokenError={customTokenError}
             chainName={chainName}
+            triggerContentAlign="right"
             dropdownAlign="right"
             isLoadingHoldings={holdingsLoading}
             onOpenChange={onTokenSelectorOpenChange}

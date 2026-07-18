@@ -178,6 +178,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     scenarios: [
       "sell",
       "buy",
+      "chains",
       "search",
       "loading",
       "empty",

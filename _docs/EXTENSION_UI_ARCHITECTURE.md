@@ -136,7 +136,10 @@ behavior with Node tests under `apps/extension/tests/ui/`.
 - `components/ui/` is domain-free. It accepts renderable content and callbacks
   and never imports wallet feature modules or performs wallet effects.
 - `components/shared/` is for wallet-aware presentation reused by multiple
-  features. It is not a catch-all for one-off feature children.
+  features. It is not a catch-all for one-off feature children. The shared
+  `NetworkSelector` domain owns the renderer-only searchable network browser
+  and pure funded-first ordering used by Swap, Send, and homepage filtering;
+  each feature retains ownership of its balance data and selection effects.
 - `theme/primitives/` owns token-driven visual atoms, not application state.
 - `src/hooks/` contains only hooks used across feature domains.
 

@@ -225,6 +225,22 @@
 
 ## Slop audit
 
+- 2026-07-18 Swap/Bridge audit: rebuilt the wallet-sized form around one compact
+  pay/receive intent module; combined token and network identity instead of
+  exposing separate selectors; reused Send's 24px-target amber rounded-square
+  balance slider; prioritized balance-heavy chains, popular assets, and wallet
+  holdings in the picker; and reduced the resting quote to route status,
+  slippage, and minimum received. Custom slippage, fee breakdowns, routing,
+  price-impact warnings, and view-only restrictions remain available without
+  competing with the primary decision. The sticky review commitment is amber.
+- 2026-07-17 Send audit: removed the competing Swap detour so the screen reads
+  as one decision path; promoted the amount without overpowering the asset and
+  recipient context; reduced the slider's visible knob while preserving its
+  24px interaction target; reserved amber for the active percentage and final
+  Review send commitment; and separated optional calldata with one hairline
+  rather than another card. Visible labels remain programmatically associated
+  with both inputs, the amount field exposes a decimal keyboard, and manual
+  entry/MAX remain non-drag alternatives to the slider.
 - 2026-07-17 generated-seed flow audit: recovery comes before customization,
   recovery begins concealed, backup acknowledgment sits adjacent to Continue,
   optional names are grouped by proximity, and the first-account helper text
@@ -377,9 +393,9 @@
   Selection remains a native identity button and Edit/Delete/Reorder remain
   separate native controls, avoiding invalid nested interaction.
 - 2026-07-16 Send recipient-copy audit: the input now summarizes accepted
-  identity categories as “Address, name service, wallet, or contact” instead of
-  enumerating protocols and suffixes. The visible placeholder and accessible
-  name stay aligned while the existing resolver support remains unchanged.
+  identity categories as “0x, contacts, .eth, .gwei”. The accessible name
+  retains the fuller input purpose while the existing resolver support remains
+  unchanged.
 - 2026-07-16 Activity-ledger audit: passes the mobile financial-list grammar
   with one defined-edge owner, relationship-based date markers, shared Assets
   row spacing, left-aligned identity and intent, right-aligned tabular values,
@@ -775,8 +791,8 @@
   and an actionable empty state.
 - 2026-07-16: restored the full-row Warm Midnight hover highlight for selectable
   contacts in Send without changing the quiet Address Book management rows.
-- 2026-07-16: simplified Send's recipient placeholder from a name-service list
-  to a concise address/name-service/wallet/contact capability summary.
+- 2026-07-16: simplified Send's recipient placeholder; the current concise copy
+  is “0x, contacts, .eth, .gwei”.
 - 2026-07-16: refined Transaction details with a concise Advanced disclosure
   that scrolls its heading into view on expansion, quiet Midnight calldata
   tabs with amber decoded-function identity, decoder-fed fallback summaries
@@ -802,3 +818,104 @@
   collapsing request context at popup widths. Call count sits on a dedicated
   metadata line beneath the batch label, while Bankr fee-management provenance
   aligns with the right-hand amount column.
+- 2026-07-17: completed the Send Warm Midnight pass by removing its Swap
+  shortcut, tightening the amount hierarchy and slider, using amber for the
+  active percentage and Review send commitment, and visually separating
+  optional calldata without changing transfer preparation or submission.
+- 2026-07-17: made Send's token-selector trigger content-sized with a 144px cap
+  so short symbols do not leave a blank leading region and long labels cannot
+  consume the asset card's right inset. The token identity stays aligned to the
+  trailing edge as the right-hand value opposite Network.
+- 2026-07-18: kept Send's My contacts navigation beside the Recipient label on
+  the left, reserving the header's right-hand slot for transient resolution and
+  the resolved name/address control.
+- 2026-07-18: moved Send's live fiat/token conversion into the amount field as
+  a bounded, truncating suffix immediately before MAX, and enlarged the amber
+  slider visual from a 14px circle to an 18px rounded square without shrinking
+  its 24px interaction target. Advanced transaction actions now share the
+  disclosure header's trailing edge, keeping mode and decode controls attached
+  to their section instead of floating above the calldata field.
+- 2026-07-18: refined Swap / Bridge for compact wallet widths by giving both
+  amounts a full row, moving bounded fiat conversions inside their fields, and
+  pairing token/network identity with balance or price impact below. Reduced
+  network and popular-token shortcuts preserve fast selection without crowding
+  the picker, while a neutral disabled direction control avoids muddy amber
+  hover feedback.
+- 2026-07-18: tightened Swap / Bridge minimum-received summaries into a
+  content-sized label, flexible right-aligned value, and fixed disclosure icon.
+  Large token amounts use a compact unit instead of visual truncation, with the
+  exact amount retained as native hover text.
+- 2026-07-18: centered the Swap / Bridge receive-quote loader within its full
+  output field so pending state reads as field-level progress rather than a
+  placeholder value anchored to the input edge.
+- 2026-07-18: separated Swap / Bridge network and token choices into compact
+  header pills above each full-width amount. Network selection now opens a
+  searchable vertical Warm Midnight list with funded networks ordered by USD
+  balance first; Ethereum leads the unfunded remainder, followed by every other
+  unfunded network alphabetically. Token selection stays scoped to that network.
+  Generic Swap entry adopts the cached portfolio's highest-value funded token,
+  while asset-row entry preserves its explicit source token.
+- 2026-07-18: promoted the searchable, funded-first network browser into a
+  shared Warm Midnight selector used by Swap / Bridge, Send, and the homepage
+  asset filter. Each surface supplies its own balance snapshot and selection
+  effect, while search, row hierarchy, ordering, empty state, and keyboard
+  dismissal remain visually and behaviorally identical.
+- 2026-07-18: constrained the shared full-screen picker column to the wallet's
+  480px content measure on wide extension tabs. Homepage network filtering,
+  Send token selection, account selection, and every other consumer retain a
+  full-height surface without stretching controls and list rows edge to edge.
+- 2026-07-18: aligned selected popular-token shortcuts with the picker list's
+  blue selection language. The blue focus edge, cool selected label, checkmark,
+  and tinted surface now communicate one selection state; amber remains
+  reserved for commitment actions and branded emphasis.
+- 2026-07-18: moved Send and Swap currency-mode switching onto the conversion
+  value inside each amount field, removing the detached USD control while
+  retaining an accessible USD/token fallback before any amount is entered.
+  Swap balance quantity and fiat value now share one quiet trailing line.
+- 2026-07-18: removed Swap's fixed-width chain-label cap. Pay and receive
+  headers now reserve the token pill's content width, then allow the chain pill
+  to render at its natural width and shrink only when the combined controls
+  genuinely exceed the wallet row.
+- 2026-07-18: matched Send's in-field currency switch to Swap's content-bounded
+  control. Its hover surface now hugs the USD or token conversion instead of
+  expanding across all space before MAX.
+- 2026-07-18: clarified Swap's chain relationship in plain language with “You
+  pay on” and “You get on” labels immediately before their network pills.
+- 2026-07-18: added a compact “on [chain]” context pill beside the Swap token
+  search label. The chain mark and name remain visible above the query without
+  consuming input width or duplicating the network-change interaction.
+- 2026-07-18: inset Send's in-field currency and MAX controls from the amount
+  field edge, matching Swap and preserving the complete blue focus boundary
+  while either suffix action is hovered.
+- 2026-07-18: kept Swap's direction control available when either asset is not
+  selected. Flipping now exchanges both network contexts and moves any selected
+  token to the opposite side while preserving an explicit Select state. The
+  screen title now uses “Swap or Bridge” capitalization.
+- 2026-07-18: removed the redundant visible “Popular on [chain]” label from
+  Swap token discovery now that network context sits beside Search. Popular
+  shortcuts follow the field directly, and the catalog section uses a tighter
+  12px inter-section gap after wallet holdings.
+- 2026-07-18: widened Swap's direction control to 46px while retaining its
+  compact 40px height, producing a clearer horizontal bridge between the Pay
+  and Receive cards without enlarging the icon.
+- 2026-07-18: made Swap's direction hover rotate only the arrow icon by 180
+  degrees over 200ms. The amber control remains stationary, and reduced-motion
+  or disabled states suppress the rotation.
+- 2026-07-18: gave the overlapping Swap direction control a dedicated 20px
+  inner buffer on the facing card edges. Pay gains bottom breathing room and
+  Receive gains matching top breathing room without loosening either card's
+  outer gutters or the rest of the compact form.
+- 2026-07-18: restored quoted Receive amounts to the primary foreground color.
+  The output remains read-only, but its financial value now carries the same
+  visual weight as the editable Pay amount instead of appearing disabled.
+- 2026-07-18: aligned Swap confirmation with the Warm Midnight commitment
+  language: its title, direction marker, submitting state, and final Confirm
+  action use brand amber; the implementation-detail Atomic/Sequential badge is
+  removed; and the estimated output label now reads “You get”.
+- 2026-07-18: replaced Swap confirmation's bright bespoke network badge with
+  the shared dark chain-context pill, omitting the redundant “on” prefix on
+  this explicit Network/Route row. Its numbered transaction badges
+  now match batch-request cards: graphite with amber numerals in Midnight,
+  while Bauhaus retains the semantic call-accent rotation.
+- 2026-07-18: matched Swap confirmation's back action to the shared app header:
+  a 44px square target, 20px arrow, and the same 8px screen-edge inset.

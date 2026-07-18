@@ -59,7 +59,20 @@ export function useTransferCatalog({
           // Fall back to API/catalog tokens.
         }
 
-        if (!cancelled) setAllTokens(tokens);
+        if (!cancelled) {
+          setAllTokens(tokens);
+          setSelectedToken((previous) => {
+            if (!previous) return previous;
+            return (
+              tokens.find(
+                (token) =>
+                  token.chainId === previous.chainId &&
+                  token.contractAddress.toLowerCase() ===
+                    previous.contractAddress.toLowerCase(),
+              ) ?? previous
+            );
+          });
+        }
       } finally {
         if (!cancelled) setHoldingsLoading(false);
       }
@@ -72,6 +85,25 @@ export function useTransferCatalog({
   const holdings = useMemo(
     () => allTokens.filter((token) => token.chainId === selectedChainId),
     [allTokens, selectedChainId],
+  );
+  const chainBalances = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const token of allTokens) {
+      totals.set(token.chainId, (totals.get(token.chainId) ?? 0) + token.valueUsd);
+    }
+    return totals;
+  }, [allTokens]);
+  const fundedChainIds = useMemo(
+    () =>
+      new Set(
+        allTokens
+          .filter(
+            (token) =>
+              token.valueUsd > 0 || parseFloat(token.balance || "0") > 0,
+          )
+          .map((token) => token.chainId),
+      ),
+    [allTokens],
   );
 
   useEffect(() => {
@@ -296,6 +328,8 @@ export function useTransferCatalog({
     selectedChainId,
     selectedToken,
     holdings,
+    chainBalances,
+    fundedChainIds,
     holdingsLoading,
     tokenList,
     setIsTokenSelectorOpen,

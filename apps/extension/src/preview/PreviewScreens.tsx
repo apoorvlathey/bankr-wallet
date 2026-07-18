@@ -194,7 +194,8 @@ function AutoConfigureSwap({ bridge }: { bridge: boolean }) {
     void (async () => {
       const select = await waitFor(() =>
         Array.from(document.querySelectorAll("button")).find(
-          (button) => button.textContent?.trim() === "SELECT",
+          (button) =>
+            button.textContent?.trim().toUpperCase().startsWith("SELECT"),
         ),
       );
       if (!select || cancelled) return;
@@ -281,6 +282,7 @@ function SwapPickerPreview({
         isOpen
         onClose={() => {}}
         mode={mode}
+        initialPanel={scenario === "chains" ? "chains" : "tokens"}
         accountType={account.accountType}
         initialChainId={8453}
         selectedTokenAddress="native"
@@ -673,7 +675,6 @@ export function PreviewScreen({
             accounts={previewAccounts}
             onBack={noop}
             onTransferInitiated={noop}
-            onSwapInstead={noop}
           />
         </PreviewShell>
       );

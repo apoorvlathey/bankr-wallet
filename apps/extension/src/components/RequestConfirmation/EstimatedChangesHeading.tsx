@@ -5,12 +5,14 @@ import ChainIcon from "@/components/ChainIcon";
 interface EstimatedChangesHeadingProps {
   chainId: number;
   chainName: string;
+  showPreposition?: boolean;
 }
 
 /** Compact destination-chain context shared by request-section headings. */
 export function RequestChainContext({
   chainId,
   chainName,
+  showPreposition = true,
 }: EstimatedChangesHeadingProps) {
   return (
     <HStack
@@ -25,9 +27,11 @@ export function RequestChainContext({
       borderRadius="md"
       bg="surface.raised"
     >
-      <Text as="span" color="fg.secondary" fontSize="xs" fontWeight="500">
-        on
-      </Text>
+      {showPreposition && (
+        <Text as="span" color="fg.secondary" fontSize="xs" fontWeight="500">
+          on
+        </Text>
+      )}
       <ChainIcon chainId={chainId} chainName={chainName} size="14px" withChip />
       <Text as="span" color="fg.primary" fontSize="xs" fontWeight="600">
         {chainName}

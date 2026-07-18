@@ -4,7 +4,6 @@ import {
   Button,
   HStack,
   Image,
-  Spinner,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -16,7 +15,7 @@ import {
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
 import ChainIcon from "@/components/ChainIcon";
-import SafeImage from "@/components/SafeImage";
+import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
 import {
   FullScreenPicker,
   FullScreenPickerEmpty,
@@ -38,19 +37,18 @@ import { TokenSymbolFallback } from "./TokenSymbolFallback";
 
 interface BridgeChainTokenPickerScreenProps {
   mode: "sell" | "buy";
+  panel: "chains" | "tokens";
   onBack: () => void;
   tokenSearch: string;
   onTokenSearchChange: (value: string) => void;
   tokenSearchRef: RefObject<HTMLInputElement>;
-  chainSearch: string;
-  onChainSearchChange: (value: string) => void;
   chains: readonly EnrichedBridgeChain[];
   chainsLoading: boolean;
   currentChainId: number;
   currentChain?: EnrichedBridgeChain;
   currentChainName: string;
-  selectedChainRef: RefObject<HTMLButtonElement>;
   chainTotals: ReadonlyMap<number, number>;
+  fundedChainIds: ReadonlySet<number>;
   onSelectChain: (chainId: number) => void;
   popularTokens: readonly PortfolioToken[];
   customToken?: PortfolioToken;
@@ -77,64 +75,21 @@ function formatUsdCompact(value: number): string {
   return "<$1";
 }
 
-function ChainLogo({
-  chain,
-  size = "20px",
-}: {
-  chain: EnrichedBridgeChain;
-  size?: string;
-}) {
-  const iconUrl = chain.icon ?? chain.logoURI;
-  if (!iconUrl) {
-    return (
-      <ChainIcon
-        chainId={chain.chainId}
-        chainName={chain.name}
-        size={size}
-        withChip
-      />
-    );
-  }
-
-  return (
-    <Box
-      boxSize={size}
-      borderRadius="full"
-      bg={chain.bgColor}
-      flexShrink={0}
-      overflow="hidden"
-    >
-      <SafeImage
-        src={iconUrl}
-        alt=""
-        boxSize={size}
-        borderRadius="full"
-        fallback={
-          <ChainIcon
-            chainId={chain.chainId}
-            chainName={chain.name}
-            size={size}
-            withChip
-          />
-        }
-      />
-    </Box>
-  );
-}
-
 function TokenLogo({
   token,
   currentChainName,
   resolveLogo,
+  size = "32px",
 }: {
   token: PortfolioToken;
   currentChainName: string;
   resolveLogo: (url: string | undefined) => string | undefined;
+  size?: string;
 }) {
   const fallback = (
     <TokenSymbolFallback
       symbol={token.symbol}
-      size="32px"
+      size={size}
       nativeChainId={token.contractAddress === "native" ? token.chainId : undefined}
       nativeChainName={currentChainName}
     />
@@ -145,7 +100,7 @@ function TokenLogo({
     <Image
       src={resolveLogo(token.logoUrl)}
       alt=""
-      boxSize="32px"
+      boxSize={size}
       borderRadius="full"
       fallback={fallback}
     />
@@ -216,19 +171,18 @@ function TokenRow({
 
 export function BridgeChainTokenPickerScreen({
   mode,
+  panel,
   onBack,
   tokenSearch,
   onTokenSearchChange,
   tokenSearchRef,
-  chainSearch,
-  onChainSearchChange,
   chains,
   chainsLoading,
   currentChainId,
   currentChain,
   currentChainName,
-  selectedChainRef,
   chainTotals,
+  fundedChainIds,
   onSelectChain,
   popularTokens,
   customToken,
@@ -246,6 +200,32 @@ export function BridgeChainTokenPickerScreen({
   resolveLogo,
   onSelectToken,
 }: BridgeChainTokenPickerScreenProps) {
+  if (panel === "chains") {
+    return (
+      <NetworkSelectorScreen
+        title={mode === "sell" ? "Pay network" : "Receive network"}
+        networks={chains.map((chain) => ({
+          chainId: chain.chainId,
+          name: chain.name,
+          nativeSymbol: chain.currency?.symbol,
+          balanceUsd: chainTotals.get(chain.chainId) ?? 0,
+          isFunded: fundedChainIds.has(chain.chainId),
+          iconUrl: chain.icon ?? chain.logoURI,
+          iconBg: chain.bgColor,
+        }))}
+        selectedChainId={currentChainId}
+        onSelect={(chainId) => {
+          if (chainId !== null) onSelectChain(chainId);
+        }}
+        onBack={onBack}
+        search={tokenSearch}
+        onSearchChange={onTokenSearchChange}
+        searchInputRef={tokenSearchRef}
+        isLoading={chainsLoading}
+      />
+    );
+  }
+
   const hasTokenResults =
     popularTokens.length > 0 ||
     !!customToken ||
@@ -254,66 +234,80 @@ export function BridgeChainTokenPickerScreen({
     remainingTokens.length > 0;
 
   const controls = (
-    <VStack align="stretch" spacing={3}>
+    <VStack align="stretch" spacing={2.5}>
       <FullScreenPickerSearch
         ref={tokenSearchRef}
         label="Search tokens"
+        labelTrailing={
+          <HStack
+            as="span"
+            maxW="220px"
+            minW={0}
+            minH="24px"
+            px={2}
+            spacing={1}
+            border="1px solid"
+            borderColor="border.default"
+            borderRadius="full"
+            bg="surface.raised"
+          >
+            <Text as="span" flexShrink={0} fontSize="2xs" color="fg.muted">
+              on
+            </Text>
+            <ChainIcon
+              chainId={currentChainId}
+              chainName={currentChainName}
+              size="14px"
+              withChip
+            />
+            <Text
+              as="span"
+              minW={0}
+              fontSize="xs"
+              fontWeight="600"
+              color="fg.secondary"
+              noOfLines={1}
+            >
+              {currentChainName}
+            </Text>
+          </HStack>
+        }
         placeholder="Search by name, symbol, or paste address"
         value={tokenSearch}
         onChange={(event) => onTokenSearchChange(event.target.value)}
       />
-      <FullScreenPickerSearch
-        label="Filter networks"
-        placeholder="Search networks"
-        value={chainSearch}
-        onChange={(event) => onChainSearchChange(event.target.value)}
-      />
-      {chainsLoading ? (
-        <HStack role="status" minH="44px" color="fg.secondary" spacing={2}>
-          <Spinner size="sm" />
-          <Text fontSize="sm">Loading networks…</Text>
-        </HStack>
-      ) : chains.length > 0 ? (
-        <FullScreenPickerScopes mt={0} aria-label="Network choices">
-          {chains.map((chain) => {
-            const isSelected = chain.chainId === currentChainId;
-            const total = chainTotals.get(chain.chainId) ?? 0;
+      {popularTokens.length > 0 && (
+        <FullScreenPickerScopes mt={0} aria-label={`Popular tokens on ${currentChainName}`}>
+          {popularTokens.map((token) => {
+            const isSelected = isSelectedToken(token);
             return (
               <Button
-                key={chain.chainId}
-                ref={isSelected ? selectedChainRef : undefined}
+                key={`popular-${token.chainId}-${token.contractAddress}`}
                 type="button"
-                variant="ghost"
-                minH="44px"
+                variant="outline"
+                h="32px"
                 flexShrink={0}
-                px={3}
+                px={2}
+                fontSize="xs"
+                borderWidth="1px"
+                borderColor={isSelected ? "border.focus" : "border.default"}
                 bg={isSelected ? "surface.accentTint" : "surface.raised"}
                 color={isSelected ? "accent.secondary" : "fg.primary"}
-                border="1px solid"
-                borderColor={isSelected ? "border.focus" : "border.default"}
-                aria-pressed={isSelected}
-                onClick={() => onSelectChain(chain.chainId)}
-                _hover={{ bg: "surface.raisedHover" }}
+                leftIcon={
+                  <TokenLogo
+                    token={token}
+                    currentChainName={currentChainName}
+                    resolveLogo={resolveLogo}
+                    size="16px"
+                  />
+                }
+                onClick={() => onSelectToken(token)}
               >
-                <HStack spacing={2}>
-                  <ChainLogo chain={chain} />
-                  <Text as="span" fontSize="sm" noOfLines={1} maxW="132px">
-                    {chain.name}
-                  </Text>
-                  {total > 0 && (
-                    <Text as="span" fontSize="xs" color="fg.secondary">
-                      {formatUsdCompact(total)}
-                    </Text>
-                  )}
-                </HStack>
+                {token.symbol}
               </Button>
             );
           })}
         </FullScreenPickerScopes>
-      ) : (
-        <Text role="status" minH="44px" py={2} color="fg.secondary" fontSize="sm">
-          No networks match “{chainSearch}”.
-        </Text>
       )}
     </VStack>
   );
@@ -325,22 +319,6 @@ export function BridgeChainTokenPickerScreen({
       backLabel="Back to Swap / Bridge"
       controls={controls}
     >
-      {popularTokens.length > 0 && (
-        <FullScreenPickerGroup label={`Popular on ${currentChainName}`}>
-          {popularTokens.map((token) => (
-            <TokenRow
-              key={`popular-${token.chainId}-${token.contractAddress}`}
-              token={token}
-              kind="popular"
-              currentChainName={currentChainName}
-              isSelected={isSelectedToken(token)}
-              resolveLogo={resolveLogo}
-              onSelect={() => onSelectToken(token)}
-            />
-          ))}
-        </FullScreenPickerGroup>
-      )}
-
       {isAddressSearch && (customLoading || customError || customToken) && (
         <FullScreenPickerGroup label="Token address">
           {customLoading ? (
@@ -412,7 +390,10 @@ export function BridgeChainTokenPickerScreen({
       )}
 
       {(remainingTokens.length > 0 || tokensStale || tokensLoading) && (
-        <FullScreenPickerGroup label={`Tokens on ${currentChainName}`}>
+        <FullScreenPickerGroup
+          label={`Tokens on ${currentChainName}`}
+          _notFirst={{ mt: 3 }}
+        >
           {tokensStale || (tokensLoading && remainingTokens.length === 0)
             ? Array.from({ length: 6 }, (_, index) => (
                 <SkeletonRow key={`token-loading-${index}`} />

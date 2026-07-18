@@ -1,6 +1,5 @@
 import type React from "react";
 import {
-  Box,
   HStack,
   Icon,
   IconButton,
@@ -15,6 +14,9 @@ import {
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import ChainIcon from "@/components/ChainIcon";
 import SafeImage from "@/components/SafeImage";
+import { getChainConfig } from "@/constants/chainConfig";
+import { useNetworks } from "@/contexts/NetworksContext";
+import { getResolvedChainById } from "@/lib/chains";
 import { TokenSymbolFallback } from "./TokenSymbolFallback";
 
 export function SwapArrowIcon(props: React.ComponentProps<typeof Icon>) {
@@ -28,61 +30,100 @@ export function SwapArrowIcon(props: React.ComponentProps<typeof Icon>) {
   );
 }
 
-export function TokenChainTrigger({
-  token,
+function useSwapChainName(chainId: number): string {
+  const { networksInfo } = useNetworks();
+  return (
+    getResolvedChainById(chainId, networksInfo)?.name ??
+    getChainConfig(chainId).name
+  );
+}
+
+export function SwapChainTrigger({
   chainId,
   onClick,
 }: {
-  token: PortfolioToken | null;
   chainId: number;
+  onClick: () => void;
+}) {
+  const chainName = useSwapChainName(chainId);
+
+  return (
+    <HStack
+      as="button"
+      cursor="pointer"
+      border="1px solid"
+      borderColor="border.default"
+      borderRadius="lg"
+      bg="surface.sunken"
+      px={2}
+      py={1.5}
+      spacing={1}
+      _hover={{ borderColor: "border.focus", bg: "surface.raisedHover" }}
+      onClick={onClick}
+      minW="80px"
+      maxW="full"
+      minH="38px"
+      flex="0 1 auto"
+      textAlign="left"
+    >
+      <ChainIcon chainId={chainId} chainName={chainName} size="18px" withChip />
+      <Text minW={0} flex={1} fontWeight="700" fontSize="xs" noOfLines={1}>
+        {chainName}
+      </Text>
+      <ChevronDownIcon flexShrink={0} color="fg.secondary" />
+    </HStack>
+  );
+}
+
+export function SwapTokenTrigger({
+  token,
+  onClick,
+}: {
+  token: PortfolioToken | null;
   onClick: () => void;
 }) {
   return (
     <HStack
       as="button"
       cursor="pointer"
-      border="2px solid"
+      border="1px solid"
       borderColor="border.default"
-      borderRadius="md"
-      bg="surface.base"
+      borderRadius="lg"
+      bg="surface.sunken"
       px={2}
       py={1.5}
-      spacing={2}
-      _hover={{ borderColor: "accent.secondary" }}
+      spacing={1}
+      _hover={{ borderColor: "border.focus", bg: "surface.raisedHover" }}
       onClick={onClick}
-      minW="100px"
+      minW="98px"
+      maxW="132px"
+      minH="38px"
+      flexShrink={0}
+      textAlign="left"
     >
-      {token && (
-        <Box position="relative" boxSize="22px" flexShrink={0}>
-          {token.logoUrl ? (
-            <SafeImage
-              src={token.logoUrl}
-              alt={token.symbol}
-              boxSize="22px"
-              borderRadius="full"
-              fallback={
-                <TokenSymbolFallback symbol={token.symbol} size="22px" />
-              }
-            />
-          ) : (
-            <TokenSymbolFallback symbol={token.symbol} size="22px" />
-          )}
-          <Box
-            position="absolute"
-            right="-3px"
-            bottom="-3px"
-            bg="surface.base"
+      {token &&
+        (token.logoUrl ? (
+          <SafeImage
+            src={token.logoUrl}
+            alt={token.symbol}
+            boxSize="22px"
             borderRadius="full"
-            p="1px"
-          >
-            <ChainIcon chainId={chainId} size="10px" withChip />
-          </Box>
-        </Box>
-      )}
-      <Text fontWeight="700" fontSize="sm" textTransform="uppercase">
+            fallback={<TokenSymbolFallback symbol={token.symbol} size="22px" />}
+          />
+        ) : (
+          <TokenSymbolFallback symbol={token.symbol} size="22px" />
+        ))}
+      <Text
+        minW={0}
+        flex={1}
+        fontWeight="700"
+        fontSize="sm"
+        textTransform="uppercase"
+        noOfLines={1}
+      >
         {token?.symbol || "Select"}
       </Text>
-      <ChevronDownIcon />
+      <ChevronDownIcon flexShrink={0} color="fg.secondary" />
     </HStack>
   );
 }

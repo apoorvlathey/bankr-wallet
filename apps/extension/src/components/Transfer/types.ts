@@ -15,7 +15,6 @@ export interface TokenTransferProps {
   accounts?: Account[];
   onBack: () => void;
   onTransferInitiated: (sponsored?: boolean) => void;
-  onSwapInstead?: (token: PortfolioToken) => void;
 }
 
 export interface SponsoredTransferFailure {

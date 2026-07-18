@@ -4,8 +4,10 @@ import type {
   SponsoredTransferFailure,
   TransferAccountType,
 } from "../types";
-
-const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+import {
+  isSponsoredBaseUsdcCandidate,
+  shouldUseSponsoredTransfer,
+} from "../model/sponsoredTransferPolicy";
 
 interface UseSponsoredTransferOptions {
   token: PortfolioToken | null;
@@ -31,11 +33,7 @@ export function useSponsoredTransfer({
   const intentRef = useRef<{ fingerprint: string; id: string } | null>(null);
   const statusCheckedRef = useRef<string | null>(null);
 
-  const isUsdcOnBase = Boolean(
-    token &&
-      token.chainId === 8453 &&
-      token.contractAddress?.toLowerCase() === BASE_USDC_ADDRESS.toLowerCase(),
-  );
+  const isUsdcOnBase = isSponsoredBaseUsdcCandidate(token);
 
   useEffect(() => {
     if (!isUsdcOnBase) {
@@ -60,12 +58,11 @@ export function useSponsoredTransfer({
     );
   }, [fromAddress, isUsdcOnBase]);
 
-  const isSponsoredFlow = Boolean(
-    isUsdcOnBase &&
-      premiumStatus?.isPremium &&
-      premiumStatus.sponsoredTransfersEnabled &&
-      accountType !== "impersonator",
-  );
+  const isSponsoredFlow = shouldUseSponsoredTransfer({
+    isCandidate: isUsdcOnBase,
+    premiumStatus,
+    accountType,
+  });
 
   const acknowledgeTransfer = useCallback(
     (intentId: string) => {

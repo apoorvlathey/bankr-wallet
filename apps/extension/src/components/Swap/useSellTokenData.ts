@@ -34,6 +34,17 @@ export function useSellTokenData({
         const catalog = await loadPortfolioTokenCatalog(fromAddress);
         if (cancelled) return;
 
+        setHoldingsAllChains(catalog.tokens);
+        if (initialSellToken) {
+          const cachedMatch = catalog.tokens.find(
+            (token) =>
+              token.chainId === initialSellToken.chainId &&
+              token.contractAddress.toLowerCase() ===
+                initialSellToken.contractAddress.toLowerCase(),
+          );
+          setSellToken(cachedMatch ?? initialSellToken);
+        }
+
         let tokens = catalog.tokens;
         try {
           const onchain = await fetchOnchainBalances(fromAddress, catalog.tokens, {
@@ -54,6 +65,18 @@ export function useSellTokenData({
               initialSellToken.contractAddress.toLowerCase(),
           );
           setSellToken(match ?? initialSellToken);
+        } else {
+          setSellToken((current) => {
+            if (!current) return current;
+            return (
+              tokens.find(
+                (token) =>
+                  token.chainId === current.chainId &&
+                  token.contractAddress.toLowerCase() ===
+                    current.contractAddress.toLowerCase(),
+              ) ?? current
+            );
+          });
         }
       } catch {
         // Portfolio failures do not block manual token selection.

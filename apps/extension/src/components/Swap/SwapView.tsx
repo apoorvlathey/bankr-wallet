@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { NATIVE_TOKEN_ADDRESS } from "@/chrome/swapApi";
@@ -11,7 +11,7 @@ import SwapConfirmation from "./SwapConfirmation";
 import { SwapFormScreen } from "./SwapFormScreen";
 import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 import type { SwapViewProps } from "./swapViewTypes";
-import { to0xToken } from "./swapViewUtils";
+import { pickDefaultSwapSellToken, to0xToken } from "./swapViewUtils";
 import { useBuyTokenData } from "./useBuyTokenData";
 import { usePreparedSwap } from "./usePreparedSwap";
 import { useSellTokenData } from "./useSellTokenData";
@@ -34,15 +34,18 @@ function SwapView({
   initialBuyToken,
   initialSellToken,
 }: SwapViewProps) {
-  const initialSwapChainId = SWAP_SUPPORTED_CHAIN_IDS.has(initialChainId)
-    ? initialChainId
-    : 1;
+  const initialSwapChainId =
+    initialSellToken && SWAP_SUPPORTED_CHAIN_IDS.has(initialSellToken.chainId)
+      ? initialSellToken.chainId
+      : SWAP_SUPPORTED_CHAIN_IDS.has(initialChainId)
+        ? initialChainId
+        : 1;
   const [sellChainId, setSellChainId] = useState(initialSwapChainId);
   const [buyChainId, setBuyChainId] = useState(initialSwapChainId);
-  const [chainTokenModalSide, setChainTokenModalSide] = useState<
-    "sell" | "buy" | null
-  >(null);
-  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [picker, setPicker] = useState<{
+    side: "sell" | "buy";
+    panel: "chains" | "tokens";
+  } | null>(null);
   const { networksInfo } = useNetworks();
   const isBridge = sellChainId !== buyChainId;
   const sellChainConfig = getChainConfig(sellChainId);
@@ -60,6 +63,23 @@ function SwapView({
     isSwapSupported: SWAP_SUPPORTED_CHAIN_IDS.has(sellChainId),
     initialSellToken,
   });
+  const autoSelectedSellRef = useRef(Boolean(initialSellToken));
+  useEffect(() => {
+    if (
+      autoSelectedSellRef.current ||
+      initialSellToken ||
+      sellToken ||
+      holdingsAllChains.length === 0
+    ) {
+      return;
+    }
+    const cachedTopToken = pickDefaultSwapSellToken(holdingsAllChains);
+    if (!cachedTopToken) return;
+    autoSelectedSellRef.current = true;
+    setSellChainId(cachedTopToken.chainId);
+    setBuyChainId(cachedTopToken.chainId);
+    setSellToken(cachedTopToken);
+  }, [holdingsAllChains, initialSellToken, sellToken, setSellToken]);
   const amount = useSwapAmount(sellToken);
   const buyToken = useBuyTokenData({
     buyChainId,
@@ -80,28 +100,33 @@ function SwapView({
   const bridgeRoute = getExecutableBridgeRoute(quotes.bridgeQuote);
 
   const handleFlip = () => {
-    if (!buyToken.buyTokenInfo || !buyToken.buyTokenAddress) return;
     const address = buyToken.buyTokenAddress.trim();
     const isNative =
+      Boolean(address) &&
       address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-    const heldBuyToken = holdingsAllChains.find(
-      (token) =>
-        token.chainId === buyChainId &&
-        (token.contractAddress.toLowerCase() === address.toLowerCase() ||
-          (isNative && token.contractAddress === "native")),
-    );
-    const nextSellToken: PortfolioToken = heldBuyToken ?? {
-      symbol: buyToken.buyTokenInfo.symbol,
-      name: buyToken.buyTokenInfo.name,
-      contractAddress: isNative ? "native" : address,
-      chainId: buyChainId,
-      decimals: buyToken.buyTokenInfo.decimals,
-      balance: "0",
-      balanceFormatted: "0",
-      priceUsd: buyToken.buyTokenPriceUsd,
-      valueUsd: 0,
-      logoUrl: buyToken.buyTokenLogoURI,
-    };
+    const heldBuyToken =
+      buyToken.buyTokenInfo && address
+        ? holdingsAllChains.find(
+            (token) =>
+              token.chainId === buyChainId &&
+              (token.contractAddress.toLowerCase() === address.toLowerCase() ||
+                (isNative && token.contractAddress === "native")),
+          )
+        : undefined;
+    const nextSellToken: PortfolioToken | null = buyToken.buyTokenInfo && address
+      ? heldBuyToken ?? {
+          symbol: buyToken.buyTokenInfo.symbol,
+          name: buyToken.buyTokenInfo.name,
+          contractAddress: isNative ? "native" : address,
+          chainId: buyChainId,
+          decimals: buyToken.buyTokenInfo.decimals,
+          balance: "0",
+          balanceFormatted: "0",
+          priceUsd: buyToken.buyTokenPriceUsd,
+          valueUsd: 0,
+          logoUrl: buyToken.buyTokenLogoURI,
+        }
+      : null;
     const previousSellToken = sellToken;
     const previousSellChainId = sellChainId;
     setSellChainId(buyChainId);
@@ -125,7 +150,7 @@ function SwapView({
   };
 
   const handleTokenSelect = (pickedChainId: number, picked: PortfolioToken) => {
-    if (chainTokenModalSide === "sell") {
+    if (picker?.side === "sell") {
       const previousSellChainId = sellChainId;
       setSellChainId(pickedChainId);
       const buyWasImplicit =
@@ -137,7 +162,7 @@ function SwapView({
       amount.resetAmount();
       amount.setIsUsdMode(false);
       quotes.setQuote(null);
-    } else if (chainTokenModalSide === "buy") {
+    } else if (picker?.side === "buy") {
       if (pickedChainId !== buyChainId) setBuyChainId(pickedChainId);
       buyToken.setSelectedBuyToken(picked);
       quotes.setQuote(null);
@@ -274,13 +299,14 @@ function SwapView({
     );
   }
 
-  if (chainTokenModalSide) {
-    const selectedIsBuy = chainTokenModalSide === "buy";
+  if (picker) {
+    const selectedIsBuy = picker.side === "buy";
     return (
       <BridgeChainTokenModal
         isOpen
-        onClose={() => setChainTokenModalSide(null)}
-        mode={chainTokenModalSide}
+        onClose={() => setPicker(null)}
+        mode={picker.side}
+        initialPanel={picker.panel}
         accountType={accountType}
         initialChainId={selectedIsBuy ? buyChainId : sellChainId}
         selectedTokenAddress={
@@ -316,7 +342,6 @@ function SwapView({
       accountType={accountType}
       sellToken={sellToken}
       sellChainId={sellChainId}
-      sellExplorer={sellChainConfig.explorer}
       sellAmount={amount.sellAmount}
       sellTokenAmount={amount.sellTokenAmount}
       isUsdMode={amount.isUsdMode}
@@ -329,7 +354,6 @@ function SwapView({
       buyTokenAddress={buyToken.buyTokenAddress}
       buyTokenLogoURI={buyToken.buyTokenLogoURI}
       buyChainId={buyChainId}
-      buyExplorer={getChainConfig(buyChainId).explorer}
       buyTokenPriceUsd={buyToken.buyTokenPriceUsd}
       unifiedBuyAmount={unifiedBuyAmount}
       outputUsd={outputUsd}
@@ -345,12 +369,21 @@ function SwapView({
         getNativeAssetMeta(sellChainId, networksInfo)?.symbol ?? "ETH"
       }
       sourceNativePriceUsd={sourceNative?.priceUsd}
-      copiedAddress={copiedAddress}
       isSubmitting={prepared.isSubmitting}
       canSwap={canSwap && !prepared.isSubmitting}
       onBack={onBack}
-      onOpenSellPicker={() => setChainTokenModalSide("sell")}
-      onOpenBuyPicker={() => setChainTokenModalSide("buy")}
+      onOpenSellChainPicker={() =>
+        setPicker({ side: "sell", panel: "chains" })
+      }
+      onOpenSellTokenPicker={() =>
+        setPicker({ side: "sell", panel: "tokens" })
+      }
+      onOpenBuyChainPicker={() =>
+        setPicker({ side: "buy", panel: "chains" })
+      }
+      onOpenBuyTokenPicker={() =>
+        setPicker({ side: "buy", panel: "tokens" })
+      }
       onFlip={handleFlip}
       onToggleMode={amount.toggleMode}
       onAmountChange={(value) => {
@@ -361,11 +394,6 @@ function SwapView({
       onMax={() => {
         amount.setSliderValue(100);
         amount.setAmountFromSlider(100);
-      }}
-      onCopy={async (address) => {
-        await navigator.clipboard.writeText(address);
-        setCopiedAddress(address);
-        setTimeout(() => setCopiedAddress(null), 2000);
       }}
       onSliderChange={(value) => {
         amount.setSliderValue(value);

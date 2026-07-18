@@ -51,7 +51,7 @@ export const FullScreenPicker = forwardRef<HTMLDivElement, FullScreenPickerProps
     ref,
   ) {
     return (
-      <AppScreen ref={ref} {...rest}>
+      <AppScreen ref={ref} maxW="480px" mx="auto" {...rest}>
         <AppHeader
           title={title}
           onBack={onBack}
@@ -74,6 +74,7 @@ export const FullScreenPicker = forwardRef<HTMLDivElement, FullScreenPickerProps
 export interface FullScreenPickerSearchProps
   extends Omit<InputProps, "size"> {
   label: string;
+  labelTrailing?: ReactNode;
   formControlProps?: Omit<FormControlProps, "children">;
 }
 
@@ -81,14 +82,17 @@ export const FullScreenPickerSearch = forwardRef<
   HTMLInputElement,
   FullScreenPickerSearchProps
 >(function FullScreenPickerSearch(
-  { label, formControlProps, ...inputProps },
+  { label, labelTrailing, formControlProps, ...inputProps },
   ref,
 ) {
   return (
     <FormControl {...formControlProps}>
-      <FormLabel mb={1.5} fontSize="sm">
-        {label}
-      </FormLabel>
+      <HStack mb={1.5} minW={0} justify="space-between" spacing={2}>
+        <FormLabel mb={0} minW={0} fontSize="sm">
+          {label}
+        </FormLabel>
+        {labelTrailing && <Box minW={0}>{labelTrailing}</Box>}
+      </HStack>
       <InputGroup>
         <InputLeftElement pointerEvents="none" color="fg.muted">
           <Search2Icon aria-hidden="true" />

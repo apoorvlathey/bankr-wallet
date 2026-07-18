@@ -16,12 +16,20 @@ existing direct and lazy imports retain the same default-export contract.
 - `CalldataSection.tsx` renders native calldata, deployment mode, and decoding.
 - `TransferNotices.tsx` renders sponsorship eligibility/status and view-only
   notices.
-- `NetworkPicker.tsx` and `RecipientPicker.tsx` own picker-only search/rendering. The Contacts group mounts shared `AddressContactList`, so Send and More expose the same identity row, edit/delete dialogs, and sortable controls rather than maintaining Send-specific contact UI. Search results remain selection/edit/delete only until the filter is cleared.
+- `NetworkPicker.tsx` adapts Send's catalog balances and selection callback to
+  the shared `NetworkSelector`; `RecipientPicker.tsx` owns recipient-only
+  search/rendering. The Contacts group mounts shared `AddressContactList`, so
+  Send and More expose the same identity row, edit/delete dialogs, and sortable
+  controls rather than maintaining Send-specific contact UI. Search results
+  remain selection/edit/delete only until the filter is cleared.
   Send enables the shared group's Add action and keeps the group visible when
   empty, making the name-service-aware contact editor reachable from the picker.
 - `AdaptiveBalance.tsx` owns responsive balance measurement and formatting.
 - `formatting.ts` contains pure display formatting/account labels; `types.ts`
   contains the public component contract.
+- `model/sendEntry.ts` keeps Send entry semantics explicit: the homepage
+  shortcut starts on Ethereum ETH, while an Assets-row entry preserves the
+  clicked token and chain.
 - `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
   cached-public-name matching, relevance ranking, and stored-order tie breaking
   for the recipient combobox. Suggestion rows reuse the shared safe avatar and
@@ -44,6 +52,9 @@ existing direct and lazy imports retain the same default-export contract.
   preparation, including slider sound semantics and deployment preconditions.
 - `hooks/useSponsoredTransfer.ts` owns premium eligibility, durable ERC-3009
   recovery checks, intent IDs, acknowledgement, and sponsored submission.
+- `model/sponsoredTransferPolicy.ts` owns the temporary Base-USDC sponsorship
+  feature gate. It is currently disabled, so Base USDC uses normal ERC-20
+  transaction intake for Bankr, private-key, and seed-phrase accounts.
 - `hooks/useTransferSubmission.ts` owns the normal pending-transaction message
   and selects between Bankr-sponsored and normal confirmation intake. Signing
   remains in the background transaction domains for Bankr, private-key, and

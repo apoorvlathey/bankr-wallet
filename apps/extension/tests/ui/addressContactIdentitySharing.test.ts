@@ -27,7 +27,12 @@ test("Address Book and Send share contact identity enrichment and contact-list c
   assert.match(recipientPicker, /canAddContact/u);
   assert.match(picker, /trailing\?: ReactNode/u);
   assert.match(recipientSection, /AddressContactAvatar/u);
-  assert.match(recipientSection, /placeholder="Address, name service, wallet, or contact"/u);
+  assert.match(recipientSection, /placeholder="0x, contacts, \.eth, \.gwei"/u);
+  assert.match(
+    recipientSection,
+    /<HStack spacing=\{1\}>[\s\S]*?Recipient[\s\S]*?hasRecipientChoices && \([\s\S]*?My contacts/u,
+  );
+  assert.match(recipientSection, /<LabeledAddressPopover[\s\S]*?maxW="180px"/u);
   assert.doesNotMatch(recipientSection, /placeholder="0x\.\.\., ENS/u);
   assert.doesNotMatch(recipientPicker, /blo\(/u);
 });

@@ -46,6 +46,7 @@ export function RecipientSection({
     suggestions,
     selectRecipientAddress,
   } = recipientState;
+  const hasRecipientChoices = otherAccounts.length + recipientContacts.length > 0;
   const showSuggestions = suggestions.length > 0 && dismissedRecipient !== recipient;
 
   useEffect(() => setActiveSuggestion(0), [recipient, suggestions.length]);
@@ -54,10 +55,16 @@ export function RecipientSection({
     <Box>
       <HStack justify="space-between" align="center" mb={1}>
         <HStack spacing={1}>
-          <Text fontSize="sm" fontWeight="600" color="fg.secondary">
+          <Text
+            as="label"
+            htmlFor="send-recipient"
+            fontSize="sm"
+            fontWeight="600"
+            color="fg.secondary"
+          >
             Recipient
           </Text>
-          {otherAccounts.length + recipientContacts.length > 0 && (
+          {hasRecipientChoices && (
             <Button
               size="sm"
               variant="ghost"
@@ -73,7 +80,7 @@ export function RecipientSection({
           )}
         </HStack>
         {recipient && (isResolving || isLoadingExtras) && (
-          <HStack spacing={1}>
+          <HStack spacing={1} minW={0}>
             <Spinner size="xs" color="accent.secondary" />
             <Text fontSize="xs" color="text.tertiary" fontWeight="700">
               Resolving...
@@ -92,7 +99,8 @@ export function RecipientSection({
       </HStack>
       <Box position="relative">
         <Input
-          placeholder="Address, name service, wallet, or contact"
+          id="send-recipient"
+          placeholder="0x, contacts, .eth, .gwei"
           value={recipient}
           onChange={(event) => {
             setDismissedRecipient("");
@@ -120,7 +128,9 @@ export function RecipientSection({
           }}
           onBlur={() => window.setTimeout(() => setDismissedRecipient(recipient), 100)}
           fontFamily="mono"
-          fontSize="sm"
+          fontSize="md"
+          autoComplete="off"
+          spellCheck={false}
           isInvalid={Boolean(recipient) && !isResolving && !isValid}
           role="combobox"
           aria-label="Recipient address, name service, wallet, or contact"

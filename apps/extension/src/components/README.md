@@ -24,7 +24,8 @@ integration boundary, not the default home for new implementations.
 - `ui/` contains domain-free mobile application primitives. It must not import
   wallet feature modules or call Chrome, storage, signing, or network APIs.
 - `shared/` contains reusable wallet-aware presentation that is genuinely used
-  by multiple features.
+  by multiple features. `shared/NetworkSelector/` owns the single searchable,
+  balance-ordered network browser reused by Swap, Send, and portfolio filters.
 - `theme/primitives/` contains token-driven visual atoms. It is separate from
   application and wallet feature behavior.
 

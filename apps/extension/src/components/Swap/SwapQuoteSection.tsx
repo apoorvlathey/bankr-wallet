@@ -60,6 +60,12 @@ export function SwapQuoteSection({
   onSlippageChange,
 }: SwapQuoteSectionProps) {
   const bridgeRoute = getExecutableBridgeRoute(bridgeQuote);
+  const routeName = bridgeRoute?.routeDetails?.name ?? "Best route";
+  const estimatedTime = bridgeRoute?.estimatedTime
+    ? bridgeRoute.estimatedTime < 60
+      ? `${bridgeRoute.estimatedTime}s`
+      : `${Math.round(bridgeRoute.estimatedTime / 60)} min`
+    : null;
 
   return (
     <>
@@ -81,13 +87,13 @@ export function SwapQuoteSection({
             onClick={onUseDestinationNative}
             px={3}
             py={2}
-            border="2px solid"
+            border="1px solid"
             borderColor="border.default"
             borderRadius="md"
             bg="surface.raised"
             spacing={2}
             cursor="pointer"
-            _hover={{ borderColor: "accent.secondary" }}
+            _hover={{ borderColor: "border.focus" }}
           >
             <Box position="relative" boxSize="20px" flexShrink={0}>
               {destNativeInfo.logoUrl ? (
@@ -116,17 +122,22 @@ export function SwapQuoteSection({
           </HStack>
         )}
 
-      <HStack justify="space-between">
-        {isBridge && bridgeRoute?.estimatedTime ? (
-          <HStack spacing={1} color="text.tertiary">
+      <HStack justify="space-between" minH="32px" spacing={2}>
+        {quoteLoading ? (
+          <Text fontSize="xs" color="fg.muted" fontWeight="600">
+            Finding the best route…
+          </Text>
+        ) : isBridge && bridgeRoute ? (
+          <HStack spacing={1.5} color="fg.secondary" minW={0}>
             <TimeIcon boxSize={3} />
-            <Text fontSize="xs" fontWeight="700">
-              Est. time:{" "}
-              {bridgeRoute.estimatedTime < 60
-                ? `${bridgeRoute.estimatedTime}s`
-                : `${Math.round(bridgeRoute.estimatedTime / 60)} min`}
+            <Text fontSize="xs" fontWeight="600" noOfLines={1}>
+              {routeName}{estimatedTime ? ` · ~${estimatedTime}` : ""}
             </Text>
           </HStack>
+        ) : quote ? (
+          <Text fontSize="xs" color="fg.secondary" fontWeight="600">
+            Best available route
+          </Text>
         ) : (
           <Box />
         )}
@@ -164,12 +175,11 @@ export function SwapQuoteSection({
         <Box
           bg={priceImpact > 10 ? "status.error.bg" : "status.warning.bg"}
           color={priceImpact > 10 ? "status.error.fg" : "status.warning.fg"}
-          border="2px solid"
+          border="1px solid"
           borderColor={
             priceImpact > 10 ? "status.error.border" : "status.warning.border"
           }
           borderRadius="lg"
-          boxShadow="card"
           p={3}
         >
           <Text fontSize="sm" fontWeight="700">
@@ -184,10 +194,9 @@ export function SwapQuoteSection({
         <Box
           bg="status.warning.bg"
           color="status.warning.fg"
-          border="2px solid"
+          border="1px solid"
           borderColor="status.warning.border"
           borderRadius="lg"
-          boxShadow="card"
           p={3}
         >
           <Text fontSize="sm" fontWeight="700">

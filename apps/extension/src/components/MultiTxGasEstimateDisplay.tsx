@@ -4,11 +4,6 @@ import {
   VStack,
   HStack,
   Text,
-  Popover,
-  PopoverBody,
-  PopoverContent,
-  PopoverTrigger,
-  Portal,
   Input,
   IconButton,
   Tooltip,
@@ -35,7 +30,7 @@ import {
 } from "@/lib/gasTiers";
 import { useScreenEntered } from "@/components/ScreenTransition";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
-import { GasFeeTrigger } from "@/components/GasEstimate/GasFeeTrigger";
+import { GasFeePopover } from "@/components/GasEstimate/GasFeePopover";
 import {
   applyBatchedNativeOutlayBalance,
   applyForceInclusionBalanceTotals,
@@ -985,6 +980,11 @@ function MultiTxGasEstimateDisplay({
   if (validEstimates.length === 0) return null;
 
   const usdDisplay = formatWeiToUsd(totalCostWei, nativePriceUsd);
+  const pickerGasLimit = editedGasLimits.reduce(
+    (sum, gasLimit) =>
+      sum + (isValidGasLimit(gasLimit) ? BigInt(gasLimit) : 0n),
+    0n,
+  );
 
   return (
     <VStack spacing={2} align="stretch">
@@ -1058,50 +1058,31 @@ function MultiTxGasEstimateDisplay({
         </VStack>
       )}
 
-      <Popover
-        isOpen={expanded}
+      <GasFeePopover
+        expanded={expanded}
+        fiatFee={usdDisplay}
+        nativeFee={formatEthCompact(totalCostWei, sym)}
+        tier={showPicker ? tier : undefined}
+        onToggle={() => setExpanded((value) => !value)}
         onClose={() => setExpanded(false)}
-        placement="top-end"
-        gutter={8}
-        closeOnBlur
-      >
-        <PopoverTrigger>
-          <GasFeeTrigger
-            expanded={expanded}
-            fiatFee={usdDisplay}
-            nativeFee={formatEthCompact(totalCostWei, sym)}
-            tier={showPicker ? tier : undefined}
-            onToggle={() => setExpanded((value) => !value)}
-          />
-        </PopoverTrigger>
-        <Portal>
-          <PopoverContent
-            w="332px"
-            maxW="calc(100vw - 32px)"
-            maxH="calc(100vh - 96px)"
-          >
-            <PopoverBody p={3} overflowY="auto" overflowX="hidden">
-              <VStack align="stretch" spacing={2}>
-
+        showPicker={false}
+        customEditorOpen={false}
+        customEditor={null}
+        tiers={passthroughEstimates?.[0]?.tiers}
+        gasLimit={pickerGasLimit}
+        nativePriceUsd={nativePriceUsd}
+        nativeCurrencySymbol={sym}
+        selectedTier={tier}
+        onTierChange={handleTierChange}
+        fallbackContent={
+          <VStack align="stretch" spacing={2}>
             {/* Tier picker (non-atomic PK/SP only). Lives at the top of the
                 expanded section so the user picks once and the per-call rows
                 below all reflect the chosen fees. */}
             {showPicker && (
               <GasTierPicker
                 tiers={passthroughEstimates![0].tiers}
-                gasLimit={(() => {
-                  // Sum of (possibly edited) per-call gas limits — drives the
-                  // per-tier total cost preview in the picker buttons.
-                  try {
-                    return editedGasLimits.reduce(
-                      (sum, g) =>
-                        sum + (isValidGasLimit(g) ? BigInt(g) : 0n),
-                      0n,
-                    );
-                  } catch {
-                    return null;
-                  }
-                })()}
+                gasLimit={pickerGasLimit}
                 nativePriceUsd={nativePriceUsd}
                 nativeCurrencySymbol={sym}
                 selected={tier}
@@ -1454,11 +1435,9 @@ function MultiTxGasEstimateDisplay({
                 Gas managed by Bankr API
               </Text>
             )}
-              </VStack>
-            </PopoverBody>
-          </PopoverContent>
-        </Portal>
-      </Popover>
+          </VStack>
+        }
+      />
     </VStack>
   );
 }

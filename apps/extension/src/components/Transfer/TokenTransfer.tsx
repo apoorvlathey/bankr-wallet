@@ -8,7 +8,6 @@ import {
   ScreenBody,
   StickyActionBar,
 } from "@/components/ui";
-import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getChainEnvironmentLabel } from "@/lib/chainIcons";
 import { getResolvedChainById, getVisibleChains } from "@/lib/chains";
@@ -35,7 +34,6 @@ function TokenTransfer({
   accounts,
   onBack,
   onTransferInitiated,
-  onSwapInstead,
 }: TokenTransferProps) {
   const { networksInfo } = useNetworks();
   const [isNetworkPickerOpen, setIsNetworkPickerOpen] = useState(false);
@@ -71,6 +69,12 @@ function TokenTransfer({
     (candidateChainId: number) =>
       getResolvedChainById(candidateChainId, networksInfo)?.name ??
       `Chain ${candidateChainId}`,
+    [networksInfo],
+  );
+  const getNativeSymbol = useCallback(
+    (candidateChainId: number) =>
+      getResolvedChainById(candidateChainId, networksInfo)?.nativeCurrency
+        .symbol,
     [networksInfo],
   );
   const chainName = getChainName(catalog.selectedChainId);
@@ -157,6 +161,9 @@ function TokenTransfer({
         chainIds={allChains}
         selectedChainId={catalog.selectedChainId}
         getChainName={getChainName}
+        getNativeSymbol={getNativeSymbol}
+        chainBalances={catalog.chainBalances}
+        fundedChainIds={catalog.fundedChainIds}
         onSelect={handleChainChange}
         onBack={() => setIsNetworkPickerOpen(false)}
       />
@@ -194,22 +201,6 @@ function TokenTransfer({
       />
       <ScreenBody pt={4} pb={4}>
         <VStack spacing={5} align="stretch">
-          {onSwapInstead &&
-            catalog.selectedToken &&
-            SWAP_SUPPORTED_CHAIN_IDS.has(catalog.selectedChainId) && (
-              <Button
-                alignSelf="flex-start"
-                size="sm"
-                variant="ghost"
-                color="accent.secondary"
-                px={0}
-                minH="32px"
-                onClick={() => onSwapInstead(catalog.selectedToken!)}
-              >
-                Swap {catalog.selectedToken.symbol.toUpperCase()} instead
-              </Button>
-            )}
-
           <SponsorshipEligibilityNotice
             accountType={accountType}
             sponsored={sponsored}
@@ -268,6 +259,7 @@ function TokenTransfer({
         )}
         primaryAction={(
           <Button
+            variant="brand"
             onClick={() => submission.submit(canSubmit)}
             isLoading={isBusy}
             isDisabled={!canSubmit || accountType === "impersonator"}

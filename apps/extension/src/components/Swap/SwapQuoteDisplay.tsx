@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, HStack, Text, VStack, Icon, Collapse } from "@chakra-ui/react";
 import { formatUnits } from "viem";
 import type { SwapQuoteResponse } from "@/chrome/swapApi";
+import { formatQuoteSummaryAmount } from "./swapViewUtils";
 
 function ChevronIcon({
   isOpen,
@@ -54,6 +55,7 @@ export default function SwapQuoteDisplay({
   const [isOpen, setIsOpen] = useState(false);
 
   const minBuyAmount = formatAmount(quote.minBuyAmount, buyTokenDecimals);
+  const displayMinBuyAmount = formatQuoteSummaryAmount(minBuyAmount);
   const minBuyUsd = (() => {
     if (!buyTokenPriceUsd || buyTokenPriceUsd <= 0) return null;
     const num = parseFloat(formatUnits(BigInt(quote.minBuyAmount), buyTokenDecimals));
@@ -84,41 +86,50 @@ export default function SwapQuoteDisplay({
   return (
     <Box
       bg="surface.sunken"
-      border="2px solid"
+      border="1px solid"
       borderColor="border.default"
       borderRadius="lg"
       px={3}
       py={2}
     >
-      <HStack
+      <Box
         as="button"
-        justify="space-between"
+        display="grid"
+        gridTemplateColumns="max-content minmax(0, 1fr) 16px"
+        columnGap={2}
+        alignItems="center"
         w="full"
+        textAlign="left"
         onClick={() => setIsOpen((v) => !v)}
         cursor="pointer"
+        aria-expanded={isOpen}
       >
         <Text
           fontSize="xs"
-          fontWeight="bold"
-          textTransform="uppercase"
-          color="text.secondary"
+          fontWeight="600"
+          color="fg.secondary"
+          whiteSpace="nowrap"
         >
-          Min. Received
+          Minimum received
         </Text>
-        <HStack spacing={1} align="center">
-          <VStack spacing={0} align="flex-end">
-            <Text fontSize="sm" fontWeight="700" noOfLines={1}>
-              {minBuyAmount} {buyTokenSymbol}
+        <VStack spacing={0} align="flex-end" minW={0}>
+          <Text
+            fontSize="sm"
+            fontWeight="700"
+            whiteSpace="nowrap"
+            fontVariantNumeric="tabular-nums"
+            title={`${minBuyAmount} ${buyTokenSymbol}`}
+          >
+            {displayMinBuyAmount} {buyTokenSymbol}
+          </Text>
+          {minBuyUsd && (
+            <Text fontSize="xs" color="text.tertiary" fontWeight="600">
+              {minBuyUsd}
             </Text>
-            {minBuyUsd && (
-              <Text fontSize="xs" color="text.tertiary" fontWeight="600">
-                {minBuyUsd}
-              </Text>
-            )}
-          </VStack>
-          <ChevronIcon isOpen={isOpen} boxSize={4} color="text.tertiary" />
-        </HStack>
-      </HStack>
+          )}
+        </VStack>
+        <ChevronIcon isOpen={isOpen} boxSize={4} color="text.tertiary" />
+      </Box>
 
       <Collapse in={isOpen} animateOpacity>
         <VStack
@@ -134,9 +145,8 @@ export default function SwapQuoteDisplay({
             <HStack justify="space-between">
               <Text
                 fontSize="xs"
-                fontWeight="bold"
-                textTransform="uppercase"
-                color="text.secondary"
+                fontWeight="600"
+                color="fg.secondary"
               >
                 Wallet Fee
               </Text>
@@ -210,9 +220,8 @@ export default function SwapQuoteDisplay({
             <HStack justify="space-between" align="flex-start" spacing={2}>
               <Text
                 fontSize="xs"
-                fontWeight="bold"
-                textTransform="uppercase"
-                color="text.secondary"
+                fontWeight="600"
+                color="fg.secondary"
                 flexShrink={0}
                 pt="2px"
               >
@@ -234,7 +243,7 @@ export default function SwapQuoteDisplay({
                     <Box
                       px={1.5}
                       py={0.5}
-                      border="2px solid"
+                      border="1px solid"
                       borderColor="border.default"
                       borderRadius="md"
                       fontSize="xs"

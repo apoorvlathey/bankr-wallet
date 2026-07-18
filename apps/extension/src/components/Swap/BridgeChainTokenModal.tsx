@@ -21,6 +21,7 @@ import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { BridgeChainTokenPickerScreen } from "./BridgeChainTokenPickerScreen";
+import { pickDefaultSwapSellToken } from "./swapViewUtils";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -101,6 +102,7 @@ interface BridgeChainTokenModalProps {
   onClose: () => void;
   /** "sell" picks source chains; "buy" picks destination chains. */
   mode: "sell" | "buy";
+  initialPanel: "chains" | "tokens";
   /** Active account type. Sell-side chains are filtered to what can sign. */
   accountType: ChainAccountType;
   /** Chain shown selected when the dropdown opens. */
@@ -136,6 +138,7 @@ export default function BridgeChainTokenModal({
   isOpen,
   onClose,
   mode,
+  initialPanel,
   accountType,
   initialChainId,
   selectedTokenAddress,
@@ -149,6 +152,7 @@ export default function BridgeChainTokenModal({
 }: BridgeChainTokenModalProps) {
   const { networksInfo } = useNetworks();
   const [currentChainId, setCurrentChainId] = useState(initialChainId);
+  const [panel, setPanel] = useState<"chains" | "tokens">(initialPanel);
   const [chains, setChains] = useState<EnrichedBridgeChain[]>([]);
   const [chainsLoading, setChainsLoading] = useState(true);
 
@@ -166,11 +170,6 @@ export default function BridgeChainTokenModal({
   const lastResolvedAddrRef = useRef<string>("");
 
   const tokenSearchRef = useRef<HTMLInputElement>(null);
-  const selectedChainChipRef = useRef<HTMLButtonElement>(null);
-
-  // Chain scopes retain their own search term so token text/address filtering
-  // and network filtering remain independent.
-  const [chainSearchTerm, setChainSearchTerm] = useState("");
 
   // Spam-suppression: holdings worth less than $0.10 USD collapse into a
   // disclosure row at the bottom of "Your Tokens". Default closed because
@@ -184,40 +183,25 @@ export default function BridgeChainTokenModal({
   useEffect(() => {
     if (!isOpen) return;
     setCurrentChainId(initialChainId);
+    setPanel(initialPanel);
     setTokenSearch(initialTokenSearch);
     setResolvedCustom(null);
     setCustomError(null);
     setCustomLoading(false);
     setShowLowValue(false);
-    setChainSearchTerm("");
     lastResolvedAddrRef.current = "";
     // Defer focus past the dropdown's mount animation.
     const id = window.setTimeout(() => {
       tokenSearchRef.current?.focus();
     }, 60);
     return () => window.clearTimeout(id);
-  }, [isOpen, initialChainId, initialTokenSearch]);
+  }, [isOpen, initialChainId, initialPanel, initialTokenSearch]);
 
   // Reset the low-value disclosure when the user switches chain — each
   // chain's "Your Tokens" set should start collapsed.
   useEffect(() => {
     setShowLowValue(false);
   }, [currentChainId]);
-
-  // Auto-scroll the chain strip to the selected chip whenever it changes.
-  // Keeps the active chain visible after picking a chain or reopening the
-  // dropdown with a chain that lives further down the horizontally scrolled row.
-  useEffect(() => {
-    if (!isOpen) return;
-    const id = window.setTimeout(() => {
-      selectedChainChipRef.current?.scrollIntoView({
-        behavior: "smooth",
-        inline: "center",
-        block: "nearest",
-      });
-    }, 80);
-    return () => window.clearTimeout(id);
-  }, [isOpen, currentChainId, chains.length]);
 
   // Load chain list once per open + mode flip.
   useEffect(() => {
@@ -282,40 +266,18 @@ export default function BridgeChainTokenModal({
     return map;
   }, [holdingsAllChains]);
 
-  // Chain-strip sort (same logic in both modes now): chains the user holds
-  // a balance on float to the front (sorted by USD value desc); the rest
-  // sort alphabetically by name. "Balance-first" was already the sell-mode
-  // behaviour and the user wants the same priority in buy mode so destination
-  // chains they already have funds on are surfaced first. No Ethereum pin —
-  // if they hold ETH, it naturally floats up; if not, it lands in the
-  // alphabetical group.
-  const sortedChains = useMemo(() => {
-    const withTotals = chains.map((c) => ({
-      ...c,
-      _total: portfolioByChain.get(c.chainId) ?? 0,
-    }));
-    withTotals.sort((a, b) => {
-      const aHas = a._total > 0;
-      const bHas = b._total > 0;
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      if (aHas && bHas) return b._total - a._total;
-      return a.name.localeCompare(b.name);
-    });
-    return withTotals;
-  }, [chains, portfolioByChain]);
-
-  // Apply the inline chain-search filter. Case-insensitive substring on
-  // chain name covers "abst"→Abstract, "eth"→Ethereum, etc. Bungee chainId
-  // is also matchable for power users that know it offhand.
-  const visibleChains = useMemo(() => {
-    const term = chainSearchTerm.trim().toLowerCase();
-    if (!term) return sortedChains;
-    return sortedChains.filter(
-      (c) =>
-        c.name.toLowerCase().includes(term) ||
-        String(c.chainId).includes(term),
-    );
-  }, [sortedChains, chainSearchTerm]);
+  const fundedChainIds = useMemo(
+    () =>
+      new Set(
+        holdingsAllChains
+          .filter(
+            (token) =>
+              token.valueUsd > 0 || parseFloat(token.balance || "0") > 0,
+          )
+          .map((token) => token.chainId),
+      ),
+    [holdingsAllChains],
+  );
 
   // Full Bungee entry for the selected chain — drives both the section
   // header label AND the inline logo so all three section headers paint
@@ -655,11 +617,35 @@ export default function BridgeChainTokenModal({
     onClose();
   };
   const handleSelectChain = (chainId: number) => {
+    const chain = chains.find((item) => item.chainId === chainId);
+    const native = chainHasNativeToken(chainId)
+      ? nativeMetaFromBungeeChain(chain) ?? getNativeAssetMeta(chainId, networksInfo)
+      : null;
+    const excluded = (token: PortfolioToken) => {
+      if (excludeChainId !== chainId || !excludeAddress) return false;
+      const tokenAddress =
+        token.contractAddress === "native" ? NATIVE_TOKEN_ADDRESS : token.contractAddress;
+      return tokenAddress.toLowerCase() === excludeAddress.toLowerCase();
+    };
+    const eligibleHoldings = holdingsAllChains.filter(
+      (token) => token.chainId === chainId && !excluded(token),
+    );
+    const heldDefault = pickDefaultSwapSellToken(eligibleHoldings, chainId);
+    const existingNative = eligibleHoldings.find(
+      (token) => token.contractAddress === "native",
+    );
+    const nativeDefault =
+      native &&
+      buildNativePortfolioToken(native, chainId, existingNative);
+    const picked = mode === "sell" ? heldDefault ?? nativeDefault : nativeDefault ?? heldDefault;
+    if (picked && !excluded(picked)) {
+      onSelect(chainId, picked);
+      onClose();
+      return;
+    }
     setCurrentChainId(chainId);
-    setChainSearchTerm("");
-    window.setTimeout(() => {
-      tokenSearchRef.current?.focus();
-    }, 0);
+    setPanel("tokens");
+    setTokenSearch("");
   };
 
   const isSelectedToken = (token: PortfolioToken) => {
@@ -675,19 +661,18 @@ export default function BridgeChainTokenModal({
   return (
     <BridgeChainTokenPickerScreen
       mode={mode}
+      panel={panel}
       onBack={onClose}
       tokenSearch={tokenSearch}
       onTokenSearchChange={setTokenSearch}
       tokenSearchRef={tokenSearchRef}
-      chainSearch={chainSearchTerm}
-      onChainSearchChange={setChainSearchTerm}
-      chains={visibleChains}
+      chains={chains}
       chainsLoading={chainsLoading}
       currentChainId={currentChainId}
       currentChain={currentChain}
       currentChainName={currentChainName}
-      selectedChainRef={selectedChainChipRef}
       chainTotals={portfolioByChain}
+      fundedChainIds={fundedChainIds}
       onSelectChain={handleSelectChain}
       popularTokens={popularTokens}
       customToken={

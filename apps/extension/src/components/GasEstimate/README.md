@@ -3,8 +3,10 @@
 - `GasFeeTrigger.tsx` owns the compact fee summary shown at the transaction
   decision point. It is presentational and receives already-formatted fee and
   tier values from `GasEstimateDisplay.tsx`.
-- `GasFeePopover.tsx` owns the anchored two-step tier/custom transition and its
-  reduced-motion fallback.
+- `GasFeePopover.tsx` owns the standard anchored fee selector shell, its
+  tier/custom transition, and reduced-motion fallback. Single-transaction and
+  multi-transaction confirmations reuse this surface; the batch coordinator
+  supplies its call breakdown as fallback content.
 - `CustomGasEditor.tsx` owns the focused gas-parameter fields, the automatic
   Priority/Base-to-Max calculation affordance, the network-determined Base fee
   hint, validation copy, and compact Cancel/Set action row. It receives

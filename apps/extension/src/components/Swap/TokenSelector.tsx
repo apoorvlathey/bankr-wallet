@@ -71,6 +71,8 @@ interface TokenSelectorProps {
   customTokenError?: string | null;
   /** Chain name shown in empty state */
   chainName?: string;
+  /** Alignment of the token identity inside the trigger button. */
+  triggerContentAlign?: "left" | "right";
   /** @deprecated Kept for caller compatibility. The selector is now a
    *  full-screen mobile destination, so trigger alignment no longer applies. */
   dropdownAlign?: "left" | "right";
@@ -96,6 +98,7 @@ export default function TokenSelector({
   customTokenLoading,
   customTokenError,
   chainName,
+  triggerContentAlign = "left",
   isLoadingHoldings = false,
   onOpenChange,
 }: TokenSelectorProps) {
@@ -345,7 +348,9 @@ export default function TokenSelector({
         borderWidth="1px"
         borderColor="border.default"
         bg="surface.raised"
-        justifyContent="flex-start"
+        justifyContent={
+          triggerContentAlign === "right" ? "flex-end" : "flex-start"
+        }
         _hover={{ bg: "surface.raisedHover", borderColor: "border.strong" }}
         onClick={handleTriggerClick}
       >

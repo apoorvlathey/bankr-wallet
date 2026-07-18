@@ -1,4 +1,11 @@
-import { Box, HStack, Input, InputGroup, Text } from "@chakra-ui/react";
+import {
+  Box,
+  HStack,
+  Input,
+  InputGroup,
+  InputRightElement,
+  Text,
+} from "@chakra-ui/react";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import {
   NATIVE_TOKEN_ADDRESS,
@@ -7,22 +14,20 @@ import {
 import LoadingDots from "@/components/LoadingDots";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatOutputAmount } from "./swapViewUtils";
-import { TokenAddressRow, TokenChainTrigger } from "./SwapTokenControls";
+import { SwapChainTrigger, SwapTokenTrigger } from "./SwapTokenControls";
 
 interface BuyTokenCardProps {
   buyTokenInfo: TokenInfo | null;
   buyTokenAddress: string;
   buyTokenLogoURI?: string;
   buyChainId: number;
-  explorer: string;
   unifiedBuyAmount?: string;
   quoteLoading: boolean;
   hasQuote: boolean;
   outputUsd: number;
   priceImpact: number | null;
-  copied: boolean;
-  onOpenPicker: () => void;
-  onCopy: () => void;
+  onOpenChainPicker: () => void;
+  onOpenTokenPicker: () => void;
 }
 
 export function BuyTokenCard({
@@ -30,15 +35,13 @@ export function BuyTokenCard({
   buyTokenAddress,
   buyTokenLogoURI,
   buyChainId,
-  explorer,
   unifiedBuyAmount,
   quoteLoading,
   hasQuote,
   outputUsd,
   priceImpact,
-  copied,
-  onOpenPicker,
-  onCopy,
+  onOpenChainPicker,
+  onOpenTokenPicker,
 }: BuyTokenCardProps) {
   const selectedToken: PortfolioToken | null = buyTokenInfo
     ? {
@@ -62,105 +65,98 @@ export function BuyTokenCard({
   return (
     <Box
       bg="surface.raised"
-      border="2px solid"
+      border="1px solid"
       borderColor="border.default"
       borderRadius="lg"
-      boxShadow="card"
-      p={3}
+      px={3}
+      pt={5}
+      pb={3}
     >
-      <Text fontSize="xs" fontWeight="600" color="fg.secondary" mb={2}>
-        You receive
-      </Text>
-      <HStack spacing={2} position="relative">
-        <TokenChainTrigger
-          token={selectedToken}
-          chainId={buyChainId}
-          onClick={onOpenPicker}
-        />
-        <InputGroup flex={1} position="relative">
-          <Input
-            placeholder={quoteLoading ? "" : "0.0"}
-            value={
-              unifiedBuyAmount && buyTokenInfo
-                ? formatOutputAmount(
-                    unifiedBuyAmount,
-                    buyTokenInfo.decimals,
-                  )
-                : ""
-            }
-            readOnly
-            fontFamily="mono"
-            fontSize="sm"
-            border="2px solid"
-            borderColor="border.default"
-            bg="surface.sunken"
-            _hover={{}}
-            _focus={{ boxShadow: "none" }}
-            cursor="default"
-          />
-          {quoteLoading && !unifiedBuyAmount && (
-            <Box
-              position="absolute"
-              left="14px"
-              top="50%"
-              transform="translateY(-50%)"
-              pointerEvents="none"
-              zIndex={1}
-            >
-              <LoadingDots />
-            </Box>
-          )}
-        </InputGroup>
-      </HStack>
-
-      {(buyTokenInfo || (hasQuote && (outputUsd > 0 || priceImpact !== null))) && (
-        <HStack align="center" spacing={2} mt={1}>
-          {buyTokenAddress &&
-            buyTokenInfo &&
-            buyTokenAddress.toLowerCase() !==
-              NATIVE_TOKEN_ADDRESS.toLowerCase() && (
-              <TokenAddressRow
-                address={buyTokenAddress}
-                explorer={explorer}
-                copied={copied}
-                onCopy={onCopy}
-              />
-            )}
-          {hasQuote &&
-            buyTokenInfo &&
-            (outputUsd > 0 || priceImpact !== null) && (
-              <HStack
-                ml="auto"
-                spacing={1}
-                align="baseline"
-                whiteSpace="nowrap"
-              >
-                {outputUsd > 0 && (
-                  <Text fontSize="xs" color="text.tertiary" fontWeight="500">
-                    ~{formatUsd(outputUsd)}
-                  </Text>
-                )}
-                {priceImpact !== null && (
-                  <Text
-                    fontSize="xs"
-                    fontWeight="700"
-                    color={
-                      priceImpact > 10
-                        ? "chart.negative"
-                        : priceImpact > 3
-                          ? "orange.500"
-                          : "text.tertiary"
-                    }
-                  >
-                    {priceImpact > 0
-                      ? `(-${priceImpact.toFixed(2)}%)`
-                      : `(+${Math.abs(priceImpact).toFixed(2)}%)`}
-                  </Text>
-                )}
-              </HStack>
-            )}
+      <HStack justify="space-between" mb={2} align="center" spacing={1}>
+        <HStack minW={0} flex="1 1 auto" spacing={1}>
+          <Text fontSize="sm" fontWeight="600" color="fg.secondary" flexShrink={0}>
+            You get on
+          </Text>
+          <SwapChainTrigger chainId={buyChainId} onClick={onOpenChainPicker} />
         </HStack>
-      )}
+        <SwapTokenTrigger token={selectedToken} onClick={onOpenTokenPicker} />
+      </HStack>
+      <InputGroup position="relative">
+        <Input
+          placeholder={quoteLoading ? "" : "0.0"}
+          value={
+            unifiedBuyAmount && buyTokenInfo
+              ? formatOutputAmount(unifiedBuyAmount, buyTokenInfo.decimals)
+              : ""
+          }
+          readOnly
+          fontFamily="mono"
+          fontSize="lg"
+          fontWeight="500"
+          color="fg.primary"
+          border="1px solid"
+          borderColor="border.default"
+          borderRadius="lg"
+          bg="surface.sunken"
+          minH="54px"
+          pr={hasQuote && outputUsd > 0 ? "104px" : undefined}
+          _hover={{}}
+          _focus={{ boxShadow: "none" }}
+          _readOnly={{ color: "fg.primary" }}
+          cursor="default"
+        />
+        {hasQuote && outputUsd > 0 && (
+          <InputRightElement h="full" w="96px" pr={3} justifyContent="flex-end">
+            <Text
+              maxW="84px"
+              overflow="hidden"
+              textOverflow="ellipsis"
+              whiteSpace="nowrap"
+              fontSize="xs"
+              color="fg.secondary"
+              fontWeight="600"
+              title={`~${formatUsd(outputUsd)}`}
+            >
+              ~{formatUsd(outputUsd)}
+            </Text>
+          </InputRightElement>
+        )}
+        {quoteLoading && !unifiedBuyAmount && (
+          <Box
+            position="absolute"
+            left="50%"
+            top="50%"
+            transform="translate(-50%, -50%)"
+            pointerEvents="none"
+            zIndex={1}
+          >
+            <LoadingDots />
+          </Box>
+        )}
+      </InputGroup>
+
+      <HStack mt={1.5} justify="flex-end" align="center" spacing={2} minH="18px">
+        {hasQuote && buyTokenInfo && priceImpact !== null && (
+          <Text
+            minW={0}
+            textAlign="right"
+            fontSize="xs"
+            fontWeight="600"
+            noOfLines={1}
+            color={
+              priceImpact > 10
+                ? "chart.negative"
+                : priceImpact > 3
+                  ? "orange.500"
+                  : "fg.muted"
+            }
+          >
+            {priceImpact > 0
+              ? `${priceImpact.toFixed(2)}% price impact`
+              : `${Math.abs(priceImpact).toFixed(2)}% better than market`}
+          </Text>
+        )}
+      </HStack>
     </Box>
   );
 }

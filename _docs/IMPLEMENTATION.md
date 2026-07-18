@@ -178,6 +178,15 @@ the restraint rules in `_docs/WARM_MIDNIGHT.md`.
 
 ## Account Types
 
+### Send entry selection
+
+- The homepage Send quick action opens with Ethereum mainnet (`chainId: 1`)
+  and its native ETH token, independent of the homepage's current chain state.
+- Sending from an Assets row preserves that row's exact token and chain.
+- The initial native placeholder is refreshed from the shared portfolio token
+  catalog after load so current balance, price, and metadata replace its
+  zero-value bootstrap fields without changing the selected asset identity.
+
 The extension supports four distinct account types that can be used simultaneously:
 
 | Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Impersonator Account    |
@@ -2518,8 +2527,13 @@ retain the normal resolver path; contract-address detection still runs for both.
 6. Background creates a `PendingTxRequest` with origin "WalletChan"
 7. Normal TransactionConfirmation flow takes over
 
-For eligible premium Base USDC sends, `TokenTransfer` may use the sponsored
-ERC-3009 path instead. The background validates and pins the account/from/to/
+The Base USDC sponsored-send feature gate is currently disabled in
+`Transfer/model/sponsoredTransferPolicy.ts`. Base USDC therefore follows the
+same standard ERC-20 `initiateTransfer` path as other ERC-20 tokens for Bankr,
+private-key, and seed-phrase accounts, and the Send UI does not request premium
+status or show sponsorship messaging. When enabled, eligible premium Base USDC
+sends may use the sponsored ERC-3009 path instead. The background validates and
+pins the account/from/to/
 amount, signs one `TransferWithAuthorization`, encrypts the exact relay payload
 with the general vault key, and stores it in bounded
 `sponsoredTransferIntents` recovery state before starting the relay request.
