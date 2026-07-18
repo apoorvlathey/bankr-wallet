@@ -51,6 +51,9 @@ integration boundary, not the default home for new implementations.
 Other flat feature families are transitional. Move them behind a named domain
 facade before adding substantial behavior.
 
+`accountRemovalModel.ts` is the pure copy and seed-group impact model consumed
+by the transitional Account Settings root. It has no renderer or wallet effects.
+
 ## Dependency direction
 
 ```text

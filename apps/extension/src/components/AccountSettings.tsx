@@ -63,12 +63,13 @@ import { BrainIcon, ShieldIcon } from "./Settings/icons";
 import { fetchPortfolio } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { getAccountRemovalCopy } from "./accountRemovalModel";
 
 interface AccountSettingsProps {
   account: Account | null;
   onClose: () => void;
   onAccountUpdated: () => void | Promise<unknown>;
-  totalAccounts: number;
+  accounts: Account[];
   initialView?: AccountSettingsSubView;
   onSessionExpired?: (returnView?: AccountSettingsSubView) => void;
   apiKeyDraft?: BankrConfigDraft | null;
@@ -97,7 +98,7 @@ function AccountSettings({
   account,
   onClose,
   onAccountUpdated,
-  totalAccounts,
+  accounts,
   initialView = "settings",
   onSessionExpired,
   apiKeyDraft,
@@ -560,7 +561,7 @@ function AccountSettings({
         setIsDeleting(false);
         if (result.success) {
           toast({
-            title: "Account removed",
+            title: deleteCopy.successTitle,
             status: "success",
             duration: 2000,
           });
@@ -808,8 +809,9 @@ function AccountSettings({
     seedGroupName.trim() !== originalSeedGroupName;
   const canReveal =
     account.type === "privateKey" || account.type === "seedPhrase";
-  const removeDisabled = totalAccounts <= 1;
+  const removeDisabled = accounts.length <= 1;
   const deleteAccountName = account.displayName?.trim() || ensIdentity.name;
+  const deleteCopy = getAccountRemovalCopy(account, accounts, deleteStep);
 
   return (
     <>
@@ -1024,9 +1026,7 @@ function AccountSettings({
               >
                 <WarningTwoIcon color="status.error.fg" />
               </Box>
-              {deleteStep === "review"
-                ? "Remove account?"
-                : "Are you absolutely sure?"}
+              {deleteCopy.title}
             </Box>
           </ModalHeader>
 
@@ -1034,7 +1034,7 @@ function AccountSettings({
             {deleteStep === "review" ? (
               <VStack spacing={3} align="stretch">
                 <Text color="text.secondary" fontSize="sm" fontWeight="500">
-                  Are you sure you want to remove this account?
+                  {deleteCopy.description}
                 </Text>
 
                 <Box
@@ -1090,8 +1090,7 @@ function AccountSettings({
                   </HStack>
                 </Box>
 
-                {(account.type === "privateKey" ||
-                  account.type === "seedPhrase") && (
+                {deleteCopy.warningTitle && (
                   <Box
                     w="full"
                     p={3}
@@ -1101,17 +1100,20 @@ function AccountSettings({
                     borderRadius="md"
                   >
                     <Text color="status.error.fg" fontSize="sm" fontWeight="700">
-                      {account.type === "seedPhrase"
-                        ? "Make sure you have backed up your seed phrase before removing this account."
-                        : "Make sure you have backed up your private key before removing this account."}
+                      {deleteCopy.warningTitle}
                     </Text>
+                    {deleteCopy.warningDescription && (
+                      <Text color="status.error.fg" fontSize="sm" fontWeight="500" mt={1}>
+                        {deleteCopy.warningDescription}
+                      </Text>
+                    )}
                   </Box>
                 )}
               </VStack>
             ) : (
               <VStack spacing={4} align="stretch">
                 <Text color="fg.secondary" fontSize="sm" fontWeight="500">
-                  This is your final confirmation.
+                  {deleteCopy.description}
                 </Text>
                 <Box
                   p={3}
@@ -1130,7 +1132,7 @@ function AccountSettings({
                   </Box>
                 </Box>
                 <Text color="fg.primary" fontSize="sm" fontWeight="700">
-                  Cancel now if you do not want to remove this account.
+                  {deleteCopy.caution}
                 </Text>
               </VStack>
             )}
@@ -1154,9 +1156,9 @@ function AccountSettings({
                   : handleDeleteAccount
               }
               isLoading={isDeleting}
-              loadingText="Removing…"
+              loadingText={deleteCopy.loadingLabel}
             >
-              {deleteStep === "review" ? "Remove account" : "Yes, remove account"}
+              {deleteCopy.actionLabel}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -1164,6 +1166,4 @@ function AccountSettings({
     </>
   );
 }
-
-
 export default memo(AccountSettings);

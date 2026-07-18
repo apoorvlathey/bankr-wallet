@@ -225,6 +225,11 @@
 
 ## Slop audit
 
+- 2026-07-18 account-removal audit: removing the final account in a seed group
+  now names both destructive outcomes in the dialog title, warning, final
+  confirmation, action label, and success feedback. The warning pairs semantic
+  red with explicit text, retains the native dialog focus model, and keeps the
+  safer Cancel action available at both steps.
 - 2026-07-18 view-only signing audit: transaction, batch, signature, and
   ERC-7715 prompts share one compact amber warning in the sticky decision bar,
   immediately above the reject-only action; the scrollable request content no
@@ -440,6 +445,9 @@
 
 ## Changelog
 
+- 2026-07-18: clarified final seed-group account removal with explicit copy
+  that the encrypted seed phrase is also permanently deleted from WalletChan,
+  cannot be recovered by WalletChan, and must be backed up before continuing.
 - 2026-07-17: made extension surface detection independent of viewport height.
   Short Chrome side panels now receive the full dynamic viewport shell before
   React paints and retain a single scroll owner instead of falling back to the

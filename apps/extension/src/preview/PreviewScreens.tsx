@@ -398,7 +398,7 @@ function AccountManagementPreview({
         account={account}
         onClose={() => {}}
         onAccountUpdated={() => {}}
-        totalAccounts={previewAccounts.length}
+        accounts={previewAccounts}
         initialView={scenario === "security" ? securityView[wallet] : "settings"}
       />
     </PreviewShell>

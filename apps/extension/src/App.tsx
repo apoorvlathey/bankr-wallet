@@ -2305,7 +2305,7 @@ function App() {
                 setView("main");
               }}
               onAccountUpdated={loadAccounts}
-              totalAccounts={accounts.length}
+              accounts={accounts}
               initialView={accountSettingsInitialView}
               onSessionExpired={handleAccountSettingsSessionExpired}
               apiKeyDraft={accountSettingsApiKeyDraft}
