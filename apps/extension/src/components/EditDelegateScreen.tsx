@@ -29,7 +29,7 @@ import {
 } from "@chakra-ui/icons";
 
 import { CopyButton } from "@/components/CopyButton";
-import { AddressActions as SharedAddressActions } from "@/components/shared/LabeledAddressPopover";
+import { AddressActionsPopover } from "@/components/shared/LabeledAddressPopover";
 import AccountSettingsIdentity from "@/components/AccountSettingsIdentity";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
@@ -90,7 +90,15 @@ function AddressActions({
   explorer?: string;
   label: string;
 }) {
-  return <SharedAddressActions address={address} explorer={explorer} contextLabel={label} compact showAddress={false} />;
+  return (
+    <AddressActionsPopover
+      address={address}
+      explorer={explorer}
+      contextLabel={label}
+      compact
+      showAddress={false}
+    />
+  );
 }
 
 export function EditDelegateScreen({
@@ -133,6 +141,8 @@ export function EditDelegateScreen({
   const accountExplorerUrl = explorer
     ? `${explorer.replace(/\/+$/, "")}/address/${account.address}`
     : `https://etherscan.io/address/${account.address}`;
+  const isAlreadySet =
+    setDisabledReason?.toLowerCase().includes("already") ?? false;
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -152,7 +162,7 @@ export function EditDelegateScreen({
           title={
             <HStack spacing={2} minW={0}>
               {chainIcon && <Image src={chainIcon} alt="" boxSize="20px" />}
-              <Text as="span" noOfLines={1}>Edit delegate</Text>
+              <Text as="span" noOfLines={1}>Smart account</Text>
             </HStack>
           }
           onBack={onBack}
@@ -163,7 +173,7 @@ export function EditDelegateScreen({
         <ScreenBody pt={4} pb={6}>
           <VStack spacing={5} align="stretch">
             <ScreenSection
-              title="EIP-7702 status"
+              title="Current delegate"
               headingProps={{ fontSize: "lg" }}
             >
               <VStack spacing={3} align="stretch">
@@ -173,14 +183,11 @@ export function EditDelegateScreen({
                   resolvedAvatar={resolvedAvatar}
                   explorerUrl={accountExplorerUrl}
                 />
-                <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
-                  Current delegation on {chainName}.
-                </Text>
                 <ListSurface>
                 <ListItem density="compact">
                   <ListItemContent>
                     <HStack spacing={2} minW={0}>
-                      <ListItemTitle fontSize="sm">Delegate</ListItemTitle>
+                      <ListItemTitle fontSize="sm">{chainName}</ListItemTitle>
                       {currentDelegateLabel && (
                         <Badge
                           bg="status.warning.tint"
@@ -213,12 +220,26 @@ export function EditDelegateScreen({
                   )}
                 </ListItem>
                 </ListSurface>
+                {currentDelegate && (
+                  <Button
+                    alignSelf="flex-start"
+                    size="sm"
+                    variant="ghost"
+                    color="chart.negative"
+                    px={0}
+                    onClick={onRevoke}
+                    isDisabled={submitting}
+                    isLoading={submitting}
+                    loadingText="Preparing…"
+                  >
+                    Revoke delegate
+                  </Button>
+                )}
               </VStack>
             </ScreenSection>
 
             <ScreenSection
-              title="Choose a delegate"
-              description="Changes require an onchain transaction."
+              title="Delegate contract"
               headingProps={{ fontSize: "lg" }}
             >
               <Box
@@ -249,7 +270,7 @@ export function EditDelegateScreen({
                         onClick={() => onChoiceChange(option)}
                         isDisabled={submitting}
                       >
-                        {option === "default" ? "WalletChan default" : "Custom contract"}
+                        {option === "default" ? "Recommended" : "Custom"}
                       </Button>
                     ))}
                   </HStack>
@@ -261,7 +282,7 @@ export function EditDelegateScreen({
                       <HStack align="center" spacing={3} minW={0}>
                         <VStack spacing={1} align="stretch" flex={1} minW={0}>
                           <Text fontSize="sm" fontWeight="600" color="fg.primary">
-                            MetaMask EIP7702StatelessDeleGator v1.3
+                            WalletChan default
                           </Text>
                           <HStack color="fg.secondary" minW={0}>
                             <MiddleTruncatedAddress address={defaultDelegate} />
@@ -274,8 +295,7 @@ export function EditDelegateScreen({
                         />
                       </HStack>
                       <Text fontSize="sm" color="fg.secondary" lineHeight="1.45">
-                        WalletChan's verified default. Future atomic batches can reuse it
-                        without another setup transaction.
+                        Verified for atomic batches.
                       </Text>
                     </VStack>
                   ) : (
@@ -359,35 +379,13 @@ export function EditDelegateScreen({
               </Box>
             </ScreenSection>
 
-            <ScreenSection
-              title="Onchain controls"
-              description={
-                currentDelegate
-                  ? "Revoking clears the current delegation and requires gas."
-                  : "This account is not delegated onchain."
-              }
-              headingProps={{ fontSize: "lg" }}
-            >
-              <Button
-                variant="ghost"
-                color="chart.negative"
-                justifyContent="flex-start"
-                px={0}
-                onClick={onRevoke}
-                isDisabled={submitting || !currentDelegate}
-                isLoading={submitting}
-                loadingText="Preparing…"
-              >
-                Revoke delegation
-              </Button>
-            </ScreenSection>
           </VStack>
         </ScreenBody>
 
         <StickyActionBar
           primaryAction={
             <VStack w="full" spacing={2} align="stretch">
-              {setDisabledReason && (
+              {setDisabledReason && !isAlreadySet && (
                 <Text
                   id="set-delegate-disabled-reason"
                   color="fg.secondary"
@@ -406,10 +404,12 @@ export function EditDelegateScreen({
                 isLoading={submitting && choice === "default"}
                 loadingText="Preparing…"
                 aria-describedby={
-                  setDisabledReason ? "set-delegate-disabled-reason" : undefined
+                  setDisabledReason && !isAlreadySet
+                    ? "set-delegate-disabled-reason"
+                    : undefined
                 }
               >
-                Set delegate
+                {isAlreadySet ? "Already set" : "Set delegate"}
               </Button>
             </VStack>
           }

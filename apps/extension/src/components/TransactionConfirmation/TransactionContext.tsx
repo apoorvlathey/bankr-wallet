@@ -36,7 +36,6 @@ interface TransactionContextProps {
   simulationUnavailable: boolean;
   requestState: ConfirmationState;
   requestError: string;
-  confirmDisabledReason: string | null;
   gasValid: boolean;
   splitState: SplitPriorTxState;
   onClearSigningResolved: (matched: boolean) => void;
@@ -60,7 +59,6 @@ export function TransactionContext({
   simulationUnavailable,
   requestState,
   requestError,
-  confirmDisabledReason,
   gasValid,
   splitState,
   onClearSigningResolved,
@@ -205,7 +203,6 @@ export function TransactionContext({
       />
 
       <RequestStatus
-        confirmDisabledReason={confirmDisabledReason}
         error={requestError}
         gasValid={gasValid}
         splitState={splitState}

@@ -34,6 +34,12 @@ interface AddressActionsProps {
   suggestedLabel?: string;
 }
 
+interface AddressActionsPopoverProps extends AddressActionsProps {
+  buttonLabel?: string;
+  triggerColor?: string;
+  triggerMl?: number;
+}
+
 export function AddressActions({
   address,
   compact = false,
@@ -152,6 +158,60 @@ const MoreHorizontalIcon = () => (
   </Icon>
 );
 
+export function AddressActionsPopover({
+  buttonLabel,
+  triggerColor = "fg.secondary",
+  triggerMl,
+  ...actionsProps
+}: AddressActionsPopoverProps) {
+  return (
+    <Popover
+      trigger="hover"
+      placement="bottom-end"
+      openDelay={120}
+      closeDelay={220}
+      gutter={6}
+      isLazy
+      lazyBehavior="keepMounted"
+    >
+      <PopoverTrigger>
+        <IconButton
+          aria-label={buttonLabel ?? `Show ${actionsProps.contextLabel ?? "address"} actions`}
+          icon={<MoreHorizontalIcon />}
+          size="xs"
+          variant="ghost"
+          minW="32px"
+          w="32px"
+          h="32px"
+          flexShrink={0}
+          ml={triggerMl}
+          color={triggerColor}
+          _hover={{
+            bg: "transparent",
+            color: "accent.highlight",
+          }}
+          _active={{
+            bg: "transparent",
+            color: "accent.highlight",
+            opacity: 0.8,
+          }}
+        />
+      </PopoverTrigger>
+      <Portal>
+        <PopoverContent
+          w="max-content"
+          maxW="calc(100vw - 24px)"
+          _focus={{ outline: "none" }}
+        >
+          <PopoverBody p={1.5}>
+            <AddressActions {...actionsProps} />
+          </PopoverBody>
+        </PopoverContent>
+      </Portal>
+    </Popover>
+  );
+}
+
 function isRawAddressLabel(label: string, address: string): boolean {
   const normalized = label.trim();
   return (
@@ -261,56 +321,15 @@ export function LabeledAddressPopover({
         {presentation.label}
       </Text>
 
-      <Popover
-        trigger="hover"
-        placement="bottom-end"
-        openDelay={120}
-        closeDelay={220}
-        gutter={6}
-        isLazy
-        lazyBehavior="keepMounted"
-      >
-        <PopoverTrigger>
-          <IconButton
-            aria-label={`Show ${contextLabel} actions`}
-            icon={<MoreHorizontalIcon />}
-            size="xs"
-            variant="ghost"
-            minW="32px"
-            w="32px"
-            h="32px"
-            flexShrink={0}
-            ml={-0.5}
-            color={isDarkTheme ? "fg.secondary" : "accentFg.secondary"}
-            _hover={{
-              bg: "transparent",
-              color: "accent.highlight",
-              opacity: 1,
-            }}
-            _active={{
-              bg: "transparent",
-              color: "accent.highlight",
-              opacity: 0.8,
-            }}
-          />
-        </PopoverTrigger>
-        <Portal>
-          <PopoverContent
-            w="max-content"
-            maxW="calc(100vw - 24px)"
-            _focus={{ outline: "none" }}
-          >
-            <PopoverBody p={1.5}>
-              <AddressActions
-                address={address}
-                contextLabel={contextLabel}
-                explorer={explorer}
-                suggestedLabel={suggestedLabel}
-              />
-            </PopoverBody>
-          </PopoverContent>
-        </Portal>
-      </Popover>
+      <AddressActionsPopover
+        address={address}
+        contextLabel={contextLabel}
+        explorer={explorer}
+        suggestedLabel={suggestedLabel}
+        buttonLabel={`Show ${contextLabel} actions`}
+        triggerColor={isDarkTheme ? "fg.secondary" : "accentFg.secondary"}
+        triggerMl={-0.5}
+      />
     </HStack>
   );
 }

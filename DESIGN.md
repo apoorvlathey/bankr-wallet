@@ -225,6 +225,18 @@
 
 ## Slop audit
 
+- 2026-07-18 smart-account audit: delegation settings now lead with current
+  state and one contract choice, keep revoke beside that state, and hide
+  clipboard, explorer, and contact actions behind the shared address overflow.
+  Delegation confirmation omits the empty asset-change section and summarizes
+  the outcome, reversibility, and target contract without stacked technical
+  explanations. Its resolved contract label shares the row heading, while the
+  address uses the shared measured middle truncation and keeps actions pinned
+  to the trailing edge.
+- 2026-07-18 transaction loading-state audit: transaction review no longer
+  prints a generic "Confirm unavailable" sentence while gas controls hydrate.
+  The disabled action carries the temporary state; explicit transaction errors
+  and multi-step gas progress remain visible where they are actionable.
 - 2026-07-18 account-removal audit: removing the final account in a seed group
   now names both destructive outcomes in the dialog title, warning, final
   confirmation, action label, and success feedback. The warning pairs semantic

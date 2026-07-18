@@ -1,38 +1,14 @@
-import { ExternalLinkIcon } from "@chakra-ui/icons";
 import {
   Badge,
   Box,
   HStack,
-  IconButton,
   Text,
   VStack,
 } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { AddressActionsPopover } from "@/components/shared/LabeledAddressPopover";
 import { useTheme } from "@/theme";
-import { CopyButton } from "./CopyButton";
-
-function EffectBullet({ children }: { children: React.ReactNode }) {
-  return (
-    <HStack spacing={2} align="flex-start">
-      <Text
-        fontSize="xs"
-        color="status.warning.fg"
-        fontWeight="900"
-        lineHeight="short"
-      >
-        •
-      </Text>
-      <Text
-        fontSize="xs"
-        color="status.warning.fg"
-        fontWeight="600"
-        lineHeight="short"
-      >
-        {children}
-      </Text>
-    </HStack>
-  );
-}
 
 function NoticeShell({ children }: { children: React.ReactNode }) {
   const { tokens } = useTheme();
@@ -52,23 +28,6 @@ function NoticeShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AfterConfirmationLabel() {
-  return (
-    <>
-      <Box h="1px" bg="status.warning.border" opacity={0.5} />
-      <Text
-        fontSize="2xs"
-        color="status.warning.fg"
-        fontWeight="700"
-        textTransform="uppercase"
-        letterSpacing="wider"
-      >
-        After confirmation
-      </Text>
-    </>
-  );
-}
-
 export function DelegationRevokeNotice({ chainName }: { chainName: string }) {
   return (
     <NoticeShell>
@@ -78,17 +37,9 @@ export function DelegationRevokeNotice({ chainName }: { chainName: string }) {
         fontWeight="600"
         lineHeight="short"
       >
-        Sends an EIP-7702 transaction that removes your account&apos;s onchain
-        delegation on{" "}
-        <Text as="span" fontWeight="900">
-          {chainName}
-        </Text>
-        .
+        This removes smart account capabilities on {chainName}. Regular account
+        use is unaffected.
       </Text>
-      <AfterConfirmationLabel />
-      <VStack spacing={1.5} align="stretch">
-        <EffectBullet>Account stops behaving as a smart account.</EffectBullet>
-      </VStack>
     </NoticeShell>
   );
 }
@@ -108,18 +59,14 @@ export function DelegationSetNotice({
 }: DelegationSetNoticeProps) {
   return (
     <NoticeShell>
-      <Text
-        fontSize="xs"
-        color="status.warning.fg"
-        fontWeight="600"
-        lineHeight="short"
-      >
-        Sends an EIP-7702 transaction that delegates your account on{" "}
-        <Text as="span" fontWeight="900">
-          {chainName}
-        </Text>{" "}
-        to the contract below.
-      </Text>
+      <VStack spacing={1} align="stretch">
+        <Text fontSize="sm" color="status.warning.fg" fontWeight="700">
+          Enable smart account on {chainName}
+        </Text>
+        <Text fontSize="xs" color="status.warning.fg" lineHeight="short">
+          Allows atomic batches. You can revoke this anytime in account settings.
+        </Text>
+      </VStack>
 
       <Box
         p={2}
@@ -128,52 +75,17 @@ export function DelegationSetNotice({
         borderColor="status.warning.border"
         borderRadius="md"
       >
-        <Text
-          fontSize="2xs"
-          color="status.warning.fg"
-          fontWeight="700"
-          textTransform="uppercase"
-          letterSpacing="wider"
-          mb={1}
-        >
-          Delegating to
-        </Text>
-        <HStack spacing={1.5} align="center">
+        <HStack mb={1.5} spacing={2} justify="space-between" align="center">
           <Text
-            fontSize="xs"
-            color="text.primary"
-            fontFamily="mono"
+            fontSize="2xs"
+            color="status.warning.fg"
             fontWeight="700"
-            isTruncated
           >
-            {delegation.targetDelegate.slice(0, 10)}…
-            {delegation.targetDelegate.slice(-8)}
+            Delegating to
           </Text>
-          <CopyButton value={delegation.targetDelegate} />
-          {explorer && (
-            <IconButton
-              aria-label="View on explorer"
-              icon={<ExternalLinkIcon boxSize="12px" />}
-              size="xs"
-              variant="ghost"
-              minW="24px"
-              w="24px"
-              h="24px"
-              color="text.tertiary"
-              onClick={() =>
-                window.open(
-                  `${explorer}/address/${delegation.targetDelegate}`,
-                  "_blank",
-                  "noopener,noreferrer",
-                )
-              }
-              _hover={{ color: "accent.secondary", bg: "bg.muted" }}
-            />
-          )}
-        </HStack>
-        {delegateLabels.length > 0 && (
-          <HStack spacing={1} mt={1.5}>
+          {delegateLabels.length > 0 && (
             <Badge
+              maxW="62%"
               bg="accent.secondary"
               color="accentFg.secondary"
               fontSize="2xs"
@@ -182,25 +94,25 @@ export function DelegationSetNotice({
               py={0}
               border="1px solid"
               borderColor="border.default"
+              noOfLines={1}
+              title={delegateLabels[0]}
             >
               {delegateLabels[0]}
             </Badge>
-          </HStack>
-        )}
+          )}
+        </HStack>
+        <HStack w="full" minW={0} spacing={1} align="center" color="text.primary">
+          <MiddleTruncatedAddress address={delegation.targetDelegate} />
+          <AddressActionsPopover
+            address={delegation.targetDelegate}
+            contextLabel="delegate"
+            explorer={explorer}
+            compact
+            showAddress={false}
+            suggestedLabel={delegateLabels[0]}
+          />
+        </HStack>
       </Box>
-
-      <AfterConfirmationLabel />
-      <VStack spacing={1.5} align="stretch">
-        <EffectBullet>
-          Your account starts behaving as a smart account on this chain.
-        </EffectBullet>
-        <EffectBullet>
-          Future multi-call batches execute as a single atomic tx.
-        </EffectBullet>
-        <EffectBullet>
-          Use Revoke in Account Settings to undo this any time.
-        </EffectBullet>
-      </VStack>
     </NoticeShell>
   );
 }

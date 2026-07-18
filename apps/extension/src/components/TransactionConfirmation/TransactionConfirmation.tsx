@@ -180,19 +180,23 @@ function TransactionConfirmation({
         />
       }
       financialImpact={
-        <TransactionFinancialImpact
-          txRequest={txRequest}
-          isValueMalformed={review.isValueMalformed}
-          isValueZero={review.isValueZero}
-          onRevertedChange={review.setSimulationReverted}
-          onSimulationUnavailableChange={review.setSimulationUnavailable}
-        />
+        delegation7702 ? undefined : (
+          <TransactionFinancialImpact
+            txRequest={txRequest}
+            isValueMalformed={review.isValueMalformed}
+            isValueZero={review.isValueZero}
+            onRevertedChange={review.setSimulationReverted}
+            onSimulationUnavailableChange={review.setSimulationUnavailable}
+          />
+        )
       }
       financialImpactTitle={
-        <TransactionEstimatedChangesTitle
-          txRequest={txRequest}
-          resolvedChainName={resolvedChainName}
-        />
+        delegation7702 ? undefined : (
+          <TransactionEstimatedChangesTitle
+            txRequest={txRequest}
+            resolvedChainName={resolvedChainName}
+          />
+        )
       }
       context={
         <TransactionContext
@@ -213,7 +217,6 @@ function TransactionConfirmation({
           simulationUnavailable={review.simulationUnavailable}
           requestState={actions.state}
           requestError={actions.error}
-          confirmDisabledReason={confirmDisabledReason}
           gasValid={review.gasValid}
           splitState={review.splitState}
           onClearSigningResolved={(matched) =>

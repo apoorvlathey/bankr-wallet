@@ -3,7 +3,6 @@ import type { ConfirmationState } from "./types";
 import type { SplitPriorTxState } from "./useSplitPriorTxState";
 
 interface RequestStatusProps {
-  confirmDisabledReason: string | null;
   error: string;
   gasValid: boolean;
   splitState: SplitPriorTxState;
@@ -12,7 +11,6 @@ interface RequestStatusProps {
 }
 
 export function RequestStatus({
-  confirmDisabledReason,
   error,
   gasValid,
   splitState,
@@ -69,12 +67,6 @@ export function RequestStatus({
             </Text>
           </HStack>
         )}
-
-      {confirmDisabledReason && state !== "submitting" && (
-        <Text role="status" color="text.secondary" fontSize="xs" lineHeight="short">
-          Confirm unavailable: {confirmDisabledReason}
-        </Text>
-      )}
     </VStack>
   );
 }
