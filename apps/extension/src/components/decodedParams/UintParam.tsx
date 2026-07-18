@@ -44,7 +44,9 @@ export function UintParam({ value }: UintParamProps) {
   // Long values get a dedicated wrapping row so the controls stay visible.
   const isLong = display.length > LONG_VALUE_THRESHOLD;
 
-  const formatButton = wouldFormatChange && (
+  // Unix Time is already a fully formatted, human-readable date. Keep the
+  // punctuation/compact toggle for the remaining numeric unit views only.
+  const formatButton = selectedOption !== "Unix Time" && wouldFormatChange && (
     <Button
       size="xs"
       minH="24px"
