@@ -365,6 +365,11 @@ The extension maintains address consistency between storage and the active accou
   invalidating the request
   refreshes the badge.
 - Account switches remain visible to an approved origin through `accountsChanged`; unapproved origins receive no account-change event. Revocation sends `accountsChanged([])` to matching open tabs.
+- The page-world provider exposes a getter-only MetaMask-compatible
+  `selectedAddress` for legacy dapps that do not re-read `eth_accounts`. It is
+  derived from the same origin-scoped provider state: `null` before approval
+  and after an empty account result or revocation, otherwise the currently
+  authorized account. The synced/global wallet fallback is never projected.
 - Account removal uses the same exact-origin revocation path before deleting a
   mapped account, so it disconnects affected sites instead of exposing the next
   global account as an implicit replacement.

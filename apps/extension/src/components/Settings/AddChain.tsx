@@ -71,14 +71,6 @@ function AddChain({
   const [chainIdConflict, setChainIdConflict] = useState("");
   const [rpcWarning, setRpcWarning] = useState("");
   const [rpcError, setRpcError] = useState("");
-  const requestedBy = useMemo(() => {
-    if (!initialRequest?.origin) return "";
-    try {
-      return new URL(initialRequest.origin).hostname;
-    } catch {
-      return initialRequest.origin;
-    }
-  }, [initialRequest?.origin]);
   const knownChainForHint = useMemo(() => {
     const parsed = parseInt(chainId, 10);
     if (!Number.isFinite(parsed)) return null;
@@ -295,8 +287,8 @@ function AddChain({
       <AddChainConfirmationScreen
         chainName={chainName}
         chainId={chainId}
-        requestedBy={requestedBy}
         requestOrigin={initialRequest?.origin ?? ""}
+        requestFavicon={initialRequest?.favicon ?? null}
         nameError={nameError}
         chainIdConflict={chainIdConflict}
         knownChainName={knownChainForHint?.name}
@@ -307,21 +299,6 @@ function AddChain({
         explorer={explorer}
         currencySymbol={currencySymbol}
         currencyDecimals={currencyDecimals}
-        rawRequestData={
-          initialRequest
-            ? JSON.stringify(
-                {
-                  chainId: initialRequest.chainId,
-                  chainName: initialRequest.chainName,
-                  nativeCurrency: initialRequest.nativeCurrency,
-                  rpcUrls: initialRequest.rpcUrls,
-                  blockExplorerUrls: initialRequest.blockExplorerUrls,
-                },
-                null,
-                2,
-              )
-            : ""
-        }
         technicalOpen={technicalOpen}
         isSubmitting={isBtnLoading}
         isApproveDisabled={!chainName || !chainId || !rpc || !!chainIdConflict}
@@ -377,7 +354,7 @@ function AddChain({
       }
       primaryAction={
         <Button
-          variant="primary"
+          variant="brand"
           onClick={addChain}
           isLoading={isBtnLoading}
           loadingText="Adding"
@@ -413,6 +390,7 @@ function AddChain({
             </FormLabel>
             <HStack>
               <Input
+                autoFocus
                 placeholder="https://rpc.example.com"
                 value={rpc}
                 onChange={(event) => handleRpcChange(event.target.value)}

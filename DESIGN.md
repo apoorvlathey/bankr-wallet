@@ -232,6 +232,16 @@
 
 ## Slop audit
 
+- 2026-07-20 add-network request audit: replaced the verbose generic action
+  banner with the shared dapp favicon/domain identity followed by one compact
+  proposed-network surface. The chain mark, name, and ID now establish the
+  decision at a glance; RPC risk detail remains in the existing progressive
+  disclosure, which scrolls into view when opened, and the final Add network
+  commitment uses WalletChan amber. The disclosure stops after the editable
+  technical fields instead of repeating the raw provider payload and origin.
+- 2026-07-20 manual add-network audit: the settings entry now starts keyboard
+  focus in the RPC URL field, matching the endpoint-first task sequence, and
+  uses the same amber final commitment treatment as the dapp-request flow.
 - 2026-07-19 Ledger onboarding audit: added the official monochrome Ledger
   lettermark directly after View-only in the existing first-account decision
   list, then reused the established device, derivation, and address-selection

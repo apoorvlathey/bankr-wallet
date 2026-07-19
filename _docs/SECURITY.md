@@ -998,6 +998,10 @@ rejects subframe requests, and stores title/favicon only as hostile display
 metadata. Address updates always refresh the provider's private internal state,
 but `accountsChanged` is emitted only to approved origins. Revocation emits
 `accountsChanged([])` to matching open tabs.
+The getter-only legacy `window.ethereum.selectedAddress` compatibility field
+is derived from that same origin-scoped state and returns `null` for the
+unconnected sentinel, malformed values, empty account results, and revocation;
+it never reads or exposes the global active-account fallback directly.
 Account removal performs that exact-origin revocation before deleting any
 account mapped to a connected tab. Since the permission grant is origin-wide,
 all open tabs at the affected origin are disconnected; no connected tab is

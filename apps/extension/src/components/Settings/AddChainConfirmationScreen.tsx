@@ -1,7 +1,6 @@
 import {
   Alert,
   AlertIcon,
-  Box,
   Button,
   FormControl,
   FormLabel,
@@ -9,30 +8,30 @@ import {
   Input,
   Spinner,
   Text,
+  usePrefersReducedMotion,
   VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
-import type {
-  ChangeEventHandler,
-  ClipboardEventHandler,
-  ReactNode,
+import {
+  useRef,
+  type ChangeEventHandler,
+  type ClipboardEventHandler,
+  type ReactNode,
 } from "react";
 
-import ChainIcon from "@/components/ChainIcon";
-import { CopyButton } from "@/components/CopyButton";
 import {
   ConfirmationScreen,
   InlineDisclosure,
   ListItem,
   ListSurface,
-  OutcomeCard,
 } from "@/components/ui";
+import { AddChainRequestSummary } from "./AddChainRequestSummary";
 
 interface AddChainConfirmationScreenProps {
   chainName: string;
   chainId: string;
-  requestedBy: string;
   requestOrigin: string;
+  requestFavicon: string | null;
   nameError: string;
   chainIdConflict: string;
   knownChainName?: string;
@@ -43,7 +42,6 @@ interface AddChainConfirmationScreenProps {
   explorer: string;
   currencySymbol: string;
   currencyDecimals: string;
-  rawRequestData: string;
   technicalOpen: boolean;
   isSubmitting: boolean;
   isApproveDisabled: boolean;
@@ -71,8 +69,8 @@ function FieldRow({ children }: { children: ReactNode }) {
 export function AddChainConfirmationScreen({
   chainName,
   chainId,
-  requestedBy,
   requestOrigin,
+  requestFavicon,
   nameError,
   chainIdConflict,
   knownChainName,
@@ -83,7 +81,6 @@ export function AddChainConfirmationScreen({
   explorer,
   currencySymbol,
   currencyDecimals,
-  rawRequestData,
   technicalOpen,
   isSubmitting,
   isApproveDisabled,
@@ -99,9 +96,23 @@ export function AddChainConfirmationScreen({
   onCurrencyDecimalsChange,
   onTechnicalOpenChange,
 }: AddChainConfirmationScreenProps) {
+  const technicalDisclosureRef = useRef<HTMLDetailsElement>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const parsedChainId = parseInt(chainId, 10);
   const displayChainId = Number.isFinite(parsedChainId) ? parsedChainId : 0;
   const displayName = chainName.trim() || `Network ${chainId || "unknown"}`;
+
+  const handleTechnicalOpenChange = (open: boolean) => {
+    onTechnicalOpenChange(open);
+    if (!open) return;
+    requestAnimationFrame(() => {
+      if (!technicalDisclosureRef.current?.open) return;
+      technicalDisclosureRef.current.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  };
 
   return (
     <ConfirmationScreen
@@ -119,41 +130,11 @@ export function AddChainConfirmationScreen({
         </Button>
       }
       outcome={
-        <OutcomeCard
-          label="Requested action"
-          outcome={`Add ${displayName}`}
-          context={
-            <VStack align="stretch" spacing={1}>
-              <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
-                {requestedBy
-                  ? `${requestedBy} wants WalletChan to connect to this network.`
-                  : "A connected app wants WalletChan to connect to this network."}
-              </Text>
-              <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
-                Only approve RPC endpoints you trust; they can observe requests
-                and return incorrect network data.
-              </Text>
-            </VStack>
-          }
-          media={
-            <Box
-              boxSize="44px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              bg="surface.raised"
-              borderWidth="1px"
-              borderColor="border.subtle"
-              borderRadius="md"
-            >
-              <ChainIcon
-                chainId={displayChainId}
-                chainName={displayName}
-                size="28px"
-                withChip
-              />
-            </Box>
-          }
+        <AddChainRequestSummary
+          chainId={displayChainId}
+          chainName={displayName}
+          favicon={requestFavicon}
+          origin={requestOrigin}
         />
       }
       context={
@@ -215,10 +196,11 @@ export function AddChainConfirmationScreen({
       advancedDetails={
         <VStack align="stretch" spacing={4}>
           <InlineDisclosure
+            ref={technicalDisclosureRef}
             label="RPC and technical details"
             description="Verify the endpoint, explorer, and native currency metadata."
             open={technicalOpen}
-            onOpenChange={onTechnicalOpenChange}
+            onOpenChange={handleTechnicalOpenChange}
           >
             <VStack align="stretch" spacing={4} pt={2}>
               <FormControl isInvalid={!!rpcError}>
@@ -278,46 +260,6 @@ export function AddChainConfirmationScreen({
                 </FormControl>
               </HStack>
 
-              {rawRequestData && (
-                <Box>
-                  <HStack mb={1} justify="space-between">
-                    <Text color="fg.secondary" fontSize="xs" fontWeight="600">
-                      Original request
-                    </Text>
-                    <CopyButton value={rawRequestData} />
-                  </HStack>
-                  <Box
-                    maxH="180px"
-                    overflowY="auto"
-                    p={3}
-                    bg="surface.sunken"
-                    borderWidth="1px"
-                    borderColor="border.subtle"
-                    borderRadius="md"
-                  >
-                    <Text
-                      color="fg.secondary"
-                      fontFamily="mono"
-                      fontSize="xs"
-                      overflowWrap="anywhere"
-                      whiteSpace="pre-wrap"
-                    >
-                      {rawRequestData}
-                    </Text>
-                  </Box>
-                </Box>
-              )}
-
-              {requestOrigin && (
-                <Text
-                  color="fg.secondary"
-                  fontFamily="mono"
-                  fontSize="xs"
-                  overflowWrap="anywhere"
-                >
-                  origin: {requestOrigin}
-                </Text>
-              )}
             </VStack>
           </InlineDisclosure>
 
@@ -333,7 +275,7 @@ export function AddChainConfirmationScreen({
       }
       confirmAction={
         <Button
-          variant="primary"
+          variant="brand"
           onClick={onApprove}
           isLoading={isSubmitting}
           loadingText="Adding"

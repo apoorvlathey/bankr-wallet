@@ -22,6 +22,8 @@
   inactive endpoint metadata edits retain the current runtime endpoint.
 - `CustomNetworkDetails.tsx` presents custom-chain explorer and native-currency
   fields behind the advanced disclosure.
+- `AddChainRequestSummary.tsx` presents the standard dapp identity and proposed
+  network summary for provider-originated add-chain decisions.
 - The remaining chain screens own network list and add-chain flows.
 - Authentication screens own password, biometric, agent-factor, auto-lock, and
   sound preference flows. Agent-factor creation explicitly collects the
