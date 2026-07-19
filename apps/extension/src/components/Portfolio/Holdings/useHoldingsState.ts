@@ -57,6 +57,8 @@ export function useHoldingsState({
   const loadVersionRef = useRef(0);
   const verifiedBalanceTokensRef = useRef(new Map<string, PortfolioToken>());
   const verifiedBalanceKeysRef = useRef(new Set<string>());
+  const tokensRef = useRef(tokens);
+  tokensRef.current = tokens;
 
   useEffect(() => {
     chrome.storage.sync.get("hidePortfolioValue", (result) => {
@@ -136,6 +138,7 @@ export function useHoldingsState({
     loadVersionRef,
     verifiedBalanceTokensRef,
     verifiedBalanceKeysRef,
+    tokensRef,
     toggleHideValue,
     applyHoldingsSnapshot,
   };

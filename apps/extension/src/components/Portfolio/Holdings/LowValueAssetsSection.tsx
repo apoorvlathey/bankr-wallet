@@ -12,6 +12,7 @@ import type { AssetDisplayRow, AssetRowPresentationProps } from "./types";
 
 interface LowValueAssetsSectionProps extends AssetRowPresentationProps {
   rows: AssetDisplayRow[];
+  rowCount: number;
   totalValueUsd: number;
   isExpanded: boolean;
   isLoading: boolean;
@@ -23,6 +24,7 @@ interface LowValueAssetsSectionProps extends AssetRowPresentationProps {
 
 export function LowValueAssetsSection({
   rows,
+  rowCount,
   totalValueUsd,
   isExpanded,
   isLoading,
@@ -98,7 +100,7 @@ export function LowValueAssetsSection({
             {rowPresentation.formatUsd(totalValueUsd)}
           </Text>
           <Text as="span" display="block" fontSize="xs" whiteSpace="nowrap">
-            {rows.length} {rows.length === 1 ? "asset" : "assets"}
+            {rowCount} {rowCount === 1 ? "asset" : "assets"}
           </Text>
         </ListItemMeta>
       </Flex>

@@ -7,7 +7,9 @@ import {
 import type { HoldingsSnapshot } from "./types";
 
 const holdingsCache = new Map<string, HoldingsSnapshot>();
+const deferredPersistenceTimers = new Map<string, number>();
 const PORTFOLIO_BACKGROUND_TASK_DELAY_MS = 250;
+const PROGRESSIVE_CACHE_WRITE_DELAY_MS = 750;
 
 export const holdingsCacheKey = (address: string, reloadKey: string) =>
   `${address.toLowerCase()}|${reloadKey}`;
@@ -49,11 +51,37 @@ export function writeHoldingsSnapshot(
 
 export async function clearHoldingsCaches(): Promise<void> {
   holdingsCache.clear();
+  for (const timer of deferredPersistenceTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  deferredPersistenceTimers.clear();
   try {
     await clearPortfolioHoldingsCache();
   } catch {
     // Best-effort display cache; live portfolio loading must continue.
   }
+}
+
+/** Coalesce scroll-driven page updates into one persistent cache write. */
+export function writeProgressiveHoldingsSnapshot(
+  cacheKey: string,
+  snapshot: HoldingsSnapshot,
+): void {
+  holdingsCache.set(cacheKey, snapshot);
+  const pending = deferredPersistenceTimers.get(cacheKey);
+  if (pending != null) window.clearTimeout(pending);
+  deferredPersistenceTimers.set(
+    cacheKey,
+    window.setTimeout(() => {
+      deferredPersistenceTimers.delete(cacheKey);
+      const latest = holdingsCache.get(cacheKey);
+      if (!latest) return;
+      void savePortfolioHoldingsSnapshot(
+        cacheKey,
+        toStoredHoldingsSnapshot(latest),
+      ).catch(() => undefined);
+    }, PROGRESSIVE_CACHE_WRITE_DELAY_MS),
+  );
 }
 
 export function hasHoldingsSnapshotContent(

@@ -23,6 +23,9 @@ import {
 /** Max calls per multicall batch to avoid oversized RPC requests */
 const MULTICALL_BATCH_SIZE = 100;
 
+/** Prevent all-network portfolios from opening an RPC burst across every chain. */
+const MAX_CONCURRENT_CHAINS = 4;
+
 /** RPC request timeout in ms – short enough to not block UI on rate limits */
 const RPC_TIMEOUT = 8_000;
 
@@ -88,9 +91,12 @@ export async function fetchOnchainBalances(
   const checkedChainIds = new Set<number>();
   const verifiedTokenKeys = new Set<string>();
 
-  // Fetch balances per chain in parallel
-  const chainPromises = Array.from(byChain.entries()).map(
-    async ([chainId, entries]) => {
+  const fetchChainBalances = async (
+    [chainId, entries]: [
+      number,
+      { index: number; token: PortfolioToken }[],
+    ],
+  ) => {
       const client = await getClient(chainId);
       if (!client) {
         // No RPC configured for this chain (e.g. portfolio API returned a
@@ -202,10 +208,20 @@ export async function fetchOnchainBalances(
           rpcIssueChainIds.add(chainId);
         }
       }
-    }
-  );
+    };
 
-  await Promise.all(chainPromises);
+  const chainEntries = Array.from(byChain.entries());
+  let nextChainIndex = 0;
+  const workerCount = Math.min(MAX_CONCURRENT_CHAINS, chainEntries.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextChainIndex < chainEntries.length) {
+        const entry = chainEntries[nextChainIndex];
+        nextChainIndex += 1;
+        await fetchChainBalances(entry);
+      }
+    }),
+  );
 
   // Filter out tokens with zero onchain balance and sort by USD value descending
   const filtered = options?.preserveZeroBalanceTokens

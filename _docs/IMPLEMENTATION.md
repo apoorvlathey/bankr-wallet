@@ -2728,7 +2728,9 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 
 - **Multicall3** (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on all chains) batches native `getEthBalance` and ERC20 `balanceOf` calls into a single multicall per chain. Registry entries with `hasNativeToken: false` are excluded before RPC work; Tempo uses this policy because its `eth_getBalance` response is a compatibility sentinel, not a user-owned asset. Tempo's USD/6 EVM currency metadata remains available to fee and transaction renderers; only balance-bearing/selectable native-token paths are disabled.
 - Calls are chunked into batches of 100 to avoid oversized RPC requests
-- Parallel execution across all chains with 8s timeout and no retries
+- Execution is capped at four chains concurrently, with an 8s timeout and no
+  retries, so an all-network whale portfolio cannot create an RPC burst across
+  every configured chain
 - Cached viem clients per chainId for performance
 - Falls back to API values on any error (per-token or per-batch)
 - A failed token read does not by itself label the chain RPC unhealthy. The
@@ -2748,7 +2750,16 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
 - ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `portfolio/coingecko.ts` facade, which shares rate-limit/cache state across focused native and ERC-20 services and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
-- `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio API data renders immediately, then runs metadata/native-price enrichment and onchain balance refresh in detached background work. Holdings deliberately skips ERC-20 price fallback during enrichment to avoid fan-out/rate limits from token-price APIs; it keeps Portfolio API prices until the portfolio backend indexes newer values.
+- `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio
+  API data and the complete provider total render immediately. Expensive work is
+  progressive and bounded to 24 rows: the initial page prioritizes explicitly
+  refreshed/recent assets and native assets, while later pages run live balance
+  verification, missing metadata/native-price enrichment, and safe image-cache
+  requests only as the list approaches them during scrolling. Page enrichment
+  operates on the existing catalog slice and never refetches the complete
+  portfolio response. Holdings deliberately skips ERC-20 price fallback during
+  enrichment to avoid fan-out/rate limits from token-price APIs; it keeps
+  Portfolio API prices until the portfolio backend indexes newer values.
 - Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts. The cache is keyed by address plus the visible-chain reload key, capped to 12 entries, TTL-pruned after 24 hours, and treated as optional display data. Older `walletchan:portfolioHoldingsCache:v1` renderer-localStorage mirrors are purged and never read, preventing a replacement wallet from inheriting prior addresses/balances/token imagery. Missing/invalid entries fall back to the normal live portfolio load.
 - Cached RPC issue IDs are display metadata only and are not replayed into the
   home warning. Live issue reports wait three seconds before rendering, so a
@@ -2794,6 +2805,15 @@ Important constraints:
   preference is persisted in `chrome.storage.sync.unifyPortfolioBalances`, and
   missing or malformed values resolve to `true` for released installs.
 - 60-second client-side cache plus a best-effort local `portfolioHoldingsCache` for first paint after popup/sidepanel reopen
+- Large asset/position collections mount in 24-row pages. An
+  `IntersectionObserver` rooted at the WalletChan screen scroll owner advances
+  the page with a 240px look-ahead; its visible load-more control remains a
+  keyboard-accessible fallback. Search, chain, account, tab, balance-unification,
+  and low-value disclosure changes reset the page boundary. Only rendered token
+  rows participate in RPC verification and remote-logo raster caching.
+  Scroll-driven cache persistence is coalesced for 750ms and chart snapshot
+  recording for one second so rapid page advances do not serialize the complete
+  catalog or touch extension storage once per page.
 - Refresh button, loading skeletons, empty state
 - Click token → opens TokenTransfer view
 

@@ -5,6 +5,7 @@ import type { AssetChangeRecord, CompletedTransaction } from "@/chrome/txHistory
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const LOW_VALUE_TOKEN_THRESHOLD_USD = 0.1;
+export const PORTFOLIO_DATA_PAGE_SIZE = 24;
 
 export function isNativePortfolioToken(token: PortfolioToken): boolean {
   return (
@@ -40,6 +41,40 @@ export function shouldFetchOnInitialPortfolioLoad(
   if (includeLowValueTokens) return true;
   if (isNativePortfolioToken(token)) return true;
   return token.valueUsd >= LOW_VALUE_TOKEN_THRESHOLD_USD;
+}
+
+/**
+ * Keep the first live-balance pass bounded for large public portfolios.
+ * Explicitly refreshed/recently received assets lead the page, followed by
+ * native assets and then the highest-value API rows in their existing order.
+ * Remaining rows are verified as they enter the progressively rendered list.
+ */
+export function selectInitialBalanceRefreshTokens(
+  tokens: PortfolioToken[],
+  priorityTokenKeys: ReadonlySet<string>,
+  includeLowValueTokens: boolean,
+  limit = PORTFOLIO_DATA_PAGE_SIZE,
+): PortfolioToken[] {
+  if (limit <= 0) return [];
+
+  const eligible = tokens.filter(
+    (token) =>
+      priorityTokenKeys.has(
+        getPortfolioTokenKey(token.chainId, token.contractAddress),
+      ) || shouldFetchOnInitialPortfolioLoad(token, includeLowValueTokens),
+  );
+  const rank = (token: PortfolioToken): number => {
+    const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
+    if (priorityTokenKeys.has(key)) return 0;
+    if (isNativePortfolioToken(token)) return 1;
+    return 2;
+  };
+
+  return eligible
+    .map((token, index) => ({ token, index, rank: rank(token) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .slice(0, limit)
+    .map(({ token }) => token);
 }
 
 export function getTokenKeySet(tokens: PortfolioToken[]): Set<string> {

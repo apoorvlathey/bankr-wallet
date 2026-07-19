@@ -8,8 +8,9 @@ ordering must remain deterministic. Review the implementation in this order:
 2. `hiddenTokens.ts`, `recentTokens.ts`, `holdingsCache.ts`,
    `snapshotStorage.ts` — storage repositories for optional display state.
 3. `onchainBalances.ts` — Multicall balance verification and RPC fallbacks.
-4. `catalogEnrichment.ts`, `tokenCatalog.ts` — metadata/price enrichment and
-   the API/custom/recent/native merge coordinator.
+4. `catalogEnrichment.ts`, `tokenPageEnrichment.ts`, `tokenCatalog.ts` —
+   bounded visible-page metadata/price enrichment and the
+   API/custom/recent/native merge coordinator.
 5. `coingeckoTypes.ts`, `coingeckoState.ts`, `coingeckoNativePolicy.ts`,
    `coingeckoNative.ts`, `coingeckoErc20.ts`, `directTokenPricing.ts`, and
    `coingecko.ts` — shared cache state, resolution policy, bounded price

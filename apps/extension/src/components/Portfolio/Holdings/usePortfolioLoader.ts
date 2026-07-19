@@ -3,12 +3,13 @@ import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
 import { getPortfolioTokenKey } from "@/chrome/portfolio/hiddenTokens";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import { recordSnapshot } from "@/chrome/portfolio/snapshotStorage";
+import { enrichPortfolioTokenPage } from "@/chrome/portfolio/tokenPageEnrichment";
 import {
   getDefiTotal,
   getTokenKeySet,
   getWalletTokenTotal,
   mergeVerifiedTokenBalances,
-  shouldFetchOnInitialPortfolioLoad,
+  selectInitialBalanceRefreshTokens,
 } from "@/components/tokenHoldingsUtils";
 import {
   clearHoldingsCaches,
@@ -16,11 +17,7 @@ import {
   schedulePortfolioBackgroundTask,
   writeHoldingsSnapshot,
 } from "./cache";
-import {
-  getVisibleTokenKeySet,
-  hasRenderablePortfolioToken,
-  mergeTokenEnrichment,
-} from "./transforms";
+import { hasRenderablePortfolioToken, mergeTokenEnrichment } from "./transforms";
 import type { LoadPortfolioOptions } from "./types";
 import type { HoldingsState } from "./useHoldingsState";
 import type { RpcHealthReport } from "@/types";
@@ -28,7 +25,6 @@ import type { RpcHealthReport } from "@/types";
 interface UsePortfolioLoaderOptions {
   address: string;
   chainReloadKey: string;
-  showLowValueTokens: boolean;
   state: HoldingsState;
   onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onSnapshotsChanged?: () => void;
@@ -37,7 +33,6 @@ interface UsePortfolioLoaderOptions {
 export function usePortfolioLoader({
   address,
   chainReloadKey,
-  showLowValueTokens,
   state,
   onRpcIssuesChange,
   onSnapshotsChanged,
@@ -137,43 +132,38 @@ export function usePortfolioLoader({
           baseTokens: typeof mergedTokens,
           fetchedTokenKeys: Set<string>,
           rpcIssueChainIds: number[],
+          enrichmentTokenKeys: Set<string>,
         ) => {
           try {
-            const enrichedCatalog = await loadPortfolioTokenCatalog(address, {
-              includeErc20PriceFallback: false,
-              enrichTokenKeys: getVisibleTokenKeySet(
-                baseTokens,
-                showLowValueTokens,
+            const enrichedPage = await enrichPortfolioTokenPage(
+              baseTokens.filter((token) =>
+                enrichmentTokenKeys.has(
+                  getPortfolioTokenKey(token.chainId, token.contractAddress),
+                ),
               ),
-            });
+            );
             if (!isCurrentLoad()) return;
             const enrichedTokens = applyVerifiedBalances(
-              mergeTokenEnrichment(baseTokens, enrichedCatalog.tokens),
+              mergeTokenEnrichment(baseTokens, enrichedPage),
             );
-            const enrichedDefiPositions = enrichedCatalog.defiPositions || [];
             const enrichedTotal =
               getWalletTokenTotal(enrichedTokens) +
-              getDefiTotal(enrichedDefiPositions);
+              getDefiTotal(defiPositions);
             const enrichedAt = Date.now();
 
             setTokens(enrichedTokens);
-            setDefiPositions(enrichedDefiPositions);
             setTotalValueUsd(enrichedTotal);
-            setCustomTokenKeys(enrichedCatalog.customTokenKeys);
-            setAllTokenKeys(enrichedCatalog.allTokenKeys);
-            setHiddenTokenKeys(enrichedCatalog.hiddenTokenKeys);
-            setApiUnavailable(enrichedCatalog.apiUnavailable);
             setLastFetched(enrichedAt);
             writeHoldingsSnapshot(cacheKey, {
               tokens: enrichedTokens,
-              defiPositions: enrichedDefiPositions,
+              defiPositions,
               totalValueUsd: enrichedTotal,
-              customTokenKeys: enrichedCatalog.customTokenKeys,
-              allTokenKeys: enrichedCatalog.allTokenKeys,
-              hiddenTokenKeys: enrichedCatalog.hiddenTokenKeys,
+              customTokenKeys: catalog.customTokenKeys,
+              allTokenKeys: catalog.allTokenKeys,
+              hiddenTokenKeys: catalog.hiddenTokenKeys,
               onchainFetchedTokenKeys: fetchedTokenKeys,
               rpcIssueChainIds,
-              apiUnavailable: enrichedCatalog.apiUnavailable,
+              apiUnavailable: catalog.apiUnavailable,
               timestamp: enrichedAt,
             });
           } catch {
@@ -194,12 +184,12 @@ export function usePortfolioLoader({
           });
         };
 
-        const tokensToRefresh = mergedTokens.filter(
-          (token) =>
-            forcedRefreshTokenKeys.has(
-              getPortfolioTokenKey(token.chainId, token.contractAddress),
-            ) || shouldFetchOnInitialPortfolioLoad(token, showLowValueTokens),
+        const tokensToRefresh = selectInitialBalanceRefreshTokens(
+          mergedTokens,
+          forcedRefreshTokenKeys,
+          false,
         );
+        const enrichmentTokenKeys = getTokenKeySet(tokensToRefresh);
         if (tokensToRefresh.length === 0) {
           setLoading(false);
           setPortfolioBalanceRefreshing(false);
@@ -218,7 +208,12 @@ export function usePortfolioLoader({
           });
           recordLoadedSnapshot(initialTotal);
           schedulePortfolioBackgroundTask(() =>
-            applyEnrichedCatalog(initialDisplayTokens, verifiedKeys, []),
+            applyEnrichedCatalog(
+              initialDisplayTokens,
+              verifiedKeys,
+              [],
+              enrichmentTokenKeys,
+            ),
           );
           return;
         }
@@ -271,6 +266,7 @@ export function usePortfolioLoader({
               displayTokens,
               verifiedKeys,
               onchain.rpcHealth.unhealthyChainIds,
+              enrichmentTokenKeys,
             );
           } catch {
             if (!isCurrentLoad()) return;
@@ -291,7 +287,12 @@ export function usePortfolioLoader({
             });
             recordLoadedSnapshot(initialTotal);
             schedulePortfolioBackgroundTask(() =>
-              applyEnrichedCatalog(initialDisplayTokens, verifiedKeys, []),
+              applyEnrichedCatalog(
+                initialDisplayTokens,
+                verifiedKeys,
+                [],
+                enrichmentTokenKeys,
+              ),
             );
           } finally {
             if (isCurrentLoad()) setPortfolioBalanceRefreshing(false);
@@ -325,7 +326,6 @@ export function usePortfolioLoader({
       setPortfolioBalanceRefreshing,
       setTokens,
       setTotalValueUsd,
-      showLowValueTokens,
       tokens.length,
       verifiedBalanceKeysRef,
       verifiedBalanceTokensRef,

@@ -8,7 +8,6 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import {
   LOW_VALUE_TOKEN_THRESHOLD_USD,
   getPortfolioTokenBalance,
-  getTokenKeySet,
   hasPositiveBalance,
   isNativePortfolioToken,
   sortTokensByValue,
@@ -24,25 +23,6 @@ const BUILT_IN_ETH_MAINNET_CHAIN_IDS = new Set(
 
 export function hasRenderablePortfolioToken(token: PortfolioToken): boolean {
   return hasPositiveBalance(token) || Number(token.valueUsd || 0) > 0;
-}
-
-function isVisibleTokenRow(
-  token: PortfolioToken,
-  includeLowValueTokens: boolean,
-): boolean {
-  return (
-    includeLowValueTokens ||
-    Number(token.valueUsd || 0) >= LOW_VALUE_TOKEN_THRESHOLD_USD
-  );
-}
-
-export function getVisibleTokenKeySet(
-  tokens: PortfolioToken[],
-  includeLowValueTokens: boolean,
-): Set<string> {
-  return getTokenKeySet(
-    tokens.filter((token) => isVisibleTokenRow(token, includeLowValueTokens)),
-  );
 }
 
 export function collectTokenLogoUrls(
