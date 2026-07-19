@@ -2,6 +2,7 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { PendingErc7715PermissionRequest } from "@/chrome/pendingErc7715PermissionStorage";
 import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermissionStorage";
 import type { ProviderRequestSurfaceHint } from "@/chrome/windowing/providerRequestSurface";
 
 export type InitialApprovalRequestLists = readonly [
@@ -9,25 +10,29 @@ export type InitialApprovalRequestLists = readonly [
   readonly PendingSignatureRequest[],
   readonly PendingErc7715PermissionRequest[],
   readonly PendingBatchTxRequest[],
+  readonly PendingDappConnectionRequest[],
 ];
 
 export type InitialApprovalRoute =
   | { kind: "transaction"; request: PendingTxRequest }
   | { kind: "signature"; request: PendingSignatureRequest }
   | { kind: "permission"; request: PendingErc7715PermissionRequest }
-  | { kind: "batch"; request: PendingBatchTxRequest };
+  | { kind: "batch"; request: PendingBatchTxRequest }
+  | { kind: "dappConnection"; request: PendingDappConnectionRequest };
 
 type InitialApprovalView =
   | "txConfirm"
   | "signatureConfirm"
   | "erc7715PermissionConfirm"
-  | "batchTxConfirm";
+  | "batchTxConfirm"
+  | "dappConnectionConfirm";
 
 interface InitialApprovalRouteSetters {
   setTransaction: (request: PendingTxRequest) => void;
   setSignature: (request: PendingSignatureRequest) => void;
   setPermission: (request: PendingErc7715PermissionRequest) => void;
   setBatch: (request: PendingBatchTxRequest) => void;
+  setDappConnection: (request: PendingDappConnectionRequest) => void;
   setView: (view: InitialApprovalView) => void;
 }
 
@@ -38,7 +43,13 @@ function newest<T>(requests: readonly T[]): T | null {
 /** Resolves only the queue named by the sidepanel-opening hint. */
 export function resolveHintedInitialApprovalRoute(
   hint: ProviderRequestSurfaceHint | null,
-  [transactions, signatures, permissions, batches]: InitialApprovalRequestLists,
+  [
+    transactions,
+    signatures,
+    permissions,
+    batches,
+    dappConnections,
+  ]: InitialApprovalRequestLists,
 ): InitialApprovalRoute | null {
   if (!hint) return null;
 
@@ -58,6 +69,10 @@ export function resolveHintedInitialApprovalRoute(
     case "i_walletSendCalls": {
       const request = newest(batches);
       return request ? { kind: "batch", request } : null;
+    }
+    case "i_dappAccounts": {
+      const request = newest(dappConnections);
+      return request ? { kind: "dappConnection", request } : null;
     }
   }
 }
@@ -82,5 +97,9 @@ export function applyInitialApprovalRoute(
     case "batch":
       setters.setBatch(route.request);
       setters.setView("batchTxConfirm");
+      return;
+    case "dappConnection":
+      setters.setDappConnection(route.request);
+      setters.setView("dappConnectionConfirm");
   }
 }

@@ -1,17 +1,25 @@
 import type { ProviderRequestSurfaceHint } from "@/chrome/windowing/providerRequestSurface";
 
 type Loader<T> = () => Promise<T[]>;
-type ApprovalRequestLoaders<Tx, Sig, Permission, Batch> = readonly [
+type ApprovalRequestLoaders<
+  Tx,
+  Sig,
+  Permission,
+  Batch,
+  DappConnection,
+> = readonly [
   Loader<Tx>,
   Loader<Sig>,
   Loader<Permission>,
   Loader<Batch>,
+  Loader<DappConnection>,
 ];
-type ApprovalRequestLists<Tx, Sig, Permission, Batch> = [
+type ApprovalRequestLists<Tx, Sig, Permission, Batch, DappConnection> = [
   Tx[],
   Sig[],
   Permission[],
   Batch[],
+  DappConnection[],
 ];
 
 const REQUEST_INDEX = {
@@ -19,6 +27,7 @@ const REQUEST_INDEX = {
   i_signatureRequest: 1,
   i_walletExecutionPermissions: 2,
   i_walletSendCalls: 3,
+  i_dappAccounts: 4,
 } as const;
 const REQUEST_WAIT_MS = 5_000;
 const REQUEST_POLL_MS = 25;
@@ -63,14 +72,15 @@ export async function loadInitialApprovalRequestsWith<
   Sig,
   Permission,
   Batch,
+  DappConnection,
 >(
   hint: ProviderRequestSurfaceHint | null,
-  loaders: ApprovalRequestLoaders<Tx, Sig, Permission, Batch>,
+  loaders: ApprovalRequestLoaders<Tx, Sig, Permission, Batch, DappConnection>,
   dependencies: InitialApprovalDependencies = productionDependencies,
-): Promise<ApprovalRequestLists<Tx, Sig, Permission, Batch>> {
+): Promise<ApprovalRequestLists<Tx, Sig, Permission, Batch, DappConnection>> {
   const lists = (await Promise.all(
     loaders.map((load) => load()),
-  )) as ApprovalRequestLists<Tx, Sig, Permission, Batch>;
+  )) as ApprovalRequestLists<Tx, Sig, Permission, Batch, DappConnection>;
   if (!hint) return lists;
 
   const requestIndex = REQUEST_INDEX[hint.requestType];
@@ -96,6 +106,10 @@ export async function loadInitialApprovalRequestsWith<
         lists[3] = await loaders[3]();
         if (lists[3].length > 0) return lists;
         break;
+      case 4:
+        lists[4] = await loaders[4]();
+        if (lists[4].length > 0) return lists;
+        break;
     }
   }
   return lists;
@@ -106,10 +120,11 @@ export async function loadInitialApprovalRequests<
   Sig,
   Permission,
   Batch,
+  DappConnection,
 >(
-  loaders: ApprovalRequestLoaders<Tx, Sig, Permission, Batch>,
+  loaders: ApprovalRequestLoaders<Tx, Sig, Permission, Batch, DappConnection>,
   hint?: ProviderRequestSurfaceHint | null,
-): Promise<ApprovalRequestLists<Tx, Sig, Permission, Batch>> {
+): Promise<ApprovalRequestLists<Tx, Sig, Permission, Batch, DappConnection>> {
   const resolvedHint =
     hint === undefined ? await takeInitialApprovalRequestHint() : hint;
   return loadInitialApprovalRequestsWith(resolvedHint, loaders);

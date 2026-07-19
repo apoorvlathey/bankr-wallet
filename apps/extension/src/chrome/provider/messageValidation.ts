@@ -53,12 +53,16 @@ export function validateExternalProviderMessage(
 
   switch (candidate.type) {
     case "openProviderRequestSidePanel":
-      return candidate.requestType === "i_sendTransaction" ||
+      return (
+        (candidate.requestType === "i_dappAccounts" &&
+          candidate.accountMethod === "eth_requestAccounts") ||
+        candidate.requestType === "i_sendTransaction" ||
         candidate.requestType === "i_signatureRequest" ||
         candidate.requestType === "i_walletSendCalls" ||
         (candidate.requestType === "i_walletExecutionPermissions" &&
           candidate.permissionMethod ===
             "wallet_requestExecutionPermissions")
+      )
         ? { valid: true }
         : failProviderValidation("Invalid provider side-panel request");
 

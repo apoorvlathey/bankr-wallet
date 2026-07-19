@@ -762,16 +762,18 @@ function App() {
       establishKeepalivePort();
 
       const isUnlocked = await checkLockState();
-      const [requests, sigRequests, permissionRequests, batchRequests] =
-        await loadInitialApprovalRequests([
+      const initialApprovalRequests = await loadInitialApprovalRequests([
           loadPendingRequests,
           loadPendingSignatureRequests,
           loadPendingErc7715PermissionRequests,
           loadPendingBatchRequests,
+          loadPendingDappConnectionRequests,
         ], approvalRequestHint);
+      const [requests, sigRequests, permissionRequests, batchRequests, dappConnectionRequests] =
+        initialApprovalRequests;
       const hintedApprovalRoute = resolveHintedInitialApprovalRoute(
         approvalRequestHint,
-        [requests, sigRequests, permissionRequests, batchRequests],
+        initialApprovalRequests,
       );
       if (hintedApprovalRoute) {
         setIsWalletUnlocked(isUnlocked);
@@ -781,6 +783,7 @@ function App() {
             setSignature: setSelectedSignatureRequest,
             setPermission: setSelectedErc7715PermissionRequest,
             setBatch: setSelectedBatchRequest,
+            setDappConnection: setPendingDappConnectionRequest,
             setView,
           });
         } else setView("unlock");
@@ -790,7 +793,6 @@ function App() {
       const [
         watchAssetRequests,
         addChainRequests,
-        dappConnectionRequests,
         ,
         loadedCrossDappBatch,
         ,
@@ -798,7 +800,6 @@ function App() {
       ] = await Promise.all([
         loadPendingWatchAssetRequests(),
         loadPendingAddChainRequests(),
-        loadPendingDappConnectionRequests(),
         loadActiveDappContext(),
         loadCrossDappBatch(),
         loadWalletConnectSessionCount(),
@@ -900,6 +901,13 @@ function App() {
 
       if (hintedApprovalRoute) {
         // The matching request is already visible; finish hydration in place.
+        if (hintedApprovalRoute.kind === "dappConnection" &&
+            typeof hintedApprovalRoute.request.tabId === "number") {
+          const requestAccount = await sendMessageWithRetry<Account | null>(
+            { type: "getTabAccount", tabId: hintedApprovalRoute.request.tabId },
+          );
+          if (requestAccount) setActiveAccount(requestAccount);
+        }
       } else if (!isUnlocked) {
         setView("unlock");
       } else if (requests.length > 0) {

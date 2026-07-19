@@ -960,11 +960,14 @@ send `openProviderRequestSidePanel` synchronously while the original user
 activation is live. The effect is presentation-only: the background route
 opens the sender tab's side panel and returns no wallet data. It runs only when
 the cached non-secret `sidePanelMode` preference is enabled (missing means the
-fresh-install default), the browser is not marked as Arc, and the request is a
-single transaction, ERC-5792 batch, signature, or
+fresh-install default), the browser is not marked as Arc, and the request is an
+unconnected `eth_requestAccounts` call, single transaction, ERC-5792 batch,
+signature, or
 `wallet_requestExecutionPermissions`. `provider/messageValidation.ts` bounds
 the route to those exact request-family tags; ERC-7715 discovery/read methods
-do not open an approval surface. The content bridge first runs the same bounded
+do not open an approval surface. Non-interactive `eth_accounts` reads and
+already-connected account requests also do not open one. The content bridge
+first runs the same bounded
 provider-envelope validation synchronously against its cached, non-secret
 connected-origin state, account address/type, and attested chain. Requests with
 invalid payloads, disconnected origins, wrong/stale chains, unsupported batch

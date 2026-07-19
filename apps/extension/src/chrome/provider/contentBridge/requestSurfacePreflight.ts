@@ -27,6 +27,14 @@ function hasValidAccountBinding(
   message: Record<string, any>,
   state: ProviderRequestPreflightState,
 ): boolean {
+  if (type === "i_dappAccounts") {
+    return (
+      message.method === "eth_requestAccounts" &&
+      !state.dappConnected &&
+      isEvmAddress(state.address)
+    );
+  }
+
   if (!state.dappConnected || !isEvmAddress(state.address)) return false;
 
   if (type === "i_sendTransaction") {
@@ -71,6 +79,13 @@ function runtimeValidationEnvelope(
   message: Record<string, any>,
   chainId: number | null,
 ): Record<string, unknown> | null {
+  if (type === "i_dappAccounts") {
+    return {
+      type: "requestDappConnection",
+      requestId: message.id,
+    };
+  }
+
   if (type === "i_sendTransaction") {
     const { id, from, to, data, value, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas } =
       message;

@@ -59,6 +59,8 @@ export function preloadApprovalRequestScreen(
   requestType: ProviderRequestSurfaceType,
 ): Promise<unknown> {
   switch (requestType) {
+    case "i_dappAccounts":
+      return import("@/components/DappConnectionConfirmation");
     case "i_sendTransaction":
       return import("@/components/TransactionConfirmation");
     case "i_signatureRequest":

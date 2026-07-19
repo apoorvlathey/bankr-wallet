@@ -59,6 +59,19 @@ test("external provider messages enforce total size and bounded URLs", () => {
     type: "openProviderRequestSidePanel",
     requestType: "i_signatureRequest",
   });
+  assertValid({
+    type: "openProviderRequestSidePanel",
+    requestType: "i_dappAccounts",
+    accountMethod: "eth_requestAccounts",
+  });
+  assertInvalid(
+    {
+      type: "openProviderRequestSidePanel",
+      requestType: "i_dappAccounts",
+      accountMethod: "eth_accounts",
+    },
+    /provider side-panel/i,
+  );
   assertInvalid(
     { type: "openProviderRequestSidePanel", requestType: "i_watchAsset" },
     /provider side-panel/i,

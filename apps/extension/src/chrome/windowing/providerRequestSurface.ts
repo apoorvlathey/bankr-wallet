@@ -4,6 +4,7 @@ export const FULLSCREEN_REQUEST_NOTIFICATION_PREFIX =
   "walletchan-fullscreen-request-";
 
 export type ProviderRequestSurfaceType =
+  | "i_dappAccounts"
   | "i_sendTransaction"
   | "i_signatureRequest"
   | "i_walletSendCalls"

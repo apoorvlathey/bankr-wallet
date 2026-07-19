@@ -66,6 +66,9 @@ export function shouldRequestProviderSidePanel(
     return false;
   }
   if (
+    (type === "i_dappAccounts" &&
+      (message as { method?: unknown } | null)?.method ===
+        "eth_requestAccounts") ||
     type === "i_sendTransaction" ||
     type === "i_signatureRequest" ||
     type === "i_walletSendCalls"
@@ -102,6 +105,10 @@ export function requestProviderSidePanel(type: string, message: unknown): void {
     .sendMessage({
       type: "openProviderRequestSidePanel",
       requestType: type,
+      accountMethod:
+        type === "i_dappAccounts"
+          ? (message as { method?: unknown } | null)?.method
+          : undefined,
       permissionMethod:
         type === "i_walletExecutionPermissions"
           ? (message as { method?: unknown } | null)?.method

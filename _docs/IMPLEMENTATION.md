@@ -291,7 +291,7 @@ The extension maintains address consistency between storage and the active accou
 ### Injected dapp connection permissions
 
 - `eth_accounts` is a non-interactive privacy check. It returns `[]` until the exact trusted page origin has been approved.
-- The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, persists a durable `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen. The prompt has no age-based timeout.
+- The first `eth_requestAccounts` call crosses `impersonator.ts` → `inject.ts` → `background.ts`, synchronously opens the side panel from the original page gesture when sidepanel mode is enabled, persists a durable `pendingDappConnectionRequests` record, and opens the extension connection-confirmation screen. A window-bound request-family hint makes a cold renderer wait for that queue so persistence cannot race panel startup. The prompt has no age-based timeout. Non-interactive `eth_accounts` reads and already-connected account requests never trigger the early open.
 - Background derives the canonical `http(s)` origin, tab, and frame from `chrome.runtime.MessageSender`; page-provided origin values are never authorization inputs. Cross-origin/subframe requests currently fail closed and must connect from the top-level site.
 - Approval stores an origin-only `dappPermissions` grant and resolves the request through `dappConnectionResult:{id}`. Future visits reuse the grant without prompting and receive the account currently selected for that tab/fallback active account.
 - A pending connection request sets the Chrome action badge to `1` only when
@@ -1648,11 +1648,13 @@ await provider.request({
   with side-panel support, missing `sidePanelMode` defaults to enabled; an
   explicit `false` preserves popup mode. When enabled, the content bridge sends
   `openProviderRequestSidePanel` synchronously from the original user gesture
-  for single transactions, ERC-5792 batches, signatures, and
+  for dapp connection prompts, single transactions, ERC-5792 batches, signatures, and
   `wallet_requestExecutionPermissions`. Before sending that presentation-only
   signal, `contentBridge/requestSurfacePreflight.ts` synchronously reuses the
   bounded provider envelope validation plus the content-script-attested active
-  chain, connected-origin state, account address, and account type. Invalid
+  chain, connected-origin state, account address, and account type. Connection
+  preflight requires an unconnected `eth_requestAccounts` call with a valid
+  active account; `eth_accounts` remains non-interactive. Invalid
   payloads, disconnected origins, stale/wrong-chain requests, unsupported
   batch versions, ineligible ERC-7715 account types, and signer/`from`
   mismatches therefore return through the normal provider error. Signature
@@ -1674,7 +1676,7 @@ await provider.request({
   panel open with a fresh user gesture.
 - The synchronous open also records a ten-second, window-scoped, one-shot
   request-family hint. A cold popup/sidepanel consumes it through the trusted-UI
-  `getProviderRequestSurfaceHint` route before loading the four approval queues.
+  `getProviderRequestSurfaceHint` route before loading the five approval queues.
   If the hinted queue is not persisted yet, `app/initialApprovalRequests.ts`
   keeps the request-shaped skeleton visible and polls only that queue for up to
   five seconds. `app/lazyScreens.ts` simultaneously preloads the hinted review
@@ -4121,7 +4123,7 @@ When multiple transactions are pending:
 
 ## Request Surface Positioning
 
-When a transaction, batch, signature, or ERC-7715 permission request is
+When a dapp connection, transaction, batch, signature, or ERC-7715 permission request is
 received, the background worker opens the configured surface. Sidepanel mode
 uses the early user-activated route described above at every browser window
 size. Popup mode uses a detached window positioned at the top-right of the
@@ -4131,7 +4133,7 @@ fullscreen.
 **See**: `src/chrome/windowing/requestSurface.ts` for surface selection and
 `windowing/popupGeometry.ts` / `popupWindow.ts` for placement, reuse, and
 creation. `provider/contentBridge/requestSurface.ts` caches the non-secret
-sidepanel preference and recognizes the four approval families;
+sidepanel preference and recognizes the five approval families;
 `windowing/providerRequestSurface.ts` consumes the original request gesture,
 owns the short-lived cold-renderer hint, and owns the fullscreen notification
 fallback. `app/initialApprovalRequests.ts` gates initial routing on the hinted
@@ -4267,7 +4269,7 @@ Build command: `pnpm build`
 
 | Type                    | Description                                                                                                      |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `openProviderRequestSidePanel` | Synchronously consume an active approval gesture to open the supported Chrome side panel for single tx, batch tx, signature, or ERC-7715 permission review when sidepanel mode is enabled |
+| `openProviderRequestSidePanel` | Synchronously consume an active approval gesture to open the supported Chrome side panel for a dapp connection, single tx, batch tx, signature, or ERC-7715 permission review when sidepanel mode is enabled |
 | `sendTransaction`       | Submit transaction. Fire-and-forget (no callback). Includes `txId` generated by content script. Result via storage (`txResult:{txId}`)  |
 | `signatureRequest`      | Submit signature request. Fire-and-forget (no callback). Includes `sigId` generated by content script. Result via storage (`sigResult:{sigId}`) |
 | `rpcRequest`            | Proxy an allowlisted public read/simulation RPC method through an extension-configured URL (15s timeout); signing, submission, debug/admin, and filter-lifecycle methods are rejected |

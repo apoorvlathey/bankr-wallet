@@ -16,6 +16,7 @@ import {
 
 test("active approval gestures use the early panel hop in sidepanel mode", () => {
   for (const [type, message] of [
+    ["i_dappAccounts", { method: "eth_requestAccounts" }],
     ["i_sendTransaction", {}],
     ["i_signatureRequest", {}],
     ["i_walletSendCalls", {}],
@@ -33,6 +34,15 @@ test("active approval gestures use the early panel hop in sidepanel mode", () =>
 });
 
 test("early panel hop respects mode, activation, and non-request 7715 methods", () => {
+  assert.equal(
+    shouldRequestProviderSidePanel(
+      "i_dappAccounts",
+      { method: "eth_accounts" },
+      true,
+      true,
+    ),
+    false,
+  );
   assert.equal(
     shouldRequestProviderSidePanel(
       "i_signatureRequest",
@@ -161,6 +171,20 @@ test("valid approval requests pass surface preflight for every wallet path", () 
   ] as const;
 
   for (const accountType of ["bankr", "privateKey", "seedPhrase"]) {
+    assert.equal(
+      providerRequestPassesSurfacePreflight(
+        "i_dappAccounts",
+        { id: "connect-request", method: "eth_requestAccounts" },
+        {
+          address,
+          accountType,
+          chainId: 1,
+          dappConnected: false,
+        },
+      ),
+      true,
+      `${accountType}:connect`,
+    );
     for (const [type, message] of requests) {
       assert.equal(
         providerRequestPassesSurfacePreflight(type, message, {
@@ -240,6 +264,31 @@ test("unconnected origins cannot open an approval sidepanel", () => {
         chainId: 1,
         dappConnected: false,
       },
+    ),
+    false,
+  );
+});
+
+test("account reads and already-connected account requests do not open a sidepanel", () => {
+  const state = {
+    address: "0x0000000000000000000000000000000000000001",
+    accountType: "privateKey",
+    chainId: 1,
+    dappConnected: false,
+  };
+  assert.equal(
+    providerRequestPassesSurfacePreflight(
+      "i_dappAccounts",
+      { id: "accounts-read", method: "eth_accounts" },
+      state,
+    ),
+    false,
+  );
+  assert.equal(
+    providerRequestPassesSurfacePreflight(
+      "i_dappAccounts",
+      { id: "connect-request", method: "eth_requestAccounts" },
+      { ...state, dappConnected: true },
     ),
     false,
   );
@@ -430,4 +479,10 @@ test("provider request surface hints are window-bound, one-shot, and short-lived
   recordProviderRequestSurfaceHint(9, "i_sendTransaction", 1_000);
   clearProviderRequestSurfaceHint(9);
   assert.equal(takeProviderRequestSurfaceHint(9, 1_500), null);
+
+  recordProviderRequestSurfaceHint(10, "i_dappAccounts", 2_000);
+  assert.deepEqual(takeProviderRequestSurfaceHint(10, 2_500), {
+    requestType: "i_dappAccounts",
+    createdAt: 2_000,
+  });
 });

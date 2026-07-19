@@ -25,6 +25,7 @@ import {
   beginDappOriginRevocation,
   finishDappOriginRevocation,
 } from "../requests/pendingRequestLifecycle";
+import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 import { withDappAccountBinding } from "./accountRemovalPrivacy";
 
 function trustedOrigin(sender: chrome.runtime.MessageSender): string | null {
@@ -93,6 +94,7 @@ export async function handleRequestDappConnection(
   const requestId =
     typeof message.requestId === "string" ? message.requestId : "";
   const origin = trustedOrigin(sender);
+  clearProviderRequestSurfaceHint(sender.tab?.windowId);
 
   if (!requestId || !origin) return;
   if (sender.frameId !== undefined && sender.frameId !== 0) {
