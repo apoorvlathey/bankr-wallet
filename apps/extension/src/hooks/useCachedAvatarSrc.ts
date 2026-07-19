@@ -4,6 +4,7 @@ import {
   getCachedAvatarDataUrl,
   requestAvatarImageFetch,
   subscribeAvatarCache,
+  type AvatarFetchMessageType,
 } from "@/lib/avatarCacheClient";
 import {
   isAllowedRemoteImageUrl,
@@ -31,6 +32,7 @@ function isHttpUrl(s: string): boolean {
  */
 export function useCachedAvatarSrc(
   url: string | null | undefined,
+  fetchMessageType: AvatarFetchMessageType = "cacheAvatarImage",
 ): string | null | undefined {
   const [resolved, setResolved] = useState<string | null | undefined>(() => {
     if (!url) return url;
@@ -76,7 +78,7 @@ export function useCachedAvatarSrc(
         setResolved(cached);
         return;
       }
-      const fetched = await requestAvatarImageFetch(url);
+      const fetched = await requestAvatarImageFetch(url, fetchMessageType);
       if (cancelled) return;
       if (fetched) setResolved(fetched);
     })();
@@ -85,7 +87,7 @@ export function useCachedAvatarSrc(
       cancelled = true;
       unsubscribe();
     };
-  }, [url]);
+  }, [fetchMessageType, url]);
 
   return resolved;
 }

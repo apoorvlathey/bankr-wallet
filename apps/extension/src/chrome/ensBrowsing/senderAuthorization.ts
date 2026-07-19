@@ -95,6 +95,12 @@ export function isAuthorizedEnsBrowsingSender(
         isExtensionPage(sender, "index.html") ||
         isTopLevelExtensionPage(sender, "browse.html")
       );
+    case "ens-list-connected-dapps":
+    case "ens-revoke-connected-dapp":
+    case "ens-search-dapp-directory":
+    case "ens-cache-browser-image":
+    case "ens-open-dapp-url":
+      return isTopLevelExtensionPage(sender, "browse.html");
     default:
       return false;
   }

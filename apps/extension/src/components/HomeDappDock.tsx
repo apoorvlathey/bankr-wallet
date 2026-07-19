@@ -30,6 +30,7 @@ import type { ResolvedChain } from "@/lib/chains";
 import { useTheme } from "@/theme";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import DappSiteIcon from "@/components/DappSiteIcon";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { useSheetTransitionSound } from "@/sounds/useSheetTransitionSound";
 
 export interface ActiveDappConnectionContext {
@@ -40,7 +41,6 @@ export interface ActiveDappConnectionContext {
   favicon?: string | null;
   connected: boolean;
 }
-
 interface HomeDappDockProps {
   context: ActiveDappConnectionContext | null;
   selectedChain: ResolvedChain | undefined;
@@ -50,12 +50,11 @@ interface HomeDappDockProps {
   onChainSelect: (chainName: string) => void;
   onDisconnect: (origin: string) => Promise<void>;
 }
-
-function SiteMark({ context }: { context: ActiveDappConnectionContext | null }) {
-  const label = context?.hostname || "No active site";
-  return <DappSiteIcon src={context?.favicon} label={label} />;
+function SiteMark({ label, src, fallbackSrc }: {
+  label: string; src?: string | null; fallbackSrc?: string | null;
+}) {
+  return <DappSiteIcon src={src} fallbackSrc={fallbackSrc} label={label} />;
 }
-
 // Lucide `wallet-minimal`, ISC licensed: https://lucide.dev/icons/wallet-minimal
 function WalletBalanceIcon() {
   return (
@@ -74,7 +73,6 @@ function WalletBalanceIcon() {
     </Icon>
   );
 }
-
 export default function HomeDappDock({
   context,
   selectedChain,
@@ -91,6 +89,10 @@ export default function HomeDappDock({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isDisconnectHovered, setIsDisconnectHovered] = useState(false);
   const [chainSearch, setChainSearch] = useState("");
+  const formatOrigin = useDappOriginFormatter();
+  const displayOrigin = context?.origin ? formatOrigin(context.origin) : null;
+  const siteLabel = displayOrigin?.label || context?.hostname || "No active site";
+  const siteIcon = displayOrigin?.faviconSrc || context?.favicon;
   useSheetTransitionSound(sheet.isOpen);
 
   const rankedChains = useMemo(() => {
@@ -139,7 +141,6 @@ export default function HomeDappDock({
       setIsDisconnecting(false);
     }
   };
-
   return (
     <>
       <Box
@@ -159,10 +160,10 @@ export default function HomeDappDock({
           overflow="hidden"
         >
           <HStack minW={0} flex={1} spacing={3} px={3} py={2}>
-            <SiteMark context={context} />
+            <SiteMark label={siteLabel} src={siteIcon} fallbackSrc={displayOrigin?.faviconFallbackSrc} />
             <VStack minW={0} flex={1} align="stretch" spacing={0} textAlign="start">
               <Text color="fg.primary" fontSize="sm" fontWeight="600" noOfLines={1}>
-                {context?.hostname || "No active site"}
+                {siteLabel}
               </Text>
               {context?.connected ? (
                 <Button
@@ -177,7 +178,7 @@ export default function HomeDappDock({
                   borderRadius="md"
                   justifyContent="flex-start"
                   color={isDisconnectHovered ? "chart.negative" : "fg.secondary"}
-                  aria-label={`Disconnect ${context.hostname}`}
+                  aria-label={`Disconnect ${siteLabel}`}
                   isLoading={isDisconnecting}
                   spinnerPlacement="start"
                   onMouseEnter={() => setIsDisconnectHovered(true)}
@@ -249,7 +250,6 @@ export default function HomeDappDock({
           </Button>}
         </HStack>
       </Box>
-
       <Drawer
         isOpen={sheet.isOpen}
         placement="bottom"
@@ -312,10 +312,10 @@ export default function HomeDappDock({
             <DrawerCloseButton top={4} right={3} boxSize="40px" />
             <DrawerHeader px={4} pt={7} pb={3} pr={14}>
               <HStack spacing={3}>
-                <SiteMark context={context} />
+                <SiteMark label={siteLabel} src={siteIcon} fallbackSrc={displayOrigin?.faviconFallbackSrc} />
                 <VStack minW={0} align="stretch" spacing={0}>
                   <Text as="h2" color="fg.primary" fontSize="lg" lineHeight="1.3" noOfLines={1}>
-                    {context?.hostname || "No active site"}
+                    {siteLabel}
                   </Text>
                   <Text color="fg.secondary" fontSize="sm" noOfLines={1}>
                     {context?.connected ? "Connected to WalletChan" : "Not connected"}

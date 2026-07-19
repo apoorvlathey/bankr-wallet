@@ -8,6 +8,7 @@ import {
 
 interface DappSiteIconProps {
   src?: string | null;
+  fallbackSrc?: string | null;
   label: string;
   size?: string;
   imageSize?: string;
@@ -19,17 +20,25 @@ interface DappSiteIconProps {
  */
 export default function DappSiteIcon({
   src,
+  fallbackSrc,
   label,
   size = "38px",
   imageSize = "24px",
 }: DappSiteIconProps) {
   const [failed, setFailed] = useState(false);
   const safeSrc = useCachedAvatarSrc(src);
+  const safeFallbackSrc = useCachedAvatarSrc(fallbackSrc);
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const showImage = !!safeSrc && safeSrc !== INERT_IMAGE_SRC && !failed;
+  const resolvedSrc =
+    safeSrc && safeSrc !== INERT_IMAGE_SRC
+      ? safeSrc
+      : safeFallbackSrc && safeFallbackSrc !== INERT_IMAGE_SRC
+        ? safeFallbackSrc
+        : null;
+  const showImage = !!resolvedSrc && !failed;
 
-  useEffect(() => setFailed(false), [safeSrc]);
+  useEffect(() => setFailed(false), [resolvedSrc]);
 
   return (
     <Box
@@ -46,7 +55,7 @@ export default function DappSiteIcon({
     >
       {showImage ? (
         <Image
-          src={safeSrc || undefined}
+          src={resolvedSrc || undefined}
           alt=""
           boxSize={imageSize}
           objectFit="contain"

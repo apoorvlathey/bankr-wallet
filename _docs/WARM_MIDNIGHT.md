@@ -607,6 +607,45 @@ Relevant files:
   receipt enrichment, bridge settlement data, metadata fallback, back-scroll
   restoration, and wallet-type-neutral history rendering.
 
+### 5.17 dapp3 browser
+
+- The standalone `browse.html` launcher uses the canonical Midnight graphite
+  elevation ramp rather than its legacy emerald-on-black palette.
+- Amber is reserved for the mascot spotlight, Open action, example hover, and
+  fallback dapp identity; keyboard focus remains financial blue.
+- The resolver is one focused decision path with a visible field label,
+  inline text error, and native keyboard-operable controls.
+- Favorite dapps appear first and may represent either resolver-backed sites or
+  ordinary HTTP(S) dapps saved from the connected list. Connected dapps follow
+  in a three-row scroll region, with last-used context, direct canonical-origin
+  navigation, and hover/focus favorite and disconnect actions. Recent
+  ENS/GNS/onchain dapps remain last in the same restrained, responsive
+  4/3/2-column tile grammar.
+- The resolver input filters connected dapps by hostname, title, and origin as
+  the user types. Runtime/storage events plus focus and visibility reconciliation
+  keep favorites, cached sites, and permissions current without page reload.
+- The same field is a compact command surface: normal credential-free HTTPS
+  URLs get a direct-open row, while free text receives debounced DefiLlama
+  directory suggestions. The elevated graphite result list supports arrow-key
+  selection, Escape dismissal, loading/error feedback, and safe-raster marks.
+  Directory progress reuses the shared Midnight three-dot pulse used by
+  simulation and gas estimation instead of introducing a browser-only loader.
+- Suggestion rows preserve the launcher by opening their validated HTTPS dapp
+  in a new tab. Hover, keyboard selection, or focus reveals a compact trailing
+  star; it favorites the dapp without opening it and uses the same filled amber
+  saved state as connected-dapp cards.
+- The top-level browser-only connected-site read is bounded and sanitized;
+  existing interstitial routing and remote-image safety remain unchanged.
+- Image-backed dapp marks use the same near-white contrast canvas and neutral
+  edge as More → Connected dapps so transparent dark artwork remains legible.
+  Generated letter fallbacks and the browser mascot now use that same white
+  canvas instead of an amber wrapper. Raster marks are larger with rounded
+  image corners while the outer tile geometry stays fixed.
+- A populated browser search field shows a bare 36px clear icon immediately to
+  the left of Open, without a resting border or background. Clearing retains
+  focus, closes the current result state, and leaves the field ready for a new
+  query.
+
 ## 6. Logic and safety guardrails
 
 Warm Midnight work is presentation-first. Do not casually change:
@@ -679,6 +718,7 @@ Every displayed `0x` address still follows the repository standard:
 | Homepage responsive/focus final pass | Pending | Do only after visual composition is locked |
 | Send | Implemented and reviewed | Amber Review send commitment, compact amber balance slider, quiet optional-data boundary, no Swap detour |
 | Swap/Bridge | Implemented and reviewed | Compact chain-aware intent form, holdings-first picker, progressive route detail, custom slippage, and amber commitment path |
+| dapp3 browser | Implemented and reviewed | Standalone Warm Midnight launcher with amber brand/action emphasis, blue focus, and responsive dapp tiles |
 | Confirmations and signing | Transaction review implemented; signing review pending | Transaction uses the Warm Midnight decision path; preserve information-first trust hierarchy |
 | Settings/account management | Mobile baseline exists; Warm Midnight review pending | Review by leaf surface, not as one large rewrite |
 
@@ -750,6 +790,7 @@ broader QA scripts or automatically open preview pages.
 | Positions | `TokenHoldings.tsx` and its DeFi position row helpers |
 | Activity/detail | transaction list components, `TxDetailScreen.tsx`, `TxDetailModal.tsx` |
 | Transaction detail composition | `components/TransactionDetails/`, `ClearSignedSummaryCard.tsx`, `preview/completedTransactionFixture.ts` |
+| dapp3 browser | `pages/Dapp3Browser.tsx`, `pages/Dapp3Browser.css`, `browse.html` |
 | Shared mobile primitives | `components/ui/` |
 | Midnight tokens | `theme/themes/midnight.ts`, `theme/recipes/`, `theme/tokens.ts` |
 
@@ -774,6 +815,18 @@ in the same workstream so the next chat does not depend on conversation history.
 
 ## 12. Changelog
 
+- 2026-07-18: promoted Favorite dapps above Connected dapps; added a three-row
+  connected-site scroll region, launcher-input filtering, keyboard-accessible
+  favorite/disconnect tile actions, HTTP(S) favorites independent of
+  permission lifetime, and automatic open-page reconciliation.
+- 2026-07-18: matched browse-page dapp logo wrappers to More → Connected dapps:
+  real image marks use a light neutral canvas, while amber remains only on
+  letter fallbacks.
+- 2026-07-18: replaced the standalone dapp3 browser's emerald palette with
+  canonical Warm Midnight graphite surfaces, amber identity/action emphasis,
+  blue focus, accessible resolver labeling, and responsive dapp tiles. The
+  launcher now also shows the same exact-origin HTTP(S) grants as More →
+  Connected dapps through a narrow top-level-only public metadata projection.
 - 2026-07-16: completed the Transaction-details variant matrix. Same-chain
   swaps, EIP-7702 set/revoke, ERC-7715 revoke, atomic and sequential batches,
   force inclusion, bridge pending/refund, broadcast uncertainty, deployments,

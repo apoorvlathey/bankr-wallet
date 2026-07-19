@@ -1,5 +1,6 @@
 import { Box, HStack, usePrefersReducedMotion } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
+import { MidnightDotPulseLoader } from "@/components/MidnightDotPulseLoader";
 import { isDarkThemeId, useTheme } from "@/theme";
 
 interface ShapesLoaderProps {
@@ -67,54 +68,15 @@ function BauhausShapesLoader({
   );
 }
 
-/**
- * Midnight loader: three identical iridescent dots fade in/out in sequence.
- * Restrained pulse instead of Bauhaus's bouncing geometric shapes — fits the
- * dark mode aesthetic where the loader should sit quietly while the model
- * thinks rather than dance.
- */
-function MidnightDotPulseLoader({
-  size,
-  reduceMotion,
-}: {
-  size: string;
-  reduceMotion: boolean;
-}) {
-  const pulse = keyframes`
-    0%, 80%, 100% {
-      opacity: 0.25;
-      transform: scale(0.9);
-    }
-    40% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  `;
-
-  return (
-    <HStack spacing={1.5} justify="center">
-      {[0, 1, 2].map((i) => (
-        <Box
-          key={i}
-          w={size}
-          h={size}
-          borderRadius="full"
-          bg="accent.primary"
-          animation={reduceMotion ? undefined : `${pulse} 1.2s ease-in-out infinite`}
-          sx={{ animationDelay: `${i * 160}ms` }}
-        />
-      ))}
-    </HStack>
-  );
-}
-
 export function ShapesLoader({ size = "10px" }: ShapesLoaderProps) {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return isDarkTheme ? (
-    <MidnightDotPulseLoader size={size} reduceMotion={prefersReducedMotion} />
+    <Box color="accent.primary" display="flex">
+      <MidnightDotPulseLoader size={size} />
+    </Box>
   ) : (
     <BauhausShapesLoader size={size} reduceMotion={prefersReducedMotion} />
   );

@@ -5,6 +5,7 @@ import type { Erc7715PermissionRevokeMeta } from "@/chrome/requests/pendingTxSto
 import TokenLogo from "@/components/TokenLogo";
 import { AddressParam } from "@/components/decodedParams/AddressParam";
 import { TokenContractPopover } from "@/components/shared/TokenContractPopover";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { permissionTitle } from "@/lib/erc7715PermissionDisplay";
 import type { TokenDisplayMetadata } from "@/lib/tokenMetadataClient";
 
@@ -71,6 +72,7 @@ export default function Erc7715RevokeReceipt({
   expiresLabel: string;
   revocationMethodLabels: string[];
 }) {
+  const formatOrigin = useDappOriginFormatter();
   const tokenLogo = (
     <TokenLogo
       symbol={tokenSymbol}
@@ -117,7 +119,8 @@ export default function Erc7715RevokeReceipt({
               fontWeight="700"
               overflowWrap="anywhere"
             >
-              {requestingSiteLabel(meta.origin)}
+              {formatOrigin(meta.origin).resolvedName ||
+                requestingSiteLabel(meta.origin)}
             </Text>
           </SummaryRow>
         )}

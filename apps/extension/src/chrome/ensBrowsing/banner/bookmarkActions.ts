@@ -6,7 +6,11 @@ import {
   removeBookmark,
   type EnsBookmark,
 } from "../bookmarks";
-import { currentPagePath, scrapePageMetadata } from "./pageState";
+import {
+  currentPagePath,
+  scrapePageMetadata,
+} from "./pageState";
+import { buildBrowserFaviconUrl } from "@/lib/browserFavicon";
 import type { BannerRefs, BannerTabContext } from "./types";
 
 function applyStarState(refs: BannerRefs, favorited: boolean): void {
@@ -38,7 +42,7 @@ function buildBookmark(
     kind: context.kind,
     contractAddress: context.contractAddress,
     title: metadata.title,
-    favicon: metadata.favicon,
+    favicon: buildBrowserFaviconUrl(location.href) || metadata.favicon,
     addedAt: Date.now(),
   };
 }

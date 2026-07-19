@@ -260,8 +260,8 @@ export default function MoreActionsView({
     ...(!isFirefox
       ? [
           {
-            title: "dapp3 browser",
-            detail: "ENS, IPFS, onchain HTML",
+            title: "WalletChan Browser",
+            detail: "Search and Browse Dapps",
             icon: <GlobeIcon boxSize={5} />,
             iconBg: "chart.positive",
             iconColor: "surface.base",

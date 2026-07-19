@@ -7,6 +7,7 @@ import {
   safeFaviconUrl,
   splitEnsDisplayUrl,
 } from "../../src/chrome/ensBrowsing/banner/pageState";
+import { buildBrowserFaviconUrl } from "../../src/lib/browserFavicon";
 import { buildHostedGatewayUrl } from "../../src/chrome/ensBrowsing/banner/menuActions";
 import type { BannerTabContext } from "../../src/chrome/ensBrowsing/banner/types";
 
@@ -63,6 +64,46 @@ test("banner metadata only accepts the historical favicon URL schemes", () => {
     "chrome-extension://id/icon.png",
   ]) {
     assert.equal(safeFaviconUrl(value), undefined, value);
+  }
+});
+
+test("local gateway pages use Chrome's processed favicon endpoint", () => {
+  assert.equal(
+    buildBrowserFaviconUrl(
+      "http://bafy.ipfs.localhost:8080/swap?from=eth#review",
+      "chrome-extension://walletchan/",
+    ),
+    "chrome-extension://walletchan/_favicon/?pageUrl=http%3A%2F%2Fbafy.ipfs.localhost%3A8080%2Fswap%3Ffrom%3Deth%23review&size=64",
+  );
+  assert.ok(
+    buildBrowserFaviconUrl(
+      "http://bafy.ipfs.gateway.home:9080/",
+      "chrome-extension://walletchan/",
+    ),
+  );
+  for (const value of [
+    "https://zrouter.eth.limo/",
+    "https://zrouter.eth.link/",
+    "https://apoorv.gwei.domains/",
+    "https://0x0000000000000000000000000000000000000000.w3eth.io/",
+  ]) {
+    assert.ok(
+      buildBrowserFaviconUrl(value, "chrome-extension://walletchan/"),
+      value,
+    );
+  }
+  for (const value of [
+    "https://app.example/icon",
+    "https://eth.limo/",
+    "https://zrouter.eth.limo.attacker.example/",
+    "http://127.0.0.1:8080/icon",
+    "javascript:alert(1)",
+  ]) {
+    assert.equal(
+      buildBrowserFaviconUrl(value, "chrome-extension://walletchan/"),
+      undefined,
+      value,
+    );
   }
 });
 

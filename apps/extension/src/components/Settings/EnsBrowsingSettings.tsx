@@ -231,7 +231,7 @@ export default function EnsBrowsingSettings({ onBack }: EnsBrowsingSettingsProps
   );
 
   return (
-    <SettingsScreenFrame title="dapp3 · ENS browsing" onBack={onBack}>
+    <SettingsScreenFrame title="WalletChan Browser" onBack={onBack}>
       <VStack align="stretch" spacing={4}>
         <Text fontSize="sm" color="fg.secondary">
           Open .eth and .gwei sites from the address bar, with an optional local IPFS gateway.

@@ -1,0 +1,45 @@
+@keyframes walletchan-midnight-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.midnight-dot-pulse-loader {
+  color: var(--midnight-dot-color, currentColor);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--midnight-dot-size, 6px) * 0.75);
+}
+
+.midnight-dot-pulse-loader__dot {
+  width: var(--midnight-dot-size, 6px);
+  height: var(--midnight-dot-size, 6px);
+  border-radius: 50%;
+  background: currentColor;
+  animation: walletchan-midnight-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.midnight-dot-pulse-loader__dot:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.midnight-dot-pulse-loader__dot:nth-child(3) {
+  animation-delay: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .midnight-dot-pulse-loader__dot {
+    opacity: 0.65;
+    transform: none;
+    animation: none;
+  }
+}

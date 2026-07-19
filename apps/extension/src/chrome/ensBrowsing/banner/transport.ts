@@ -1,3 +1,4 @@
+import { buildBrowserFaviconUrl } from "@/lib/browserFavicon";
 import { scrapePageMetadata } from "./pageState";
 import type { BannerTabContext, BannerTheme } from "./types";
 
@@ -36,7 +37,6 @@ export async function getBannerTheme(): Promise<BannerTheme> {
 }
 
 function sendCacheMetadata(context: BannerTabContext): void {
-  if (/^0x[a-f0-9]{40}$/i.test(context.ensName)) return;
   const metadata = scrapePageMetadata();
   if (!metadata.title && !metadata.favicon) return;
   chrome.runtime
@@ -44,7 +44,7 @@ function sendCacheMetadata(context: BannerTabContext): void {
       type: "ens-cache-metadata",
       name: context.ensName,
       title: metadata.title,
-      favicon: metadata.favicon,
+      favicon: buildBrowserFaviconUrl(location.href) || metadata.favicon,
     })
     .catch(() => undefined);
 }

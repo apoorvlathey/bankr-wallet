@@ -1,23 +1,35 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ENS_RESOLVE_CACHE_KEY,
   listCached,
   type CachedResolve,
 } from "@/chrome/ensBrowsing/cache";
 import {
+  addBookmark,
   ENS_BOOKMARKS_KEY,
   getAllBookmarks,
   type EnsBookmark,
 } from "@/chrome/ensBrowsing/bookmarks";
+import BookmarkPageReminder from "@/components/Dapp3Browser/BookmarkPageReminder";
+import ConnectedDappsSection from "@/components/Dapp3Browser/ConnectedDappsSection";
+import DappDirectorySuggestions from "@/components/Dapp3Browser/DappDirectorySuggestions";
+import FavoriteDappsSection from "@/components/Dapp3Browser/FavoriteDappsSection";
+import Dapp3SiteCard, { CloseIcon } from "@/components/Dapp3Browser/Dapp3SiteCard";
 import {
-  INERT_IMAGE_SRC,
-  useCachedAvatarSrc,
-} from "@/hooks/useCachedAvatarSrc";
+  bookmarkForCachedDapp,
+  navigationUrlForTarget,
+  parseDapp3Target,
+} from "@/components/Dapp3Browser/dapp3BrowserModel";
+import { useDappDirectorySearch } from "@/components/Dapp3Browser/useDappDirectorySearch";
+import { googleFaviconUrl } from "@/constants/externalUrls";
+import { buildBrowserFaviconUrl } from "@/lib/browserFavicon";
 import "./Dapp3Browser.css";
-
-type ParsedTarget =
-  | { kind: "ens"; host: string; rest: string }
-  | { kind: "address"; address: string; rest: string };
 
 const EXAMPLES = [
   { label: "vitalik.eth", value: "vitalik.eth" },
@@ -29,74 +41,6 @@ const EXAMPLES = [
   },
 ];
 
-function normalizeRest(rest: string): string {
-  if (!rest) return "";
-  if (rest.startsWith("/") || rest.startsWith("?") || rest.startsWith("#")) {
-    return rest;
-  }
-  return `/${rest}`;
-}
-
-function parseTarget(rawInput: string): ParsedTarget | null {
-  const trimmed = rawInput
-    .trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/^\/+/, "");
-  if (!trimmed) return null;
-
-  const match = trimmed.match(/^([^/?#]+)(.*)$/);
-  if (!match?.[1]) return null;
-
-  const head = match[1].toLowerCase().replace(/:\d+$/, "");
-  const rest = normalizeRest(match[2] || "");
-
-  if (/^0x[a-f0-9]{40}$/.test(head)) {
-    return { kind: "address", address: head, rest };
-  }
-
-  const w3link = head.match(/^(0x[a-f0-9]{40})\.1\.w3link\.io$/);
-  if (w3link?.[1]) {
-    return { kind: "address", address: w3link[1], rest };
-  }
-
-  const w3eth = head.match(/^([a-z0-9-]+(?:\.[a-z0-9-]+)*)\.w3eth\.io$/);
-  if (w3eth?.[1]) {
-    const label = w3eth[1];
-    if (/^0x[a-f0-9]{40}$/.test(label)) {
-      return { kind: "address", address: label, rest };
-    }
-    return { kind: "ens", host: `${label}.eth`, rest };
-  }
-
-  const ethGateway = head.match(/^((?:[a-z0-9-]+\.)+eth)\.(?:limo|link)$/);
-  if (ethGateway?.[1]) {
-    return { kind: "ens", host: ethGateway[1], rest };
-  }
-
-  const gweiGateway = head.match(/^((?:[a-z0-9-]+\.)+gwei)\.domains$/);
-  if (gweiGateway?.[1]) {
-    return { kind: "ens", host: gweiGateway[1], rest };
-  }
-
-  if (/^(?:[a-z0-9-]+\.)+(?:eth|gwei)\.?$/.test(head)) {
-    return {
-      kind: "ens",
-      host: head.endsWith(".") ? head.slice(0, -1) : head,
-      rest,
-    };
-  }
-
-  return null;
-}
-
-function buildTargetUrl(target: ParsedTarget): string {
-  const path = target.rest || "/";
-  if (target.kind === "ens") {
-    return `http://${target.host}${path}`;
-  }
-  return `https://${target.address}.w3eth.io${path}`;
-}
-
 function buildInterstitialUrl(targetUrl: string): string {
   return `${chrome.runtime.getURL("interstitial.html")}#${targetUrl}`;
 }
@@ -106,13 +50,7 @@ function formatKind(kind: CachedResolve["kind"]): string {
   return kind.toUpperCase();
 }
 
-type FaviconSource = {
-  ensName: string;
-  kind?: CachedResolve["kind"];
-  favicon?: string;
-};
-
-function defaultFaviconUrl(site: FaviconSource): string {
+function cachedFaviconUrl(site: CachedResolve): string {
   if (site.kind === "web3" || /^0x[a-f0-9]{40}$/.test(site.ensName)) {
     const label = site.ensName.endsWith(".eth")
       ? site.ensName.slice(0, -4)
@@ -125,40 +63,42 @@ function defaultFaviconUrl(site: FaviconSource): string {
   return `https://${site.ensName}.limo/favicon.ico`;
 }
 
-function BrowserFavicon({
-  src,
-  label,
-  onError,
-}: {
-  src: string | null;
-  label: string;
-  onError: () => void;
-}) {
-  const safeSrc = useCachedAvatarSrc(src);
-  if (!safeSrc || safeSrc === INERT_IMAGE_SRC) {
-    return <span className="site-letter">{label}</span>;
-  }
+function cachedFaviconFallbackUrl(site: CachedResolve): string {
+  const gatewayUrl = cachedFaviconUrl(site).replace(/\/favicon\.ico$/, "/");
   return (
-    <img
-      className="site-favicon"
-      src={safeSrc}
-      alt=""
-      onError={onError}
-    />
+    buildBrowserFaviconUrl(gatewayUrl) ||
+    googleFaviconUrl(new URL(gatewayUrl).hostname, 64)
   );
 }
 
 export default function Dapp3Browser() {
   const inputRef = useRef<HTMLInputElement>(null);
   const clearInvalidRef = useRef<number | null>(null);
+  const cacheLoadVersionRef = useRef(0);
+  const bookmarkLoadVersionRef = useRef(0);
   const [targetInput, setTargetInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [bookmarks, setBookmarks] = useState<EnsBookmark[]>([]);
   const [cachedSites, setCachedSites] = useState<CachedResolve[]>([]);
-  const [failedFavicons, setFailedFavicons] = useState<Set<string>>(
-    () => new Set(),
+  const [pendingCachedFavorite, setPendingCachedFavorite] = useState<
+    string | null
+  >(null);
+  const [cachedFavoriteError, setCachedFavoriteError] = useState<string | null>(
+    null,
   );
+  const directorySearch = useDappDirectorySearch(targetInput);
+  const parsedInput = parseDapp3Target(targetInput);
+  const directUrl = parsedInput?.kind === "https" ? parsedInput.url : undefined;
+  const suggestionCount = directorySearch.results.length + (directUrl ? 1 : 0);
+  const suggestionsVisible =
+    searchFocused &&
+    !suggestionsDismissed &&
+    targetInput.trim().length >= 2 &&
+    (suggestionCount > 0 || directorySearch.loading || directorySearch.failed);
 
   useEffect(() => {
     document.title = "WalletChan Browser";
@@ -177,17 +117,31 @@ export default function Dapp3Browser() {
     let active = true;
 
     const loadCachedSites = async () => {
+      const loadVersion = ++cacheLoadVersionRef.current;
       const entries = await listCached(8).catch(() => []);
-      if (active) setCachedSites(entries);
+      if (active && loadVersion === cacheLoadVersionRef.current) {
+        setCachedSites(entries);
+      }
     };
 
     const loadBookmarks = async () => {
+      const loadVersion = ++bookmarkLoadVersionRef.current;
       const entries = await getAllBookmarks().catch(() => []);
-      if (active) setBookmarks(entries);
+      if (active && loadVersion === bookmarkLoadVersionRef.current) {
+        setBookmarks(entries);
+      }
     };
 
     void loadCachedSites();
     void loadBookmarks();
+
+    const refresh = () => {
+      void loadCachedSites();
+      void loadBookmarks();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
 
     const handleStorageChange = (
       changes: Record<string, chrome.storage.StorageChange>,
@@ -201,9 +155,15 @@ export default function Dapp3Browser() {
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
+      cacheLoadVersionRef.current += 1;
+      bookmarkLoadVersionRef.current += 1;
       chrome.storage.onChanged.removeListener(handleStorageChange);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -221,10 +181,10 @@ export default function Dapp3Browser() {
   };
 
   const openTarget = (raw: string = targetInput) => {
-    const parsed = parseTarget(raw);
+    const parsed = parseDapp3Target(raw);
     if (!parsed) {
       flashError(
-        "Couldn't parse that. Try `name.eth`, `name.gwei`, or a 0x... contract address.",
+        "Choose a suggested dapp, or enter an https:// URL, name.eth, name.gwei, or 0x... address.",
       );
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -232,19 +192,59 @@ export default function Dapp3Browser() {
     }
 
     setError(null);
-    location.assign(buildInterstitialUrl(buildTargetUrl(parsed)));
+    const targetUrl = navigationUrlForTarget(parsed);
+    location.assign(
+      parsed.kind === "https" ? targetUrl : buildInterstitialUrl(targetUrl),
+    );
+  };
+
+  const openHttpsInNewTab = (url: string) => {
+    setError(null);
+    setSuggestionsDismissed(true);
+    void chrome.runtime
+      .sendMessage({ type: "ens-open-dapp-url", url })
+      .then((response: { ok?: boolean }) => {
+        if (!response?.ok) flashError("That dapp could not be opened.");
+      })
+      .catch(() => flashError("That dapp could not be opened."));
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (activeSuggestion >= 0) {
+      if (directUrl && activeSuggestion === 0) {
+        openHttpsInNewTab(directUrl);
+        return;
+      }
+      const resultIndex = activeSuggestion - (directUrl ? 1 : 0);
+      const result = directorySearch.results[resultIndex];
+      if (result) {
+        openHttpsInNewTab(result.url);
+        return;
+      }
+    }
+    if (!parsedInput && directorySearch.results[0]) {
+      openHttpsInNewTab(directorySearch.results[0].url);
+      return;
+    }
     openTarget();
   };
 
-  const markFaviconFailed = (key: string) => {
-    setFailedFavicons((current) => {
-      const next = new Set(current);
-      next.add(key);
-      return next;
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setSuggestionsDismissed(true);
+      setActiveSuggestion(-1);
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (suggestionCount === 0) return;
+    event.preventDefault();
+    setSuggestionsDismissed(false);
+    setActiveSuggestion((current) => {
+      if (event.key === "ArrowDown") {
+        return current < suggestionCount - 1 ? current + 1 : 0;
+      }
+      return current > 0 ? current - 1 : suggestionCount - 1;
     });
   };
 
@@ -253,19 +253,11 @@ export default function Dapp3Browser() {
     (site) => !bookmarkedNames.has(site.ensName),
   );
 
-  const bookmarkTarget = (bookmark: EnsBookmark) => {
-    if (bookmark.path === "/") return bookmark.ensName;
-    return `${bookmark.ensName}${bookmark.path}`;
-  };
-
-  const bookmarkSubtitle = (bookmark: EnsBookmark) => {
-    if (bookmark.path === "/") return "Saved";
-    return bookmark.path;
-  };
-
   return (
     <>
       <main>
+        <BookmarkPageReminder />
+
         <div className="search-panel">
           <div className="hero">
             <span className="brand-mark" aria-hidden="true">
@@ -273,37 +265,93 @@ export default function Dapp3Browser() {
             </span>
             <h1>WalletChan Browser</h1>
             <p className="hero-subtitle">
-              Resolve & Browse ENS, GNS, IPFS, and Onchain HTML sites locally
+              Search dapps or resolve ENS, GNS, IPFS, and onchain sites
             </p>
           </div>
 
           <form className="go-form" autoComplete="off" onSubmit={submit}>
-            <div className="input-row">
-              <input
-                ref={inputRef}
-                id="target"
-                type="text"
-                placeholder="name.eth, name.gwei, or 0x... address"
-                value={targetInput}
-                onChange={(event) => {
-                  setTargetInput(event.target.value);
-                  if (error) setError(null);
-                }}
-                className={invalid ? "invalid" : undefined}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-              />
-              <button type="submit" id="open" className="primary">
-                Open
-              </button>
+            <div className="search-control">
+              <div className="input-row">
+                <input
+                  ref={inputRef}
+                  id="target"
+                  type="text"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-haspopup="grid"
+                  aria-label="Search dapps or enter URL or .eth, .gwei or 0x address for onchain dapps"
+                  aria-expanded={suggestionsVisible}
+                  aria-controls="dapp-directory-suggestions"
+                  aria-activedescendant={
+                    activeSuggestion >= 0
+                      ? `dapp-suggestion-${activeSuggestion}`
+                      : undefined
+                  }
+                  aria-busy={directorySearch.loading}
+                  placeholder="Search dapps / enter URL / .eth, .gwei, 0x.. for onchain dapps"
+                  value={targetInput}
+                  onFocus={() => {
+                    setSearchFocused(true);
+                    setSuggestionsDismissed(false);
+                  }}
+                  onBlur={() => setSearchFocused(false)}
+                  onKeyDown={handleSearchKeyDown}
+                  onChange={(event) => {
+                    setTargetInput(event.target.value);
+                    setSuggestionsDismissed(false);
+                    setActiveSuggestion(-1);
+                    if (error) setError(null);
+                  }}
+                  className={invalid ? "invalid" : undefined}
+                  aria-describedby={error ? "hint" : undefined}
+                  aria-invalid={Boolean(error)}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+                <span className="input-actions">
+                  {targetInput && (
+                    <button
+                      type="button"
+                      className="search-clear"
+                      aria-label="Clear search"
+                      title="Clear search"
+                      onClick={() => {
+                        setTargetInput("");
+                        setError(null);
+                        setInvalid(false);
+                        setSuggestionsDismissed(false);
+                        setActiveSuggestion(-1);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      <CloseIcon />
+                    </button>
+                  )}
+                  <button type="submit" id="open" className="primary">
+                    Open
+                  </button>
+                </span>
+              </div>
+              {suggestionsVisible && (
+                <DappDirectorySuggestions
+                  directUrl={directUrl}
+                  results={directorySearch.results}
+                  bookmarks={bookmarks}
+                  loading={directorySearch.loading}
+                  failed={directorySearch.failed}
+                  activeIndex={activeSuggestion}
+                  onSelectUrl={openHttpsInNewTab}
+                />
+              )}
             </div>
-            <p className="hint" id="hint" hidden={!error}>
+            <p className="hint" id="hint" role="alert" hidden={!error}>
               {error}
             </p>
           </form>
 
           <div className="examples">
+            <span className="examples-label">Eg:</span>
             {EXAMPLES.map((example) => (
               <button
                 key={example.value}
@@ -321,81 +369,63 @@ export default function Dapp3Browser() {
           </div>
         </div>
 
-        {bookmarks.length > 0 && (
-          <section
-            className="cached-sites bookmarked-sites"
-            aria-labelledby="bookmarked-sites-title"
-          >
-            <h2 id="bookmarked-sites-title">Favorite dapps</h2>
-            <div className="site-grid">
-              {bookmarks.map((bookmark) => {
-                const key = `${bookmark.ensName}${bookmark.path}`;
-                const faviconSrc = failedFavicons.has(key)
-                  ? null
-                  : bookmark.favicon || defaultFaviconUrl(bookmark);
-                const target = bookmarkTarget(bookmark);
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className="site-tile"
-                    title={bookmark.title || target}
-                    onClick={() => {
-                      setTargetInput(target);
-                      setError(null);
-                      openTarget(target);
-                    }}
-                  >
-                    <span className="site-icon" aria-hidden="true">
-                      <BrowserFavicon
-                        src={faviconSrc}
-                        label={bookmark.ensName.charAt(0).toUpperCase()}
-                        onError={() => markFaviconFailed(key)}
-                      />
-                    </span>
-                    <span className="site-name">
-                      {bookmark.title?.trim() || bookmark.ensName}
-                    </span>
-                    <span className="site-kind">
-                      {bookmarkSubtitle(bookmark)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
+        <FavoriteDappsSection
+          bookmarks={bookmarks}
+          cachedSites={cachedSites}
+          onOpenHttpsUrl={openHttpsInNewTab}
+          onOpenResolvedTarget={(target) => {
+            setTargetInput(target);
+            setError(null);
+            openTarget(target);
+          }}
+        />
+
+        <ConnectedDappsSection
+          bookmarks={bookmarks}
+          query={targetInput}
+          onOpenHttpsUrl={openHttpsInNewTab}
+        />
 
         {visibleCachedSites.length > 0 && (
           <section className="cached-sites" aria-labelledby="cached-sites-title">
             <h2 id="cached-sites-title">Recently cached dapps</h2>
+            {cachedFavoriteError && (
+              <p className="connected-sites-error" role="alert">
+                {cachedFavoriteError}
+              </p>
+            )}
             <div className="site-grid">
               {visibleCachedSites.map((site) => {
-                const faviconSrc = failedFavicons.has(site.ensName)
-                  ? null
-                  : site.favicon || defaultFaviconUrl(site);
                 return (
-                  <button
+                  <Dapp3SiteCard
                     key={site.ensName}
-                    type="button"
-                    className="site-tile"
-                    title={site.title || site.ensName}
-                    onClick={() => {
+                    iconSrc={site.favicon || cachedFaviconUrl(site)}
+                    iconFallbackSrc={cachedFaviconFallbackUrl(site)}
+                    label={site.ensName}
+                    title={site.ensName}
+                    subtitle={formatKind(site.kind)}
+                    onOpen={() => {
                       setTargetInput(site.ensName);
                       setError(null);
                       openTarget(site.ensName);
                     }}
-                  >
-                    <span className="site-icon" aria-hidden="true">
-                      <BrowserFavicon
-                        src={faviconSrc}
-                        label={site.ensName.charAt(0).toUpperCase()}
-                        onError={() => markFaviconFailed(site.ensName)}
-                      />
-                    </span>
-                    <span className="site-name">{site.ensName}</span>
-                    <span className="site-kind">{formatKind(site.kind)}</span>
-                  </button>
+                    favoriteAction={{
+                      label: `Add ${site.title?.trim() || site.ensName} to favorites`,
+                      pressed: false,
+                      disabled: pendingCachedFavorite !== null,
+                      onClick: () => {
+                        setPendingCachedFavorite(site.ensName);
+                        setCachedFavoriteError(null);
+                        void addBookmark(bookmarkForCachedDapp(site))
+                          .catch(() => {
+                            setCachedFavoriteError(
+                              "That favorite could not be saved. Please try again.",
+                            );
+                          })
+                          .finally(() => setPendingCachedFavorite(null));
+                      },
+                    }}
+                  />
                 );
               })}
             </div>

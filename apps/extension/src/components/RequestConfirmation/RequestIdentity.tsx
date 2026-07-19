@@ -2,6 +2,7 @@ import { ExternalLinkIcon } from "@chakra-ui/icons";
 import { Box, HStack, Image, Text, VStack } from "@chakra-ui/react";
 import SafeImage from "@/components/SafeImage";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
 interface RequestIdentityProps {
   origin: string;
@@ -23,6 +24,27 @@ export function RequestIdentity({
   originInitials = "?",
   onOpenOrigin,
 }: RequestIdentityProps) {
+  const formatOrigin = useDappOriginFormatter();
+  const displayOrigin = formatOrigin(origin);
+  const displayLabel = displayOrigin.label;
+  const displayFavicon = displayOrigin.resolvedName
+    ? displayOrigin.faviconSrc
+    : favicon;
+  const displayFaviconFallback = displayOrigin.resolvedName
+    ? displayOrigin.faviconFallbackSrc
+    : originHostname
+      ? googleFaviconUrl(originHostname)
+      : undefined;
+  const displayInitials = displayOrigin.resolvedName
+    ? displayLabel
+        .split(/[.\s-]+/u)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase() || originInitials
+    : originInitials;
+
   return (
     <VStack
       as="section"
@@ -46,23 +68,21 @@ export function RequestIdentity({
       >
         {isInternalWalletChan ? (
           <Image src="/walletchan-icon.png" alt="WalletChan" boxSize="28px" />
-        ) : favicon || originHostname ? (
+        ) : displayFavicon || displayFaviconFallback ? (
           <SafeImage
-            src={favicon || undefined}
-            fallbackSrc={
-              originHostname ? googleFaviconUrl(originHostname) : undefined
-            }
+            src={displayFavicon || undefined}
+            fallbackSrc={displayFaviconFallback}
             alt=""
             boxSize="22px"
             fallback={
               <Text fontSize="xs" fontWeight="700" color="text.secondary">
-                {originInitials}
+                {displayInitials}
               </Text>
             }
           />
         ) : (
           <Text fontSize="xs" fontWeight="700" color="text.secondary">
-            {originInitials}
+            {displayInitials}
           </Text>
         )}
       </Box>
@@ -72,7 +92,7 @@ export function RequestIdentity({
           as="button"
           type="button"
           role="group"
-          aria-label={`Open ${originHostname || origin}`}
+          aria-label={`Open ${displayLabel}`}
           spacing={0}
           minH="24px"
           minW={0}
@@ -90,7 +110,7 @@ export function RequestIdentity({
             minW={0}
             noOfLines={1}
           >
-            {originHostname || origin}
+            {displayLabel}
           </Text>
           <ExternalLinkIcon
             boxSize="10px"
@@ -116,7 +136,7 @@ export function RequestIdentity({
           maxW="full"
           noOfLines={1}
         >
-          {originHostname || origin}
+          {displayLabel}
         </Text>
       )}
     </VStack>

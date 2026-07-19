@@ -17,7 +17,7 @@
 // Legacy shape (`tier1` / `tier2aLocalIpfs` / `tier2bKubo`) is migrated on read
 // so user settings persist across the rename.
 
-const KEY = "ensBrowsing";
+export const ENS_BROWSING_SETTINGS_KEY = "ensBrowsing";
 
 export const DEFAULT_GATEWAY_HOST = "localhost";
 export const DEFAULT_GATEWAY_PORT = 8080;
@@ -87,8 +87,8 @@ export function isDefaultGatewayHost(host: string): boolean {
 }
 
 export async function getEnsBrowsingSettings(): Promise<EnsBrowsingSettings> {
-  const raw = await chrome.storage.local.get(KEY);
-  return normalize(raw[KEY] as StoredShape | undefined);
+  const raw = await chrome.storage.local.get(ENS_BROWSING_SETTINGS_KEY);
+  return normalize(raw[ENS_BROWSING_SETTINGS_KEY] as StoredShape | undefined);
 }
 
 export async function setEnsBrowsingSetting<K extends keyof EnsBrowsingSettings>(
@@ -100,7 +100,7 @@ export async function setEnsBrowsingSetting<K extends keyof EnsBrowsingSettings>
   }
   const current = await getEnsBrowsingSettings();
   const next: EnsBrowsingSettings = { ...current, [key]: value };
-  await chrome.storage.local.set({ [KEY]: next });
+  await chrome.storage.local.set({ [ENS_BROWSING_SETTINGS_KEY]: next });
   return next;
 }
 
@@ -108,7 +108,11 @@ export function onEnsBrowsingSettingsChanged(
   cb: (next: EnsBrowsingSettings) => void,
 ): void {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !changes[KEY]) return;
-    cb(normalize(changes[KEY].newValue as StoredShape | undefined));
+    if (area !== "local" || !changes[ENS_BROWSING_SETTINGS_KEY]) return;
+    cb(
+      normalize(
+        changes[ENS_BROWSING_SETTINGS_KEY].newValue as StoredShape | undefined,
+      ),
+    );
   });
 }

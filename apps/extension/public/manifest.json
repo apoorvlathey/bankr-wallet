@@ -55,6 +55,7 @@
   ],
   "permissions": [
     "activeTab",
+    "favicon",
     "storage",
     "sidePanel",
     "notifications",

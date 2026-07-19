@@ -124,3 +124,43 @@ test("untrusted page icons and trusted renderers retain separate boundaries", ()
   assert.equal(sanitizeTrustedRendererImageSrc("https://cdn.example.org/icon.png"), null);
   assert.equal(sanitizeTrustedRendererImageSrc(raster), raster);
 });
+
+test("trusted renderers admit only approved browser favicon routes", () => {
+  const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  Object.defineProperty(globalThis, "chrome", {
+    configurable: true,
+    value: {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://walletchan${path}`,
+      },
+    },
+  });
+  try {
+    for (const allowed of [
+      "chrome-extension://walletchan/_favicon/?pageUrl=http%3A%2F%2Fbafy.ipfs.localhost%3A8080%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=http%3A%2F%2Fbafy.ipfs.gateway.home%3A9080%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Fzrouter.eth.limo%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Fzrouter.eth.link%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Fapoorv.gwei.domains%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2F0x1234.w3eth.io%2F&size=64",
+    ]) {
+      assert.equal(sanitizeTrustedRendererImageSrc(allowed), allowed);
+    }
+    for (const source of [
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Feth.limo%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=https%3A%2F%2Fzrouter.eth.link.attacker.example%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=http%3A%2F%2F127.0.0.1%2F&size=64",
+      "chrome-extension://walletchan/_favicon/?pageUrl=http%3A%2F%2Fbafy.ipfs.localhost%2F&size=128",
+      "chrome-extension://other/_favicon/?pageUrl=http%3A%2F%2Fbafy.ipfs.localhost%2F&size=64",
+    ]) {
+      assert.equal(sanitizeTrustedRendererImageSrc(source), null, source);
+    }
+  } finally {
+    if (originalChrome) {
+      Object.defineProperty(globalThis, "chrome", originalChrome);
+    } else {
+      Reflect.deleteProperty(globalThis, "chrome");
+    }
+  }
+});

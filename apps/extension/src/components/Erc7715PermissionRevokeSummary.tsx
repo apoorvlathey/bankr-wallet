@@ -29,6 +29,7 @@ import {
   type TokenDisplayMetadata,
 } from "@/lib/tokenMetadataClient";
 import { formatErc7715RevokeAmount } from "@/lib/erc7715PermissionRevokeDisplay";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { useTheme } from "@/theme";
 
 function isValidAddress(value: string | undefined): value is `0x${string}` {
@@ -97,6 +98,7 @@ export default function Erc7715PermissionRevokeSummary({
   presentation?: "review" | "receipt";
 }) {
   const { tokens } = useTheme();
+  const formatOrigin = useDappOriginFormatter();
   const [metadata, setMetadata] = useState<TokenDisplayMetadata | null>(null);
   const isNative = isErc7715NativePermissionType(meta.permissionType || "");
   const tokenAddress =
@@ -229,7 +231,7 @@ export default function Erc7715PermissionRevokeSummary({
               textAlign="right"
               noOfLines={1}
             >
-              {meta.origin}
+              {formatOrigin(meta.origin).resolvedName || meta.origin}
             </Text>
           </HStack>
         )}

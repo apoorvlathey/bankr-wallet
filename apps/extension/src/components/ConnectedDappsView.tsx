@@ -11,6 +11,7 @@ import {
 import type { DappPermission } from "@/chrome/requests/dappPermissionStorage";
 import DappSiteIcon from "@/components/DappSiteIcon";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import {
   AppHeader,
   AppScreen,
@@ -58,6 +59,7 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
   const [permissions, setPermissions] = useState<DappPermission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removingOrigin, setRemovingOrigin] = useState<string | null>(null);
+  const formatOrigin = useDappOriginFormatter();
 
   const loadPermissions = useCallback(async () => {
     try {
@@ -126,7 +128,9 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
             </EmptyState>
           ) : (
             <ListSurface aria-label="Connected dapps">
-              {sortedPermissions.map((permission) => (
+              {sortedPermissions.map((permission) => {
+                const displayOrigin = formatOrigin(permission.origin);
+                return (
                 <Box
                   as="li"
                   key={permission.origin}
@@ -153,10 +157,12 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
                     >
                       <DappSiteIcon
                         src={
+                          displayOrigin.faviconSrc ||
                           permission.favicon ||
                           googleFaviconUrl(permission.hostname, 64)
                         }
-                        label={permission.hostname}
+                        fallbackSrc={displayOrigin.faviconFallbackSrc}
+                        label={displayOrigin.label}
                         size="36px"
                         imageSize="24px"
                       />
@@ -168,7 +174,7 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
                           lineHeight="1.3"
                           noOfLines={1}
                         >
-                          {permission.hostname}
+                          {displayOrigin.label}
                         </Text>
                         <Text color="fg.secondary" fontSize="sm" noOfLines={1}>
                           {lastUsedLabel(permission.lastConnectedAt)}
@@ -177,7 +183,7 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
                       <ExternalLinkIcon color="fg.muted" flexShrink={0} />
                     </Button>
                     <IconButton
-                      aria-label={`Remove ${permission.hostname} account access`}
+                      aria-label={`Remove ${displayOrigin.label} account access`}
                       title="Remove access"
                       icon={<CloseIcon boxSize="10px" />}
                       variant="ghost"
@@ -198,7 +204,8 @@ export default function ConnectedDappsView({ onBack }: ConnectedDappsViewProps) 
                     />
                   </Flex>
                 </Box>
-              ))}
+                );
+              })}
             </ListSurface>
           )}
         </ScreenSection>

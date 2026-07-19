@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { useAddressContacts } from "@/hooks/useAddressContacts";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import ActivityItem from "./ActivityItem";
 import { buildActivityAddressLabels } from "./activityIdentityModel";
 import { groupActivityByDate } from "./activityModel";
@@ -46,6 +47,7 @@ function TxStatusList({
     null,
   );
   const { contacts } = useAddressContacts();
+  const formatOrigin = useDappOriginFormatter();
   const addressLabels = useMemo(
     () => buildActivityAddressLabels(accounts, contacts),
     [accounts, contacts],
@@ -218,6 +220,7 @@ function TxStatusList({
                 <ActivityItem
                   key={tx.id}
                   tx={tx}
+                  originDisplay={formatOrigin(tx.origin)}
                   addressLabels={addressLabels}
                   onClick={() => {
                     if (onSelectTx) onSelectTx(tx);

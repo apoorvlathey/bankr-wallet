@@ -300,8 +300,52 @@ scheme + host. It does **not** trust an arbitrary `chrome-extension://` or
 `interstitial.html`, `ens-error.html`, `setup-kubo.html`) are authorized only
 for their exact message/page combinations in
 `ensBrowsing/senderAuthorization.ts`; `ensBrowsing/handlers.ts` remains only
-the stable message-entry facade. These documents
-cannot call wallet UI, account, auth, or secret handlers. `popup-wake` and
+the stable message-entry facade. The top-level `browse.html` launcher may call
+`ens-list-connected-dapps`, which returns only a 24-entry display projection of
+`dappPermissions`: canonical origin-derived hostname, bounded title, sanitized
+public raster URL, and last-used timestamp. Embedded launcher frames, ordinary
+sites, and other extension pages fail authorization before permission storage
+is read. The projection excludes account addresses and unrecognized stored
+fields. These documents
+cannot call wallet UI, account, auth, or secret handlers. The exact top-level
+`browse.html` document may also call `ens-revoke-connected-dapp` with one
+HTTP(S) origin. That route normalizes the origin and delegates to the complete
+dapp revocation lifecycle: permission deletion, pending-request cancellation,
+matching-tab account cleanup, page notification, and a permission-change
+broadcast. It cannot grant access, choose an account, reveal account metadata,
+or delete the separate non-secret favorite record. Connected favorites extend
+the existing `ensBookmarks` record only with a normalized HTTP(S) origin; an
+invalid or non-HTTP(S) `launchUrl` is discarded before persistence or launch.
+Favorite reordering may additionally store a numeric display-only `sortOrder`
+on those same non-secret records. Reordering neither changes the launch target
+nor grants, revokes, or reads dapp permissions or account data.
+The same exact top-level launcher may call `ens-search-dapp-directory` with one
+user-entered query. The background trims and caps it at 120 characters, sends
+only that query to the exact DefiLlama HTTPS search endpoint, and applies a
+5-second deadline, 64 KiB response ceiling, redirect rejection, omitted
+credentials/referrer, and JSON validation. Its renderer projection is capped at
+eight records and retains only a bounded name, credential-free HTTPS route,
+derived hostname, and sanitized raster logo URL. No account, permission,
+credential, browsing-history, or resolver-cache data is sent to DefiLlama. The
+DefiLlama key is an intentionally public client key shared with the website OS
+build, is confined to the background bundle at runtime, and grants no wallet
+authority. Direct launcher navigation likewise accepts only credential-free
+HTTPS URLs up to 2,048 characters; ordinary HTTP input fails closed.
+The exact launcher may also call `ens-cache-browser-image` with a public image
+URL returned by the directory or connected-dapp projection. This is a distinct
+message from trusted wallet UI image requests and exposes only the existing
+avatar cache's public-HTTPS validation, redirect/size/MIME limits, raster
+decode, and WebP re-encode result. Embedded launchers and ordinary sites cannot
+invoke it, and the renderer never receives remote bytes or assigns the remote
+URL directly to `<img>`.
+Suggestion navigation uses the separate `ens-open-dapp-url` route. Only the
+exact top-level `browse.html` launcher may invoke it, and the background accepts
+at most 2,048 characters, reparses the URL, requires HTTPS with a hostname,
+rejects embedded credentials, and creates one active tab. Embedded launchers,
+ordinary sites, HTTP URLs, and malformed values cannot use the route. The
+adjacent star action writes only the existing non-secret, origin-normalized
+bookmark projection and never grants or changes dapp permissions.
+`popup-wake` and
 `ui-keepalive` ports use the same sender check so a content script or embedded
 web-accessible page cannot suppress worker suspension. A trusted wallet UI sends
 an exact, secret-free heartbeat every 20 seconds because Chrome 114+ does not
@@ -680,6 +724,12 @@ Extension pages self-host Outfit, JetBrains Mono, and Anton through bundled
 or CSS imports: those disclose extension-page opens and violate the no-remote-
 code/store-review boundary.
 
+The exact `browse.html` launcher may store the non-secret
+`walletchan:browseBookmarkReminderDismissed:v1` DOM-localStorage flag. It is a
+presentation preference only, contains no origin/account data, and grants no
+capability. The bookmark reminder does not require the Chrome bookmarks
+permission.
+
 ENS/avatar/token-logo URLs are attacker-controlled display metadata.
 The local-gateway ENS banner treats the mounted page the same way: its metadata
 scraper forwards only a title and `http(s)` or `data:image/*` favicon URL, its
@@ -689,6 +739,35 @@ and hosted-gateway navigation goes through the authorized
 `ensBanner.ts` is initialization-only; parsing, transport, bookmark/gateway
 actions, and closed-shadow rendering remain separate audit modules under
 `ensBrowsing/banner/`. The banner does not fetch or evaluate page content.
+The browser launcher never assigns raw local-gateway SVG favicon metadata to
+the renderer. For resolver-backed favorites it first accepts only Chrome's
+same-extension `/_favicon/` URL at fixed size 64 for an exact
+HTTP IPFS/IPNS subdomain-gateway page, `https://*.eth.limo`,
+`https://*.eth.link`, `https://*.gwei.domains`, or `https://*.w3eth.io` page;
+apexes, non-gateway host shapes, credentials, unsafe ports, and hosted-gateway
+lookalikes remain rejected. Custom Kubo hosts and ports are supported because
+the display projection constructs this URL only after matching the actual page
+against the normalized user setting. Chrome owns the processed icon bytes
+already displayed in the tab; WalletChan neither fetches that local page nor
+receives its SVG/document source.
+Otherwise WalletChan projects only the captured
+asset path onto the known public eth.limo, gwei.domains, or w3eth.io origin,
+after which the normal public-HTTPS validation and raster decode/re-encode
+boundary still applies.
+
+Friendly local-gateway origin labels are also display-only. The renderer maps
+an opaque CID/IPNS hostname back to retained `ensResolveCache` metadata only
+when the URL is HTTP and its subdomain suffix and effective port exactly match
+the user's normalized `ensBrowsing.gatewayHost` and `gatewayPort`. Hosted URLs,
+lookalike suffixes, different ports, and unmatched labels remain unchanged.
+Expired navigation records may supply a label, but never a route. The raw
+browser-attested origin remains authoritative for permissions, provider
+authorization, SIWE validation, transaction history, revocation, and opening a
+tab, preventing the friendly label from becoming an origin-spoofing boundary.
+The associated favicon follows the same display-only match. Unsafe inline SVG
+metadata is skipped; renderer components accept only a previously sanitized
+raster, a public HTTPS image that crosses the decode/re-encode cache, or
+Chrome's same-extension fixed-size processed favicon URL.
 
 `remoteImagePolicy.ts` and the `avatar/` audit domain behind the stable
 `avatarImageCache.ts` facade therefore require public HTTPS on the default TLS
@@ -1032,7 +1111,7 @@ accessible resources.
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
+| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for content-script coverage and configured RPCs; egress is method/URL/origin/redirect/timeout/size/concurrency bounded |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |

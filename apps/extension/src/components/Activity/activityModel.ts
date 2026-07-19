@@ -283,8 +283,10 @@ export function getActivityStatusModel(
 export function getActivityPresentation(
   tx: CompletedTransaction,
   addressLabels?: ReadonlyMap<string, string>,
+  originDisplayHostname?: string | null,
 ): ActivityPresentation {
-  const originHostname = getOriginHostname(tx.origin);
+  const originHostname =
+    originDisplayHostname ?? getOriginHostname(tx.origin);
   const arrow = " → ";
   const arrowIndex = tx.origin.indexOf(arrow);
   let bridgeIntent: string | null = null;

@@ -225,6 +225,41 @@
 
 ## Slop audit
 
+- 2026-07-19 browse-page bookmark audit: a quiet upper-right reminder exposes
+  the platform-native bookmark shortcut without presenting a nonfunctional
+  bookmark button or requesting broad browser bookmark access. It is fixed to
+  the viewport corner, while hover/focus reveals a quiet close action that
+  persists a non-secret dismissal preference. Its single amber star stays
+  subordinate to the resolver's primary action, and the compact keycap remains
+  legible on the Warm Midnight surface at narrow widths.
+- 2026-07-19 connected-dapp overflow audit: the browse page keeps a narrow,
+  token-colored custom scrollbar visible whenever the three-row connected grid
+  overflows, bypassing OS overlay-scrollbar fading while preserving native
+  wheel, touch, trackpad, and keyboard scrolling.
+- 2026-07-19 favorite-dapp ordering audit: the browse launcher now gives each
+  favorite a restrained hover/focus drag grip instead of making the open card
+  itself ambiguous. Mouse, delayed touch, and keyboard sorting share the same
+  grid behavior, while previous/next controls provide a no-drag pointer path.
+  Drag state uses opacity and transform only, reduced motion is honored,
+  failures are announced in text, and the saved order synchronizes through the
+  existing bookmark subscription.
+- 2026-07-18 dapp3 browser audit: replaced the standalone launcher's legacy
+  emerald palette with canonical Warm Midnight surfaces, restrained amber
+  brand/action emphasis, blue keyboard focus, and relationship-based spacing.
+  Favorite and recent dapp tiles now use the same defined-edge graphite
+  elevation language as the extension, with 4/3/2-column responsive layouts;
+  recent resolver tiles expose the same keyboard-accessible hover favorite
+  action and move into the favorite-first grid immediately after saving;
+  connected HTTP(S) dapps use that same grammar beneath the favorite-first
+  discovery list, with a bounded three-row scroll region and quiet hover/focus
+  management actions.
+  The resolver retains one primary action, native controls, a visible field
+  label, text-linked validation, 24px-minimum targets, and reduced-motion-safe
+  feedback. No wallet behavior or resolver flow changed.
+- 2026-07-18 dapp3 icon audit: image-backed dapp marks now share the extension
+  Connected-dapps treatment: a neutral light canvas and subtle neutral edge
+  preserve transparent and dark artwork. Amber remains reserved for the
+  letter fallback when no safe raster is available.
 - 2026-07-18 smart-account audit: delegation settings now lead with current
   state and one contract choice, keep revoke beside that state, and hide
   clipboard, explorer, and contact actions behind the shared address overflow.
@@ -457,6 +492,20 @@
 
 ## Changelog
 
+- 2026-07-18: made the dapp3 launcher favorite-first and stateful: the resolver
+  input filters connected sites, connected results scroll after three rows, and
+  hover/focus actions favorite or disconnect without coupling saved sites to
+  permission lifetime. Runtime, storage, focus, and visibility reconciliation
+  keep the open page synchronized.
+- 2026-07-18: aligned `browse.html` dapp logo wrappers with More → Connected
+  dapps by using the same light contrast canvas for real image marks and
+  retaining amber only for generated letter fallbacks.
+- 2026-07-18: brought `browse.html` into Warm Midnight with canonical zinc,
+  amber, blue-focus, typography, radius, spacing, and interaction tokens;
+  tightened the desktop composition and added responsive dapp tile layouts
+  plus accessible resolver labeling and validation semantics. The page now
+  leads with ordinary HTTP(S) dapps from the same exact-origin permission list
+  as More → Connected dapps, without broadening its wallet-UI authority.
 - 2026-07-18: clarified final seed-group account removal with explicit copy
   that the encrypted seed phrase is also permanently deleted from WalletChan,
   cannot be recovered by WalletChan, and must be backed up before continuing.
@@ -943,3 +992,26 @@
   while Bauhaus retains the semantic call-accent rotation.
 - 2026-07-18: matched Swap confirmation's back action to the shared app header:
   a 44px square target, 20px arrow, and the same 8px screen-edge inset.
+- 2026-07-19: extracted Warm Midnight's restrained three-dot progress pulse
+  into a provider-independent shared loader. Transaction simulation, gas
+  estimation, and standalone dapp-directory search now use one motion pattern,
+  including a static reduced-motion state.
+- 2026-07-19: kept dapp-directory discovery and launcher context separate:
+  result activation opens a validated HTTPS URL in a new tab, while a trailing
+  hover/focus star saves the result without navigation. The star reuses the
+  connected-card saved state and remains visible on keyboard selection and
+  coarse pointers.
+- 2026-07-19: unified standalone-browser identity marks on the connected-dapp
+  white contrast canvas, including mascot and generated-letter fallbacks.
+  Raster logos now occupy more of the unchanged icon footprint with rounded
+  image corners. Populated search gains a bare, compact clear action directly
+  before Open, returning focus to the empty field without adding another boxed
+  control.
+- 2026-07-19: replaced opaque local IPFS/IPNS CID hostnames with the original
+  `.eth`, `.gwei`, or onchain `0x` identity across browser cards, request
+  reviews, activity, and details. The friendly label reacts to the configured
+  gateway host/port while raw security origins and navigation remain intact.
+- 2026-07-19: extended that identity projection to favicons across connection,
+  signing, activity, and detail surfaces. Local IPFS/onchain marks now reuse
+  the browser launcher's safe raster/remap/Chrome-processed fallback order and
+  existing light contrast canvas instead of collapsing to a CID letter tile.

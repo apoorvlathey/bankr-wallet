@@ -5,6 +5,7 @@ import type { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAss
 import { WatchAssetConfirmationScreen } from "@/components/WatchAssetConfirmation/WatchAssetConfirmationScreen";
 import { getChainConfig } from "@/constants/chainConfig";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
 interface WatchAssetConfirmationProps {
   request: PendingWatchAssetRequest;
@@ -19,6 +20,7 @@ export default function WatchAssetConfirmation({
 }: WatchAssetConfirmationProps) {
   const [confirming, setConfirming] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const formatOrigin = useDappOriginFormatter();
   const chainConfig = getChainConfig(request.chainId);
   const originHostname = useMemo(() => {
     try {
@@ -27,6 +29,7 @@ export default function WatchAssetConfirmation({
       return request.origin;
     }
   }, [request.origin]);
+  const displayOrigin = formatOrigin(request.origin);
   const fallbackFavicon = googleFaviconUrl(originHostname);
 
   const handleConfirm = async () => {
@@ -68,10 +71,14 @@ export default function WatchAssetConfirmation({
       chainId={request.chainId}
       chainName={chainConfig.name}
       explorerUrl={chainConfig.explorer}
-      originHostname={originHostname}
-      origin={request.origin}
-      originFavicon={request.favicon || fallbackFavicon}
-      fallbackFavicon={fallbackFavicon}
+      originHostname={displayOrigin.hostname ?? originHostname}
+      origin={displayOrigin.resolvedName || request.origin}
+      originFavicon={
+        displayOrigin.faviconSrc || request.favicon || fallbackFavicon
+      }
+      fallbackFavicon={
+        displayOrigin.faviconFallbackSrc || fallbackFavicon
+      }
       requestId={request.id}
       rejectAction={
         <Button

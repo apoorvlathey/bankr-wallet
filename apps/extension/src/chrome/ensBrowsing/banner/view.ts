@@ -43,7 +43,7 @@ export function buildBanner(theme: BannerTheme): BannerRefs {
   brand.appendChild(brandImg);
   const label = document.createElement("span");
   label.className = "label";
-  label.textContent = "WALLETCHAN · DAPP3";
+  label.textContent = "WALLETCHAN · BROWSER";
   homeLink.append(brand, label);
   left.appendChild(homeLink);
   bar.appendChild(left);

@@ -1,4 +1,5 @@
 import { classifyPrivateNetworkHostname } from "./privateNetworkPolicy";
+import { isAllowedBrowserFaviconPageUrl } from "./browserFavicon";
 
 const MAX_REMOTE_IMAGE_URL_CHARS = 2_048;
 // The background encoder caps cached images at 512 KiB before base64
@@ -68,11 +69,72 @@ export function sanitizeUntrustedImageUrl(value: unknown): string | null {
   return null;
 }
 
+export function sanitizeTrustedBrowserFaviconSrc(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value.length > MAX_REMOTE_IMAGE_URL_CHARS ||
+    typeof chrome === "undefined" ||
+    !chrome.runtime?.getURL
+  ) {
+    return null;
+  }
+  try {
+    const extensionRoot = new URL(chrome.runtime.getURL("/"));
+    const candidate = new URL(value);
+    if (
+      candidate.protocol !== extensionRoot.protocol ||
+      candidate.host !== extensionRoot.host ||
+      candidate.pathname !== "/_favicon/"
+    ) {
+      return null;
+    }
+    const keys = [...candidate.searchParams.keys()];
+    if (
+      keys.length !== 2 ||
+      keys.filter((key) => key === "pageUrl").length !== 1 ||
+      keys.filter((key) => key === "size").length !== 1 ||
+      candidate.searchParams.get("size") !== "64"
+    ) {
+      return null;
+    }
+    const rawPageUrl = candidate.searchParams.get("pageUrl");
+    if (!rawPageUrl || rawPageUrl.length > MAX_REMOTE_IMAGE_URL_CHARS) {
+      return null;
+    }
+    return isAllowedBrowserFaviconPageUrl(rawPageUrl)
+      ? candidate.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasUnsafeExtensionPathChars(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (
+      code <= 0x20 ||
+      code === 0x7f ||
+      char === "\\" ||
+      char === "<" ||
+      char === ">" ||
+      char === '"' ||
+      char === "'"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isPackagedExtensionPath(value: string): boolean {
   if (
     !value ||
     value.length > MAX_REMOTE_IMAGE_URL_CHARS ||
-    /[\u0000-\u0020\u007f\\<>"']/.test(value) ||
+    hasUnsafeExtensionPathChars(value) ||
     value.startsWith("//")
   ) {
     return false;
@@ -93,6 +155,8 @@ function isPackagedExtensionPath(value: string): boolean {
       return false;
     }
   }
+
+  if (sanitizeTrustedBrowserFaviconSrc(value)) return true;
 
   // chrome.runtime.getURL() is used by a few packaged assets. Require the
   // current extension origin rather than trusting an arbitrary extension ID.

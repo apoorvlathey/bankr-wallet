@@ -186,6 +186,126 @@ test("ENS browsing messages are bound to their exact page and top frame", () => 
       ),
       false,
     );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-list-connected-dapps",
+        extensionSender("browse.html"),
+      ),
+      true,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-list-connected-dapps",
+        extensionSender("browse.html", {
+          frameId: 4,
+          topUrl: "https://attacker.example/",
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-revoke-connected-dapp",
+        extensionSender("browse.html"),
+      ),
+      true,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-revoke-connected-dapp",
+        extensionSender("browse.html", {
+          frameId: 4,
+          topUrl: "https://attacker.example/",
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-search-dapp-directory",
+        extensionSender("browse.html"),
+      ),
+      true,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-search-dapp-directory",
+        extensionSender("browse.html", {
+          frameId: 4,
+          topUrl: "https://attacker.example/",
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-cache-browser-image",
+        extensionSender("browse.html"),
+      ),
+      true,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-cache-browser-image",
+        extensionSender("browse.html", {
+          frameId: 4,
+          topUrl: "https://attacker.example/",
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-open-dapp-url",
+        extensionSender("browse.html"),
+      ),
+      true,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-open-dapp-url",
+        extensionSender("browse.html", {
+          frameId: 4,
+          topUrl: "https://attacker.example/",
+        }),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-cache-browser-image",
+        ordinarySiteSender(),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-search-dapp-directory",
+        ordinarySiteSender(),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-revoke-connected-dapp",
+        ordinarySiteSender(),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-list-connected-dapps",
+        extensionSender("index.html"),
+      ),
+      false,
+    );
+    assert.equal(
+      isAuthorizedEnsBrowsingSender(
+        "ens-list-connected-dapps",
+        ordinarySiteSender(),
+      ),
+      false,
+    );
   } finally {
     if (originalChrome) {
       Object.defineProperty(globalThis, "chrome", originalChrome);
@@ -227,6 +347,120 @@ test("embedded interstitial requests fail before cache or resolver work", () => 
       );
       assert.deepEqual(response, { ok: false, error: "Unauthorized" });
     }
+  } finally {
+    if (originalChrome) {
+      Object.defineProperty(globalThis, "chrome", originalChrome);
+    } else {
+      Reflect.deleteProperty(globalThis, "chrome");
+    }
+  }
+});
+
+test("browser image caching requires the exact launcher and a string URL", () => {
+  const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  Object.defineProperty(globalThis, "chrome", {
+    configurable: true,
+    value: {
+      runtime: {
+        getURL(path: string) {
+          return new URL(path, EXTENSION_ROOT).toString();
+        },
+      },
+    },
+  });
+
+  try {
+    let response: unknown;
+    assert.equal(
+      handleEnsBrowsingMessage(
+        { type: "ens-cache-browser-image", url: 42 },
+        extensionSender("browse.html"),
+        (value) => {
+          response = value;
+        },
+      ),
+      true,
+    );
+    assert.deepEqual(response, { dataUrl: null });
+
+    response = undefined;
+    assert.equal(
+      handleEnsBrowsingMessage(
+        {
+          type: "ens-cache-browser-image",
+          url: "https://icons.llamao.fi/icons/protocols/uniswap",
+        },
+        ordinarySiteSender(),
+        (value) => {
+          response = value;
+        },
+      ),
+      true,
+    );
+    assert.deepEqual(response, { ok: false, error: "Unauthorized" });
+  } finally {
+    if (originalChrome) {
+      Object.defineProperty(globalThis, "chrome", originalChrome);
+    } else {
+      Reflect.deleteProperty(globalThis, "chrome");
+    }
+  }
+});
+
+test("the exact launcher opens only safe HTTPS dapp URLs in a new tab", async () => {
+  const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  let opened: chrome.tabs.CreateProperties | undefined;
+  Object.defineProperty(globalThis, "chrome", {
+    configurable: true,
+    value: {
+      runtime: {
+        getURL(path: string) {
+          return new URL(path, EXTENSION_ROOT).toString();
+        },
+      },
+      tabs: {
+        create: async (properties: chrome.tabs.CreateProperties) => {
+          opened = properties;
+          return {} as chrome.tabs.Tab;
+        },
+      },
+    },
+  });
+
+  try {
+    const response = await new Promise<unknown>((resolve) => {
+      assert.equal(
+        handleEnsBrowsingMessage(
+          {
+            type: "ens-open-dapp-url",
+            url: "https://app.uniswap.org/swap",
+          },
+          extensionSender("browse.html"),
+          resolve,
+        ),
+        true,
+      );
+    });
+    assert.deepEqual(response, { ok: true });
+    assert.deepEqual(opened, {
+      url: "https://app.uniswap.org/swap",
+      active: true,
+    });
+
+    opened = undefined;
+    let invalidResponse: unknown;
+    assert.equal(
+      handleEnsBrowsingMessage(
+        { type: "ens-open-dapp-url", url: "http://app.uniswap.org/" },
+        extensionSender("browse.html"),
+        (value) => {
+          invalidResponse = value;
+        },
+      ),
+      true,
+    );
+    assert.deepEqual(invalidResponse, { ok: false, error: "Invalid URL" });
+    assert.equal(opened, undefined);
   } finally {
     if (originalChrome) {
       Object.defineProperty(globalThis, "chrome", originalChrome);

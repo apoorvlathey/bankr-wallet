@@ -2,6 +2,7 @@ import { Box, Grid, HStack, Text } from "@chakra-ui/react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { ListItem } from "@/components/ui";
 import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
+import type { DappOriginDisplay } from "@/lib/dappOriginDisplay";
 import ActivityMedia from "./ActivityMedia";
 import ActivityExplorerActions from "./ActivityExplorerActions";
 import ActivityStatus from "./ActivityStatus";
@@ -14,6 +15,7 @@ import {
 
 interface ActivityItemProps {
   tx: CompletedTransaction;
+  originDisplay?: DappOriginDisplay;
   addressLabels: ReadonlyMap<string, string>;
   onClick: () => void;
   resolveLogo: (url: string | undefined) => string | undefined;
@@ -21,6 +23,7 @@ interface ActivityItemProps {
 
 export default function ActivityItem({
   tx,
+  originDisplay,
   addressLabels,
   onClick,
   resolveLogo,
@@ -28,7 +31,11 @@ export default function ActivityItem({
   const iconChipBg = useIconChipBg();
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const presentation = getActivityPresentation(tx, addressLabels);
+  const presentation = getActivityPresentation(
+    tx,
+    addressLabels,
+    originDisplay?.resolvedName,
+  );
   const statusModel = getActivityStatusModel(tx);
   const explorer = useActivityExplorers(tx);
   const isOutgoingValue = presentation.value?.startsWith("−") ?? false;
@@ -72,6 +79,8 @@ export default function ActivityItem({
         <ActivityMedia
           tx={tx}
           originHostname={presentation.originHostname}
+          originFaviconSrc={originDisplay?.faviconSrc}
+          originFaviconFallbackSrc={originDisplay?.faviconFallbackSrc}
           iconChipBg={iconChipBg}
           isDarkTheme={isDarkTheme}
           resolveLogo={resolveLogo}

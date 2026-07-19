@@ -43,6 +43,7 @@ import NativeValueAmount from "@/components/NativeValueAmount";
 import SafeImage from "@/components/SafeImage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
 // Per-call accent rotation for expressive surfaces. CallCard resolves these to
 // neutral graphite badges in Midnight while Bauhaus keeps the color sequence;
@@ -91,7 +92,8 @@ export function CallCard({
     newData: string,
   ) => Promise<{ success: boolean; error?: string }>;
 }) {
-  const originHostname = origin
+  const formatOrigin = useDappOriginFormatter();
+  const rawOriginHostname = origin
     ? (() => {
         try {
           return new URL(origin).hostname;
@@ -100,6 +102,8 @@ export function CallCard({
         }
       })()
     : null;
+  const originDisplay = origin ? formatOrigin(origin) : null;
+  const originHostname = originDisplay?.hostname ?? rawOriginHostname;
   const { networksInfo } = useNetworks();
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
@@ -317,8 +321,11 @@ export function CallCard({
           {originHostname && (
             <HStack spacing={1} maxW="100%">
               <SafeImage
-                src={favicon || undefined}
-                fallbackSrc={googleFaviconUrl(originHostname)}
+                src={originDisplay?.faviconSrc || favicon || undefined}
+                fallbackSrc={
+                  originDisplay?.faviconFallbackSrc ||
+                  googleFaviconUrl(originHostname)
+                }
                 alt="favicon"
                 boxSize="10px"
                 fallback={

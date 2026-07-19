@@ -83,6 +83,21 @@ export async function listCached(limit = 8): Promise<CachedResolve[]> {
     .slice(0, limit);
 }
 
+/**
+ * Display-only resolver identities, including entries older than the navigation
+ * TTL. Stale records must never be used to route a page, but remain useful for
+ * replacing an opaque local gateway CID with the name the user originally
+ * opened in durable permissions and transaction history.
+ */
+export async function listCachedForDisplay(
+  limit = MAX_ENTRIES,
+): Promise<CachedResolve[]> {
+  const map = await readMap();
+  return Object.values(map)
+    .sort((a, b) => b.resolvedAt - a.resolvedAt)
+    .slice(0, limit);
+}
+
 export async function updateCachedMetadata(
   ensName: string,
   metadata: { title?: string; favicon?: string },

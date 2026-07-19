@@ -23,6 +23,7 @@ import {
   ListItemTitle,
 } from "@/components/ui";
 import { formatRelativeTime } from "@/lib/timeFormatUtils";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -71,12 +72,20 @@ function truncateAddress(address: string): string {
 interface OriginMarkProps {
   origin: string;
   favicon: string | null;
+  fallbackFavicon?: string | null;
+  displayLabel?: string;
 }
 
-function OriginMark({ origin, favicon }: OriginMarkProps) {
+function OriginMark({
+  origin,
+  favicon,
+  fallbackFavicon,
+  displayLabel,
+}: OriginMarkProps) {
   const src = getFaviconUrl(origin, favicon);
   const fallback = getFaviconUrl(origin, null);
-  const initial = getOriginDisplay(origin).charAt(0).toUpperCase() || "?";
+  const initial =
+    (displayLabel || getOriginDisplay(origin)).charAt(0).toUpperCase() || "?";
 
   return (
     <Box
@@ -98,7 +107,7 @@ function OriginMark({ origin, favicon }: OriginMarkProps) {
       {src && (
         <SafeImage
           src={src}
-          fallbackSrc={fallback}
+          fallbackSrc={fallbackFavicon || fallback}
           alt=""
           position="absolute"
           inset={0}
@@ -212,7 +221,14 @@ export default function PendingRequestRow({
   onSelectBatch,
   onSelectCrossDappBatch,
 }: PendingRequestRowProps) {
-  const presentation = presentRequest(item);
+  const formatOrigin = useDappOriginFormatter();
+  const rawPresentation = presentRequest(item);
+  const displayOrigin = rawPresentation.origin
+    ? formatOrigin(rawPresentation.origin)
+    : null;
+  const presentation = displayOrigin?.resolvedName
+    ? { ...rawPresentation, title: displayOrigin.label }
+    : rawPresentation;
   const chain = getChainConfig(presentation.chainId);
 
   const handleSelect = () => {
@@ -261,7 +277,11 @@ export default function PendingRequestRow({
         ) : (
           <OriginMark
             origin={presentation.origin || presentation.title}
-            favicon={presentation.favicon ?? null}
+            favicon={
+              displayOrigin?.faviconSrc || presentation.favicon || null
+            }
+            fallbackFavicon={displayOrigin?.faviconFallbackSrc}
+            displayLabel={presentation.title}
           />
         )}
       </ListItemMedia>

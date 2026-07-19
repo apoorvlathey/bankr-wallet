@@ -3,6 +3,7 @@ import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import { getStoredNativeCurrencySymbol } from "@/lib/chains";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { resolveAddressToName } from "@/lib/ensUtils";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
 function getOriginHostname(origin: string): string | null {
   try {
@@ -26,11 +27,12 @@ export function useTransactionMetadata(
   resolvedNativeSymbol?: string,
 ) {
   const { tx, origin } = txRequest;
+  const formatOrigin = useDappOriginFormatter();
   const isInternalWalletChan = origin === "WalletChan";
   const internalSendTokenLabel = origin.startsWith("Send ")
     ? origin.slice(5).trim()
     : null;
-  const originHostname = getOriginHostname(origin);
+  const originHostname = formatOrigin(origin).hostname ?? getOriginHostname(origin);
   const originInitials = getOriginInitials(
     internalSendTokenLabel || originHostname || origin,
   );

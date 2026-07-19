@@ -9,6 +9,8 @@ import { getInternalSendSymbol } from "./activityModel";
 interface ActivityMediaProps {
   tx: CompletedTransaction;
   originHostname: string | null;
+  originFaviconSrc?: string | null;
+  originFaviconFallbackSrc?: string | null;
   iconChipBg: string;
   isDarkTheme: boolean;
   resolveLogo: (url: string | undefined) => string | undefined;
@@ -17,7 +19,15 @@ interface ActivityMediaProps {
 function ActivityIcon({
   tx,
   originHostname,
-}: Pick<ActivityMediaProps, "tx" | "originHostname">) {
+  originFaviconSrc,
+  originFaviconFallbackSrc,
+}: Pick<
+  ActivityMediaProps,
+  | "tx"
+  | "originHostname"
+  | "originFaviconSrc"
+  | "originFaviconFallbackSrc"
+>) {
   const internalSendSymbol = getInternalSendSymbol(tx);
   const fallbackLabel = (internalSendSymbol || tx.origin || "?")
     .slice(0, 3)
@@ -27,7 +37,8 @@ function ActivityIcon({
     tx.origin === "BankrWallet" ||
     tx.origin === "Cross-Dapp Batch"
       ? "/walletchan-icon.png"
-      : tx.favicon ||
+      : originFaviconSrc ||
+        tx.favicon ||
         (originHostname ? googleFaviconUrl(originHostname) : undefined);
 
   if (!imageSrc) {
@@ -42,9 +53,10 @@ function ActivityIcon({
     <SafeImage
       src={imageSrc}
       fallbackSrc={
-        originHostname && !tx.origin.startsWith("Send ")
+        originFaviconFallbackSrc ||
+        (originHostname && !tx.origin.startsWith("Send ")
           ? googleFaviconUrl(originHostname)
-          : undefined
+          : undefined)
       }
       alt={internalSendSymbol || "favicon"}
       boxSize={originHostname ? "28px" : "20px"}
@@ -87,6 +99,8 @@ function ChainBadge({
 export default function ActivityMedia({
   tx,
   originHostname,
+  originFaviconSrc,
+  originFaviconFallbackSrc,
   iconChipBg,
   isDarkTheme,
   resolveLogo,
@@ -218,7 +232,12 @@ export default function ActivityMedia({
         border={isWebsite || isDarkTheme ? "1px solid" : undefined}
         borderColor={isWebsite ? "border.subtle" : "border.default"}
       >
-        <ActivityIcon tx={tx} originHostname={originHostname} />
+        <ActivityIcon
+          tx={tx}
+          originHostname={originHostname}
+          originFaviconSrc={originFaviconSrc}
+          originFaviconFallbackSrc={originFaviconFallbackSrc}
+        />
       </Box>
       <ChainBadge tx={tx} iconChipBg={iconChipBg} />
     </Box>

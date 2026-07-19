@@ -77,6 +77,13 @@ test("hostile dapp, WalletConnect, permission, and history images use the safe p
   }
 
   const browser = await readFile(new URL("Dapp3Browser.tsx", PAGE_ROOT), "utf8");
-  assert.match(browser, /const safeSrc = useCachedAvatarSrc\(src\)/);
+  const browserIcon = await component("Dapp3Browser/Dapp3SiteIcon.tsx");
+  const suggestions = await component("Dapp3Browser/DappDirectorySuggestions.tsx");
+  assert.match(browser, /import Dapp3SiteCard from/);
+  assert.match(suggestions, /import Dapp3SiteIcon from/);
+  assert.match(
+    browserIcon,
+    /const safeSrc = useCachedAvatarSrc\(src, "ens-cache-browser-image"\)/,
+  );
   assert.doesNotMatch(browser, /<img[\s\S]{0,160}src=\{faviconSrc\}/);
 });

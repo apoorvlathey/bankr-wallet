@@ -223,7 +223,7 @@ export default function EnsInterstitial() {
                 letterSpacing="0.08em"
                 fontWeight={700}
               >
-                WALLETCHAN · DAPP3 - NAME BROWSING
+                WALLETCHAN · BROWSER - NAME BROWSING
               </Text>
             </HStack>
 
@@ -275,7 +275,7 @@ export default function EnsInterstitial() {
               <Text fontSize="xs" color="fg.muted">
                 Manage in{" "}
                 <Text as="span" fontWeight={700} color="fg.secondary">
-                  Settings → dapp3 - ENS Browsing
+                  Settings → WalletChan Browser
                 </Text>
               </Text>
             </Box>

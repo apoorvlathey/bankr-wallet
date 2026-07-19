@@ -27,6 +27,9 @@ let cachePromise: Promise<AvatarCache> | null = null;
 const memCache = new Map<string, string>();
 const fetchPromises = new Map<string, Promise<string | null>>();
 const listeners = new Set<() => void>();
+export type AvatarFetchMessageType =
+  | "cacheAvatarImage"
+  | "ens-cache-browser-image";
 function isFresh(entry: AvatarCacheEntry): boolean {
   return (
     Number.isFinite(entry?.cachedAt) &&
@@ -110,17 +113,19 @@ export async function getCachedAvatarDataUrl(
 
 export async function requestAvatarImageFetch(
   url: string,
+  messageType: AvatarFetchMessageType = "cacheAvatarImage",
 ): Promise<string | null> {
   const sync = getCachedAvatarDataUrlSync(url);
   if (sync) return sync;
 
-  const existing = fetchPromises.get(url);
+  const requestKey = `${messageType}:${url}`;
+  const existing = fetchPromises.get(requestKey);
   if (existing) return existing;
 
   const p = new Promise<string | null>((resolve) => {
     try {
       chrome.runtime.sendMessage(
-        { type: "cacheAvatarImage", url },
+        { type: messageType, url },
         (response: { dataUrl: string | null } | undefined) => {
           if (chrome.runtime.lastError) {
             resolve(null);
@@ -137,8 +142,8 @@ export async function requestAvatarImageFetch(
     } catch {
       resolve(null);
     }
-  }).finally(() => fetchPromises.delete(url));
+  }).finally(() => fetchPromises.delete(requestKey));
 
-  fetchPromises.set(url, p);
+  fetchPromises.set(requestKey, p);
   return p;
 }

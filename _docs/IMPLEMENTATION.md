@@ -1361,9 +1361,11 @@ Build command: `pnpm build:onboarding` (included in `pnpm build`)
 WalletChan includes the dapp3 ENS browsing resolver inside the extension. The
 More screen exposes `dapp3 Browser`, which opens the standalone extension page
 `browse.html` in a browser tab. That page is a WalletChan-branded search-bar
-launcher accepting a `.eth` name, `.gwei` name, or raw `0x` contract address,
-with optional path/query/hash suffixes. It is intentionally not rendered inside
-the popup.
+launcher accepting a normal `https://` URL, `.eth` name, `.gwei` name, or raw
+`0x` contract address, with optional path/query/hash suffixes. It is
+intentionally not rendered inside the popup. Ordinary HTTPS URLs navigate
+directly; credentials, HTTP URLs, malformed URLs, and inputs over 2,048
+characters fail closed.
 
 The launcher intentionally reuses the same resolver path as address-bar
 browsing:
@@ -1375,7 +1377,10 @@ browsing:
    - pasted `*.eth.limo`, `*.eth.link`, `*.gwei.domains`, `*.w3eth.io`, and
      `0x<address>.1.w3link.io` gateway URLs are normalized back to the
      underlying ENS/GNS/address target.
-2. The page navigates the current browser tab to `interstitial.html#<target-url>`.
+   - other valid `https://` URLs navigate directly without entering the
+     resolver/interstitial path.
+2. Resolver-backed inputs navigate the current browser tab to
+   `interstitial.html#<target-url>`.
 3. `EnsInterstitial` parses the fragment and sends `ens-cache-check` followed
    by `ens-resolve` to the service worker.
 4. `ensBrowsing/resolver.ts` is the stable resolver facade.
@@ -1422,24 +1427,112 @@ gwei.domains, or w3eth.io, the service worker installs the matching per-tab DNR
 ALLOW bypass. That bypass protects tabs from WalletChan's old Dapp3-style
 gateway rewrite state after WalletChan has chosen a hosted gateway.
 
-The launcher lists user-pinned `ensBookmarks` entries first as browser-style
-"Favorite dapps" tiles, followed by the freshest valid `ensResolveCache`
-entries as "Recently cached dapps" tiles in a wider strip below the search bar.
-Tile clicks submit the ENS name/address back through the same interstitial path
-rather than constructing gateway URLs in the page. Gateway visits can attach
-optional title/favicon metadata to the cache; older entries fall back to the
-gateway `/favicon.ico` path and then to a letter tile if the image fails. Raw
-`0x` ERC-4804 address-mode resolutions are cached here too so onchain HTML
-dapps opened without ENS still appear in the recent tiles.
+The launcher lists user-pinned `ensBookmarks` entries as "Favorite dapps"
+first, ordinary injected sites from `dappPermissions` as "Connected dapps"
+second, then the freshest valid `ensResolveCache` entries as "Recently cached
+dapps". Favorite cards expose a drag grip that supports mouse, touch, and
+keyboard grid reordering. The resulting zero-based `sortOrder` is stored on the
+existing non-secret bookmark records; legacy entries remain newest-first and a
+new unranked favorite appears before an established custom order. The existing
+`ensBookmarks` storage listener keeps open launcher tabs synchronized. The
+resolver input also filters connected sites by hostname, title, or
+origin while the user types. Connected results use a three-row scroll region so
+larger permission sets do not push the rest of the launcher out of view.
+`browse.html` obtains the permission list only through the narrow
+`ens-list-connected-dapps` route: `ensBrowsing/senderAuthorization.ts` requires
+the exact top-level launcher, and `connectedDapps.ts` returns at most 24
+origin-derived hostnames with bounded title, sanitized favicon, and last-used
+time. It never returns account addresses or arbitrary permission fields.
+Connected-site tiles open canonical HTTPS origins in a new active tab through
+the same exact-launcher route used by directory results; legacy HTTP origins
+retain same-page navigation. Their
+hover/focus actions can create a non-secret favorite or disconnect the exact
+origin through `ens-revoke-connected-dapp`. That mutation is also restricted to
+the exact top-level launcher and delegates to the same complete revocation
+lifecycle as More → Connected dapps, including pending-request cancellation,
+tab account cleanup, page notification, and permission-change broadcast.
+Favoriting adds a normalized HTTP(S) `launchUrl` to the existing bookmark
+record; permission revocation never deletes that bookmark, so it remains until
+the user explicitly removes it from Favorite dapps.
+ENS/GNS/onchain tile clicks still submit the name/address back through the same
+interstitial path rather than constructing gateway URLs in the page. Gateway
+visits can attach optional title/favicon metadata to the cache. Favorite cards
+replace the generic saved-state caption with the normalized hostname or
+resolver name/path. Local IPFS/IPNS favicon paths are remapped onto the matching
+public eth.limo, gwei.domains, or w3eth.io gateway before crossing the raster
+cache. When Chrome has already rendered the exact local gateway page's favicon,
+the banner stores Chrome's `/_favicon/` projection for that page instead. The
+launcher accepts the same processed projection for exact `*.eth.limo`,
+`*.eth.link`, `*.gwei.domains`, and `*.w3eth.io` hosted gateway pages. This
+allows inline SVG favicons to appear without assigning SVG metadata to the
+extension DOM. Missing icons fall back to the hosted gateway `/favicon.ico` and
+then a letter tile. Raw `0x` ERC-4804 address-mode resolutions are cached here too so
+onchain HTML dapps opened without ENS still appear in the recent tiles.
 
-On local-gateway pages, the injected WalletChan · dapp3 banner links its left
+The same input also performs a 250 ms debounced directory lookup using the
+DefiLlama endpoint already used by the website OS page. Only the exact
+top-level `browse.html` page can send `ens-search-dapp-directory`. The service
+worker normalizes the query to 120 characters, posts it to the exact
+`https://search-core.defillama.com/multi-search` endpoint with a 5-second
+deadline and 64 KiB response cap, and returns no more than eight bounded
+name/HTTPS-route/sanitized-logo records. The key is the public DefiLlama search
+client key: the background build accepts `VITE_DEFILLAMA_SEARCH_KEY` or
+`NEXT_PUBLIC_DEFILLAMA_SEARCH_KEY` and otherwise reuses the website OS
+`NEXT_PUBLIC_DEFILLAMA_SEARCH_KEY`; it is not delivered to the browser-page
+renderer. Arrow keys cycle suggestions, Escape dismisses them, and Enter opens
+the active result (or the first directory match for free-text searches).
+Suggestion activation sends `ens-open-dapp-url`; the exact top-level launcher
+is retained while the bounded credential-free HTTPS result opens in a new
+active tab. Each suggestion exposes an independent hover/focus star action.
+That action stores or removes an origin-normalized ordinary-dapp bookmark and
+does not open the suggestion; the existing bookmark storage listener promotes
+it into Favorite dapps immediately.
+Suggestion and tile logos then use `ens-cache-browser-image`, an exact
+top-level-`browse.html` route into the shared avatar raster cache. The page
+shows only the decoded/re-encoded data URL written by that cache and never
+assigns the DefiLlama or favicon URL directly to an image element.
+
+Bookmark/cache storage listeners plus connected-permission runtime, storage,
+focus, and visibility reconciliation keep an open launcher current without a
+manual reload.
+
+The launcher keeps a bookmark-page reminder fixed to the viewport's upper-right
+corner and shows the platform-native bookmark shortcut. Dismissing it writes
+only the non-secret
+`walletchan:browseBookmarkReminderDismissed:v1` DOM-localStorage flag; it does
+not request Chrome's broad bookmarks permission or invoke a privileged route.
+
+Renderer dapp identity uses the shared display-only
+`lib/dappOriginDisplay.ts` projection and `useDappOriginDisplay.ts` storage
+adapter. When an exact HTTP origin matches the user's configured Kubo
+subdomain gateway host **and port**, the projection matches its IPFS/IPNS label
+against retained `ensResolveCache` metadata and displays the original `.eth`,
+`.gwei`, or raw `0x` ERC-4804 identity. The storage adapter keeps browser
+cards, connection and signing prompts, pending requests, delegated permissions,
+activity, and transaction details synchronized after cache or gateway-setting
+changes. Resolver records older than the one-hour navigation TTL may be used
+for this label only; they are never restored to the navigation cache path.
+The same projection supplies favicon sources across those surfaces: a safe
+cached raster or processed Chrome favicon first, a local asset path projected
+onto the matching public eth.limo/gwei.domains/w3eth.io gateway next, Chrome's
+fixed-size `/_favicon/` endpoint for the exact local page as fallback, and then
+the public favicon service or letter tile. Inline SVG page favicons remain
+excluded from renderer image sources. `DappSiteIcon`, `RequestIdentity`, batch
+call identities, pending requests, activity, and watch-asset prompts all
+consume this shared order rather than resolving local dapp icons independently.
+The underlying origin remains unchanged everywhere authorization, SIWE checks,
+permission revocation, history persistence, or tab navigation depends on it.
+
+On local-gateway pages, the injected WalletChan · Browser banner links its left
 logo/title cluster to `browse.html` in the same tab. The right side includes a
 star button that writes/removes a local `ensBookmarks` entry for the current
 ENS/GNS/address identity and path. Bookmarks store only non-secret display
-metadata such as title and favicon.
+metadata such as title and favicon; connected-site favorites may additionally
+store their normalized HTTP(S) origin.
 
-No wallet credentials are used by this flow. It only reads Ethereum mainnet via
-the configured RPC and optionally writes non-secret ENS / ERC-4804 caches and
+No wallet credentials are used by this flow. It reads the bounded public
+display projection of exact-origin dapp grants, reads Ethereum mainnet via the
+configured RPC, and optionally writes non-secret ENS / ERC-4804 caches and
 bookmarks.
 
 ## Transaction Flow
@@ -4085,6 +4178,7 @@ Build command: `pnpm build`
   },
   "permissions": [
     "activeTab",
+    "favicon",
     "storage",
     "sidePanel",
     "notifications",
@@ -4100,6 +4194,7 @@ Build command: `pnpm build`
 | Permission                         | Purpose                                                                 |
 | ---------------------------------- | ----------------------------------------------------------------------- |
 | `activeTab`                        | Access to the currently active tab                                      |
+| `favicon`                          | Read Chrome's processed favicon for exact local IPFS/IPNS and approved hosted gateway pages |
 | `storage`                          | Store encrypted API key, settings, transaction history                  |
 | `sidePanel`                        | Enable sidepanel mode (Chrome 114+)                                     |
 | `notifications`                    | Show transaction success/failure notifications                          |

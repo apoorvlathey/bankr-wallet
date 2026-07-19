@@ -6,6 +6,7 @@ import {
 } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useBatchPlan } from "@/hooks/useBatchPlan";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { getResolvedChainById } from "@/lib/chains";
 import {
   isDarkThemeId,
@@ -57,6 +58,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const iconChipBg = useIconChipBg();
   const { networksInfo } = useNetworks();
+  const formatOrigin = useDappOriginFormatter();
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
   const isIntakeValidating = batchRequest.intakeStatus === "validating";
@@ -73,7 +75,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const isAtomic7702 = batchPlan.strategy === "atomic-7702";
   const isNonAtomic = isLocalSigningAccount && !isAtomic7702;
   const resolvedChainName = resolvedChain?.name ?? chainName;
-  const originHostname = getOriginHostname(origin);
+  const originHostname = formatOrigin(origin).hostname ?? getOriginHostname(origin);
   const isInternalWalletChan = origin === "WalletChan" || origin === "Cross-Dapp Batch";
   const originInitials = (originHostname || origin || "?")
     .split(/[.\s-]+/)

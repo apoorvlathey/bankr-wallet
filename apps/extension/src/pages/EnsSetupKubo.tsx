@@ -293,7 +293,7 @@ export default function EnsSetupKubo() {
               </IconBox>
               <VStack align="start" spacing={0} minW={0} flex={1}>
                 <Text fontSize="xs" color="fg.muted" letterSpacing="0.08em">
-                  WALLETCHAN · DAPP3 · PIN ONCHAIN HTML
+                  WALLETCHAN · BROWSER · PIN ONCHAIN HTML
                 </Text>
                 <Text fontWeight={700} fontSize="md">
                   Allow WalletChan to write to your Kubo node

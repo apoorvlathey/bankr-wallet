@@ -9,8 +9,11 @@ test("web-accessible resources expose only the provider and navigable ENS pages"
       "utf8",
     ),
   ) as {
+    permissions?: string[];
     web_accessible_resources?: Array<{ resources?: string[] }>;
   };
+
+  assert.ok(manifest.permissions?.includes("favicon"));
 
   const exposed = new Set(
     (manifest.web_accessible_resources ?? []).flatMap(

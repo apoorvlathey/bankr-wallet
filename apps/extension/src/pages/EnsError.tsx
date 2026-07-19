@@ -106,7 +106,7 @@ export default function EnsError() {
               </IconBox>
               <VStack align="start" spacing={0}>
                 <Text fontSize="xs" color="fg.muted" letterSpacing="0.08em">
-                  WALLETCHAN · DAPP3 · NAME BROWSING
+                  WALLETCHAN · BROWSER · NAME BROWSING
                 </Text>
                 <Text fontWeight={700} fontSize="md">
                   Couldn't resolve {displayedName || "this name"}

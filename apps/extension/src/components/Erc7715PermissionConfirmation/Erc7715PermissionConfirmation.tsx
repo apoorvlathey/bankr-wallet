@@ -5,6 +5,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { getResolvedChainById } from "@/lib/chains";
 import {
   getErc7715PermissionTokenAddress,
@@ -40,6 +41,7 @@ function Erc7715PermissionConfirmation({
   onNavigate,
 }: Erc7715PermissionConfirmationProps) {
   const { networksInfo } = useNetworks();
+  const formatOrigin = useDappOriginFormatter();
   const iconChipBg = useIconChipBg();
   const { bg: stripBg, fg: stripFg } = useStripTokens();
   const [editedRequest, setEditedRequest] = useState(permissionRequest.request);
@@ -89,6 +91,10 @@ function Erc7715PermissionConfirmation({
       }),
     [asset, editedRequest, permissionRequest],
   );
+  const displayOrigin = formatOrigin(presentation.origin);
+  const displayInitials = displayOrigin.resolvedName
+    ? displayOrigin.label.slice(0, 3).toUpperCase()
+    : presentation.originInitials;
   const canGrant = canGrantErc7715Permission(accountType);
   const actions = useErc7715PermissionActions({
     permissionRequest,
@@ -130,9 +136,9 @@ function Erc7715PermissionConfirmation({
       onNavigate={onNavigate}
       onRejectAll={onCancelAll}
       origin={presentation.origin}
-      originHostname={presentation.originHostname}
+      originHostname={displayOrigin.hostname ?? presentation.originHostname}
       favicon={permissionRequest.favicon}
-      originInitials={presentation.originInitials}
+      originInitials={displayInitials}
       iconChipBg={iconChipBg}
       summary={
         <PermissionSummary

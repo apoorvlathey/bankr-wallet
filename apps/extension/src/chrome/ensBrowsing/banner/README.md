@@ -11,7 +11,9 @@
   static theme fallback. Page metadata remains untrusted display data and only
   `http(s)` or `data:image/*` favicon URLs are forwarded.
 - `contentUpdates.ts` consumes only the `ens-content-updated` background push.
-- `bookmarkActions.ts` preserves normalized path-scoped bookmark semantics.
+- `bookmarkActions.ts` preserves normalized path-scoped bookmark semantics and
+  records Chrome's processed favicon endpoint for the exact local gateway page,
+  so inline SVG icons never enter the extension renderer as raw markup.
 - `menuActions.ts` owns copy, history, and hosted-gateway actions. Hosted
   navigation still asks the service worker for the per-tab DNR bypass first.
 - `addressField.ts` owns closed-shadow-root selection, plain-text paste, mixed

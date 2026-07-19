@@ -1,4 +1,8 @@
-import { sanitizeUntrustedImageUrl } from "@/lib/remoteImagePolicy";
+import {
+  sanitizeTrustedBrowserFaviconSrc,
+  sanitizeUntrustedImageUrl,
+} from "@/lib/remoteImagePolicy";
+import { fetchAndCacheAvatarImage } from "../avatarImageCache";
 import {
   DEFAULT_THEME_ID,
   SELECTED_THEME_STORAGE_KEY,
@@ -6,6 +10,9 @@ import {
   isThemeId,
   type ThemeId,
 } from "@/theme/tokens";
+import { handleRevokeDappPermission } from "../dapp/connectionHandlers";
+import { listBrowserConnectedDapps } from "./connectedDapps";
+import { searchDappDirectory } from "./dappDirectorySearch";
 import {
   findCachedByGatewayLabel,
   getCached,
@@ -54,6 +61,11 @@ export function handleEnsBrowsingMessage(
     "ens-probe-kubo-api",
     "ens-web3-list",
     "ens-web3-evict",
+    "ens-list-connected-dapps",
+    "ens-revoke-connected-dapp",
+    "ens-search-dapp-directory",
+    "ens-cache-browser-image",
+    "ens-open-dapp-url",
   ]);
   if (!recognizedTypes.has(type)) return false;
 
@@ -70,9 +82,14 @@ export function handleEnsBrowsingMessage(
         : undefined;
     const favicon =
       typeof message.favicon === "string"
-        ? sanitizeUntrustedImageUrl(message.favicon) ?? undefined
+        ? sanitizeUntrustedImageUrl(message.favicon) ??
+          sanitizeTrustedBrowserFaviconSrc(message.favicon) ??
+          undefined
         : undefined;
-    if (!/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(name)) {
+    if (
+      !/^(?:[a-z0-9-]+\.)+(?:eth|gwei)$/.test(name) &&
+      !/^0x[a-f0-9]{40}$/.test(name)
+    ) {
       sendResponse({ ok: false, error: "invalid name" });
       return true;
     }
@@ -292,6 +309,74 @@ export function handleEnsBrowsingMessage(
       (entries) => sendResponse({ ok: true, entries }),
       (error) =>
         sendResponse({ ok: false, error: error?.message ?? String(error) }),
+    );
+    return true;
+  }
+
+  if (message.type === "ens-list-connected-dapps") {
+    listBrowserConnectedDapps().then(
+      (dapps) => sendResponse({ ok: true, dapps }),
+      () => sendResponse({ ok: false, dapps: [] }),
+    );
+    return true;
+  }
+
+  if (message.type === "ens-revoke-connected-dapp") {
+    if (typeof message.origin !== "string") {
+      sendResponse({ ok: false, revoked: false, error: "Invalid origin" });
+      return true;
+    }
+    handleRevokeDappPermission(message.origin).then(
+      (result) => sendResponse({ ok: result.success, revoked: result.revoked }),
+      () => sendResponse({ ok: false, revoked: false }),
+    );
+    return true;
+  }
+
+  if (message.type === "ens-search-dapp-directory") {
+    searchDappDirectory(message.query).then(
+      (results) => sendResponse({ ok: true, results }),
+      () => sendResponse({ ok: false, results: [] }),
+    );
+    return true;
+  }
+
+  if (message.type === "ens-cache-browser-image") {
+    if (typeof message.url !== "string") {
+      sendResponse({ dataUrl: null });
+      return true;
+    }
+    fetchAndCacheAvatarImage(message.url).then(
+      (dataUrl) => sendResponse({ dataUrl }),
+      () => sendResponse({ dataUrl: null }),
+    );
+    return true;
+  }
+
+  if (message.type === "ens-open-dapp-url") {
+    if (typeof message.url !== "string" || message.url.length > 2_048) {
+      sendResponse({ ok: false, error: "Invalid URL" });
+      return true;
+    }
+    let url: URL;
+    try {
+      url = new URL(message.url);
+    } catch {
+      sendResponse({ ok: false, error: "Invalid URL" });
+      return true;
+    }
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      !url.hostname
+    ) {
+      sendResponse({ ok: false, error: "Invalid URL" });
+      return true;
+    }
+    chrome.tabs.create({ url: url.href, active: true }).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false, error: "Could not open URL" }),
     );
     return true;
   }

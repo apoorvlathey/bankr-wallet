@@ -5,6 +5,7 @@ import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermiss
 import DappConnectionAccountSelector from "@/components/DappConnectionAccountSelector";
 import { ConfirmationScreen } from "@/components/ui";
 import { googleFaviconUrl } from "@/constants/externalUrls";
+import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import DappSiteIcon from "@/components/DappSiteIcon";
 import DisplayModeMenu from "@/components/DisplayModeMenu";
 import { playInteractionSound } from "@/sounds/soundManager";
@@ -101,6 +102,8 @@ export default function DappConnectionConfirmation({
 }: DappConnectionConfirmationProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const formatOrigin = useDappOriginFormatter();
+  const displayOrigin = formatOrigin(request.origin);
   const favicon = useMemo(
     () => request.favicon || googleFaviconUrl(request.hostname, 64),
     [request.favicon, request.hostname],
@@ -147,8 +150,9 @@ export default function DappConnectionConfirmation({
           textAlign="center"
         >
           <DappSiteIcon
-            src={favicon}
-            label={request.hostname}
+            src={displayOrigin.faviconSrc || favicon}
+            fallbackSrc={displayOrigin.faviconFallbackSrc}
+            label={displayOrigin.label}
             size="64px"
             imageSize="44px"
           />
@@ -165,7 +169,7 @@ export default function DappConnectionConfirmation({
               maxW="full"
               overflowWrap="anywhere"
             >
-              {request.hostname}
+              {displayOrigin.label}
             </Heading>
           </VStack>
         </VStack>
