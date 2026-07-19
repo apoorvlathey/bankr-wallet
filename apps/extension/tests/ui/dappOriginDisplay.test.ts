@@ -73,6 +73,7 @@ test("maps exact eth.limo and eth.link origins to their ENS identity", () => {
   ]) {
     const display = getDappOriginDisplay(origin, cachedSites, gateway);
     assert.equal(display.isEnsIpfsGateway, true);
+    assert.equal(display.contenthashEnsName, display.resolvedName);
     assert.equal(
       display.resolvedName,
       origin.includes("subdomain") ? "subdomain.ens.eth" : "ens.eth",
@@ -86,6 +87,36 @@ test("maps exact eth.limo and eth.link origins to their ENS identity", () => {
       gateway,
     ).isEnsIpfsGateway,
     false,
+  );
+});
+
+test("keeps literal gateway origins when WalletChan Browser is disabled", () => {
+  const hosted = getDappOriginDisplay(
+    "https://ens.eth.limo",
+    cachedSites,
+    gateway,
+    false,
+  );
+  assert.equal(hosted.label, "ens.eth.limo");
+  assert.equal(hosted.hostname, "ens.eth.limo");
+  assert.equal(hosted.resolvedName, null);
+  assert.equal(hosted.contenthashEnsName, "ens.eth");
+  assert.equal(hosted.isEnsIpfsGateway, true);
+  assert.equal(hosted.browserFaviconPageUrl, "https://ens.eth.limo");
+
+  const local = getDappOriginDisplay(
+    "http://bafy-zrouter.ipfs.gateway.home:9080",
+    cachedSites,
+    gateway,
+    false,
+  );
+  assert.equal(local.label, "bafy-zrouter.ipfs.gateway.home");
+  assert.equal(local.resolvedName, null);
+  assert.equal(local.contenthashEnsName, null);
+  assert.equal(local.isLocalGateway, false);
+  assert.equal(
+    local.browserFaviconPageUrl,
+    "http://bafy-zrouter.ipfs.gateway.home:9080",
   );
 });
 

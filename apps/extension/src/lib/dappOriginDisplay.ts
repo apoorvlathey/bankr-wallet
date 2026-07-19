@@ -14,6 +14,7 @@ export type DappOriginDisplay = {
   label: string;
   hostname: string | null;
   resolvedName: string | null;
+  contenthashEnsName: string | null;
   isLocalGateway: boolean;
   isEnsIpfsGateway: boolean;
   faviconSrc: string | null;
@@ -108,12 +109,14 @@ function faviconSources(
 
 /**
  * Returns a friendly display identity without changing the security origin.
- * Only the user's exact configured subdomain gateway host and port are mapped.
+ * ENS rewriting is disabled with WalletChan Browser; otherwise only exact
+ * hosted gateways or the configured subdomain gateway host and port are mapped.
  */
 export function getDappOriginDisplay(
   rawOrigin: string,
   cachedSites: readonly CachedResolve[],
   gateway: GatewayLocation,
+  ensBrowsingEnabled = true,
 ): DappOriginDisplay {
   let url: URL;
   try {
@@ -123,6 +126,7 @@ export function getDappOriginDisplay(
       label: rawOrigin,
       hostname: null,
       resolvedName: null,
+      contenthashEnsName: null,
       isLocalGateway: false,
       isEnsIpfsGateway: false,
       faviconSrc: null,
@@ -133,16 +137,30 @@ export function getDappOriginDisplay(
 
   const hostname = url.hostname.toLowerCase();
   const hostedEnsName = hostedEnsGatewayName(hostname);
+  if (!ensBrowsingEnabled) {
+    return {
+      label: hostname || rawOrigin,
+      hostname: hostname || null,
+      resolvedName: null,
+      contenthashEnsName: hostedEnsName,
+      isLocalGateway: false,
+      isEnsIpfsGateway: hostedEnsName !== null,
+      faviconSrc: null,
+      faviconFallbackSrc: googleFaviconUrl(hostname, 64),
+      browserFaviconPageUrl: rawOrigin,
+    };
+  }
   if (hostedEnsName) {
     return {
       label: hostedEnsName,
       hostname: hostedEnsName,
       resolvedName: hostedEnsName,
+      contenthashEnsName: hostedEnsName,
       isLocalGateway: false,
       isEnsIpfsGateway: true,
       faviconSrc: null,
-      faviconFallbackSrc: null,
-      browserFaviconPageUrl: null,
+      faviconFallbackSrc: googleFaviconUrl(hostname, 64),
+      browserFaviconPageUrl: rawOrigin,
     };
   }
   if (url.protocol !== "http:") {
@@ -150,6 +168,7 @@ export function getDappOriginDisplay(
       label: hostname || rawOrigin,
       hostname: hostname || null,
       resolvedName: null,
+      contenthashEnsName: null,
       isLocalGateway: false,
       isEnsIpfsGateway: false,
       faviconSrc: null,
@@ -163,6 +182,7 @@ export function getDappOriginDisplay(
       label: hostname || rawOrigin,
       hostname: hostname || null,
       resolvedName: null,
+      contenthashEnsName: null,
       isLocalGateway: false,
       isEnsIpfsGateway: false,
       faviconSrc: null,
@@ -185,6 +205,7 @@ export function getDappOriginDisplay(
     label: resolvedName || hostname || rawOrigin,
     hostname: resolvedName || hostname || null,
     resolvedName,
+    contenthashEnsName: isEnsIpfsGateway ? resolvedName : null,
     isLocalGateway: true,
     isEnsIpfsGateway,
     ...(cachedSite

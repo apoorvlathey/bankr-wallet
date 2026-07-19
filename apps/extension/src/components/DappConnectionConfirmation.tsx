@@ -107,7 +107,7 @@ export default function DappConnectionConfirmation({
   const formatOrigin = useDappOriginFormatter();
   const displayOrigin = formatOrigin(request.origin);
   const contenthashHistory = useEnsContenthashLastUpdated(
-    displayOrigin.resolvedName,
+    displayOrigin.contenthashEnsName,
     displayOrigin.isEnsIpfsGateway,
   );
   const contenthashLabel = contenthashHistoryLabel(contenthashHistory);

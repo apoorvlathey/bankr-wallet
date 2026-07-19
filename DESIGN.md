@@ -225,6 +225,13 @@
 
 ## Slop audit
 
+- 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
+  now gates ENS-friendly rewriting across every request surface. With browsing
+  disabled, the literal gateway hostname remains the primary security identity
+  and its exact-page Chrome favicon occupies the existing mark slot; no new
+  visual treatment or competing label was introduced. Public `.eth.limo` and
+  `.eth.link` connection prompts still retain the subordinate contenthash-age
+  provenance pill because it describes the literal site's deployed content.
 - 2026-07-19 ENS connection provenance audit: exact `.eth.limo`, `.eth.link`,
   and configured local/custom IPFS gateway connection requests gain one quiet
   status pill beneath the recovered ENS identity. The pill uses existing

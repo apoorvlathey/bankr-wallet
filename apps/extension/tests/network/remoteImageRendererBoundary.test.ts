@@ -57,7 +57,10 @@ test("hostile dapp, WalletConnect, permission, and history images use the safe p
     ["WalletConnectSessionsList.tsx", /src=\{session\.icons\[0\]\}/],
     ["WalletConnectProposalNotice.tsx", /src=\{icon\}/],
     ["PendingRequestRow.tsx", /src=\{src\}/],
-    ["RequestConfirmation/RequestIdentity.tsx", /src=\{favicon \|\| undefined\}/],
+    [
+      "RequestConfirmation/RequestIdentity.tsx",
+      /src=\{displayFavicon \|\| undefined\}/,
+    ],
     ["WatchAssetConfirmation/WatchAssetConfirmationScreen.tsx", /src=\{imageUrl\}/],
     ["Activity/ActivityMedia.tsx", /src=\{imageSrc\}/],
     ["BatchCallsList.tsx", /src=\{favicon \|\| undefined\}/],

@@ -310,9 +310,10 @@ The extension maintains address consistency between storage and the active accou
   unconnected, subframe, and navigation-race requests fail with EIP-1193 code
   `4100` through the normal storage result channel.
 - Site title and favicon are bounded, display-only metadata. The canonical hostname is always the primary identity in confirmation and management UI.
-- Connection prompts opened from an exact `*.eth.limo` / `*.eth.link` origin,
-  or from a configured local/custom IPFS gateway that maps back to a cached
-  `.eth` IPFS/IPNS resolution, show a non-blocking contenthash provenance pill.
+- Connection prompts opened from an exact `*.eth.limo` / `*.eth.link` origin
+  always show a non-blocking contenthash provenance pill. Configured
+  local/custom IPFS gateways show it while WalletChan Browser is enabled and
+  the gateway maps back to a cached `.eth` IPFS/IPNS resolution.
   Trusted wallet UI calls `getEnsContenthashLastUpdated`; the service worker
   queries the ENS subgraph for the current resolver's newest
   `ContenthashChanged` block and resolves that block timestamp through the
@@ -322,6 +323,15 @@ The extension maintains address consistency between storage and the active accou
   public `VITE_THE_GRAPH_API_KEY` / `NEXT_PUBLIC_THE_GRAPH_API_KEY` used by
   swiss-knife and compiles it only into the service-worker bundle; without a
   configured key it falls back to the legacy public ENS subgraph endpoint.
+- Request surfaces share the same origin presentation formatter. When
+  WalletChan Browser is disabled, hosted and local gateway origins are not
+  rewritten through the ENS resolution cache: connection, transaction,
+  signature, batch, permission, watch-asset, pending-request, and activity
+  identities show the literal requesting hostname. Hosted/local gateway marks
+  use Chrome's processed favicon endpoint for that exact page URL, so display
+  does not depend on a configured or running local IPFS gateway. Public
+  `.eth.limo` / `.eth.link` origins retain their underlying ENS name only for
+  contenthash provenance lookup even while their displayed identity is literal.
 - Pending prompt storage is globally and per-origin bounded before mutation.
   Connection prompts allow one outstanding request per exact origin; add-chain
   and watch-asset prompts allow five per exact origin (with twenty globally).

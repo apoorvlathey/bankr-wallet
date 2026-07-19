@@ -27,14 +27,10 @@ export function RequestIdentity({
   const formatOrigin = useDappOriginFormatter();
   const displayOrigin = formatOrigin(origin);
   const displayLabel = displayOrigin.label;
-  const displayFavicon = displayOrigin.resolvedName
-    ? displayOrigin.faviconSrc
-    : favicon;
-  const displayFaviconFallback = displayOrigin.resolvedName
-    ? displayOrigin.faviconFallbackSrc
-    : originHostname
-      ? googleFaviconUrl(originHostname)
-      : undefined;
+  const displayFavicon = displayOrigin.faviconSrc || favicon;
+  const displayFaviconFallback =
+    displayOrigin.faviconFallbackSrc ||
+    (originHostname ? googleFaviconUrl(originHostname) : undefined);
   const displayInitials = displayOrigin.resolvedName
     ? displayLabel
         .split(/[.\s-]+/u)

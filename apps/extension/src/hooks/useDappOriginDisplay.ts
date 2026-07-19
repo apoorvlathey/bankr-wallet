@@ -16,12 +16,14 @@ import {
 import { buildBrowserFaviconUrl } from "@/lib/browserFavicon";
 
 type DisplayState = {
+  ensBrowsingEnabled: boolean;
   cachedSites: CachedResolve[];
   gatewayHost: string;
   gatewayPort: number;
 };
 
 let snapshot: DisplayState = {
+  ensBrowsingEnabled: DEFAULT_ENS_BROWSING_SETTINGS.enabled,
   cachedSites: [],
   gatewayHost: DEFAULT_ENS_BROWSING_SETTINGS.gatewayHost,
   gatewayPort: DEFAULT_ENS_BROWSING_SETTINGS.gatewayPort,
@@ -41,6 +43,7 @@ async function refreshDisplayState(): Promise<void> {
   ]);
   if (version !== refreshVersion) return;
   snapshot = {
+    ensBrowsingEnabled: settings.enabled,
     cachedSites,
     gatewayHost: settings.gatewayHost,
     gatewayPort: settings.gatewayPort,
@@ -86,15 +89,24 @@ export function useDappOriginFormatter(): (
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return useCallback(
     (rawOrigin: string) => {
-      const display = getDappOriginDisplay(rawOrigin, state.cachedSites, {
-        host: state.gatewayHost,
-        port: state.gatewayPort,
-      });
+      const display = getDappOriginDisplay(
+        rawOrigin,
+        state.cachedSites,
+        {
+          host: state.gatewayHost,
+          port: state.gatewayPort,
+        },
+        state.ensBrowsingEnabled,
+      );
       const browserFaviconSrc = display.browserFaviconPageUrl
         ? buildBrowserFaviconUrl(display.browserFaviconPageUrl)
         : undefined;
       return {
         ...display,
+        faviconSrc:
+          !display.resolvedName && browserFaviconSrc
+            ? browserFaviconSrc
+            : display.faviconSrc,
         faviconFallbackSrc:
           browserFaviconSrc || display.faviconFallbackSrc,
       };
