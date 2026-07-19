@@ -1247,6 +1247,9 @@ These must always hold true. Violations indicate a security bug.
    write is deferred until the master credential is initialized under the
    active onboarding marker, so the existing rollback removes any partial
    credential and Ledger metadata together.
+   Fee-payment capability discovery rejects Ledger before inspecting any
+   onchain delegate, so even a pre-delegated address cannot enter the ERC-4337
+   token-funded gas path that has no hardware signing implementation.
    Pending Ledger requests
    remain durable during the hardware prompt, but the existing synchronous
    first-action claim blocks confirm/edit/reject races across popup, side panel,

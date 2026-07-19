@@ -37,6 +37,12 @@ export function evaluateTokenFeePaymentEligibility(input: {
   if (input.accountType === "impersonator") {
     return { available: false, unavailableReason: "View-only accounts cannot send transactions" };
   }
+  if (input.accountType === "ledger") {
+    return {
+      available: false,
+      unavailableReason: "Ledger accounts don't support token gas payment",
+    };
+  }
   if (input.hasDeployment) {
     return { available: false, unavailableReason: "Token gas payment doesn't support contract deployment" };
   }

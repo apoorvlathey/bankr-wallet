@@ -255,8 +255,9 @@ The extension supports five distinct account types that can be used simultaneous
   Safe device/preparation failures therefore leave the request available for a
   deliberate retry instead of creating a failed Activity row.
 - **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches,
-  EIP-7702/ERC-7715 authority, force inclusion, sponsored transfers, and the
-  direct in-extension swap shortcut. A dapp swap that submits one normal
+  EIP-7702/ERC-7715 authority, ERC-4337 token-funded gas (including addresses
+  already delegated to WalletChan), force inclusion, sponsored transfers, and
+  the direct in-extension swap shortcut. A dapp swap that submits one normal
   transaction uses the supported single-transaction path.
 
 Wallet-UI messages `ledgerConnect`, `ledgerScan`, `ledgerCancel`,
