@@ -232,6 +232,11 @@
 
 ## Slop audit
 
+- 2026-07-20 home RPC-alert audit: collapsed the warning into a compact
+  two-row status surface. The affected chain and dismissal action now share
+  the header, while the shortened recovery guidance receives the full width
+  beneath it instead of wrapping inside a narrow middle column. Multi-chain
+  warnings show one chain plus a count so narrow popup layouts remain stable.
 - 2026-07-20 manual add-token audit: the final Add token/Add back action now
   uses WalletChan amber in both enabled and disabled states, matching the
   screen's saved-state commitment while leaving blue reserved for focus and

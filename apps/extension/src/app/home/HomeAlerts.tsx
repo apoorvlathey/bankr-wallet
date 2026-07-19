@@ -87,52 +87,54 @@ export function RpcIssueAlert({
       px={3}
       py={2}
     >
-      <HStack align="start" spacing={2}>
-        <Box
-          p={1}
-          bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-          borderRadius={isDarkTheme ? "sm" : undefined}
-        >
-          <WarningIcon
-            color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"}
-            boxSize={3}
-          />
-        </Box>
-        <Box flex={1} minW={0}>
+      <VStack align="stretch" spacing={1}>
+        <HStack spacing={2}>
+          <Box
+            p={1}
+            bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+            borderRadius={isDarkTheme ? "sm" : undefined}
+          >
+            <WarningIcon
+              color={isDarkTheme ? "fg.inverse" : "accentFg.secondary"}
+              boxSize={3}
+            />
+          </Box>
           <Text
+            flexShrink={0}
             fontSize="2xs"
             fontWeight="800"
             color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
             textTransform="uppercase"
             letterSpacing="wide"
-            mb={1}
           >
-            RPC Issue Detected
+            RPC issue detected
           </Text>
-          {hasResolvedChain ? (
-            <VStack align="start" spacing={1}>
-              <HStack spacing={2} flexWrap="wrap">
-                {chainIds.slice(0, 2).map((chainId) => {
-                  const chain = getResolvedChainById(chainId, networksInfo);
-                  if (!chain) return null;
-                  return (
-                    <HStack
-                      key={chainId}
-                      spacing={1.5}
-                      bg="surface.raised"
-                      border="1.5px solid"
-                      borderColor="border.default"
-                      borderRadius={isDarkTheme ? "md" : undefined}
-                      px={1.5}
-                      py={1}
-                      cursor="pointer"
-                      _hover={{ bg: "bg.muted" }}
-                      onClick={() => onEditChain(chain.name)}
-                    >
+          {hasResolvedChain && (
+            <HStack flex={1} minW={0} spacing={1} overflow="hidden">
+              {chainIds.slice(0, 1).map((chainId) => {
+                const chain = getResolvedChainById(chainId, networksInfo);
+                if (!chain) return null;
+                return (
+                  <Button
+                    key={chainId}
+                    size="xs"
+                    variant="ghost"
+                    bg="surface.raised"
+                    border="1.5px solid"
+                    borderColor="border.default"
+                    borderRadius={isDarkTheme ? "md" : undefined}
+                    px={1.5}
+                    h="24px"
+                    minW={0}
+                    flexShrink={0}
+                    _hover={{ bg: "surface.raisedHover" }}
+                    onClick={() => onEditChain(chain.name)}
+                  >
+                    <HStack spacing={1.5}>
                       <ChainIcon
                         chainId={chain.chainId}
                         chainName={chain.name}
@@ -142,57 +144,51 @@ export function RpcIssueAlert({
                       <Text
                         fontSize="xs"
                         fontWeight="800"
-                        color="text.primary"
+                        color="fg.primary"
                         textTransform="uppercase"
                         letterSpacing="wide"
                       >
                         {chain.name}
                       </Text>
                     </HStack>
-                  );
-                })}
-                {chainIds.length > 2 && (
-                  <Text
-                    fontSize="2xs"
-                    fontWeight="700"
-                    color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-                    opacity={0.8}
-                  >
-                    +{chainIds.length - 2} more
-                  </Text>
-                )}
-              </HStack>
-              <Text
-                fontSize="xs"
-                color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-                fontWeight="600"
-                opacity={isDarkTheme ? 1 : 0.9}
-              >
-                Some balances may be stale. Check the chain RPC if this persists.
-              </Text>
-            </VStack>
-          ) : (
-            <Text
-              fontSize="xs"
-              color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-              fontWeight="600"
-              opacity={isDarkTheme ? 1 : 0.9}
-            >
-              Some balances may be stale. Check the chain RPC if this persists.
-            </Text>
+                  </Button>
+                );
+              })}
+              {chainIds.length > 1 && (
+                <Text
+                  fontSize="2xs"
+                  fontWeight="700"
+                  color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+                  opacity={0.8}
+                  whiteSpace="nowrap"
+                >
+                  +{chainIds.length - 1} more
+                </Text>
+              )}
+            </HStack>
           )}
-        </Box>
-        <Button
-          size="xs"
-          variant="ghost"
-          color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
-          fontWeight="700"
-          _hover={{ bg: "whiteAlpha.200" }}
-          onClick={onDismiss}
+          <Button
+            size="xs"
+            variant="ghost"
+            color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
+            fontWeight="700"
+            flexShrink={0}
+            _hover={{ bg: "whiteAlpha.200" }}
+            onClick={onDismiss}
+          >
+            Dismiss
+          </Button>
+        </HStack>
+        <Text
+          fontSize="xs"
+          color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+          fontWeight="600"
+          opacity={isDarkTheme ? 1 : 0.9}
+          whiteSpace="nowrap"
         >
-          Dismiss
-        </Button>
-      </HStack>
+          Balances may be stale. Check RPC settings.
+        </Text>
+      </VStack>
     </Box>
   );
 }
