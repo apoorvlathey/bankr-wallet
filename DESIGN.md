@@ -232,6 +232,10 @@
 
 ## Slop audit
 
+- 2026-07-20 manual add-token audit: the final Add token/Add back action now
+  uses WalletChan amber in both enabled and disabled states, matching the
+  screen's saved-state commitment while leaving blue reserved for focus and
+  ordinary selection.
 - 2026-07-20 add-network request audit: replaced the verbose generic action
   banner with the shared dapp favicon/domain identity followed by one compact
   proposed-network surface. The chain mark, name, and ID now establish the
@@ -550,6 +554,8 @@
 
 ## Changelog
 
+- 2026-07-20: aligned the manual add-token screen's final save action with the
+  shared amber commitment treatment.
 - 2026-07-19: moved Ledger setup into a dedicated full extension tab, closes
   an originating side panel after launch, and replaced the generic hardware
   glyph with official local Ledger SVG assets plus a compact connected-device
