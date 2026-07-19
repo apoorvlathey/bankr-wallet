@@ -6,6 +6,7 @@ export const BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES = [
   "confirmTransaction",
   "confirmTransactionAsync",
   "confirmTransactionAsyncPK",
+  "confirmTransactionAsyncLedger",
   "initiateTransfer",
 ] as const;
 
@@ -23,6 +24,14 @@ export type BackgroundTransactionExecutionDependencies = {
     forceInclusion?: boolean,
   ) => Promise<any>;
   handleConfirmTransactionAsyncPK: (
+    txId: string,
+    password: string,
+    tabId?: number,
+    functionName?: string,
+    gasOverrides?: any,
+    forceInclusion?: boolean,
+  ) => Promise<any>;
+  handleConfirmTransactionAsyncLedger: (
     txId: string,
     password: string,
     tabId?: number,
@@ -146,6 +155,35 @@ export function createBackgroundTransactionExecutionMessageRouter(
             sendResponse({
               success: false,
               error: errorMessage(error, "Failed to confirm transaction"),
+            }),
+          );
+        return HANDLED_ASYNC;
+      }
+
+      case "confirmTransactionAsyncLedger": {
+        const tabId = message.tabId || sender.tab?.id;
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        dependencies
+          .runPendingRequestResolution({
+            family: "transaction",
+            requestId: txId,
+            action: "confirm",
+            resolve: () =>
+              dependencies.handleConfirmTransactionAsyncLedger(
+                txId,
+                message.password,
+                tabId,
+                message.functionName,
+                message.gasOverrides,
+                message.forceInclusion,
+              ),
+            conflictResult: dependencies.pendingResolutionConflict,
+          })
+          .then(sendResponse)
+          .catch((error) =>
+            sendResponse({
+              success: false,
+              error: errorMessage(error, "Failed to confirm Ledger transaction"),
             }),
           );
         return HANDLED_ASYNC;

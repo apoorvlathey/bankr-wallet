@@ -14,6 +14,7 @@ import {
 export interface AppHeaderProps extends Omit<FlexProps, "title"> {
   title: ReactNode;
   onBack?: () => void;
+  isBackDisabled?: boolean;
   backLabel?: string;
   trailing?: ReactNode;
   headingId?: string;
@@ -26,6 +27,7 @@ export const AppHeader = forwardRef<HTMLElement, AppHeaderProps>(
     {
       title,
       onBack,
+      isBackDisabled = false,
       backLabel = "Go back",
       trailing,
       headingId,
@@ -55,6 +57,7 @@ export const AppHeader = forwardRef<HTMLElement, AppHeaderProps>(
             aria-label={backLabel}
             icon={<ArrowBackIcon boxSize={5} />}
             onClick={onBack}
+            isDisabled={isBackDisabled}
             variant="ghost"
             minW="44px"
             w="44px"

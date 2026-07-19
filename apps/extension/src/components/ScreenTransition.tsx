@@ -18,7 +18,6 @@ import { createScreenAnimationCompletionGate } from "./screenAnimationCompletion
 import { useScreenScrollRestoration } from "./useScreenScrollRestoration";
 
 const ScreenEnteredContext = createContext<boolean>(true);
-
 // eslint-disable-next-line react-refresh/only-export-components
 export function useScreenEntered(): boolean {
   return useContext(ScreenEnteredContext);

@@ -31,6 +31,7 @@ interface GasFeePopoverProps {
   selectedTier: GasTierSelection;
   onTierChange: (tier: GasTierSelection) => void;
   customBadge?: string;
+  isDisabled?: boolean;
 }
 
 const transition = {
@@ -57,6 +58,7 @@ export function GasFeePopover({
   selectedTier,
   onTierChange,
   customBadge,
+  isDisabled = false,
 }: GasFeePopoverProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const motionTransition = prefersReducedMotion
@@ -65,7 +67,7 @@ export function GasFeePopover({
 
   return (
     <Popover
-      isOpen={expanded}
+      isOpen={!isDisabled && expanded}
       onClose={onClose}
       placement="top-end"
       gutter={8}
@@ -78,6 +80,7 @@ export function GasFeePopover({
           nativeFee={nativeFee}
           tier={tier}
           onToggle={onToggle}
+          isDisabled={isDisabled}
         />
       </PopoverTrigger>
       <Portal>

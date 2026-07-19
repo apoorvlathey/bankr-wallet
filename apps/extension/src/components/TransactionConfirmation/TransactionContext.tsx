@@ -38,6 +38,7 @@ interface TransactionContextProps {
   requestError: string;
   gasValid: boolean;
   splitState: SplitPriorTxState;
+  isReadOnly?: boolean;
   onClearSigningResolved: (matched: boolean) => void;
 }
 
@@ -61,6 +62,7 @@ export function TransactionContext({
   requestError,
   gasValid,
   splitState,
+  isReadOnly = false,
   onClearSigningResolved,
 }: TransactionContextProps) {
   const { tokens } = useTheme();
@@ -150,6 +152,7 @@ export function TransactionContext({
           approval={parsedApproval}
           chainId={tx.chainId}
           txId={txRequest.id}
+          isReadOnly={isReadOnly}
         />
       )}
 

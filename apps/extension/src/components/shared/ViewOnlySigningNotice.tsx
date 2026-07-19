@@ -1,8 +1,17 @@
 import { WarningIcon } from "@chakra-ui/icons";
 import { HStack, Text } from "@chakra-ui/react";
+import type { ReactNode } from "react";
 
-/** Shared reject-only notice for signing requests pinned to a view-only account. */
-export function ViewOnlySigningNotice() {
+/** Shared reject-only notice for accounts that cannot sign the current request. */
+export function ViewOnlySigningNotice({
+  message = "View-only accounts can't sign",
+  icon,
+  trailing,
+}: {
+  message?: string;
+  icon?: ReactNode;
+  trailing?: ReactNode;
+}) {
   return (
     <HStack
       role="status"
@@ -17,10 +26,13 @@ export function ViewOnlySigningNotice() {
       borderColor="border.default"
       borderRadius="lg"
     >
-      <WarningIcon boxSize={4} flexShrink={0} aria-hidden="true" />
-      <Text fontSize="sm" fontWeight="700" lineHeight="short">
-        View-only accounts can't sign
+      {icon ?? (
+        <WarningIcon boxSize={4} flexShrink={0} aria-hidden="true" />
+      )}
+      <Text flex="1" minW={0} fontSize="sm" fontWeight="700" lineHeight="short">
+        {message}
       </Text>
+      {trailing}
     </HStack>
   );
 }

@@ -40,6 +40,7 @@ import { createBackgroundSwapExecutionMessageRouter } from "../swapExecutionRout
 import { createBackgroundTransactionExecutionMessageRouter } from "../transactionExecutionRouter";
 import { createBackgroundTransactionStatusMessageRouter } from "../transactionStatusRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
+import { handleConfirmTransactionAsyncLedger } from "../../ledger/transactionExecution";
 
 export function composeExecutionRoutes(
   pending: PendingResolutionComposition,
@@ -50,6 +51,7 @@ export function composeExecutionRoutes(
       handleConfirmTransaction,
       handleConfirmTransactionAsync,
       handleConfirmTransactionAsyncPK,
+      handleConfirmTransactionAsyncLedger,
       handleInitiateTransfer,
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,

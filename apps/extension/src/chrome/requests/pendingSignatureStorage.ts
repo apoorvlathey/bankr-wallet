@@ -32,7 +32,7 @@ export interface PendingSignatureRequest {
   // compiler forces these to be set at creation time.
   accountId?: string;
   accountAddress?: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   /** Non-secret ciphertext-generation binding for Bankr signer requests. */
   bankrCredentialTag?: string;
   tabId?: number;

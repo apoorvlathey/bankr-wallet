@@ -2,6 +2,7 @@ import { Image } from "@chakra-ui/react";
 import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { LedgerAvatar } from "@/components/Ledger/LedgerAvatar";
 
 function BlockieAvatar({ address, size }: { address: string; size: number }) {
   return (
@@ -48,6 +49,9 @@ export function AccountAvatar({
         borderRadius="md"
       />
     );
+  }
+  if (account.type === "ledger") {
+    return <LedgerAvatar size={size} />;
   }
   return <BlockieAvatar address={account.address} size={size} />;
 }

@@ -78,6 +78,15 @@ import { createBackgroundSecretManagementMessageRouter } from "../secretManageme
 import { createBackgroundWalletConnectSessionMessageRouter } from "../walletConnectSessionRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
 import { getEnsContenthashLastUpdated } from "../../ensBrowsing/contenthashHistory";
+import {
+  handleAddLedgerAccounts,
+  handleGetLedgerDevices,
+  handleLedgerCancel,
+  handleLedgerConnect,
+  handleLedgerScan,
+} from "../../ledger/accountHandlers";
+import { createBackgroundLedgerMessageRouter } from "../ledgerRouter";
+import { handleConfirmLedgerSignatureRequest } from "../../ledger/signatureConfirmation";
 import { clearTxHistoryForAddresses } from "../../txHistoryStorage";
 
 export function composeAccountRoutes(
@@ -147,6 +156,14 @@ export function composeAccountRoutes(
         chrome.runtime.sendMessage(runtimeMessage),
     });
 
+  const routeBackgroundLedgerMessage = createBackgroundLedgerMessageRouter({
+    handleLedgerConnect,
+    handleLedgerScan,
+    handleLedgerCancel,
+    handleAddLedgerAccounts,
+    handleGetLedgerDevices,
+  });
+
   const routeBackgroundSecretManagementMessage =
     createBackgroundSecretManagementMessageRouter({
       isTrustedWalletUiSender,
@@ -159,6 +176,7 @@ export function composeAccountRoutes(
       getAccountById,
       handleConfirmSignatureRequestBankr,
       handleConfirmSignatureRequest,
+      handleConfirmLedgerSignatureRequest,
       readLocalStorage: (key) => chrome.storage.local.get(key),
       writeResultToStorage,
       handleConfirmErc7715PermissionRequest,
@@ -169,6 +187,7 @@ export function composeAccountRoutes(
     routeBackgroundDappPermissionMessage,
     routeBackgroundWalletConnectSessionMessage,
     routeBackgroundAccountManagementMessage,
+    routeBackgroundLedgerMessage,
     routeBackgroundSecretManagementMessage,
   };
 }

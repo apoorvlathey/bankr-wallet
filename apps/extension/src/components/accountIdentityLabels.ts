@@ -18,5 +18,21 @@ export function getWalletTypeLabel(
   if (account.type === "seedPhrase") {
     return getSeedAccountLabel(account, seedGroupMap) || "Seed phrase";
   }
+  if (account.type === "ledger") return `Ledger · Account ${account.hdIndex + 1}`;
   return "View only";
+}
+
+export function getAccountSettingsTypeLabel(account: Account): string {
+  switch (account.type) {
+    case "bankr":
+      return "Bankr";
+    case "privateKey":
+      return "Private Key";
+    case "seedPhrase":
+      return `Seed · #${account.derivationIndex}`;
+    case "ledger":
+      return "Ledger";
+    case "impersonator":
+      return "View-Only";
+  }
 }

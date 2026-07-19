@@ -43,6 +43,8 @@ function accountTypeLabel(account: Account): string {
       return "Private Key";
     case "seedPhrase":
       return `Seed · #${account.derivationIndex}`;
+    case "ledger":
+      return `Ledger · Account ${account.hdIndex + 1}`;
     case "impersonator":
       return "View-Only";
   }

@@ -229,6 +229,12 @@
 
 ## Slop audit
 
+- 2026-07-19 Ledger setup identity audit: replaced the invented hardware glyph
+  with Ledger's official press-kit wordmark and lettermark. The connected
+  device now owns one quiet surface with one name and one text-plus-dot status,
+  eliminating repeated identity and nested icon chrome. Derivation choices
+  separate human labels from monospace paths for faster scanning, retain native
+  radio semantics and focus behavior, and consume existing theme tokens only.
 - 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
   now gates ENS-friendly rewriting across every request surface. With browsing
   disabled, the literal gateway hostname remains the primary security identity
@@ -298,6 +304,15 @@
   ERC-7715 prompts share one compact amber warning in the sticky decision bar,
   immediately above the reject-only action; the scrollable request content no
   longer repeats account capability state.
+- 2026-07-19 Ledger signing-wait audit: hardware approval remains on the full
+  request review instead of jumping early to Activity. The shared sticky amber
+  notice now carries the official Ledger mark on its black brand tile, one
+  direct instruction, and a dark circular progress cue. The commitment action
+  uses the shared dark-to-muted three-dot loader with `Waiting`, the
+  broadcast-only submitting banner stays hidden, and request-mutating controls
+  retain their layout while becoming unavailable until the device resolves.
+  Back remains active because it navigates without mutating or cancelling the
+  hardware request.
 - 2026-07-18 Swap/Bridge audit: rebuilt the wallet-sized form around one compact
   pay/receive intent module; combined token and network identity instead of
   exposing separate selectors; reused Send's 24px-target amber rounded-square
@@ -508,6 +523,11 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-19: moved Ledger setup into a dedicated full extension tab, closes
+  an originating side panel after launch, and replaced the generic hardware
+  glyph with official local Ledger SVG assets plus a compact connected-device
+  and derivation-path presentation.
 
 - 2026-07-19: added a quiet, theme-token-driven contenthash provenance pill to
   ENS/IPFS connection requests. It appears only for exact hosted or configured
@@ -1036,3 +1056,11 @@
   signing, activity, and detail surfaces. Local IPFS/onchain marks now reuse
   the browser launcher's safe raster/remap/Chrome-processed fallback order and
   existing light contrast canvas instead of collapsing to a CID letter tile.
+- 2026-07-19: moved Ledger to the final Add Account position after View-only
+  and replaced the remaining invented hardware glyph with Ledger's official
+  monochrome lettermark.
+- 2026-07-19: kept Ledger transaction and signature reviews mounted through
+  hardware approval, added the shared branded signing prompt with black logo
+  tile and dark trailing spinner, moved `Waiting` to a dark-to-muted three-dot
+  loader, reserved the submitting banner for broadcast, locked request edits
+  until the device resolves, and kept Back available as non-mutating navigation.

@@ -32,6 +32,7 @@ export type BackgroundSecretManagementDependencies = {
   getAccountById: (accountId: string) => Promise<any>;
   handleConfirmSignatureRequestBankr: (...args: any[]) => Promise<any>;
   handleConfirmSignatureRequest: (...args: any[]) => Promise<any>;
+  handleConfirmLedgerSignatureRequest: (...args: any[]) => Promise<any>;
   readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
   writeResultToStorage: (key: string, result: any) => Promise<void>;
   handleConfirmErc7715PermissionRequest: (...args: any[]) => Promise<any>;
@@ -85,6 +86,13 @@ async function confirmSignatureRequest(
         pinnedType === "seedPhrase"
       ) {
         result = await dependencies.handleConfirmSignatureRequest(
+          sigId,
+          message.password,
+          tabId,
+          message.allowUnsafeSiwe === true,
+        );
+      } else if (pinnedType === "ledger") {
+        result = await dependencies.handleConfirmLedgerSignatureRequest(
           sigId,
           message.password,
           tabId,

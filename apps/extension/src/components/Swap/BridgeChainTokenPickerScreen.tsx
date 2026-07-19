@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   HStack,
-  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
@@ -15,6 +14,7 @@ import {
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
 import {
   FullScreenPicker,
@@ -97,7 +97,7 @@ function TokenLogo({
 
   if (!token.logoUrl) return fallback;
   return (
-    <Image
+    <SafeImage
       src={resolveLogo(token.logoUrl)}
       alt=""
       boxSize={size}

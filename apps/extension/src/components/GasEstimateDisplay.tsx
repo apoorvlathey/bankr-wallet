@@ -31,7 +31,7 @@ import { getInsufficientBalanceMessage } from "@/components/GasEstimate/model/ba
 
 interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   onGasOverrides?: (overrides: GasOverrides | null) => void;
   /**
    * Reports whether the current gas params are valid for broadcast. Bubbled
@@ -40,6 +40,8 @@ interface GasEstimateDisplayProps {
    */
   onValidityChange?: (valid: boolean) => void;
   forceInclusion?: boolean;
+  /** Lock fee selection once a hardware-signing request is in flight. */
+  isReadOnly?: boolean;
 }
 
 function GasRow({ label, value }: { label: string; value: string }) {
@@ -148,6 +150,7 @@ function GasEstimateDisplay({
   onGasOverrides,
   onValidityChange,
   forceInclusion,
+  isReadOnly = false,
 }: GasEstimateDisplayProps) {
   const { tokens } = useTheme();
   const [estimate, setEstimate] = useState<GasEstimate | null>(null);
@@ -184,8 +187,14 @@ function GasEstimateDisplay({
   const [dappValuesPendingForCustom, setDappValuesPendingForCustom] =
     useState(false);
 
+  useEffect(() => {
+    if (!isReadOnly) return;
+    setExpanded(false);
+    setCustomEditorOpen(false);
+  }, [isReadOnly]);
+
   const isLocalAccount =
-    accountType === "privateKey" || accountType === "seedPhrase";
+    accountType === "privateKey" || accountType === "seedPhrase" || accountType === "ledger";
   // Picker is hidden only when we have no tier data (force inclusion /
   // non-1559 chain) or when the account type doesn't allow overrides. We
   // intentionally still show it when the dapp suggested gas — the user
@@ -721,6 +730,7 @@ function GasEstimateDisplay({
       )}
 
       <GasFeePopover
+        isDisabled={isReadOnly}
         expanded={expanded}
         fiatFee={usdDisplay}
         nativeFee={formatCompactFee(displayCostWei, sym)}

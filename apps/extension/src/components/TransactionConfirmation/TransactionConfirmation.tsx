@@ -27,6 +27,7 @@ import { useTransactionActions } from "./useTransactionActions";
 import { useTransactionBatchEligibility } from "./useTransactionBatchEligibility";
 import { useTransactionMetadata } from "./useTransactionMetadata";
 import { useTransactionReviewState } from "./useTransactionReviewState";
+import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
 
 function TransactionConfirmation({
   txRequest,
@@ -89,6 +90,8 @@ function TransactionConfirmation({
     onBeforeReject,
     onAddedToBatch,
   });
+  const isLedgerWaiting =
+    accountType === "ledger" && actions.state === "submitting";
 
   if (actions.state === "forceInclusion" && review.forceInclusionInfo) {
     return (
@@ -112,7 +115,7 @@ function TransactionConfirmation({
         : "Transaction request";
   const confirmDisabledReason = actions.isRejecting
     ? "Reject in progress"
-    : actions.state === "error"
+    : actions.state === "error" && accountType !== "ledger"
       ? "Fix the error above before retrying"
       : review.isCalldataMalformed
         ? "Calldata is malformed — signing blocked"
@@ -167,6 +170,7 @@ function TransactionConfirmation({
             stripFg={stripFg}
             onNavigate={onNavigate}
             onRejectAll={onRejectAll}
+            isDisabled={isLedgerWaiting}
           />
         ) : undefined
       }
@@ -215,13 +219,14 @@ function TransactionConfirmation({
           clearSigningEligible={review.clearSigningEligible}
           simulationReverted={review.simulationReverted}
           simulationUnavailable={review.simulationUnavailable}
-          requestState={actions.state}
+          requestState={isLedgerWaiting ? "ready" : actions.state}
           requestError={actions.error}
           gasValid={review.gasValid}
           splitState={review.splitState}
           onClearSigningResolved={(matched) =>
             review.setClearSigningStatus(matched ? "matched" : "absent")
           }
+          isReadOnly={isLedgerWaiting}
         />
       }
       advancedDetails={
@@ -240,6 +245,7 @@ function TransactionConfirmation({
           onFunctionName={setDecodedFunctionName}
           onAddToBatch={actions.handleAddToBatch}
           onForceInclusionChange={review.setForceInclusion}
+          isReadOnly={isLedgerWaiting}
         />
       }
       actionSummary={
@@ -253,10 +259,15 @@ function TransactionConfirmation({
           isValueMalformed={review.isValueMalformed}
           onGasOverrides={review.setGasOverrides}
           onGasValidityChange={review.setGasValid}
+          isReadOnly={isLedgerWaiting}
         />
       }
       actionNotice={
-        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
+        accountType === "impersonator" ? (
+          <ViewOnlySigningNotice />
+        ) : accountType === "ledger" ? (
+          <LedgerSigningStatus active={isLedgerWaiting} />
+        ) : undefined
       }
       confirmAction={
         accountType === "impersonator" ? (
@@ -268,6 +279,7 @@ function TransactionConfirmation({
             simulationFailed={shouldConfirmSimulationFailure({
               simulationReverted: review.simulationReverted,
             })}
+            waitingForLedger={isLedgerWaiting}
             onConfirm={actions.handleConfirm}
           />
         )

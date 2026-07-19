@@ -1,6 +1,5 @@
 import {
   createPublicClient,
-  formatUnits,
   erc20Abi,
   type Address,
   type PublicClient,
@@ -12,20 +11,14 @@ import { secureHttpTransport } from "../network/rpcClient";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import type { RpcHealthReport } from "@/types";
 
-/** Multicall3 is deployed at the same address on all supported chains */
-const MULTICALL3_ADDRESS: Address =
-  "0xcA11bde05977b3631167028862bE2a173976CA11";
-
-/** Multicall3 ABI for batching native balance lookups */
-const multicall3Abi = [
-  {
-    type: "function",
-    name: "getEthBalance",
-    stateMutability: "view",
-    inputs: [{ name: "addr", type: "address" }],
-    outputs: [{ name: "balance", type: "uint256" }],
-  },
-] as const;
+import {
+  applyBalance,
+  fetchChunkBalancesIndividually,
+  fetchSingleBalanceDirectly,
+  MULTICALL3_ADDRESS,
+  multicall3Abi,
+  type OnchainBalanceCall,
+} from "./onchainBalanceReads";
 
 /** Max calls per multicall batch to avoid oversized RPC requests */
 const MULTICALL_BATCH_SIZE = 100;
@@ -113,7 +106,7 @@ export async function fetchOnchainBalances(
 
       // Build unified call list – native uses Multicall3.getEthBalance,
       // ERC20 uses balanceOf, all batched into a single multicall
-      const calls: { entryIndex: number; token: PortfolioToken; contract: any }[] = [];
+      const calls: OnchainBalanceCall[] = [];
 
       for (const entry of entries) {
         const isNative =
@@ -248,71 +241,4 @@ async function confirmRpcUnavailable(client: PublicClient): Promise<boolean> {
       return true;
     }
   }
-}
-
-async function fetchChunkBalancesIndividually(
-  client: PublicClient,
-  tokens: PortfolioToken[],
-  chunk: { entryIndex: number; token: PortfolioToken; contract: any }[],
-  address: Address,
-): Promise<boolean[]> {
-  return Promise.all(
-    chunk.map(({ entryIndex, token }) =>
-      fetchSingleBalanceDirectly(client, tokens, entryIndex, token, address),
-    ),
-  );
-}
-
-async function fetchSingleBalanceDirectly(
-  client: PublicClient,
-  tokens: PortfolioToken[],
-  entryIndex: number,
-  token: PortfolioToken,
-  address: Address,
-): Promise<boolean> {
-  try {
-    const isNative =
-      token.contractAddress === "native" ||
-      token.contractAddress === "0x0000000000000000000000000000000000000000";
-
-    const rawBalance = isNative
-      ? await client.getBalance({ address })
-      : await client.readContract({
-          address: token.contractAddress as Address,
-          abi: erc20Abi,
-          functionName: "balanceOf",
-          args: [address],
-        });
-
-    applyBalance(tokens, entryIndex, rawBalance as bigint, token);
-    return true;
-  } catch (fallbackErr) {
-    return false;
-  }
-}
-
-/** Apply a raw bigint balance to a token entry, recomputing derived fields */
-function applyBalance(
-  tokens: PortfolioToken[],
-  index: number,
-  rawBalance: bigint,
-  originalToken: PortfolioToken
-) {
-  const balanceStr = formatUnits(rawBalance, originalToken.decimals);
-  const balanceNum = parseFloat(balanceStr);
-
-  tokens[index].balance = balanceStr;
-  tokens[index].balanceFormatted = formatBalance(balanceNum);
-  tokens[index].valueUsd = balanceNum * originalToken.priceUsd;
-}
-
-/** Format a numeric balance to a human-readable string (max 6 significant digits) */
-function formatBalance(value: number): string {
-  if (value === 0) return "0";
-  if (value < 0.000001) return "<0.000001";
-  if (value >= 1_000_000) {
-    return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-  // Show up to 6 significant digits
-  return parseFloat(value.toPrecision(6)).toString();
 }

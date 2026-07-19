@@ -80,6 +80,14 @@ This is essential for user experience because blockchain transactions can take f
 
 ---
 
+### 4b. offscreen
+
+**Justification:**
+
+The offscreen permission is used only for Ledger hardware-wallet operations. After the user explicitly grants a Ledger device through Chrome's WebHID chooser, WalletChan creates a packaged offscreen document to keep the Ledger transport alive while the popup closes or the user reviews and approves a transaction on the device. The document receives only public derivation paths and unsigned transaction/message data, returns a signature, and is closed after an idle timeout. It does not capture the page, execute remote code, or receive private keys.
+
+---
+
 ### 5. tabs
 
 **Justification:**

@@ -23,6 +23,9 @@ export const CrossDappBatchConfirmation = lazy(
 );
 export const ChatView = lazy(() => import("@/components/Chat/ChatView"));
 export const AddAccount = lazy(() => import("@/components/AddAccount"));
+export const LedgerSetupScreen = lazy(
+  () => import("@/components/Ledger/LedgerSetupScreen"),
+);
 export const AccountSettings = lazy(
   () => import("@/components/AccountSettings"),
 );
@@ -91,6 +94,7 @@ if (typeof window !== "undefined") {
     void import("@/components/CrossDappBatchConfirmation");
     void import("@/components/Chat/ChatView");
     void import("@/components/AddAccount");
+    void import("@/components/Ledger/LedgerSetupScreen");
     void import("@/components/AccountSettings");
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");

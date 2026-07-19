@@ -17,7 +17,7 @@ type PendingSignatureReleaseContext = PendingRequestLifecycleContext & {
 /** Discard a completed signature if account/transport/credential authority moved while signing. */
 export async function revalidatePendingSignatureBeforeRelease(
   pending: PendingSignatureReleaseContext,
-  expectedType: "bankr" | "privateKey" | "seedPhrase",
+  expectedType: "bankr" | "privateKey" | "seedPhrase" | "ledger",
 ): Promise<{ authorized: true } | { authorized: false; error: string }> {
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     if (!pending.accountId || !pending.accountAddress) {

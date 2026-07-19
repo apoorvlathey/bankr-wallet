@@ -1,12 +1,12 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { Button, Spinner, VStack } from "@chakra-ui/react";
-
 import type { PendingSignatureRequest } from "@/chrome/requests/pendingSignatureStorage";
 import {
   ClearSigningView,
 } from "@/components/ClearSigning/ClearSigningView";
 import { CopyButton } from "@/components/CopyButton";
 import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
+import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { Eip712DigestDisplay } from "@/components/DigestDisplay";
 import Erc7710DelegationDisplay from "@/components/Erc7710DelegationDisplay";
 import SiweMessageDisplay from "@/components/SiweMessageDisplay";
@@ -21,6 +21,7 @@ import { analyzeSiweMessage } from "@/lib/siwe";
 import { useIconChipBg, useStripTokens } from "@/theme";
 import { SignatureConfirmationScreen } from "./SignatureConfirmationScreen";
 import { SignatureDecisionSummary } from "./SignatureDecisionSummary";
+import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
 import {
   RawSignatureData,
   SignatureMessageData,
@@ -33,13 +34,12 @@ import {
   getSignerAddress,
   isClearSigningTypedData,
 } from "./signaturePresentation";
-
 interface SignatureRequestConfirmationProps {
   sigRequest: PendingSignatureRequest;
   currentIndex: number;
   totalCount: number;
   isInSidePanel: boolean;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   onBack: () => void;
   onCancelled: () => void;
   onRejectAll: () => void;
@@ -47,7 +47,6 @@ interface SignatureRequestConfirmationProps {
   onNavigate: (direction: "prev" | "next") => void;
   onConfirmed?: () => void;
 }
-
 function SignatureRequestConfirmation({
   sigRequest,
   currentIndex,
@@ -119,7 +118,6 @@ function SignatureRequestConfirmation({
         ? "loading"
         : "absent",
   );
-
   useEffect(() => {
     setSiweOverrideAcknowledged(false);
     setSiweOverrideOpen(false);
@@ -135,7 +133,9 @@ function SignatureRequestConfirmation({
   const canSign =
     accountType === "privateKey" ||
     accountType === "seedPhrase" ||
+    accountType === "ledger" ||
     accountType === "bankr";
+  const isLedgerWaiting = accountType === "ledger" && isSubmitting;
 
   const handleCancel = () => {
     if (isRejecting) return;
@@ -280,7 +280,16 @@ function SignatureRequestConfirmation({
       variant="brand"
       onClick={handleConfirm}
       isLoading={isSubmitting}
-      loadingText="Signing"
+      loadingText={isLedgerWaiting ? "Waiting" : "Signing"}
+      spinner={
+        isLedgerWaiting ? (
+          <ShapesLoader
+            variant="dots"
+            size="6px"
+            color="accentFg.highlight"
+          />
+        ) : undefined
+      }
       isDisabled={
         isRejecting ||
         (siweOverrideRequired && !siweOverrideAcknowledged)
@@ -374,8 +383,13 @@ function SignatureRequestConfirmation({
         ) : undefined
       }
       actionNotice={
-        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
+        accountType === "impersonator" ? (
+          <ViewOnlySigningNotice />
+        ) : accountType === "ledger" ? (
+          <LedgerSigningStatus active={isLedgerWaiting} />
+        ) : undefined
       }
+      isInteractionLocked={isLedgerWaiting}
       confirmAction={confirmButton}
       rejectAction={canSign ? rejectButton : undefined}
     />

@@ -2,7 +2,12 @@
  * Account types and vault structures for multi-account support
  */
 
-export type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+export type AccountType =
+  | "bankr"
+  | "privateKey"
+  | "seedPhrase"
+  | "ledger"
+  | "impersonator";
 
 /**
  * Password type for unlock sessions
@@ -33,11 +38,29 @@ export interface SeedPhraseAccount extends BaseAccount {
   derivationIndex: number;
 }
 
+export interface LedgerAccount extends BaseAccount {
+  type: "ledger";
+  deviceId: string;
+  hdPath: string;
+  hdIndex: number;
+}
+
+export interface LedgerDevice {
+  label: string;
+  model: string;
+  addedAt: number;
+}
+
 export interface ImpersonatorAccount extends BaseAccount {
   type: "impersonator";
 }
 
-export type Account = BankrAccount | PrivateKeyAccount | SeedPhraseAccount | ImpersonatorAccount;
+export type Account =
+  | BankrAccount
+  | PrivateKeyAccount
+  | SeedPhraseAccount
+  | LedgerAccount
+  | ImpersonatorAccount;
 
 /**
  * Seed group metadata (stored alongside accounts)

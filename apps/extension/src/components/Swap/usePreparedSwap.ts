@@ -66,6 +66,16 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
       });
       return;
     }
+    if (options.accountType === "ledger") {
+      toast({
+        title: "Ledger swap not available",
+        description:
+          "Use a swap dapp; WalletChan will show the normal Ledger confirmation.",
+        status: "info",
+        duration: 4000,
+      });
+      return;
+    }
     if (!options.isBridge && !options.quote) return;
 
     setIsSubmitting(true);

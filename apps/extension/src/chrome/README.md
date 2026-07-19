@@ -12,7 +12,7 @@ directory. A file should remain here only when it is one of:
 Implementations belong in named audit domains. Current domains include:
 
 - `cryptography/`, `accounts/`, `auth/`, `passkey/`, `session/`, `mnemonic/`,
-  `secrets/`, and `localSigning/` for record codecs, key wrapping, account
+  `secrets/`, `localSigning/`, and `ledger/` for record codecs, key wrapping, account
   state, plaintext release, and secret authority;
 - `transactions/`, `signatures/`, `batch/`, `erc7715/`, `simulation/` for
   signing, execution, permission, and review flows;

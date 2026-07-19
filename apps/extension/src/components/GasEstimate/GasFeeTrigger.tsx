@@ -11,12 +11,13 @@ interface GasFeeTriggerProps {
   nativeFee: string;
   tier?: GasTierSelection;
   onToggle: () => void;
+  isDisabled?: boolean;
 }
 
 /** Compact trigger for the anchored fee-detail popover. */
 export const GasFeeTrigger = forwardRef<HTMLButtonElement, GasFeeTriggerProps>(
   function GasFeeTrigger(
-    { expanded, fiatFee, nativeFee, tier, onToggle },
+    { expanded, fiatFee, nativeFee, tier, onToggle, isDisabled = false },
     ref,
   ) {
     const { tokens } = useTheme();
@@ -33,6 +34,7 @@ export const GasFeeTrigger = forwardRef<HTMLButtonElement, GasFeeTriggerProps>(
         px={3}
         py={1}
         onClick={onToggle}
+        isDisabled={isDisabled}
         aria-expanded={expanded}
         border={tokens.borders.thin}
         borderColor="border.default"

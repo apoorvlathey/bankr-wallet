@@ -18,6 +18,7 @@ export interface ConfirmationScreenProps
   extends Omit<AppScreenProps, "children" | "title"> {
   title: ReactNode;
   onBack?: () => void;
+  isBackDisabled?: boolean;
   backLabel?: string;
   trailing?: ReactNode;
   headingRef?: Ref<HTMLHeadingElement>;
@@ -49,6 +50,7 @@ export const ConfirmationScreen = forwardRef<
   {
     title,
     onBack,
+    isBackDisabled,
     backLabel,
     trailing,
     headingRef,
@@ -76,6 +78,7 @@ export const ConfirmationScreen = forwardRef<
       <AppHeader
         title={title}
         onBack={onBack}
+        isBackDisabled={isBackDisabled}
         backLabel={backLabel}
         trailing={trailing}
         headingRef={headingRef}

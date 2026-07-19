@@ -2,12 +2,13 @@
 
 ## Overview
 
-WalletChan is a browser extension that supports four account types:
+WalletChan is a browser extension that supports five account types:
 
 1. **Bankr API Accounts** - AI-powered wallets that execute transactions through the Bankr API
 2. **Private Key Accounts** - Standard wallets with local key storage for transaction signing
 3. **Seed Phrase Accounts** - BIP39/BIP44 groups whose derived keys sign locally
-4. **Impersonator Accounts** - View-only addresses that cannot sign or send
+4. **Ledger Accounts** - Hardware-backed accounts that sign on a connected Ledger in Chromium
+5. **Impersonator Accounts** - View-only addresses that cannot sign or send
 
 This document describes the core architecture and transaction handling implementation.
 
@@ -16,6 +17,7 @@ This document describes the core architecture and transaction handling implement
 - [SECURITY.md](./SECURITY.md) - Security audit guide, threat model, and pre-commit checklists
 - [SECURITY_ARCHITECTURE.md](./SECURITY_ARCHITECTURE.md) - Audit map, critical module boundaries, and safe refactor sequence
 - [PK_ACCOUNTS.md](./PK_ACCOUNTS.md) - Private key accounts implementation (security, signing, storage)
+- [LEDGER.md](./LEDGER.md) - Ledger WebHID/offscreen architecture, storage, signing, and support boundaries
 - [CHAT.md](./CHAT.md) - Chat feature implementation (AI conversations with Bankr agent)
 - [CALLDATA.md](./CALLDATA.md) - Calldata decoder UI (rich param components, type routing, unit conversion)
 - [STYLING.md](./STYLING.md) - Token vocabulary, theme authoring rules, design system
@@ -193,15 +195,69 @@ the restraint rules in `_docs/WARM_MIDNIGHT.md`.
   estimate refreshes for the resolved recipient or calldata; ERC-20 MAX remains
   the full token balance.
 
-The extension supports four distinct account types that can be used simultaneously:
+The extension supports five distinct account types that can be used simultaneously:
 
-| Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Impersonator Account    |
-| --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | ----------------------- |
-| Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | ❌ Disabled (view-only) |
-| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ❌ Disabled (view-only) |
-| Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | No secrets stored       |
-| Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Address only            |
-| Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Viewing portfolio/dApps |
+| Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Ledger Account                         | Impersonator Account    |
+| --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | -------------------------------------- | ----------------------- |
+| Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | Device signing + RPC broadcast         | ❌ Disabled (view-only) |
+| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ✅ Personal sign + EIP-712             | ❌ Disabled (view-only) |
+| Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | Keys remain on device; public metadata only | No secrets stored       |
+| Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only            |
+| Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps |
+
+### Ledger Architecture
+
+- **Browser boundary:** Ledger setup and signing require Chromium with WebHID
+  and `chrome.offscreen` (Chrome 124+). Firefox keeps all non-Ledger wallet
+  behavior but does not advertise Ledger setup.
+- **Setup surface:** selecting Ledger from a popup or side panel opens the
+  dedicated `index.html?route=add-ledger` full-tab route. A side-panel launcher
+  closes through the shared side-panel control after the tab opens. The route
+  persists across unlock and takes priority over normal pending-request startup
+  routing.
+- **Permission gesture:** the full-tab `components/Ledger/AddLedgerFlow.tsx`
+  calls `navigator.hid.requestDevice()` only from the Connect button's user
+  gesture. Popup and side-panel contexts never request WebHID permission.
+- **Transport isolation:** `chrome/ledger/offscreenBridge.ts` lazily creates
+  `offscreen.html`; `src/offscreen/ledgerSigner.ts` owns the Ledger SDK and
+  WebHID session. Its message listener authorizes the exact extension ID and
+  service-worker script URL before dispatch, rejecting UI/content-script and
+  URL-lookalike senders. The document closes after 30 seconds idle.
+- **Device binding:** the stable device identity is the lowercase address at
+  `m/44'/60'/0'/0/0`. Every scan/sign session re-derives and checks it before
+  using the connected device.
+- **Persistence:** Ledger accounts extend public `accounts` metadata with
+  `deviceId`, `hdPath`, and `hdIndex`. `ledgerDevices` stores only public label,
+  model, and creation metadata; no hardware secret enters extension storage.
+  Account/device persistence is the import commit boundary; active-account
+  selection is best-effort after commit and cannot turn a successful import
+  into a false failure.
+- **Authority:** adding Ledger accounts requires a live master session. Signing
+  works under master or agent sessions and retains the normal pinned-account,
+  origin/WalletConnect, reset lease, signer-recovery, history, and receipt gates.
+- **Hardware-wait boundary:** transaction and signature rows remain pending
+  while the Ledger device is waiting for approval, so the request review stays
+  mounted. The UI shows a Ledger action banner with the branded black logo tile
+  and dark trailing spinner, changes the primary action to a dark three-dot `Waiting`
+  state, and keeps the broadcast-only submitting banner hidden. Approval, gas,
+  queue, rejection, and warning-override controls are locked, while Back remains
+  available and only navigates away from the still-active request. The background
+  first-action claim independently rejects competing edits or terminal actions.
+  A transaction moves into processing history only
+  after the recovered hardware signature reaches the final pre-broadcast
+  callback; a message request is removed only after final authorization passes.
+  Safe device/preparation failures therefore leave the request available for a
+  deliberate retry instead of creating a failed Activity row.
+- **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches,
+  EIP-7702/ERC-7715 authority, force inclusion, sponsored transfers, and the
+  direct in-extension swap shortcut. A dapp swap that submits one normal
+  transaction uses the supported single-transaction path.
+
+Wallet-UI messages `ledgerConnect`, `ledgerScan`, `ledgerCancel`,
+`addLedgerAccounts`, and `getLedgerDevices` are handled by
+`background/ledgerRouter.ts`. A pinned Ledger transaction confirms through
+`confirmTransactionAsyncLedger`; Ledger signatures branch inside the existing
+trusted `confirmSignatureRequest` route.
 
 ### Seed Phrase Architecture
 
@@ -233,7 +289,8 @@ When importing a seed phrase whose derived address matches an existing private k
 
 ### Account Selection
 
-- Users can configure one or both account types during onboarding
+- Users can configure supported account types during onboarding and add Ledger
+  or view-only accounts later from Account Settings
 - When both accounts are set up, the first account added becomes the default active account
 - Only tabs whose current origin has an approved dapp connection (or an active
   connection prompt) maintain an account selection in `tabAccounts`. Their
@@ -560,7 +617,7 @@ bounded candidates when Multicall3 is unavailable.
 
 ### Per-Account-Type Chain Restrictions
 
-Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Robinhood Chain, and Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). The remaining built-ins are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
+Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Robinhood Chain, and Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). The remaining built-ins are available for PK, Seed Phrase, Ledger, and Impersonator accounts. PK / Seed / Ledger / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains. Ledger still applies the execution exclusions documented above.
 
 **Constants** (derived from `src/constants/chainRegistry.ts`, re-exported via `src/constants/networks.ts`):
 

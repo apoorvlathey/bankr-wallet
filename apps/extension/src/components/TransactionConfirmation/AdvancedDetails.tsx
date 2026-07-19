@@ -32,6 +32,7 @@ interface AdvancedDetailsProps {
   onFunctionName: (name: string | undefined) => void;
   onAddToBatch: () => void;
   onForceInclusionChange: (enabled: boolean) => void;
+  isReadOnly?: boolean;
 }
 
 function TenderlyAndBatchControls({
@@ -41,6 +42,7 @@ function TenderlyAndBatchControls({
   isAddingToBatch,
   batchedCount,
   onAddToBatch,
+  isReadOnly,
 }: Pick<
   AdvancedDetailsProps,
   | "txRequest"
@@ -49,6 +51,7 @@ function TenderlyAndBatchControls({
   | "isAddingToBatch"
   | "batchedCount"
   | "onAddToBatch"
+  | "isReadOnly"
 >) {
   const { tx } = txRequest;
   const params = new URLSearchParams({
@@ -68,6 +71,7 @@ function TenderlyAndBatchControls({
       isAddingToBatch={isAddingToBatch}
       batchedCount={batchedCount}
       onAddToBatch={onAddToBatch}
+      isInteractionDisabled={isReadOnly}
     />
   );
 }
@@ -87,6 +91,7 @@ export function AdvancedDetails({
   onFunctionName,
   onAddToBatch,
   onForceInclusionChange,
+  isReadOnly = false,
 }: AdvancedDetailsProps) {
   const { tx } = txRequest;
   const disclosureRef = useRef<HTMLDetailsElement>(null);
@@ -196,6 +201,7 @@ export function AdvancedDetails({
             isAddingToBatch={isAddingToBatch}
             batchedCount={batchedCount}
             onAddToBatch={onAddToBatch}
+            isReadOnly={isReadOnly}
           />
 
           {forceInclusionInfo && (
@@ -203,6 +209,7 @@ export function AdvancedDetails({
               enabled={forceInclusion}
               l1ChainName={forceInclusionInfo.l1ChainName}
               onChange={onForceInclusionChange}
+              isDisabled={isReadOnly}
             />
           )}
         </VStack>

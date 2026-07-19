@@ -1066,6 +1066,7 @@ accessible resources.
 | `mnemonicVault`            | Yes (encrypted)  | V2 dedicated-key-encrypted phrases + master wrapper, or V1 PBKDF2-encrypted phrases |
 | `seedGroups`               | No               | Seed group metadata (names, counts)                     |
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
+| `ledgerDevices`            | No               | Public Ledger label/model metadata keyed by the canonical public address at `m/44'/60'/0'/0/0`; no transport secret or private key |
 | `addressContacts`          | No               | Local-only user labels for public EVM addresses         |
 | `ensIdentityCache`         | No               | Six-hour public name/avatar cache; optional `needsAvatar` marks a forward-resolved name awaiting batched avatar lookup |
 | `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
@@ -1132,7 +1133,7 @@ accessible resources.
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
+| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `notifications`, `offscreen`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `offscreen` exists only in the Chromium manifest and isolates the Ledger WebHID SDK in `offscreen.html`; Firefox omits it. `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for content-script coverage and configured RPCs; egress is method/URL/origin/redirect/timeout/size/concurrency bounded |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
@@ -1156,6 +1157,29 @@ These must always hold true. Violations indicate a security bug.
 2. **No secrets in console logs** - Never `console.log` passwords, API keys, private keys, or vault keys. Grep for `console.log` near sensitive variables when reviewing changes.
 
 3. **Agent password blocks all account/secret modifications** - Every handler that modifies secrets or account structure checks `getPasswordType() === "agent"` and returns an error. The UI hides these options too, but backend enforcement is the true security boundary.
+
+3a. **Ledger keys never enter extension memory or storage** - The offscreen
+   Ledger SDK receives unsigned transaction/message/typed-data payloads and
+   returns only public addresses or signatures. Account persistence contains
+   public device/path metadata only. Every signing session re-identifies the
+   device, and the service worker locally recovers the returned signature before
+   broadcast/release. Adding Ledger accounts is master-only; normal signing may
+   use a live master or agent session. Ledger pairing/scan routes are exact
+   trusted-wallet-UI messages, not provider messages. Pending Ledger requests
+   reach the offscreen signer only from the exact extension service-worker
+   sender URL and extension ID; content scripts, renderer pages, foreign IDs,
+   query/hash variants, and path lookalikes are rejected before dispatch.
+   Ledger account/device persistence is the durable import commit, while the
+   subsequent active-account preference update is best-effort and cannot
+   produce a false failed-import response after data was committed.
+   Pending Ledger requests
+   remain durable during the hardware prompt, but the existing synchronous
+   first-action claim blocks confirm/edit/reject races across popup, side panel,
+   and full-page renderers. Transaction removal and Activity creation occur
+   only after recovered-signer and final-authorization checks in the
+   pre-broadcast callback; signature removal occurs only after those same final
+   release checks. Renderer-side edit locks are UX defense-in-depth, not the
+   concurrency boundary.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
@@ -1487,6 +1511,17 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Is sensitive data encrypted before storage?
 - [ ] Is the key documented in the Storage Keys Reference above?
 - [ ] Is `chrome.storage.sync` only used for non-sensitive data?
+
+### If you modified Ledger support:
+
+- [ ] Does WebHID permission still originate from an explicit trusted-UI user gesture?
+- [ ] Does the offscreen document receive no password, vault key, private key, seed phrase, or API key?
+- [ ] Does the offscreen listener authorize the exact extension service-worker sender before dispatch?
+- [ ] Is the connected device re-bound through the canonical public identity before every scan/sign?
+- [ ] Is the recovered transaction/message/EIP-712 signer checked against the pinned account?
+- [ ] Do account mutations remain master-only while agent sessions can sign but cannot reveal/add/remove?
+- [ ] Do Firefox builds omit the `offscreen` permission and offscreen JavaScript target?
+- [ ] Were normal Bankr, private-key, seed-phrase, and view-only paths regression-tested?
 
 ### General checks:
 

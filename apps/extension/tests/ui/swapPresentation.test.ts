@@ -132,9 +132,10 @@ test("Swap separates the shared searchable network browser from token discovery"
 });
 
 test("Swap initializes a generic entry from the cached top portfolio token", async () => {
-  const [view, data] = await Promise.all([
+  const [view, data, utils] = await Promise.all([
     readSwapSource("SwapView.tsx"),
     readSwapSource("useSellTokenData.ts"),
+    readSwapSource("swapViewUtils.ts"),
   ]);
 
   assert.match(data, /setHoldingsAllChains\(catalog\.tokens\)/u);
@@ -143,6 +144,7 @@ test("Swap initializes a generic entry from the cached top portfolio token", asy
   assert.match(view, /setBuyChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /initialSellToken && SWAP_SUPPORTED_CHAIN_IDS\.has\(initialSellToken\.chainId\)/u);
   assert.doesNotMatch(view, /if \(!buyToken\.buyTokenInfo \|\| !buyToken\.buyTokenAddress\) return/u);
-  assert.match(view, /const nextSellToken: PortfolioToken \| null/u);
-  assert.match(view, /: null;[\s\S]*?setSellChainId\(buyChainId\)[\s\S]*?setBuyChainId\(previousSellChainId\)/u);
+  assert.match(view, /buildFlippedSellToken\(\{/u);
+  assert.match(utils, /if \(!args\.buyTokenInfo \|\| !address\) return null/u);
+  assert.match(view, /setSellChainId\(buyChainId\)[\s\S]*?setBuyChainId\(previousSellChainId\)/u);
 });

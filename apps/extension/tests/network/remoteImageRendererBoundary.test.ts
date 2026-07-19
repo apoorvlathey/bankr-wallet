@@ -63,9 +63,12 @@ test("hostile dapp, WalletConnect, permission, and history images use the safe p
     ],
     ["WatchAssetConfirmation/WatchAssetConfirmationScreen.tsx", /src=\{imageUrl\}/],
     ["Activity/ActivityMedia.tsx", /src=\{imageSrc\}/],
-    ["BatchCallsList.tsx", /src=\{favicon \|\| undefined\}/],
+    [
+      "BatchCallsList.tsx",
+      /src=\{originDisplay\?\.faviconSrc \|\| favicon \|\| undefined\}/,
+    ],
     ["ChainIcon.tsx", /src=\{meta\.iconSrc\}/],
-    ["Swap/BridgeChainTokenPickerScreen.tsx", /src=\{iconUrl\}/],
+    ["Swap/BridgeChainTokenPickerScreen.tsx", /src=\{resolveLogo\(token\.logoUrl\)\}/],
     ["Swap/SwapQuoteSection.tsx", /src=\{destNativeInfo\.logoUrl\}/],
     ["Swap/SwapTokenControls.tsx", /src=\{token\.logoUrl\}/],
   ];
@@ -82,7 +85,7 @@ test("hostile dapp, WalletConnect, permission, and history images use the safe p
   const browser = await readFile(new URL("Dapp3Browser.tsx", PAGE_ROOT), "utf8");
   const browserIcon = await component("Dapp3Browser/Dapp3SiteIcon.tsx");
   const suggestions = await component("Dapp3Browser/DappDirectorySuggestions.tsx");
-  assert.match(browser, /import Dapp3SiteCard from/);
+  assert.match(browser, /import Dapp3SiteCard(?:, \{ CloseIcon \})? from/);
   assert.match(suggestions, /import Dapp3SiteIcon from/);
   assert.match(
     browserIcon,

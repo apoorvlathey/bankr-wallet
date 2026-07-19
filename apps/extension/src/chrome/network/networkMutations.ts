@@ -9,13 +9,9 @@ import { withStorageLock } from "../storageLock";
 import {
   cleanChainName,
   cleanNetworkEntry,
-  cleanSavedRpcEndpoints,
 } from "./customNetworkValidation";
-import {
-  getNetworkRpcEndpoints,
-  moveNetworkRpcEndpoints,
-  removeNetworkRpcUrls,
-} from "./rpcHistoryRepository";
+import { removeNetworkRpcUrls } from "./rpcHistoryRepository";
+import { reconcileNetworkRpcEndpoints } from "./networkRpcMutation";
 import {
   failure,
   findChainNameById,
@@ -169,32 +165,12 @@ export async function updateNetworkEntry({
       }
 
       const requestedRpcEndpoints = rpcEndpoints ?? rpcUrls;
-      if (requestedRpcEndpoints !== undefined) {
-        const cleanedRpcEndpoints = cleanSavedRpcEndpoints(
-          requestedRpcEndpoints,
-          cleanedEntry.rpcUrl,
-        );
-        await moveNetworkRpcEndpoints(
-          current.chainId,
-          savedChainId,
-          cleanedEntry.rpcUrl,
-          cleanedRpcEndpoints,
-        );
-      } else if (
-        cleanedEntry.rpcUrl !== current.rpcUrl ||
-        savedChainId !== current.chainId
-      ) {
-        const existingRpcEndpoints = await getNetworkRpcEndpoints(
-          current.chainId,
-          current.rpcUrl,
-        );
-        await moveNetworkRpcEndpoints(
-          current.chainId,
-          savedChainId,
-          cleanedEntry.rpcUrl,
-          [...existingRpcEndpoints, { url: current.rpcUrl }],
-        );
-      }
+      await reconcileNetworkRpcEndpoints({
+        current,
+        savedChainId,
+        savedRpcUrl: cleanedEntry.rpcUrl,
+        requestedRpcEndpoints,
+      });
 
       const savedEntry: NetworkEntry = isCustom
         ? {

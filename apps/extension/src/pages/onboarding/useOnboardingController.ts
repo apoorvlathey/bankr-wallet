@@ -4,7 +4,11 @@ import { isResolvableName, resolveNameToAddress } from "@/lib/ensUtils";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
 import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
-
+import {
+  getOrCreateOnboardingOwnerId,
+  isArcBrowser,
+  ONBOARDING_OWNER_SESSION_KEY,
+} from "./onboardingEnvironment";
 export type OnboardingStep =
   | "accountType"
   | "bankrSetup"
@@ -28,34 +32,6 @@ export type OnboardingErrors = {
   password?: string;
   confirmPassword?: string;
 };
-
-function isArcBrowser(): boolean {
-  try {
-    const title = getComputedStyle(document.documentElement).getPropertyValue(
-      "--arc-palette-title",
-    );
-    return !!title && title.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
-
-const ONBOARDING_OWNER_SESSION_KEY = "walletchanOnboardingOwner";
-
-function getOrCreateOnboardingOwnerId(): string {
-  try {
-    const existing = sessionStorage.getItem(ONBOARDING_OWNER_SESSION_KEY);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    sessionStorage.setItem(ONBOARDING_OWNER_SESSION_KEY, created);
-    return created;
-  } catch {
-    // A stable ID for this mounted controller is still enough when session
-    // storage is unavailable. A reload then treats the old marker as owned by
-    // an interrupted surface only after its TTL, never overwriting it.
-    return crypto.randomUUID();
-  }
-}
 
 export function useOnboardingController() {
   const [step, setStep] = useState<OnboardingStep>("accountType");

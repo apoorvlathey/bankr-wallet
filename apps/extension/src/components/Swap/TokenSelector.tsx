@@ -15,9 +15,7 @@ import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import { TokenPickerContent } from "@/components/Swap/TokenPickerContent";
-
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-
 /** Popular token symbols per chain — same list as BuyTokenSelector so the
  *  buy/sell dropdowns offer parity. */
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
@@ -28,7 +26,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
-
 /** Convert a static token-list entry into the PortfolioToken shape parents
  *  consume for the sell side. Tokens not in the user's holdings get a zero
  *  balance — the swap quote will still load against onchain balance. */
@@ -51,7 +48,6 @@ function entryToPortfolioToken(
     chainId,
   };
 }
-
 interface TokenSelectorProps {
   holdings: PortfolioToken[];
   tokenList: TokenListEntry[];
@@ -84,7 +80,6 @@ interface TokenSelectorProps {
   isLoadingHoldings?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
 }
-
 export default function TokenSelector({
   holdings,
   tokenList,
@@ -109,10 +104,8 @@ export default function TokenSelector({
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const lastSubmittedRef = useRef("");
-
   const searchTerm = search.trim().toLowerCase();
   const excludeLower = excludeAddress?.toLowerCase();
-
   const closeDropdown = useCallback((restoreFocus = true) => {
     setIsOpen(false);
     setSearch("");
@@ -121,12 +114,10 @@ export default function TokenSelector({
       requestAnimationFrame(() => triggerRef.current?.focus());
     }
   }, [onOpenChange]);
-
   const handleTriggerClick = () => {
     setIsOpen(true);
     onOpenChange?.(true);
   };
-
   useEffect(() => {
     if (isOpen) {
       setVisibleCount(60);
@@ -135,7 +126,6 @@ export default function TokenSelector({
       return () => window.clearTimeout(focusTimer);
     }
   }, [isOpen]);
-
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {

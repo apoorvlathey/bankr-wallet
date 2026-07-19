@@ -6,6 +6,7 @@ export type SwapAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
+  | "ledger"
   | "impersonator";
 
 export interface SwapViewProps {

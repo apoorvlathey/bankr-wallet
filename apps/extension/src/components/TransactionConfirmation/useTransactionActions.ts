@@ -67,9 +67,11 @@ export function useTransactionActions({
     setState("submitting");
     setError("");
     const messageType =
-      accountType === "privateKey" || accountType === "seedPhrase"
-        ? "confirmTransactionAsyncPK"
-        : "confirmTransactionAsync";
+      accountType === "ledger"
+        ? "confirmTransactionAsyncLedger"
+        : accountType === "privateKey" || accountType === "seedPhrase"
+          ? "confirmTransactionAsyncPK"
+          : "confirmTransactionAsync";
     const functionName = isErc7715PermissionRevoke
       ? "Revoke delegated permission"
       : is7702Revoke

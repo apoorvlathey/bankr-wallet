@@ -36,6 +36,16 @@ export const SeedIcon = (props: any) => (
   </Icon>
 );
 
+// Ledger / hardware-wallet icon — device screen plus USB connector.
+export const HardwareWalletIcon = (props: any) => (
+  <Icon viewBox="0 0 24 24" display="block" {...props}>
+    <path
+      fill="currentColor"
+      d="M4 4h14a2 2 0 0 1 2 2v3h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1v3a2 2 0 0 1-2 2H4a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm0 3v10h13V7H4Zm16 5h1v-1h-1v1ZM7 9h7v6H7V9Z"
+    />
+  </Icon>
+);
+
 // Eye icon for Impersonator (view-only) accounts
 export const EyeIcon = (props: any) => (
   <Icon viewBox="0 0 24 24" display="block" {...props}>

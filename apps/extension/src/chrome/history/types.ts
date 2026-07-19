@@ -160,7 +160,7 @@ export interface CompletedTransaction {
   broadcastUncertain?: boolean;
   error?: string;
   jobId?: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger";
   functionName?: string;
   gasData?: GasData;
   swapMeta?: SwapMeta;

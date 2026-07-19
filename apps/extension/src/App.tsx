@@ -11,7 +11,6 @@ import {
   Container,
   Box,
   VStack,
-  Spinner,
   useDisclosure,
 } from "@chakra-ui/react";
 
@@ -38,6 +37,7 @@ import {
   Erc7715PermissionConfirmation,
   HiddenPortfolioTokensView,
   HideTokensView,
+  LedgerSetupScreen,
   MoreActionsView,
   PendingTxList,
   preloadApprovalRequestScreen,
@@ -53,22 +53,8 @@ import {
   WatchAssetConfirmation,
 } from "@/app/lazyScreens";
 import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
-
-/**
- * Detects if we're running in Arc browser using CSS variable
- * Arc browser injects --arc-palette-title CSS variable
- * This is the recommended way to detect Arc (used by MetaMask)
- */
-function isArcBrowser(): boolean {
-  try {
-    const arcPaletteTitle = getComputedStyle(
-      document.documentElement,
-    ).getPropertyValue("--arc-palette-title");
-    return !!arcPaletteTitle && arcPaletteTitle.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
+import LoadingFallback from "@/app/LoadingFallback";
+import { isArcBrowser } from "@/app/isArcBrowser";
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -133,37 +119,22 @@ import {
 } from "@/app/initialApprovalRequests";
 import { applyInitialApprovalRoute, resolveHintedInitialApprovalRoute } from "@/app/initialApprovalRoute";
 import { openOrFocusOnboarding } from "@/app/openOnboarding";
-type AddChainReturnTarget = {
-  view: "walletConnect";
-  dappName?: string;
-};
-
-type UnlockReturnTarget =
-  | { view: "settings"; tab: SettingsTab }
-  | { view: "settingsAddChain" }
-  | { view: "accountSettings"; subView: AccountSettingsSubView };
-
-const UNLOCK_SUCCESS_HOLD_MS = 500;
-const UNLOCK_SUCCESS_REDUCED_MOTION_HOLD_MS = 120;
-
-// Loading fallback component
-const LoadingFallback = () => (
-  <Box
-    minH="200px"
-    display="flex"
-    alignItems="center"
-    justifyContent="center"
-    bg="bg.base"
-  >
-    <Spinner size="lg" color="accent.secondary" thickness="3px" />
-  </Box>
-);
+import { isLedgerSetupRoute } from "@/app/ledgerSetupRoute";
+import {
+  UNLOCK_SUCCESS_HOLD_MS,
+  UNLOCK_SUCCESS_REDUCED_MOTION_HOLD_MS,
+  type AddChainReturnTarget,
+  type UnlockReturnTarget,
+} from "@/app/unlockRouting";
 
 function App() {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
   const [view, setView] = useState<AppView>("main");
+  const ledgerSetupRequestedRef = useRef(
+    isLedgerSetupRoute(window.location.search),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isApprovalRequestLoading, setIsApprovalRequestLoading] = useState(false);
   const [address, setAddress] = useState<string>("");
@@ -703,6 +674,12 @@ function App() {
     }
   };
 
+  const leaveLedgerSetupRoute = () => {
+    ledgerSetupRequestedRef.current = false;
+    window.history.replaceState({}, "", window.location.pathname);
+    setView("main");
+  };
+
   const toggleSidePanelMode = async () => {
     if (sidePanelMode) {
       // DISABLING: restore and immediately open the popup before closing the panel
@@ -775,7 +752,7 @@ function App() {
         approvalRequestHint,
         initialApprovalRequests,
       );
-      if (hintedApprovalRoute) {
+      if (hintedApprovalRoute && !ledgerSetupRequestedRef.current) {
         setIsWalletUnlocked(isUnlocked);
         if (isUnlocked) {
           applyInitialApprovalRoute(hintedApprovalRoute, {
@@ -899,7 +876,9 @@ function App() {
 
       setIsWalletUnlocked(isUnlocked);
 
-      if (hintedApprovalRoute) {
+      if (ledgerSetupRequestedRef.current) {
+        setView(isUnlocked ? "addAccount" : "unlock");
+      } else if (hintedApprovalRoute) {
         // The matching request is already visible; finish hydration in place.
         if (hintedApprovalRoute.kind === "dappConnection" &&
             typeof hintedApprovalRoute.request.tabId === "number") {
@@ -1570,6 +1549,11 @@ function App() {
     isWalletUnlockedRef.current = true;
     setIsWalletUnlocked(true);
     setSuppressPasskeyAutoPrompt(false);
+
+    if (ledgerSetupRequestedRef.current) {
+      setView("addAccount");
+      return;
+    }
 
     const unlockReturnTarget = unlockReturnTargetRef.current;
     if (unlockReturnTarget) {
@@ -2359,6 +2343,21 @@ function App() {
           </Suspense>
         </Box>
       </Box>
+    );
+  }
+
+  // Ledger setup runs in a full extension tab so Chrome can display WebHID's
+  // device chooser. Popup and side-panel renderers only launch this route.
+  if (view === "addAccount" && ledgerSetupRequestedRef.current) {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <LedgerSetupScreen onBack={leaveLedgerSetupRoute} onComplete={async () => {
+          const added = await sendMessageWithRetry<Account | null>({ type: "getActiveAccount" });
+          if (added) await handleAccountSwitch(added);
+          await loadAccounts(true);
+          leaveLedgerSetupRoute();
+        }} />
+      </Suspense>
     );
   }
 

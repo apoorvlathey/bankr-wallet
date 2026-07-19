@@ -11,11 +11,13 @@ import {
   KeyIcon,
   SeedIcon,
 } from "@/components/shared/AccountTypeIcons";
+import { LedgerLogo } from "@/components/Ledger/LedgerLogo";
 
 export type AccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
+  | "ledger"
   | "impersonator";
 
 interface AddAccountTypeGridProps {
@@ -56,12 +58,22 @@ const accountTypes = [
     iconBg: "status.success.bg",
     iconColor: "status.success.fg",
   },
+  {
+    type: "ledger" as const,
+    title: "Ledger",
+    description: "Connect a hardware wallet",
+    icon: null,
+    iconBg: "surface.sunken",
+    iconColor: "fg.primary",
+  },
 ];
 
 export function AddAccountTypeGrid({
   hasBankrAccount,
   onSelect,
 }: AddAccountTypeGridProps) {
+  const ledgerUnavailable =
+    typeof navigator === "undefined" || !("hid" in navigator);
   return (
     <SimpleGrid columns={2} spacing={3}>
       {accountTypes.map(
@@ -73,7 +85,9 @@ export function AddAccountTypeGrid({
           iconBg,
           iconColor,
         }) => {
-        const isDisabled = type === "bankr" && hasBankrAccount;
+        const isDisabled =
+          (type === "bankr" && hasBankrAccount) ||
+          (type === "ledger" && ledgerUnavailable);
 
         return (
           <Button
@@ -103,7 +117,9 @@ export function AddAccountTypeGrid({
                 bg={iconBg}
                 color={iconColor}
               >
-                {TypeIcon ? (
+                {type === "ledger" ? (
+                  <LedgerLogo variant="lettermark" w="20px" />
+                ) : TypeIcon ? (
                   <TypeIcon boxSize="19px" />
                 ) : (
                   <Image
@@ -119,7 +135,11 @@ export function AddAccountTypeGrid({
                   {title}
                 </Text>
                 <Text color="fg.secondary" fontSize="sm" fontWeight="400">
-                  {isDisabled ? "Already connected" : description}
+                  {type === "bankr" && isDisabled
+                    ? "Already connected"
+                    : type === "ledger" && isDisabled
+                      ? "Chrome 124+ required"
+                      : description}
                 </Text>
               </VStack>
             </VStack>

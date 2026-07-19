@@ -30,7 +30,7 @@ export const PREVIEW_ASSETS = previewAssets;
 
 export interface PreviewWallet {
   accountId: string;
-  accountType: Account["type"];
+  accountType: Exclude<Account["type"], "ledger">;
   address: `0x${string}`;
   displayName: string;
   createdAt: number;

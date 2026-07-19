@@ -8,6 +8,7 @@ interface QueueNavigationProps {
   stripFg: string;
   onNavigate: (direction: "prev" | "next") => void;
   onRejectAll: () => void;
+  isDisabled?: boolean;
 }
 
 /** Shared request-queue navigation; intentionally lives before request identity. */
@@ -18,6 +19,7 @@ export function QueueNavigation({
   stripFg,
   onNavigate,
   onRejectAll,
+  isDisabled = false,
 }: QueueNavigationProps) {
   if (totalCount <= 1) return null;
 
@@ -29,7 +31,7 @@ export function QueueNavigation({
           icon={<ChevronLeftIcon />}
           variant="ghost"
           size="xs"
-          isDisabled={currentIndex === 0}
+          isDisabled={isDisabled || currentIndex === 0}
           onClick={() => onNavigate("prev")}
           color="text.secondary"
           _hover={{ color: "text.primary", bg: "bg.muted" }}
@@ -45,7 +47,7 @@ export function QueueNavigation({
           icon={<ChevronRightIcon />}
           variant="ghost"
           size="xs"
-          isDisabled={currentIndex + 1 === totalCount}
+          isDisabled={isDisabled || currentIndex + 1 === totalCount}
           onClick={() => onNavigate("next")}
           color="text.secondary"
           _hover={{ color: "text.primary", bg: "bg.muted" }}
@@ -63,6 +65,7 @@ export function QueueNavigation({
         fontWeight="700"
         _hover={{ bg: "status.error.bg", color: "status.error.fg" }}
         onClick={onRejectAll}
+        isDisabled={isDisabled}
         px={2}
       >
         Reject all

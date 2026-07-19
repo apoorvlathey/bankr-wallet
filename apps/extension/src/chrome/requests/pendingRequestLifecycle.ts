@@ -32,7 +32,12 @@ export type PendingRequestLifecycleContext = {
   frameId?: number;
   walletConnect?: WalletConnectRequestIdentity;
   trustedInternal?: true;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?:
+    | "bankr"
+    | "privateKey"
+    | "seedPhrase"
+    | "ledger"
+    | "impersonator";
   bankrCredentialTag?: string;
 };
 

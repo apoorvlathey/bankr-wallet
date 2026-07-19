@@ -11,14 +11,17 @@ import SwapConfirmation from "./SwapConfirmation";
 import { SwapFormScreen } from "./SwapFormScreen";
 import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 import type { SwapViewProps } from "./swapViewTypes";
-import { pickDefaultSwapSellToken, to0xToken } from "./swapViewUtils";
+import {
+  buildFlippedSellToken,
+  pickDefaultSwapSellToken,
+  to0xToken,
+} from "./swapViewUtils";
 import { useBuyTokenData } from "./useBuyTokenData";
 import { usePreparedSwap } from "./usePreparedSwap";
 import { useSellTokenData } from "./useSellTokenData";
 import { useSwapAmount } from "./useSwapAmount";
 import { useSwapQuotes } from "./useSwapQuotes";
 import { useSwapSlippage } from "./useSwapSlippage";
-
 function SwapView({
   fromAddress,
   accountId,
@@ -56,7 +59,6 @@ function SwapView({
   const resolvedBuyChainName =
     getResolvedChainById(buyChainId, networksInfo)?.name ??
     getChainConfig(buyChainId).name;
-
   const { holdingsAllChains, sellToken, setSellToken } = useSellTokenData({
     fromAddress,
     chainId: sellChainId,
@@ -98,35 +100,15 @@ function SwapView({
     isBridge,
   });
   const bridgeRoute = getExecutableBridgeRoute(quotes.bridgeQuote);
-
   const handleFlip = () => {
-    const address = buyToken.buyTokenAddress.trim();
-    const isNative =
-      Boolean(address) &&
-      address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-    const heldBuyToken =
-      buyToken.buyTokenInfo && address
-        ? holdingsAllChains.find(
-            (token) =>
-              token.chainId === buyChainId &&
-              (token.contractAddress.toLowerCase() === address.toLowerCase() ||
-                (isNative && token.contractAddress === "native")),
-          )
-        : undefined;
-    const nextSellToken: PortfolioToken | null = buyToken.buyTokenInfo && address
-      ? heldBuyToken ?? {
-          symbol: buyToken.buyTokenInfo.symbol,
-          name: buyToken.buyTokenInfo.name,
-          contractAddress: isNative ? "native" : address,
-          chainId: buyChainId,
-          decimals: buyToken.buyTokenInfo.decimals,
-          balance: "0",
-          balanceFormatted: "0",
-          priceUsd: buyToken.buyTokenPriceUsd,
-          valueUsd: 0,
-          logoUrl: buyToken.buyTokenLogoURI,
-        }
-      : null;
+    const nextSellToken = buildFlippedSellToken({
+      buyTokenAddress: buyToken.buyTokenAddress,
+      buyTokenInfo: buyToken.buyTokenInfo,
+      buyTokenPriceUsd: buyToken.buyTokenPriceUsd,
+      buyTokenLogoURI: buyToken.buyTokenLogoURI,
+      buyChainId,
+      holdings: holdingsAllChains,
+    });
     const previousSellToken = sellToken;
     const previousSellChainId = sellChainId;
     setSellChainId(buyChainId);
@@ -148,7 +130,6 @@ function SwapView({
     amount.resetAmount();
     quotes.clearQuotes();
   };
-
   const handleTokenSelect = (pickedChainId: number, picked: PortfolioToken) => {
     if (picker?.side === "sell") {
       const previousSellChainId = sellChainId;
@@ -168,7 +149,6 @@ function SwapView({
       quotes.setQuote(null);
     }
   };
-
   const sellAmountNumber = parseFloat(amount.sellTokenAmount) || 0;
   const insufficientBalance = sellAmountNumber > amount.sellBalance;
   const unifiedBuyAmount = isBridge
@@ -208,9 +188,9 @@ function SwapView({
       !insufficientBalance &&
       (isBridge ? bridgeRoute : quotes.quote) &&
       !quotes.quoteLoading &&
-      accountType !== "impersonator",
+      accountType !== "impersonator" &&
+      accountType !== "ledger",
   );
-
   const prepared = usePreparedSwap({
     sellToken,
     buyTokenInfo: buyToken.buyTokenInfo,
@@ -229,7 +209,6 @@ function SwapView({
     slippageBps,
     onSwapInitiated,
   });
-
   if (
     prepared.showConfirmation &&
     prepared.preparedTransactions &&
@@ -298,7 +277,6 @@ function SwapView({
       />
     );
   }
-
   if (picker) {
     const selectedIsBuy = picker.side === "buy";
     return (
@@ -331,7 +309,6 @@ function SwapView({
       />
     );
   }
-
   const sourceNative = holdingsAllChains.find(
     (token) =>
       token.chainId === sellChainId && token.contractAddress === "native",
@@ -419,5 +396,4 @@ function SwapView({
     />
   );
 }
-
 export default memo(SwapView);

@@ -21,7 +21,8 @@ export function SponsorshipEligibilityNotice({
     premiumLoading ||
     !premiumStatus ||
     premiumStatus.isPremium ||
-    accountType === "impersonator"
+    accountType === "impersonator" ||
+    accountType === "ledger"
   ) {
     return null;
   }
@@ -80,7 +81,8 @@ export function TransferNotices({
       {isUsdcOnBase &&
         !premiumLoading &&
         premiumStatus?.isPremium &&
-        accountType !== "impersonator" && (
+        accountType !== "impersonator" &&
+        accountType !== "ledger" && (
           <Box
             bg="status.success.bg"
             borderWidth="1px"

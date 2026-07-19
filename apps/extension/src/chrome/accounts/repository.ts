@@ -82,7 +82,7 @@ export async function updateAccountDisplayName(
 }
 
 export async function getAccountsByType(
-  type: "bankr" | "privateKey" | "seedPhrase" | "impersonator",
+  type: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator",
 ): Promise<Account[]> {
   const accounts = await getAccounts();
   return accounts.filter((account) => account.type === type);

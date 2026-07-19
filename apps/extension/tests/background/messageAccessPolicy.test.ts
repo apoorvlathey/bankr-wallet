@@ -36,6 +36,7 @@ import { BACKGROUND_TOKEN_DATA_MESSAGE_TYPES } from "../../src/chrome/background
 import { BACKGROUND_CHAT_MESSAGE_TYPES } from "../../src/chrome/background/chatRouter";
 import { BACKGROUND_CLEAR_SIGNING_MESSAGE_TYPES } from "../../src/chrome/background/clearSigningRouter";
 import { BACKGROUND_RESET_MESSAGE_TYPES } from "../../src/chrome/background/resetRouter";
+import { BACKGROUND_LEDGER_MESSAGE_TYPES } from "../../src/chrome/background/ledgerRouter";
 import {
   deliverProviderRequestRejection,
   mapProviderRequestRejection,
@@ -90,6 +91,7 @@ test("every main background route has exactly one explicit audience", async () =
     BACKGROUND_SPONSORED_TRANSFER_MESSAGE_TYPES,
     BACKGROUND_TRANSACTION_STATUS_MESSAGE_TYPES,
     BACKGROUND_ACCOUNT_MANAGEMENT_MESSAGE_TYPES,
+    BACKGROUND_LEDGER_MESSAGE_TYPES,
     BACKGROUND_SECRET_MANAGEMENT_MESSAGE_TYPES,
     BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES,
     BACKGROUND_DELEGATION_MESSAGE_TYPES,
@@ -187,6 +189,7 @@ test("delegated routers run after the audience gate and before unknown handling"
     "routeBackgroundSponsoredTransferMessage",
     "routeBackgroundTransactionStatusMessage",
     "routeBackgroundAccountManagementMessage",
+    "routeBackgroundLedgerMessage",
     "routeBackgroundSecretManagementMessage",
     "routeBackgroundBatchRequestMessage",
     "routeBackgroundDelegationMessage",
@@ -214,6 +217,7 @@ test("delegated routers run after the audience gate and before unknown handling"
     "createBackgroundSwapBridgeDataMessageRouter",
     "createBackgroundTokenDataMessageRouter",
     "createBackgroundSecretManagementMessageRouter",
+    "createBackgroundLedgerMessageRouter",
     "createBackgroundBatchRequestMessageRouter",
     "createBackgroundDelegationMessageRouter",
     "createBackgroundCrossDappBatchMessageRouter",

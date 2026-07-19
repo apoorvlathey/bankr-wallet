@@ -78,7 +78,7 @@ export interface PendingBatchTxRequest {
    */
   intakeStatus?: "validating";
   /** Account type at time of request — determines atomic vs non-atomic path */
-  accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase";
+  accountType?: "bankr" | "impersonator" | "privateKey" | "seedPhrase" | "ledger";
   /** Non-secret ciphertext-generation binding for Bankr signer requests. */
   bankrCredentialTag?: string;
   // SECURITY: trusted context captured at request arrival. Optional on the

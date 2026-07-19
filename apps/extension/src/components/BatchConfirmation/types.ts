@@ -7,7 +7,7 @@ export interface BatchTransactionConfirmationProps {
   currentIndex: number;
   totalCount: number;
   isInSidePanel: boolean;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   accountAddress: string;
   onBack: () => void;
   onConfirmed: () => void;
