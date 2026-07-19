@@ -4,7 +4,6 @@ import {
   Button,
   FormControl,
   FormErrorMessage,
-  FormLabel,
   IconButton,
   Input,
   InputGroup,
@@ -123,7 +122,7 @@ function BiometricUnlockSetup({
         <VStack spacing={6} w="full" align="stretch">
           <ScreenSection
             title="Verify password"
-            description="Enter your master password to continue."
+            description="Enter your password to continue."
           >
             <Box
               as="form"
@@ -134,15 +133,14 @@ function BiometricUnlockSetup({
               }}
             >
               <FormControl isInvalid={!!error}>
-                <FormLabel>Master password</FormLabel>
                 <InputGroup>
                   <Input
                     ref={inputRef}
-                    aria-label="Master password"
+                    aria-label="Password"
                     type={showPassword ? "text" : "password"}
                     name="masterPassword"
                     autoComplete="current-password"
-                    placeholder="Master password"
+                    placeholder="Password"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
