@@ -7,6 +7,7 @@ import {
 } from "./onboarding/OnboardingIntroSteps";
 import { PasswordStep } from "./onboarding/PasswordStep";
 import { PrivateKeySetupStep } from "./onboarding/PrivateKeySetupStep";
+import { LedgerOnboardingStep } from "./onboarding/LedgerOnboardingStep";
 import { SeedPhraseOnboardingStep } from "./onboarding/SeedPhraseOnboardingStep";
 import { useOnboardingController } from "./onboarding/useOnboardingController";
 import { ViewOnlySetupStep } from "./onboarding/ViewOnlySetupStep";
@@ -47,6 +48,7 @@ function Onboarding() {
     setCollectedSeedIndices,
     setSeedGroupName,
     setSeedAccountDisplayName,
+    setLedgerSelection,
     errors,
     setErrors,
     handleContinue,
@@ -124,6 +126,19 @@ function Onboarding() {
         onBack={handleBack}
         onProgressStepClick={handleProgressStepClick}
         onContinue={handleContinue}
+      />
+    );
+  }
+
+  if (step === "ledger") {
+    return (
+      <LedgerOnboardingStep
+        onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
+        onCollect={async (selection) => {
+          setLedgerSelection(selection);
+          setStep("password");
+        }}
       />
     );
   }

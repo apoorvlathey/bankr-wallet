@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Badge,
   Box,
@@ -31,20 +31,30 @@ import {
 } from "./LedgerDerivationPicker";
 
 type Scheme = LedgerDerivationScheme;
-type AddressRow = {
+export type LedgerAddressSelection = {
   address: `0x${string}`;
   hdPath: string;
   hdIndex: number;
 };
-type Device = {
+export type LedgerAccountSelection = {
   deviceId: string;
   deviceLabel: string;
   deviceModel: string;
+  addresses: LedgerAddressSelection[];
 };
+
+type Device = Omit<LedgerAccountSelection, "addresses">;
+
+export interface LedgerFlowLayoutParts {
+  content: ReactNode;
+  primaryAction: ReactNode;
+}
 
 export interface AddLedgerFlowProps {
   onBack(): void;
   onComplete(): void;
+  commitAccounts?(selection: LedgerAccountSelection): Promise<void>;
+  renderLayout?(parts: LedgerFlowLayoutParts): ReactNode;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -58,9 +68,11 @@ const STATUS_LABELS: Record<string, string> = {
 export default function AddLedgerFlow({
   onBack,
   onComplete,
+  commitAccounts,
+  renderLayout,
 }: AddLedgerFlowProps) {
   const [device, setDevice] = useState<Device | null>(null);
-  const [addresses, setAddresses] = useState<AddressRow[]>([]);
+  const [addresses, setAddresses] = useState<LedgerAddressSelection[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheme, setScheme] = useState<Scheme>("ledgerLive");
   const [busy, setBusy] = useState(false);
@@ -128,7 +140,7 @@ export default function AddLedgerFlow({
       if (!response?.success) {
         throw new Error(response?.error || "Could not read Ledger addresses.");
       }
-      const rows = response.addresses as AddressRow[];
+      const rows = response.addresses as LedgerAddressSelection[];
       setAddresses((current) => (replace ? rows : [...current, ...rows]));
       setStatus("Ledger connected. Select the accounts you want to add.");
       if (replace) {
@@ -204,13 +216,20 @@ export default function AddLedgerFlow({
       const chosen = addresses.filter((row) =>
         selected.has(row.address.toLowerCase()),
       );
-      const response = await chrome.runtime.sendMessage({
-        type: "addLedgerAccounts",
+      const selection: LedgerAccountSelection = {
         ...device,
         addresses: chosen,
-      });
-      if (!response?.success) {
-        throw new Error(response?.error || "Could not add Ledger accounts.");
+      };
+      if (commitAccounts) {
+        await commitAccounts(selection);
+      } else {
+        const response = await chrome.runtime.sendMessage({
+          type: "addLedgerAccounts",
+          ...selection,
+        });
+        if (!response?.success) {
+          throw new Error(response?.error || "Could not add Ledger accounts.");
+        }
       }
       onComplete();
     } catch (cause) {
@@ -224,11 +243,8 @@ export default function AddLedgerFlow({
     }
   };
 
-  return (
-    <AppScreen>
-      <AppHeader title="Connect Ledger" onBack={onBack} />
-      <ScreenBody pt={5}>
-        <VStack spacing={6} align="stretch">
+  const content = (
+    <VStack spacing={6} align="stretch">
           <LedgerDevicePanel device={device} busy={busy} status={status} />
 
           {device && (
@@ -322,32 +338,36 @@ export default function AddLedgerFlow({
               </Text>
             </Box>
           )}
-        </VStack>
-      </ScreenBody>
-      <StickyActionBar
-        primaryAction={
-          device ? (
-            <Button
-              variant="brand"
-              isLoading={busy}
-              loadingText="Adding…"
-              isDisabled={!selected.size}
-              onClick={() => void addSelected()}
-            >
-              Add {selected.size || ""} account{selected.size === 1 ? "" : "s"}
-            </Button>
-          ) : (
-            <Button
-              variant="brand"
-              isLoading={busy}
-              loadingText="Connecting…"
-              onClick={() => void connect()}
-            >
-              Connect Ledger
-            </Button>
-          )
-        }
-      />
+    </VStack>
+  );
+  const primaryAction = device ? (
+    <Button
+      variant="brand"
+      isLoading={busy}
+      loadingText={commitAccounts ? "Continuing…" : "Adding…"}
+      isDisabled={!selected.size}
+      onClick={() => void addSelected()}
+    >
+      {commitAccounts ? "Continue" : `Add ${selected.size || ""} account${selected.size === 1 ? "" : "s"}`}
+    </Button>
+  ) : (
+    <Button
+      variant="brand"
+      isLoading={busy}
+      loadingText="Connecting…"
+      onClick={() => void connect()}
+    >
+      Connect Ledger
+    </Button>
+  );
+
+  if (renderLayout) return <>{renderLayout({ content, primaryAction })}</>;
+
+  return (
+    <AppScreen>
+      <AppHeader title="Connect Ledger" onBack={onBack} />
+      <ScreenBody pt={5}>{content}</ScreenBody>
+      <StickyActionBar primaryAction={primaryAction} />
     </AppScreen>
   );
 }

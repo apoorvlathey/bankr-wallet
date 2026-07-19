@@ -229,6 +229,12 @@
 
 ## Slop audit
 
+- 2026-07-19 Ledger onboarding audit: added the official monochrome Ledger
+  lettermark directly after View-only in the existing first-account decision
+  list, then reused the established device, derivation, and address-selection
+  flow inside the three-stage onboarding shell. Hardware discovery remains a
+  full-tab user gesture; the final account write stays behind the master-password
+  commitment rather than introducing a competing setup pattern.
 - 2026-07-19 Ledger setup identity audit: replaced the invented hardware glyph
   with Ledger's official press-kit wordmark and lettermark. The connected
   device now owns one quiet surface with one name and one text-plus-dot status,

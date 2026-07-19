@@ -4,34 +4,17 @@ import { isResolvableName, resolveNameToAddress } from "@/lib/ensUtils";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
 import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
+import type { LedgerAccountSelection } from "@/components/Ledger/AddLedgerFlow";
 import {
   getOrCreateOnboardingOwnerId,
   isArcBrowser,
-  ONBOARDING_OWNER_SESSION_KEY,
 } from "./onboardingEnvironment";
-export type OnboardingStep =
-  | "accountType"
-  | "bankrSetup"
-  | "privateKey"
-  | "seedPhrase"
-  | "viewOnly"
-  | "password"
-  | "success";
-
-export type AccountTypeChoice =
-  | "seedPhrase"
-  | "privateKey"
-  | "viewOnly"
-  | "bankr";
-
-export type OnboardingErrors = {
-  apiKey?: string;
-  privateKey?: string;
-  walletAddress?: string;
-  viewOnlyAddress?: string;
-  password?: string;
-  confirmPassword?: string;
-};
+import { submitOnboardingAccount } from "./onboardingSubmission";
+import type {
+  AccountTypeChoice,
+  OnboardingErrors,
+  OnboardingStep,
+} from "./onboardingTypes";
 
 export function useOnboardingController() {
   const [step, setStep] = useState<OnboardingStep>("accountType");
@@ -47,6 +30,8 @@ export function useOnboardingController() {
   const [bankrDisplayName, setBankrDisplayName] = useState("");
   const [viewOnlyAddress, setViewOnlyAddress] = useState("");
   const [viewOnlyDisplayName, setViewOnlyDisplayName] = useState("");
+  const [ledgerSelection, setLedgerSelection] =
+    useState<LedgerAccountSelection | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -235,6 +220,7 @@ export function useOnboardingController() {
         else if (accountTypeChoice === "privateKey") setStep("privateKey");
         else if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
         else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
+        else if (accountTypeChoice === "ledger") setStep("ledger");
         break;
       case "bankrSetup":
         if (await validateBankrSetup()) setStep("password");
@@ -277,10 +263,15 @@ export function useOnboardingController() {
       case "viewOnly":
         setStep("accountType");
         break;
+      case "ledger":
+        setLedgerSelection(null);
+        setStep("accountType");
+        break;
       case "password":
         if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
         else if (accountTypeChoice === "privateKey") setStep("privateKey");
         else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
+        else if (accountTypeChoice === "ledger") setStep("ledger");
         else setStep("bankrSetup");
         break;
     }
@@ -296,6 +287,8 @@ export function useOnboardingController() {
         setCollectedSeedIndices([0]);
         setSeedGroupName("");
         setSeedAccountDisplayName("");
+      } else if (accountTypeChoice === "ledger") {
+        setLedgerSelection(null);
       }
       setErrors({});
       setStep("accountType");
@@ -307,231 +300,42 @@ export function useOnboardingController() {
       if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
       else if (accountTypeChoice === "privateKey") setStep("privateKey");
       else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
+      else if (accountTypeChoice === "ledger") setStep("ledger");
       else setStep("bankrSetup");
     }
   };
 
   async function handleSubmit() {
     setIsSubmitting(true);
-    let initializationId: string | null = null;
     try {
-      let finalAddress: string;
-      let finalDisplayAddress: string;
-      let resolvedBankrAddress: string | null = null;
-      let resolvedViewOnlyAddress: string | null = null;
-
-      // Resolve and validate every input that does not mutate storage before
-      // opening the initialization transaction.
-      if (accountTypeChoice === "privateKey") {
-        const result = validateAndDeriveAddress(privateKey);
-        if (!result.valid || !result.address || !result.normalizedKey) {
-          throw new Error(result.error || "Invalid private key");
-        }
-      } else if (accountTypeChoice === "seedPhrase") {
-        if (!collectedMnemonic.trim()) {
-          throw new Error("Seed phrase is required");
-        }
-      } else if (accountTypeChoice === "bankr") {
-        resolvedBankrAddress = await resolveAddress(walletAddress.trim());
-        if (!resolvedBankrAddress) throw new Error("Invalid address or name");
-      } else if (accountTypeChoice === "viewOnly") {
-        resolvedViewOnlyAddress = await resolveAddress(viewOnlyAddress.trim());
-        if (!resolvedViewOnlyAddress) throw new Error("Invalid address or name");
-      }
-
-      const initialization = await chrome.runtime.sendMessage({
-        type: "beginOnboardingInitialization",
-        initializationId: onboardingOwnerIdRef.current,
+      await submitOnboardingAccount({
+        initializationOwnerId: onboardingOwnerIdRef.current,
+        accountType: accountTypeChoice,
+        password,
+        apiKey,
+        walletAddress,
+        bankrDisplayName,
+        privateKey,
+        privateKeyDisplayName: pkDisplayName,
+        viewOnlyAddress,
+        viewOnlyDisplayName,
+        mnemonic: collectedMnemonic,
+        seedIndices: collectedSeedIndices,
+        seedGroupName,
+        seedAccountDisplayName,
+        ledgerSelection,
+        resolveAddress,
       });
-      if (!initialization?.success || !initialization.initializationId) {
-        throw new Error(
-          initialization?.error || "Failed to start wallet setup safely",
-        );
-      }
-      initializationId = initialization.initializationId;
-
-      const initializeCredential = async (credential: string) => {
-        const unlocked = await chrome.runtime.sendMessage({
-          type: "initializeOnboardingCredential",
-          initializationId,
-          credential,
-          password,
-        });
-        if (!unlocked?.success || unlocked.passwordType !== "master") {
-          throw new Error(
-            unlocked?.error || "Failed to verify the wallet password",
-          );
-        }
-      };
-
-      if (accountTypeChoice === "seedPhrase") {
-        await initializeCredential("pk-only-mode");
-        const response = await new Promise<{
-          success: boolean;
-          error?: string;
-          account?: any;
-          group?: any;
-        }>((resolve) => {
-          chrome.runtime.sendMessage(
-            {
-              type: "addSeedPhraseGroup",
-              mnemonic: collectedMnemonic,
-              indices: collectedSeedIndices,
-              name: seedGroupName || undefined,
-              accountDisplayName: seedAccountDisplayName || undefined,
-            },
-            resolve,
-          );
-        });
-        if (!response.success) {
-          throw new Error(
-            response.error || "Failed to create seed phrase account",
-          );
-        }
-        const account = response.account;
-        if (!account?.address) {
-          throw new Error("Seed phrase account was not committed safely");
-        }
-        finalAddress = account.address;
-        finalDisplayAddress = account?.displayName || finalAddress;
-      }
-
-      if (accountTypeChoice === "privateKey") {
-        const result = validateAndDeriveAddress(privateKey);
-        if (!result.valid || !result.address || !result.normalizedKey) {
-          throw new Error(result.error || "Invalid private key");
-        }
-        finalAddress = result.address;
-        finalDisplayAddress = pkDisplayName.trim() || result.address;
-        await initializeCredential("pk-only-mode");
-        const response = await new Promise<{ success: boolean; error?: string }>(
-          (resolve) => {
-            chrome.runtime.sendMessage(
-              {
-                type: "addPrivateKeyAccount",
-                privateKey: result.normalizedKey,
-                displayName: pkDisplayName.trim() || undefined,
-              },
-              resolve,
-            );
-          },
-        );
-        if (!response.success) {
-          throw new Error(response.error || "Failed to add private key account");
-        }
-      }
-
-      if (accountTypeChoice === "viewOnly") {
-        const resolvedAddress = resolvedViewOnlyAddress!;
-        const displayName =
-          viewOnlyDisplayName.trim() ||
-          (viewOnlyAddress.trim() !== resolvedAddress
-            ? viewOnlyAddress.trim()
-            : undefined);
-        await initializeCredential("pk-only-mode");
-        const response = await new Promise<{ success: boolean; error?: string }>(
-          (resolve) => {
-            chrome.runtime.sendMessage(
-              {
-                type: "addImpersonatorAccount",
-                address: resolvedAddress,
-                displayName,
-              },
-              resolve,
-            );
-          },
-        );
-        if (!response.success) {
-          throw new Error(response.error || "Failed to add view-only account");
-        }
-        finalAddress = resolvedAddress;
-        finalDisplayAddress = displayName || resolvedAddress;
-      }
-
-      if (accountTypeChoice === "bankr") {
-        const resolvedAddress = resolvedBankrAddress!;
-        await initializeCredential(apiKey.trim());
-        const displayName =
-          bankrDisplayName.trim() ||
-          (walletAddress.trim() !== resolvedAddress
-            ? walletAddress.trim()
-            : undefined);
-        const response = await new Promise<{ success: boolean; error?: string }>(
-          (resolve) => {
-            chrome.runtime.sendMessage(
-              {
-                type: "addBankrAccount",
-                address: resolvedAddress,
-                displayName,
-              },
-              resolve,
-            );
-          },
-        );
-        if (!response.success) {
-          throw new Error(response.error || "Failed to add Bankr account");
-        }
-        finalAddress = resolvedAddress;
-        finalDisplayAddress = bankrDisplayName.trim() || walletAddress.trim();
-      }
-
-      await chrome.storage.sync.set({
-        address: finalAddress!,
-        displayAddress: finalDisplayAddress!,
-        chainName: "Base",
-      });
-
-      const completion = await chrome.runtime.sendMessage({
-        type: "completeOnboardingInitialization",
-        initializationId,
-      });
-      if (!completion?.success) {
-        throw new Error(
-          completion?.error || "Wallet setup did not complete safely",
-        );
-      }
-      initializationId = null;
-      try {
-        sessionStorage.removeItem(ONBOARDING_OWNER_SESSION_KEY);
-      } catch {
-        // Session metadata is non-secret and best effort only.
-      }
-
-      const { isArcBrowser: storedIsArc } = await chrome.storage.sync.get([
-        "isArcBrowser",
-      ]);
-      if (!storedIsArc) {
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: "setSidePanelMode",
-            enabled: true,
-          });
-          if (response?.success) {
-            console.log("Sidepanel mode enabled by default");
-          }
-        } catch {
-          // Popup mode remains available as a fallback.
-        }
-      }
-
       setApiKey("");
       setPrivateKey("");
       setViewOnlyAddress("");
+      setLedgerSelection(null);
       setPassword("");
       setConfirmPassword("");
       setCollectedMnemonic("");
       setCollectedSeedIndices([0]);
       setStep("success");
-      chrome.runtime.sendMessage({ type: "onboardingComplete" });
     } catch (error) {
-      if (initializationId) {
-        await chrome.runtime
-          .sendMessage({
-            type: "rollbackOnboardingInitialization",
-            initializationId,
-          })
-          .catch(() => undefined);
-      }
       setErrors({
         password:
           error instanceof Error
@@ -553,6 +357,7 @@ export function useOnboardingController() {
     setPassword, confirmPassword, setConfirmPassword, showPassword,
     setShowPassword, isSubmitting, isResolvingAddress, setCollectedMnemonic,
     setCollectedSeedIndices, setSeedGroupName, setSeedAccountDisplayName,
+    ledgerSelection, setLedgerSelection,
     errors, setErrors, handleContinue, handleBack, handleProgressStepClick,
     setupRecoveryError,
   };

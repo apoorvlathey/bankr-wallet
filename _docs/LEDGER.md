@@ -2,6 +2,13 @@
 
 WalletChan supports Ledger hardware accounts in Chromium browsers with WebHID and `chrome.offscreen` (Chrome 124+). Firefox builds remain functional but do not expose Ledger setup because Firefox does not provide the required extension APIs.
 
+Fresh-wallet onboarding is already a full extension tab. On supported Chromium
+browsers it offers Ledger after View-only, performs the WebHID chooser and
+address scan in that same tab, and holds only public selection metadata until
+the user creates the master password. Account/device persistence then occurs
+inside the existing onboarding initialization marker so failures roll back the
+partial wallet rather than leaving a configured credential without an account.
+
 ## Architecture
 
 1. Selecting Ledger from the popup or side panel opens `index.html?route=add-ledger` in a full extension tab. A side-panel launcher closes after the tab opens using the shared side-panel close path. The deep link takes priority over normal pending-request auto-routing; a locked wallet returns to Ledger setup immediately after unlock.

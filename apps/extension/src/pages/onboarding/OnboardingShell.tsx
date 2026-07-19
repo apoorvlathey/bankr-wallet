@@ -27,7 +27,6 @@ function ProgressRail({
         return (
           <HStack
             as={canNavigate ? "button" : "div"}
-            type={canNavigate ? "button" : undefined}
             key={step.title}
             position="relative"
             spacing={3}

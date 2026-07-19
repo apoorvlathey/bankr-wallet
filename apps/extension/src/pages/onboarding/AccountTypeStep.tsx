@@ -1,13 +1,9 @@
 import { Box, Button, HStack, Image, Text, VStack } from "@chakra-ui/react";
 import { CheckIcon } from "@chakra-ui/icons";
+import { LedgerLogo } from "@/components/Ledger/LedgerLogo";
 import { EyeIcon, KeyIcon, SeedIcon } from "@/components/shared/AccountTypeIcons";
 import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
-
-export type AccountTypeChoice =
-  | "seedPhrase"
-  | "privateKey"
-  | "viewOnly"
-  | "bankr";
+import type { AccountTypeChoice } from "./onboardingTypes";
 
 type AccountOptionProps = {
   title: string;
@@ -100,6 +96,12 @@ export function AccountTypeStep({
   onChoiceChange: (choice: AccountTypeChoice) => void;
   onContinue: () => void;
 }) {
+  const ledgerAvailable =
+    typeof navigator !== "undefined" &&
+    "hid" in navigator &&
+    typeof chrome !== "undefined" &&
+    "offscreen" in chrome;
+
   return (
     <OnboardingCanvas
       currentStep={0}
@@ -158,6 +160,17 @@ export function AccountTypeStep({
             iconBg="status.success.bg"
             iconColor="status.success.fg"
           />
+          {ledgerAvailable && (
+            <AccountOption
+              title="Ledger"
+              description="Connect a hardware wallet while its keys stay on the device."
+              isSelected={choice === "ledger"}
+              onSelect={() => onChoiceChange("ledger")}
+              icon={<LedgerLogo variant="lettermark" w="20px" color="inherit" />}
+              iconBg="surface.sunken"
+              iconColor="fg.primary"
+            />
+          )}
           <AccountOption
             title="Bankr API"
             description="Use your Bankr API key for AI-assisted wallet actions."

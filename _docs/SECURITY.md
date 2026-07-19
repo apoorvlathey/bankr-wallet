@@ -1172,6 +1172,11 @@ These must always hold true. Violations indicate a security bug.
    Ledger account/device persistence is the durable import commit, while the
    subsequent active-account preference update is best-effort and cannot
    produce a false failed-import response after data was committed.
+   During fresh-wallet onboarding, WebHID discovery occurs before credential
+   creation but retains public selection metadata only. The account/device
+   write is deferred until the master credential is initialized under the
+   active onboarding marker, so the existing rollback removes any partial
+   credential and Ledger metadata together.
    Pending Ledger requests
    remain durable during the hardware prompt, but the existing synchronous
    first-action claim blocks confirm/edit/reject races across popup, side panel,
@@ -1520,6 +1525,7 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Is the connected device re-bound through the canonical public identity before every scan/sign?
 - [ ] Is the recovered transaction/message/EIP-712 signer checked against the pinned account?
 - [ ] Do account mutations remain master-only while agent sessions can sign but cannot reveal/add/remove?
+- [ ] Does first-account onboarding defer Ledger persistence until after master credential initialization and retain the rollback marker through the write?
 - [ ] Do Firefox builds omit the `offscreen` permission and offscreen JavaScript target?
 - [ ] Were normal Bankr, private-key, seed-phrase, and view-only paths regression-tested?
 

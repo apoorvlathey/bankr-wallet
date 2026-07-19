@@ -215,6 +215,12 @@ The extension supports five distinct account types that can be used simultaneous
   closes through the shared side-panel control after the tab opens. The route
   persists across unlock and takes priority over normal pending-request startup
   routing.
+- **First-account onboarding:** Chromium onboarding already runs in a full
+  extension tab, so Ledger appears after View-only in the initial account list.
+  The shared Ledger flow pairs and scans there, retains only selected public
+  device/path metadata in renderer state, then defers `addLedgerAccounts` until
+  the master credential has been initialized inside the rollback-safe
+  onboarding transaction. Unsupported browsers do not advertise the option.
 - **Permission gesture:** the full-tab `components/Ledger/AddLedgerFlow.tsx`
   calls `navigator.hid.requestDevice()` only from the Connect button's user
   gesture. Popup and side-panel contexts never request WebHID permission.
