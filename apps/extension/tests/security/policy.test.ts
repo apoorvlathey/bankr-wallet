@@ -11,13 +11,14 @@ import {
 } from "../../src/constants/securityPolicy";
 
 test("new-password policy is strong, bounded, and does not transform input", () => {
-  assert.equal(MIN_NEW_PASSWORD_LENGTH, 12);
+  assert.equal(MIN_NEW_PASSWORD_LENGTH, 8);
   assert.equal(MAX_PASSWORD_LENGTH, 256);
   assert.match(newPasswordPolicyError("", "Password") || "", /required/i);
   assert.match(
     newPasswordPolicyError("x".repeat(MIN_NEW_PASSWORD_LENGTH - 1), "Password") || "",
-    /at least 12/i,
+    /at least 8/i,
   );
+  assert.equal(newPasswordPolicyError("Abc123!x"), null);
   assert.equal(
     newPasswordPolicyError(" Abc1234xyz!"),
     null,
@@ -29,7 +30,12 @@ test("new-password policy is strong, bounded, and does not transform input", () 
     /at most 256/i,
   );
   assert.match(newPasswordPolicyError(1234) || "", /required/i);
-  assert.match(newPasswordPolicyError("a".repeat(12)) || "", /easy to guess/i);
+  assert.match(
+    newPasswordPolicyError("a".repeat(MIN_NEW_PASSWORD_LENGTH)) || "",
+    /easy to guess/i,
+  );
+  assert.match(newPasswordPolicyError("password") || "", /easy to guess/i);
+  assert.match(newPasswordPolicyError("12345678") || "", /easy to guess/i);
   assert.match(newPasswordPolicyError("password1234") || "", /easy to guess/i);
 });
 

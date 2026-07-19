@@ -1364,7 +1364,8 @@ The onboarding flow varies based on account type selection:
 
 **Step 3: Create Password**
 
-- Password + Confirm password fields (current shared password policy)
+- Password + Confirm password fields (shared 8-character minimum,
+  256-character maximum, and common-password rejection policy)
 - Security warning about password recovery
 
 **Step 4: Success**
@@ -3774,6 +3775,9 @@ adapter. Lower layers never import the facade or authentication handlers.
 
 Users can optionally configure an **agent password** that allows AI agents to unlock the wallet for normal operations while protecting private key reveal:
 
+New agent passwords use the same shared 8-to-256-character and
+common-password rejection policy as new master passwords.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         Agent Password Architecture                          │
@@ -4230,6 +4234,9 @@ When changing the wallet password (Settings → Change Password):
 - **Agent sessions are blocked in the background**: The guard restores a persisted
   "Never" session first, so a service-worker restart cannot turn an agent session
   into an untyped session that bypasses the restriction.
+- **Shared new-password policy**: The replacement must be 8 to 256 characters
+  and must not match the common-password denylist. Existing shorter passwords
+  remain valid only as the current-password proof so legacy wallets stay accessible.
 - **Cache cleared**: After password change, user must unlock with new password
 - Password handling stays entirely in background worker (never exposed to UI)
 

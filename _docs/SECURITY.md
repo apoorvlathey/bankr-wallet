@@ -68,6 +68,13 @@ which is insufficient without the browser-session ciphertext.
 | IV             | 12 bytes (random per encryption)                        |
 | Vault key      | 256-bit random (generated once, encrypted per-password) |
 
+New master and agent passwords are accepted only when they are 8 to 256
+characters and do not match the common-password denylist in
+`constants/securityPolicy.ts`. This creation policy is enforced in both the UI
+and the background onboarding, agent-factor, and master-rotation boundaries.
+Existing-password unlock and verification deliberately omit the minimum so a
+legacy wallet with a shorter password cannot be stranded.
+
 **Files**: the stable `crypto.ts` and `cryptoUtils.ts` facades cover the `cryptography/` audit domain (`types.ts` for the released envelope, `base64.ts` for bounded codecs, `passwordKey.ts` for fixed PBKDF2 policy, `passwordCipher.ts` for legacy AES-GCM records, `vaultKey.ts` for 32-byte vault-key wrapping/direct encryption, and `credentialStorage.ts` for vault-first legacy-compatible Bankr lookup). The policy-free `vaultCrypto.ts` facade covers the `vault/` audit domain (`entryCrypto.ts` for released password/vault-key transforms, `accountIntegrity.ts` for local key binding, `generalIntegrity.ts` for general-key recovery proof, `recordCodec.ts` for bounded released-V1 decoding and the unique-ID mutation gate, `repository.ts` for exact `pkVault` V1 storage, and `operations.ts` for serialized mutation/hydration/migration preparation). The stable `mnemonicStorage.ts` facade covers the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. Stable `secretRevealHandlers.ts` and `masterAuthorization.ts` facades cover `secrets/revealHandlers.ts` and `secrets/masterAuthorization.ts`, where plaintext release remains lock-held, epoch-bound, master-only, and revalidated after asynchronous reads.
 
 See [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) for the enforced
@@ -1784,9 +1791,10 @@ These are security characteristics that have been reviewed and accepted:
 2. **No rate limiting on local unlock attempts.** PBKDF2-SHA256 with 600,000
    iterations slows each guess but does not make a weak password safe against
    an attacker who copies the encrypted profile and guesses offline. New
-   passwords use the current minimum-length/common-password policy; existing
-   shorter legacy passwords remain accepted for unlock so an upgrade cannot
-   strand users. Users with legacy weak passwords should rotate them.
+   passwords require 8 to 256 characters and reject the common-password
+   denylist; existing shorter legacy passwords remain accepted for unlock so
+   an upgrade cannot strand users. Users with legacy weak passwords should
+   rotate them.
 
 3. **`getCachedApiKey` returns plaintext API key** to the extension UI. This is necessary for displaying it in settings and for the UI to function. The UI is same-origin with the background worker.
 
