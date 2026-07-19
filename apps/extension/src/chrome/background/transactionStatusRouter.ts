@@ -11,6 +11,8 @@ export const BACKGROUND_TRANSACTION_STATUS_MESSAGE_TYPES = [
   "clearTxHistoryForAddresses",
   "clearNonceCache",
   "checkPendingTxReceipt",
+  "getArbitrumForceInclusionStatus",
+  "submitArbitrumForceInclusion",
 ] as const;
 
 export type BackgroundTransactionStatusRouteResult =
@@ -32,6 +34,8 @@ type Dependencies = {
     txHash: string,
     chainId: number,
   ) => Promise<any>;
+  getArbitrumForceInclusionStatus: (txId: string) => Promise<any>;
+  submitArbitrumForceInclusion: (txId: string) => Promise<any>;
 };
 
 const HANDLED_ASYNC: BackgroundTransactionStatusRouteResult = {
@@ -127,6 +131,20 @@ export function createBackgroundTransactionStatusMessageRouter(
           .then((result) => {
             sendResponse({ status: result });
           });
+        return HANDLED_ASYNC;
+      }
+
+      case "getArbitrumForceInclusionStatus": {
+        dependencies
+          .getArbitrumForceInclusionStatus(String(message.txId || ""))
+          .then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "submitArbitrumForceInclusion": {
+        dependencies
+          .submitArbitrumForceInclusion(String(message.txId || ""))
+          .then(sendResponse);
         return HANDLED_ASYNC;
       }
 

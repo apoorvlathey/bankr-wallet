@@ -27,6 +27,8 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     clearTxHistoryForAddresses: async () => {},
     clearAllNonces: () => {},
     checkPendingTxReceipt: async () => "pending",
+    getArbitrumForceInclusionStatus: async () => ({ eligible: false }),
+    submitArbitrumForceInclusion: async () => ({ success: true }),
     ...overrides,
   };
 }
@@ -124,4 +126,33 @@ test("receipt checks preserve identifiers and wrap the status response", async (
   );
   assert.deepEqual(await capture.response, { status: "confirmed" });
   assert.deepEqual(calls, [["tx-1", "0xhash", 8453]]);
+});
+
+test("Arbitrum status and force requests forward only the transaction id", async () => {
+  const calls: unknown[][] = [];
+  const route = createBackgroundTransactionStatusMessageRouter(
+    dependencies({
+      getArbitrumForceInclusionStatus: async (...args: unknown[]) => {
+        calls.push(["status", ...args]);
+        return { eligible: true };
+      },
+      submitArbitrumForceInclusion: async (...args: unknown[]) => {
+        calls.push(["submit", ...args]);
+        return { success: true };
+      },
+    }),
+  );
+  const status = responseCapture();
+  route(
+    { type: "getArbitrumForceInclusionStatus", txId: "tx-arb", ignored: "x" },
+    status.sendResponse,
+  );
+  assert.deepEqual(await status.response, { eligible: true });
+  const submit = responseCapture();
+  route(
+    { type: "submitArbitrumForceInclusion", txId: "tx-arb", accountId: "attacker" },
+    submit.sendResponse,
+  );
+  assert.deepEqual(await submit.response, { success: true });
+  assert.deepEqual(calls, [["status", "tx-arb"], ["submit", "tx-arb"]]);
 });

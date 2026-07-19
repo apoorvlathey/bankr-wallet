@@ -111,6 +111,13 @@ export async function confirmLocalBatchWithExecutors(
     }
   }
 
+  if (forceInclusion) {
+    const { FORCE_INCLUSION_CHAINS } = await import("@/constants/chainRegistry");
+    if (FORCE_INCLUSION_CHAINS.get(pending.chainId)?.protocol !== "op-stack") {
+      processingBundleIds.delete(bundleId);
+      return { success: false, error: "Arbitrum force inclusion is not available for batch requests" };
+    }
+  }
   const forceInclusionProcessor = forceInclusion
     ? (await import("../forceInclusion/batch")).processForceInclusionBatchLocal
     : null;

@@ -34,6 +34,10 @@ import { createBackgroundSwapExecutionMessageRouter } from "../swapExecutionRout
 import { createBackgroundTransactionExecutionMessageRouter } from "../transactionExecutionRouter";
 import { createBackgroundTransactionStatusMessageRouter } from "../transactionStatusRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
+import {
+  getArbitrumForceInclusionStatus,
+  submitArbitrumForceInclusion,
+} from "../../arbitrumForceInclusion/status";
 
 export function composeExecutionRoutes(
   pending: PendingResolutionComposition,
@@ -89,6 +93,11 @@ export function composeExecutionRoutes(
       clearTxHistoryForAddresses,
       clearAllNonces,
       checkPendingTxReceipt: checkPendingTxReceiptFn,
+      getArbitrumForceInclusionStatus,
+      submitArbitrumForceInclusion: (txId) =>
+        runInternalIrreversibleOperation(() =>
+          submitArbitrumForceInclusion(txId),
+        ),
     });
 
   return {

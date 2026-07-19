@@ -72,6 +72,9 @@ export async function estimateForceInclusionGas(
 ): Promise<GasEstimate> {
   const info = FORCE_INCLUSION_CHAINS.get(tx.chainId);
   if (!info) return failedEstimate("Chain does not support force inclusion");
+  if (info.protocol !== "op-stack") {
+    return failedEstimate("Invalid OP Stack force-inclusion route");
+  }
 
   try {
     const l1RpcUrl = await getL1RpcUrl(info.l1ChainId);
@@ -178,6 +181,9 @@ export async function buildL1DepositTxParams(
   info: ForceInclusionChainInfo,
   l2GasOverride?: bigint,
 ): Promise<TransactionParams> {
+  if (info.protocol !== "op-stack") {
+    throw new Error("Invalid OP Stack force-inclusion route");
+  }
   const from = l2Tx.from as `0x${string}`;
   const value = l2Tx.value && l2Tx.value !== "0x0" ? BigInt(l2Tx.value) : 0n;
   const l2To = l2Tx.to as `0x${string}` | undefined;

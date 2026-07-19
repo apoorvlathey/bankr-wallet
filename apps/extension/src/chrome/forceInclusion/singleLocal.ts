@@ -56,6 +56,11 @@ export async function processForceInclusionLocal(
     effectLease?.release();
     return;
   }
+  if (info.protocol !== "op-stack") {
+    await writeSingleForceInclusionFailure(txId, "Invalid OP Stack force-inclusion route");
+    effectLease?.release();
+    return;
+  }
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   const progress = createSingleProgressWriter(txId, info, pending.tx.chainId);
 

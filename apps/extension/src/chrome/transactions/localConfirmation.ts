@@ -123,9 +123,23 @@ export async function handleConfirmTransactionAsyncPK(
     return { success: false, error: key.error };
   }
 
-  const forceInclusionProcessor = forceInclusion
-    ? (await import("../forceInclusion/single")).processForceInclusionLocal
-    : null;
+  let forceInclusionProcessor:
+    | typeof import("../forceInclusion/single")["processForceInclusionLocal"]
+    | null = null;
+  if (forceInclusion) {
+    const { FORCE_INCLUSION_CHAINS } = await import("@/constants/chainRegistry");
+    const info = FORCE_INCLUSION_CHAINS.get(pending.tx.chainId);
+    if (!info) {
+      processingTxIds.delete(txId);
+      return { success: false, error: "Chain does not support force inclusion" };
+    }
+    forceInclusionProcessor =
+      info.protocol === "arbitrum"
+        ? (await import("../arbitrumForceInclusion/single"))
+            .processArbitrumForceInclusionLocal
+        : (await import("../forceInclusion/single"))
+            .processForceInclusionLocal;
+  }
   await removePendingTxRequest(txId);
 
   const authorization =

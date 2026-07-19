@@ -16,7 +16,7 @@ Implementations belong in named audit domains. Current domains include:
   state, plaintext release, and secret authority;
 - `transactions/`, `signatures/`, `batch/`, `erc7715/`, `simulation/` for
   signing, execution, permission, and review flows;
-- `bankr/`, `walletConnect/`, `forceInclusion/`, and `sponsoredTransfers/` for
+- `bankr/`, `walletConnect/`, `forceInclusion/`, `arbitrumForceInclusion/`, and `sponsoredTransfers/` for
   remote signing, remote sessions, L1 recovery, and ERC-3009 relay recovery;
 - `onboarding/`, `requests/`, and `portfolio/` for fresh-wallet
   initialization, durable prompt coordination, and non-secret asset state;

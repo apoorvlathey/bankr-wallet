@@ -29,6 +29,7 @@ import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
 import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
+import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -260,6 +261,8 @@ export function TxDetailController({
           onViewExplorer={handleViewOnExplorer}
         />
 
+        <ArbitrumForceInclusionAction isOpen={isOpen} tx={tx} />
+
         <TransactionError
           tx={tx}
           canRebroadcast={canRebroadcast}
@@ -314,7 +317,7 @@ export function TxDetailController({
             ) : (
               <DecodedFunctionSummary
                 functionName={decodedFunctionName || genericAction}
-                contractAddress={tx.tx.to}
+                contractAddress={tx.tx.to ?? undefined}
                 chainId={tx.chainId}
                 value={tx.tx.value}
                 nativeSymbol={nativeSym}

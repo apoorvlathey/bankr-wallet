@@ -39,6 +39,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `Erc20TransferRow.tsx` | Render one summarized ERC-20 counterparty row with shared safe token imagery, symbol fallback, and hover/focus token-symbol contract disclosure | Explorer navigation, token copy delegated to the shared popover |
 | `Erc20TransferGroupRow.tsx` | Render aggregate ERC-20 movement and own multi-counterparty expansion | Explorer navigation, token copy delegated to the shared popover |
 | `ForceInclusionSteps.tsx` | Render L1 deposit and L2 inclusion as one rounded two-stage receipt ledger, with each terminal status linked to its chain explorer | Opens the matching L1 or L2 explorer transaction |
+| `ArbitrumForceInclusionAction.tsx` | Show the delayed Arbitrum recovery action only after on-chain force eligibility | Reads force status and requests the guarded L1 force transaction |
 | `formatting.ts` | Pure amount, grouping, swap-selection, and timestamp helpers | None |
 | `forceInclusionState.ts` | Pure L1/L2 progress derivation | None |
 | `tokenMetadata.ts` | Pure token-metadata request collection and record enrichment | None |

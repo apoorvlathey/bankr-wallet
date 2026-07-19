@@ -112,6 +112,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const forceInclusionInfo = useMemo<ForceInclusionInfo | null>(() => {
     if (isAtomic7702 || !isForceInclusionSupportedForAccount(chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(chainId)!;
+    if (entry.protocol !== "op-stack") return null;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [chainId, accountType, isAtomic7702]);
   const actions = useBatchActions({

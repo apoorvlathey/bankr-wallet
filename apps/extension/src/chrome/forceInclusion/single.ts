@@ -1,4 +1,4 @@
-/** Stable public facade for single-transaction OP Stack force inclusion. */
+/** Stable public facade for single-transaction force inclusion. */
 export {
   createL1PublicClient,
   getL1Chain,
@@ -7,10 +7,8 @@ export {
   L1_RPC_TIMEOUT,
   writeForceInclusionProgress,
 } from "./l1Client";
-export {
-  buildL1DepositTxParams,
-  estimateForceInclusionGas,
-} from "./deposit";
+export { buildL1DepositTxParams } from "./deposit";
+export { estimateForceInclusionGas } from "./estimate";
 export { processForceInclusionBankr } from "./singleBankr";
 export { processForceInclusionLocal } from "./singleLocal";
 export { extractL2Hash } from "./singleOutcome";

@@ -33,6 +33,12 @@ export function validateBankrTransactionChain(
     if (!info) {
       return { ok: false, error: "Chain does not support force inclusion" };
     }
+    if (info.protocol !== "op-stack") {
+      return {
+        ok: false,
+        error: "Arbitrum force inclusion requires a Private Key or Seed Phrase account",
+      };
+    }
     if (!BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId)) {
       return {
         ok: false,

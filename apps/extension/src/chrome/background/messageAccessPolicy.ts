@@ -224,6 +224,8 @@ export const WALLET_UI_MESSAGE_TYPES = [
   // Transaction review helpers
   "estimateGas",
   "estimateForceInclusionGas",
+  "getArbitrumForceInclusionStatus",
+  "submitArbitrumForceInclusion",
   "estimateBatchGasSequential",
   "simulateAssetChanges",
   "simulateBatchAssetChanges",

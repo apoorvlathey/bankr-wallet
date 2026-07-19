@@ -1,8 +1,8 @@
-# Arbitrum Nitro delayed-inbox and force-inclusion research
+# Arbitrum Nitro delayed-inbox and force-inclusion implementation notes
 
-> Research status: exploration, not an implementation specification
+> Status: Arbitrum One implementation with verified protocol references
 >
-> Last verified: 2026-07-13
+> Last verified: 2026-07-19
 >
 > Scope: Arbitrum Nitro Rollup/AnyTrust chains, signed L2 messages through the
 > parent-chain delayed inbox, forced inclusion, WalletChan account types,
@@ -40,9 +40,10 @@ The recommended first integration, if implementation proceeds, is:
 - no Bankr or Impersonator support until the capability gap described below is
   resolved.
 
-This should be presented as **censorship-resistant submission** rather than an
-instant “Force Inclusion” toggle. On Nitro, the initial L1 transaction queues
-the message; it does not immediately force it into the canonical inbox.
+The confirmation surface deliberately reuses WalletChan's existing Force
+Inclusion toggle and progress UX. The protocol distinction appears only when a
+queued transaction misses normal L2 inclusion: transaction details then expose
+the second L1 force action after on-chain eligibility.
 
 ## OP Stack comparison
 
@@ -330,8 +331,9 @@ interface ArbitrumDelayedInclusionMeta {
 }
 ```
 
-The exact storage design would require the normal WalletChan storage migration
-process and is intentionally not specified here as a code change.
+WalletChan persists these values as optional additions to the released
+`forceInclusionMeta` history shape. Older records omit `protocol` and continue
+to decode as OP Stack deposits, so no destructive storage migration is needed.
 
 ## Current core contracts and parameters
 

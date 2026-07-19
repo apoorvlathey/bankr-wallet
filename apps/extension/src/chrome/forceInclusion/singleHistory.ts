@@ -41,12 +41,14 @@ export async function initializeSingleForceInclusionHistory(
     accountType: account
       ? (account.type as "privateKey" | "seedPhrase")
       : "bankr",
+    accountId: account?.id,
     functionName: "Force Inclusion (L1 Deposit)",
     forceInclusionMeta: {
       l1TxHash: "",
       l1ChainId: info.l1ChainId,
       l2ChainId: pending.tx.chainId,
       l2Confirmed: false,
+      protocol: info.protocol,
     },
   });
   attachClearSignedMetaToHistory(

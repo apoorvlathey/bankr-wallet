@@ -1014,6 +1014,12 @@ export interface ForceInclusionChainInfo {
   viemChain: Chain;
   l1ChainId: number;
   l1ChainName: string;
+  protocol: "op-stack" | "arbitrum";
+  arbitrumContracts?: {
+    inbox: `0x${string}`;
+    bridge: `0x${string}`;
+    sequencerInbox: `0x${string}`;
+  };
 }
 
 /**
@@ -1049,9 +1055,22 @@ for (const chain of OP_STACK_VIEM_CHAINS) {
       viemChain: chain,
       l1ChainId: chain.sourceId,
       l1ChainName: getL1ChainName(chain.sourceId),
+      protocol: "op-stack",
     });
   }
 }
+
+FORCE_INCLUSION_CHAINS.set(arbitrum.id, {
+  viemChain: arbitrum,
+  l1ChainId: mainnet.id,
+  l1ChainName: "Ethereum",
+  protocol: "arbitrum",
+  arbitrumContracts: {
+    inbox: "0x4Dbd4fc535Ac27206064B68FfCf827b0A60BAB3f",
+    bridge: "0x8315177aB297bA92A06054cE80a67Ed4DBd7ed3a",
+    sequencerInbox: "0x1c479675ad559DC151F6Ec7ed3FbF8ceE79582B6",
+  },
+});
 
 export function isForceInclusionSupported(chainId: number): boolean {
   return FORCE_INCLUSION_CHAINS.has(chainId);
@@ -1071,6 +1090,9 @@ export function isForceInclusionSupportedForAccount(
   if (!accountType || accountType === "impersonator") return false;
   const info = FORCE_INCLUSION_CHAINS.get(l2ChainId);
   if (!info) return false;
+  if (info.protocol === "arbitrum") {
+    return accountType === "privateKey" || accountType === "seedPhrase";
+  }
   // Bankr accounts can only force-include when the L1 chain is supported by Bankr
   if (accountType === "bankr") {
     return BANKR_SUPPORTED_CHAIN_IDS.has(info.l1ChainId);

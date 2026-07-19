@@ -1377,6 +1377,15 @@ These must always hold true. Violations indicate a security bug.
     `single.ts`, `batch.ts`, and `receiptPoller.ts` paths are export-only
     facades, so callers cannot bypass those focused implementations.
 
+    Arbitrum uses the same reviewed local-account boundary but signs the exact
+    child transaction before submitting `0x04 || signedTransaction` to the L1
+    Inbox. Only the child hash and public Bridge delivery preimage are persisted;
+    raw signed child bytes are not stored. The later trusted-UI-only force action
+    runs behind the internal irreversible-operation/reset barrier, rechecks the
+    local account immediately before broadcast, re-reads sequencer consumption
+    and the strict on-chain deadline, and matches the saved preimage against the
+    canonical L1 receipt before signing `SequencerInbox.forceInclusion`.
+
 14c. **Remote signer responses are bounded and proven** - Bankr sign, submit,
     and job responses have deadlines and streamed byte limits. User-facing
     remote error text is control-character stripped and capped at 1,000

@@ -22,6 +22,13 @@ export async function recoverStuckForceInclusionTxs(): Promise<void> {
 
 async function recoverSingleEntry(tx: CompletedTransaction): Promise<void> {
   if (!tx.forceInclusionMeta) return;
+  if (tx.forceInclusionMeta.protocol === "arbitrum") {
+    const { recoverArbitrumForceInclusion } = await import(
+      "../arbitrumForceInclusion/recovery"
+    );
+    await recoverArbitrumForceInclusion(tx);
+    return;
+  }
   if (tx.status === "failed") {
     const knownL2Hash = tx.txHash;
     if (
