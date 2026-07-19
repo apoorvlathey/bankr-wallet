@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
+import { encodeAbiParameters } from "viem";
 import {
   decodeAccountErc20Transfers,
+  decodeAccountNftTransfers,
+  ERC1155_TRANSFER_BATCH_TOPIC,
+  ERC1155_TRANSFER_SINGLE_TOPIC,
   ERC20_TRANSFER_TOPIC,
   toHistoryBigInt,
 } from "../../src/chrome/history/assetTransferParser";
@@ -63,6 +68,79 @@ test("asset parser keeps only non-zero fungible transfers involving the account"
   assert.equal(toHistoryBigInt(7), 7n);
   assert.equal(toHistoryBigInt(3n), 3n);
   assert.equal(toHistoryBigInt(null), 0n);
+});
+
+test("asset parser decodes ERC-721 and ERC-1155 transfers involving the account", () => {
+  const receipt = {
+    logs: [
+      {
+        address: TOKEN,
+        topics: [ERC20_TRANSFER_TOPIC, topic(USER), topic(OTHER), "0x2a"],
+        data: "0x",
+      },
+      {
+        address: TOKEN,
+        topics: [
+          ERC1155_TRANSFER_SINGLE_TOPIC,
+          topic(OTHER),
+          topic(OTHER),
+          topic(USER),
+        ],
+        data: encodeAbiParameters(
+          [{ type: "uint256" }, { type: "uint256" }],
+          [7n, 3n],
+        ),
+      },
+      {
+        address: TOKEN,
+        topics: [
+          ERC1155_TRANSFER_BATCH_TOPIC,
+          topic(OTHER),
+          topic(USER),
+          topic(OTHER),
+        ],
+        data: encodeAbiParameters(
+          [{ type: "uint256[]" }, { type: "uint256[]" }],
+          [[8n, 9n], [1n, 2n]],
+        ),
+      },
+    ],
+  };
+
+  assert.deepEqual(decodeAccountNftTransfers(receipt, USER), [
+    {
+      token: TOKEN,
+      direction: "out",
+      counterparty: OTHER,
+      standard: "erc721",
+      tokenId: "42",
+      amount: "1",
+    },
+    {
+      token: TOKEN,
+      direction: "in",
+      counterparty: OTHER,
+      standard: "erc1155",
+      tokenId: "7",
+      amount: "3",
+    },
+    {
+      token: TOKEN,
+      direction: "out",
+      counterparty: OTHER,
+      standard: "erc1155",
+      tokenId: "8",
+      amount: "1",
+    },
+    {
+      token: TOKEN,
+      direction: "out",
+      counterparty: OTHER,
+      standard: "erc1155",
+      tokenId: "9",
+      amount: "2",
+    },
+  ]);
 });
 
 test("bundle receipt projection excludes provider-specific fields", () => {
@@ -176,13 +254,40 @@ test("receipt reconciliation is wallet-type neutral", () => {
       tx: { from: USER },
       chainId: 8453,
       accountType,
-      assetChanges: { blockNumber: "1", erc20Transfers: [] },
+      assetChanges: { version: 2, blockNumber: "1", erc20Transfers: [] },
     } as CompletedTransaction;
     assert.equal(shouldReconcileReceiptDerivedHistory(tx), true, accountType);
   }
 });
 
+test("legacy ERC-20-only history snapshots are eligible for lazy NFT backfill", () => {
+  const base = {
+    status: "success" as const,
+    txHash: "0xhash",
+    tx: { from: USER },
+    chainId: 1,
+  };
+  assert.equal(
+    shouldReconcileReceiptDerivedHistory({
+      ...base,
+      assetChanges: { blockNumber: "1", erc20Transfers: [] },
+    }),
+    true,
+  );
+  assert.equal(
+    shouldReconcileReceiptDerivedHistory({
+      ...base,
+      assetChanges: { version: 2, blockNumber: "1", erc20Transfers: [] },
+    }),
+    false,
+  );
+});
+
 test("backfill eligibility does not requeue existing or non-success entries", async () => {
+  Object.assign(globalThis, {
+    indexedDB: new IDBFactory(),
+    IDBKeyRange,
+  });
   const history = [
     {
       id: "enriched",
@@ -190,7 +295,8 @@ test("backfill eligibility does not requeue existing or non-success entries", as
       txHash: "0xhash",
       tx: { from: USER },
       chainId: 1,
-      assetChanges: { blockNumber: "1", erc20Transfers: [] },
+      createdAt: 1,
+      assetChanges: { version: 2, blockNumber: "1", erc20Transfers: [] },
     },
     {
       id: "failed",
@@ -198,6 +304,7 @@ test("backfill eligibility does not requeue existing or non-success entries", as
       txHash: "0xhash",
       tx: { from: USER },
       chainId: 8453,
+      createdAt: 2,
     },
   ] as CompletedTransaction[];
   const harness = createChromeStorageHarness({ local: { txHistory: history } });
@@ -217,8 +324,12 @@ test("backfill eligibility does not requeue existing or non-success entries", as
       success: false,
       error: "Transaction is not backfillable",
     });
-    assert.equal(harness.writes.length, 0);
+    assert.equal(harness.stores.local.txHistory, undefined);
   } finally {
+    const { resetHistoryDatabaseConnectionForTests } = await import(
+      "../../src/chrome/history/database"
+    );
+    resetHistoryDatabaseConnectionForTests();
     harness.restore();
   }
 });

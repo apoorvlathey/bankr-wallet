@@ -240,8 +240,9 @@ internal-operation effect lease before handing work to their background
 executor. `txHandlers.ts` contains exports only and cannot hide signing policy.
 
 Durable transaction display state lives under `chrome/history/`.
-`repository.ts` is the sole released `txHistory` storage authority and shares
-one `local:txHistory` lock across add/update/cleanup operations;
+`repository.ts` is the sole public authority and serializes mutations through
+the history lock; `database.ts` owns compact IndexedDB persistence, legacy
+`txHistory` import, indexed paging, and bounded retention;
 `maintenance.ts` preserves force-inclusion recovery ownership while handling
 stale and explicit deletion. Receipt Transfer parsing is pure, bounded RPC
 reads and same-block correction are isolated in `rpc.ts`, and storage writes

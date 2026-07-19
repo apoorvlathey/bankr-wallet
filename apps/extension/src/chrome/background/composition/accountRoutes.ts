@@ -78,6 +78,7 @@ import { createBackgroundSecretManagementMessageRouter } from "../secretManageme
 import { createBackgroundWalletConnectSessionMessageRouter } from "../walletConnectSessionRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
 import { getEnsContenthashLastUpdated } from "../../ensBrowsing/contenthashHistory";
+import { clearTxHistoryForAddresses } from "../../txHistoryStorage";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
@@ -141,6 +142,7 @@ export function composeAccountRoutes(
       getAccounts,
       handleRevokeDappPermission,
       handleRemoveAccount,
+      clearTxHistoryForAddresses,
       sendRuntimeMessage: (runtimeMessage) =>
         chrome.runtime.sendMessage(runtimeMessage),
     });

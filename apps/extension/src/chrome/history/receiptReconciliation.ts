@@ -15,7 +15,9 @@ export function shouldReconcileReceiptDerivedHistory(
   >,
 ): boolean {
   if (tx.status !== "success" || !tx.txHash || !tx.tx.from) return false;
-  return !tx.assetChanges || FLASHBLOCKS_CHAIN_IDS.has(tx.chainId);
+  return (
+    tx.assetChanges?.version !== 2 || FLASHBLOCKS_CHAIN_IDS.has(tx.chainId)
+  );
 }
 
 export async function queueReceiptDerivedHistoryReconciliation(

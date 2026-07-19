@@ -4,7 +4,6 @@
  * Storage authority, maintenance, enrichment, and record definitions live in
  * `history/`; this root path remains for released callers and type imports.
  */
-
 export type {
   AssetChangeRecord,
   AssetTransferRecord,
@@ -13,17 +12,24 @@ export type {
   CompletedTransaction,
   ForceInclusionMeta,
   GasData,
+  NftTransferRecord,
   SwapMeta,
   TransferMeta,
   TxCallOrigin,
   TxStatus,
 } from "./history/types";
+export type {
+  AssetChangeLeg,
+  TxHistoryCursor,
+  TxHistoryPage,
+} from "./history/queryTypes";
 export {
   addTxToHistory,
   getPendingConfirmationTxs,
   getProcessingTxs,
   getTxById,
   getTxHistory,
+  getTxHistoryPage,
   updateTxInHistory,
 } from "./history/repository";
 export {

@@ -18,6 +18,8 @@ export async function handleTransactionFailure(
     status: "failed",
     error,
     completedAt: Date.now(),
+  }).catch((historyError) => {
+    console.error("[transaction] Could not persist failure history", historyError);
   });
 
   if (pending.parentBundleId && pending.bundleIndex !== undefined) {

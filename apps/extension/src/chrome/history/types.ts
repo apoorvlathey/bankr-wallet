@@ -1,15 +1,12 @@
 import type { TransactionParams } from "../bankr/submission";
 import type { Erc7715PermissionRevokeMeta } from "../requests/pendingTxStorage";
-
 export type TxStatus = "processing" | "pending" | "success" | "failed";
-
 export interface SwapMeta {
   sellTokenSymbol: string;
   sellTokenLogo: string | null;
   buyTokenSymbol: string;
   buyTokenLogo: string | null;
 }
-
 export interface TransferMeta {
   recipient: string;
   amount: string;
@@ -72,8 +69,32 @@ export interface AssetTransferRecord {
   logoUrl?: string;
 }
 
+/** One confirmed ERC-721 or ERC-1155 transfer involving the observed account. */
+export interface NftTransferRecord {
+  /** Lowercased NFT contract. */
+  token: string;
+  direction: "in" | "out";
+  /** Lowercased other side of the transfer. */
+  counterparty: string;
+  standard: "erc721" | "erc1155";
+  tokenId: string;
+  /** ERC-721 is always 1; ERC-1155 preserves the emitted quantity. */
+  amount: string;
+  /** Resolved only in renderer memory; never persisted in transaction history. */
+  collectionName?: string;
+  symbol?: string;
+  metadata?: {
+    name?: string;
+    image?: string;
+  };
+  /** Renderer-only lazy metadata state; stripped by durable history compaction. */
+  metadataLoading?: boolean;
+}
+
 /** Post-confirm asset-change snapshot for one chain leg. */
 export interface AssetChangeRecord {
+  /** Additive receipt parser version; missing means the legacy ERC-20-only parser. */
+  version?: 2;
   /** Mined block number as a decimal string. */
   blockNumber: string;
   /**
@@ -82,6 +103,7 @@ export interface AssetChangeRecord {
    */
   nativeDelta?: string;
   erc20Transfers: AssetTransferRecord[];
+  nftTransfers?: NftTransferRecord[];
 }
 
 /** Source-chain bridge metadata with an optional settled destination leg. */
@@ -132,6 +154,8 @@ export interface CompletedTransaction {
   createdAt: number;
   completedAt?: number;
   txHash?: string;
+  calldataSelector?: string;
+  detailsIncomplete?: boolean;
   /** Signed bytes crossed the RPC boundary without an authoritative reply. */
   broadcastUncertain?: boolean;
   error?: string;
@@ -161,6 +185,5 @@ export interface CompletedTransaction {
   };
   /** Disable-delegation display snapshot committed only after receipt success. */
   erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
-  /** Stable account identity captured before any post-confirm side effects. */
   accountId?: string;
 }

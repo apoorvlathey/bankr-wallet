@@ -24,6 +24,7 @@ function createDependencies(
     resetWalletConnectForWalletReset: async () => {},
     withWalletSecretLock: async (work) => work(),
     performSecurityReset: async () => {},
+    clearHistoryState: async () => {},
     getAllLocalStorage: async () => ({ accounts: [] }),
     getWalletLocalStorageKeysToRemove: () => ["accounts"],
     removeLocalStorage: async () => {},
@@ -96,6 +97,9 @@ test("reset installs its barrier synchronously and preserves destructive order",
     performSecurityReset: async () => {
       events.push("security:reset");
     },
+    clearHistoryState: async () => {
+      events.push("history:clear");
+    },
     getAllLocalStorage: async () => {
       events.push("local:get");
       return { accounts: [], cache: true };
@@ -137,6 +141,7 @@ test("reset installs its barrier synchronously and preserves destructive order",
     "walletconnect:reset",
     "lock:start",
     "security:reset",
+    "history:clear",
     "local:get",
     "manifest:accounts,cache",
     "local:remove:accounts",

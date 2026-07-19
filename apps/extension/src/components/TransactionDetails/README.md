@@ -35,7 +35,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `RawTransactionDetails.tsx` | Render function, transfer, addresses, value, calldata, and deploy data inside the advanced owner; publish the existing decoder's resolved function name | Copy/explorer actions delegated to shared components |
 | `GasDetails.tsx` | Render confirmed or estimated gas diagnostics inside the advanced owner | None |
 | `TransactionError.tsx` | Render bounded error detail and the optional rebroadcast action | Copy action; rebroadcast callback is owned by the controller |
-| `AssetChangesCard.tsx` | Order native/ERC-20 outflows before inflows and compose exact amount rows | None directly |
+| `AssetChangesCard.tsx` | Order native/ERC-20/NFT outflows before inflows and reuse the request-review NFT row/media boundary | None directly |
 | `Erc20TransferRow.tsx` | Render one summarized ERC-20 counterparty row with shared safe token imagery, symbol fallback, and hover/focus token-symbol contract disclosure | Explorer navigation, token copy delegated to the shared popover |
 | `Erc20TransferGroupRow.tsx` | Render aggregate ERC-20 movement and own multi-counterparty expansion | Explorer navigation, token copy delegated to the shared popover |
 | `ForceInclusionSteps.tsx` | Render L1 deposit and L2 inclusion as one rounded two-stage receipt ledger, with each terminal status linked to its chain explorer | Opens the matching L1 or L2 explorer transaction |
@@ -43,6 +43,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `forceInclusionState.ts` | Pure L1/L2 progress derivation | None |
 | `tokenMetadata.ts` | Pure token-metadata request collection and record enrichment | None |
 | `useAssetChangeData.ts` | Enrich token metadata, backfill asset changes, and fetch native/token prices | Runtime messages only |
+| `useResolvedCalldata.ts` | Resolve settled calldata by trusted history ID only when details need it | Runtime messages only |
 | `useGasData.ts` | Read persisted receipt gas data, fetch missing ordinary receipt gas, and derive display values; force-inclusion history supplies its fee-bearing L1 gas record | Bounded RPC reads only |
 
 ## Dependency direction
@@ -71,6 +72,11 @@ large hook.
 - Non-zero balance changes must remain visible. Eighteen-decimal dust up to
   99,999 base units uses exact wei; other narrow tiny values use the shared
   compact subscript-zero notation rather than rounding to zero.
+- Confirmed ERC-721 and ERC-1155 transfers reuse the request screen's NFT row,
+  standard tag, sanitized preview, contract copy action, and explorer action.
+- Settled calldata and NFT display metadata are loaded on demand. Durable
+  history retains the selector plus NFT contract/token ID only; raw token URI
+  never enters renderer state.
 - Token identities reuse the request-review `TokenLogo` fallback. Missing,
   rejected, and still-rasterizing remote logos must show the token symbol rather
   than an invisible inert image. Keep the symbol and its `to` / `from`

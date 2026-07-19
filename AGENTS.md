@@ -385,6 +385,8 @@ apps/extension/src/
 │   │   └── nonAtomicBatch.ts # Dual-path merge precedence
 │   ├── txHistoryStorage.ts  # Stable transaction-history compatibility facade
 │   ├── assetChangesExtractor.ts # Stable post-confirm enrichment facade
+│   ├── history/database.ts # IndexedDB transaction history, migration, paging, retention
+│   ├── history/detailResolution.ts # Trusted on-demand calldata/NFT detail resolution
 │   ├── receiptEnrichment.ts # Stable receipt retry/backfill facade
 │   ├── history/             # Transaction history/receipt audit domain (see README.md)
 │   │   ├── types.ts         # Released additive txHistory record shape

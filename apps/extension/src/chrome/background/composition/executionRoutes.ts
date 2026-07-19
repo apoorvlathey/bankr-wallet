@@ -3,6 +3,10 @@
 import { clearAllNonces } from "../../forceInclusion/nonceManager";
 import { checkPendingTxReceipt as checkPendingTxReceiptFn } from "../../forceInclusion/receiptPoller";
 import { queueAssetChangesBackfill } from "../../receiptEnrichment";
+import {
+  getTransactionCalldata,
+  resolveHistoryNftMetadata,
+} from "../../history/detailResolution";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
 import { handleCheckPremiumStatus } from "../../sponsoredTransfers/premiumStatus";
 import {
@@ -14,7 +18,9 @@ import {
   clearTxHistory,
   clearTxHistoryForAddresses,
   getProcessingTxs,
+  getTxById,
   getTxHistory,
+  getTxHistoryPage,
 } from "../../txHistoryStorage";
 import {
   failedTxResults,
@@ -83,6 +89,10 @@ export function composeExecutionRoutes(
         void chrome.storage.local.remove(key);
       },
       getTxHistory,
+      getTxHistoryPage,
+      getTxHistoryItem: getTxById,
+      getTransactionCalldata,
+      resolveHistoryNftMetadata,
       queueAssetChangesBackfill,
       getProcessingTxs,
       clearTxHistory,

@@ -1086,6 +1086,7 @@ src/
 │   │   └── status.ts       # Trusted-UI recovery and acknowledgment
 │   ├── txHistoryStorage.ts  # Stable transaction-history compatibility facade
 │   ├── assetChangesExtractor.ts # Stable post-confirm enrichment facade
+│   ├── history/nftTransferMetadata.ts # Confirmed NFT collection/token metadata enrichment
 │   ├── receiptEnrichment.ts # Stable receipt retry/backfill facade
 │   ├── history/             # Transaction history and receipt enrichment audit domain
 │   │   ├── types.ts         # Released additive txHistory record shape
@@ -2189,17 +2190,20 @@ The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself
 
 ### Post-confirm Asset Changes Extraction
 
-After a tx confirms successfully, the receipt path fires-and-forgets `extractAndStoreAssetChanges` through the stable `chrome/assetChangesExtractor.ts` facade. The implementation is split under `chrome/history/`: pure Transfer-log parsing, bounded receipt/balance RPC helpers, asset-change assembly, recent-token/history persistence, and delayed receipt/backfill policy are independently auditable (see `chrome/history/README.md`). Most txs flow through `applyReceiptToHistory` (in `forceInclusion/receiptPoller.ts`). Bankr direct-success paths (`transactions/bankrProcessing.ts`, `transactions/swaps/bankrLeg.ts`, `batch/batchBankrExecution.ts`, and `crossDappBatch/completion.ts`) use the stable `receiptEnrichment.ts` facade to retry `eth_getTransactionReceipt` asynchronously, because Bankr can return `success` before the user's configured RPC has indexed the receipt. For ERC-5792 responses, an immediately available raw receipt is converted to the sanitized `BundleReceipt` shape before storing it for `wallet_getCallsStatus`, while the raw receipt is kept for internal extraction. `TxDetailModal` also sends the extension-only `backfillAssetChanges` message when a confirmed history entry has a `txHash` but no `assetChanges`, so old entries and service-worker-interrupted retries can repair themselves on open. The extractor:
+After a tx confirms successfully, the receipt path fires-and-forgets `extractAndStoreAssetChanges` through the stable `chrome/assetChangesExtractor.ts` facade. The implementation is split under `chrome/history/`: pure ERC-20/ERC-721/ERC-1155 Transfer-log parsing, bounded receipt/balance RPC helpers, asset-change assembly, recent-token/history persistence, and delayed receipt/backfill policy are independently auditable (see `chrome/history/README.md`). Most txs flow through `applyReceiptToHistory` (in `forceInclusion/receiptPoller.ts`). Bankr direct-success paths (`transactions/bankrProcessing.ts`, `transactions/swaps/bankrLeg.ts`, `batch/batchBankrExecution.ts`, and `crossDappBatch/completion.ts`) use the stable `receiptEnrichment.ts` facade to retry `eth_getTransactionReceipt` asynchronously, because Bankr can return `success` before the user's configured RPC has indexed the receipt. For ERC-5792 responses, an immediately available raw receipt is converted to the sanitized `BundleReceipt` shape before storing it for `wallet_getCallsStatus`, while the raw receipt is kept for internal extraction. `TxDetailModal` also sends the extension-only `backfillAssetChanges` message when a confirmed history entry has a `txHash` but no current-version `assetChanges`, so old entries, legacy ERC-20-only snapshots, and service-worker-interrupted retries can repair themselves on open. The extractor:
 
 1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
 2. Resolves `symbol/decimals/logoUrl` per unique token via `tokenMetadata.ts`, which shares swap-list, Bungee-list, watched-asset, and hardcoded-logo fallbacks.
 3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row. For chains marked `supportsFlashblocks`, receipt-derived history first waits for one following block and verifies that a refreshed receipt's `blockHash` matches the canonical block before using its fee fields. This prevents a preconfirmed L1-fee estimate from surviving as a false native transfer. Opening Transaction details queues one reconciliation per mounted Flashblocks entry, including already-enriched history, so older gas/native snapshots are repaired from the same settled receipt; ordinary-chain snapshots remain immutable.
 4. Attempts to seed `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolio/tokenCatalog.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. This happens before the tx-history broadcast when storage succeeds, so Holdings can merge the stub immediately. A seed failure is logged but must not block writing `assetChanges`. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; CoinGecko/GeckoTerminal backfills price while `tokenMetadata.ts` backfills any missing symbol/logo.
-5. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
+5. Decodes ERC-721 `Transfer` plus ERC-1155 `TransferSingle`/`TransferBatch` and persists only immutable transfer identity: contract, token ID, standard, amount, direction, and counterparty. NFT token URI, image, and display metadata are never durable history.
+6. Writes the versioned `AssetChangeRecord` onto the existing history entry. Missing versions remain readable and are lazily re-enriched. If detailed transfer persistence fails, a best-effort `detailsIncomplete` marker preserves the settled summary without changing transaction success.
 
 **Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
 
-**Refresh wiring.** `updateTxInHistory()` broadcasts `txHistoryUpdated` with `updatedTx` and `changedKeys` (top-level fields from the update object). `TokenHoldings.tsx` listens for entries whose `from` or `bridge.receiverAddress` matches the displayed wallet AND that carry `assetChanges` or `destAssetChanges`, then force-reloads. ERC-20s from the receipt are passed through as forced refresh keys/stubs so they bypass the collapsed low-value-token RPC deferral and get immediate onchain balances even when the "Under $0.10" group is closed. `PortfolioTabs.tsx` keeps a delayed generic fallback for matching-account confirmation updates (`status`, `txHash`, or `completedAt`), but cancels that timer once `assetChanges`/`destAssetChanges` arrives because `TokenHoldings` owns the immediate targeted refresh. This prevents a delayed API-first load from cancelling the authoritative receipt-token RPC pass. Bridge-only progress updates (`changedKeys: ["bridge"]`) must not trigger portfolio RPC sweeps across every visible chain.
+**Refresh wiring.** `updateTxInHistory()` broadcasts only `{ txId, ownerAddress, chainId, changedKeys }`; it never copies the history record or transfer arrays through runtime messaging. Activity refreshes the changed row with `getTxHistoryItem`. Holdings uses the compact identity/change fields for its delayed refresh policy.
+
+**Durable history and lazy details.** IndexedDB database `walletchan-history` stores compact transaction summaries separately from ERC-20/NFT transfer rows. The first history access idempotently imports the released `chrome.storage.local.txHistory` array, then removes that legacy key only after all valid records commit. Settled rows omit full calldata and retain only the selector; NFT rows omit token URI, image, collection, symbol, and token name. Activity uses 30-row indexed cursor pages and an intersection sentinel for automatic loading. Retention keeps at most 1,000 settled entries per account/network and 50 MiB overall, without evicting processing/pending recovery rows. Transaction Details fetches calldata by stored transaction hash through the configured RPC and validates hash/from/to before using it. NFT display metadata is resolved through the configured RPC at the receipt block with latest-state fallback and a 24-hour, 500-entry, 10 MiB best-effort display cache; raw token URI is never sent to the renderer or stored.
 
 Holdings keeps successful RPC balance reads (including zero-balance tombstones) authoritative across subsequent API revalidations. A lagging portfolio response may update token metadata and price, but it cannot overwrite a verified balance or resurrect a token that RPC already reported as zero. Failed per-token RPC reads are never marked authoritative, so a transient RPC error cannot freeze an API fallback as an onchain value. The same overlay is applied to the fast API paint and the detached enrichment pass, preventing either async stage from causing post-confirm balance flicker.
 
@@ -2311,22 +2315,25 @@ Gas data is not available at confirmation time (tx hasn't been mined). It's fetc
 
 ### Storage Functions
 
-`history/repository.ts` owns reads, adds, updates, newest-first ordering, the
-50-entry cap, and the shared mutation lock. `history/maintenance.ts` owns stale
+`history/repository.ts` owns reads, adds, updates, and the shared mutation lock.
+`history/database.ts` owns IndexedDB migration, paging, and retention. `history/maintenance.ts` owns stale
 processing cleanup and full/per-address deletion. The root facade re-exports
 their functions without wrappers so existing callers retain export identity.
 
 | Function                           | Description                               |
 | ---------------------------------- | ----------------------------------------- |
-| `getTxHistory()`                   | Get all history (newest first, max 50)    |
+| `getTxHistory()`                   | Compatibility/recovery compact read       |
+| `getTxHistoryPage(options)`        | Get a 30-row indexed cursor page           |
+| `getTxById(txId)`                  | Hydrate one row with its transfer records  |
 | `addTxToHistory(tx)`               | Add new entry with "processing" status    |
 | `updateTxInHistory(txId, updates)` | Update status, txHash, error, completedAt |
 | `clearTxHistory()`                 | Remove all history entries                |
 
 ### Storage Details
 
-- **Key**: `txHistory` in `chrome.storage.local`
-- **Max entries**: 50 (oldest entries removed when limit exceeded)
+- **Database**: IndexedDB `walletchan-history`
+- **Stores**: `transactions`, `assetTransfers`
+- **Retention**: 1,000 settled entries per account/network; 50 MiB overall
 - **Sort order**: Newest first (by `createdAt`)
 
 ### Chrome Storage RMW Locks
@@ -4538,7 +4545,7 @@ notification clicks. The focused callback implementations remain under
 
 | Type                         | Description                                     |
 | ---------------------------- | ----------------------------------------------- |
-| `txHistoryUpdated`           | Notifies views that transaction history changed. `updateTxInHistory()` includes `updatedTx` and `changedKeys`; add/history-clear broadcasts may omit `changedKeys`. |
+| `txHistoryUpdated`           | Notifies views with compact `txId`, `ownerAddress`, `chainId`, and optional `changedKeys`; no transaction or transfer payload is broadcast. |
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |

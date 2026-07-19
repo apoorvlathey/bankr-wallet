@@ -358,7 +358,7 @@ configured auto-lock boundary.
 | Handler Class | Examples | Why Extension-Only |
 | --- | --- | --- |
 | Account/session reads and ordering | `getAccounts`, `reorderAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state or allowing webpages to mutate wallet UI ordering. |
-| Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
+| Transaction/history UI | `getTxHistory`, `getTxHistoryPage`, `getTxHistoryItem`, `getTransactionCalldata`, `resolveHistoryNftMetadata`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. Lazy detail reads operate only on a trusted stored row and configured RPC. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
@@ -373,6 +373,8 @@ not forward an inpage message for it.
 | Handler | Effect | Guard |
 | --- | --- | --- |
 | `backfillAssetChanges` | Extension UI asks the service worker to re-fetch a confirmed tx receipt and populate missing `assetChanges` on an existing history entry. Does not expose secrets or create transactions. | `wallet-ui` audience policy |
+| `getTransactionCalldata` | Loads a trusted stored transaction, fetches its hash from the configured RPC, and returns calldata only after exact hash/from/to validation. | `wallet-ui` audience policy |
+| `resolveHistoryNftMetadata` | Resolves one trusted stored NFT contract/token ID at its receipt block (latest fallback). Raw token URI remains background-only; the renderer receives only bounded sanitized display fields. | `wallet-ui` audience policy |
 
 ### Authentication Handlers
 
@@ -803,7 +805,10 @@ reset/fresh onboarding abort plus epoch-invalidate old-wallet work. A storage
 write that crosses the reset epoch removes its stale entry before returning.
 NFT tokenURI metadata uses the same public-host/redirect rules, streams JSON
 under 256 KiB, bounds inline data and display strings, and rejects SVG/HTML
-image markup.
+image markup. Confirmed-history NFT display enrichment reads token metadata
+through the same bounded configured-RPC transport at the mined block. Durable
+history keeps only contract/token identity; the best-effort display cache never
+stores token URI and persists only bounded fields plus approved HTTPS image URLs.
 
 ---
 
@@ -1081,7 +1086,8 @@ accessible resources.
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `erc7715PermissionResult:{id}` | No           | Transient ERC-7715 approval result, read+deleted by the waiting injected content script or used by the WalletConnect result bridge |
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |
-| `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata; no secrets. |
+| `txHistory`                | No               | Legacy completed transaction array, read only as an IndexedDB migration source and removed after successful compact import. |
+| `historyNftMetadataCache`  | No               | Best-effort 24-hour NFT display cache (500 entries/10 MiB). Never stores token URI; only public bounded fields and policy-approved HTTPS image URLs persist. |
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `portfolioSnapshotsV2`     | No               | Aggregate USD portfolio chart points keyed by public wallet address, with one-hour deduplication and eight-day retention. Legacy `portfolioSnapshots` data is purge-only because it may contain unrecoverable Tempo sentinel totals. |
@@ -1411,7 +1417,7 @@ These must always hold true. Violations indicate a security bug.
 
 17. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
-18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storage/cachePruner.ts` through the stable root facade.
+18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, `historyNftMetadataCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and bounded/expired entries are pruned by their owning cache or `storage/cachePruner.ts` through the stable root facade.
 
 ---
 

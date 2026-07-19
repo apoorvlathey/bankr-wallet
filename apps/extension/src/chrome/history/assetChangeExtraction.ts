@@ -1,6 +1,7 @@
 import { resolveTokenMetadata } from "../tokenMetadata";
 import {
   decodeAccountErc20Transfers,
+  decodeAccountNftTransfers,
   toHistoryBigInt,
 } from "./assetTransferParser";
 import { deriveNativeDelta } from "./nativeDelta";
@@ -28,6 +29,7 @@ export async function extractAssetChangesFromConfirmedReceipt({
   const blockNumber = blockNumberValue.toString();
 
   const drafts = decodeAccountErc20Transfers(receipt, userAddress);
+  const nftDrafts = decodeAccountNftTransfers(receipt, userAddress);
   const uniqueTokens = Array.from(new Set(drafts.map((transfer) => transfer.token)));
   const metadataByToken = new Map<
     string,
@@ -51,6 +53,9 @@ export async function extractAssetChangesFromConfirmedReceipt({
       logoUrl: metadata?.logoUrl,
     };
   });
+  // Persist only immutable transfer identity. Collection/token metadata and
+  // media are resolved lazily when a visible history row needs them.
+  const nftTransfers = nftDrafts;
 
   const currentBlockHex = `0x${blockNumberValue.toString(16)}`;
   const previousBlockHex = `0x${(blockNumberValue - 1n).toString(16)}`;
@@ -80,6 +85,12 @@ export async function extractAssetChangesFromConfirmedReceipt({
     });
   }
 
-  if (erc20Transfers.length === 0 && nativeDelta === undefined) return null;
-  return { blockNumber, nativeDelta, erc20Transfers };
+  if (
+    erc20Transfers.length === 0 &&
+    nftTransfers.length === 0 &&
+    nativeDelta === undefined
+  ) {
+    return null;
+  }
+  return { version: 2, blockNumber, nativeDelta, erc20Transfers, nftTransfers };
 }

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createServer, type ViteDevServer } from "vite";
 
 type Hooks = {
-  mode: "success" | "account-race" | "safe-fault" | "ambiguous-fault";
+  mode: "success" | "account-race" | "safe-fault" | "ambiguous-fault" | "history-fault";
   liveAccount: any;
   processing: Set<string>;
   active: Map<string, AbortController>;
@@ -136,7 +136,10 @@ test("local execution revalidates immediately before one broadcast", async (t) =
             export const handleTransactionFailure = async (_id, _pending, error) => globalThis.__walletchanLocalTxExecution.failures.push(error);`;
           if (id === "\0local-execution-history") return `
             export const addTxToHistory = async (...args) => globalThis.__walletchanLocalTxExecution.updates.push(["add", ...args]);
-            export const updateTxInHistory = async (...args) => globalThis.__walletchanLocalTxExecution.updates.push(["update", ...args]);`;
+            export const updateTxInHistory = async (...args) => {
+              if (globalThis.__walletchanLocalTxExecution.mode === "history-fault") throw new Error("history unavailable");
+              globalThis.__walletchanLocalTxExecution.updates.push(["update", ...args]);
+            };`;
           if (id === "\0local-execution-receipt") return `
             export const applyReceiptToHistory = async (...args) => globalThis.__walletchanLocalTxExecution.updates.push(["receipt", ...args]);
             export const startReceiptPolling = (...args) => globalThis.__walletchanLocalTxExecution.polls.push(args);`;
@@ -242,6 +245,19 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       assert.deepEqual(hooks.failures, ["socket closed after write"]);
       assert.equal(await resetResult(), "blocked");
     });
+
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`${type} broadcast success survives a history write fault`, async () => {
+        reset(type, "history-fault");
+        await execute(`${type}-history-fault`, type);
+        assert.deepEqual(hooks.failures, []);
+        assert.equal(hooks.resets.length, 0);
+        assert.deepEqual(hooks.results.at(-1)?.[1], {
+          success: true,
+          txHash: `0x${"ab".repeat(32)}`,
+        });
+      });
+    }
   } finally {
     await server?.close();
     Reflect.deleteProperty(globalThis, "__walletchanLocalTxExecution");

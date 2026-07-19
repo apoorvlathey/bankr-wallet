@@ -1,6 +1,7 @@
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { SimulationResult } from "@/chrome/txSimulation";
+import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import extensionPackage from "../../package.json";
@@ -331,6 +332,57 @@ export function responseForPreviewMessage(
       return [];
     case "getTxHistory":
       return environment.txHistory;
+    case "getTxHistoryPage": {
+      const history = environment.txHistory as CompletedTransaction[];
+      const filtered = history.filter((tx) =>
+        (!message.ownerAddress || tx.tx.from.toLowerCase() === String(message.ownerAddress).toLowerCase()) &&
+        (message.chainId == null || tx.chainId === message.chainId),
+      );
+      const start = message.cursor
+        ? Math.max(0, filtered.findIndex((tx) => tx.id === message.cursor.id) + 1)
+        : 0;
+      const limit = typeof message.limit === "number" ? message.limit : 30;
+      const items = filtered.slice(start, start + limit);
+      const hasMore = start + items.length < filtered.length;
+      const last = items.at(-1);
+      return {
+        items,
+        hasMore,
+        nextCursor: hasMore && last
+          ? { createdAt: last.createdAt, id: last.id }
+          : null,
+      };
+    }
+    case "getTxHistoryItem":
+      return (environment.txHistory as CompletedTransaction[])
+        .find((tx) => tx.id === message.txId) ?? null;
+    case "getTransactionCalldata": {
+      const tx = (environment.txHistory as CompletedTransaction[])
+        .find((candidate) => candidate.id === message.txId);
+      return tx?.tx.data
+        ? { success: true, data: tx.tx.data }
+        : { success: false, error: "Calldata unavailable in preview" };
+    }
+    case "resolveHistoryNftMetadata": {
+      const tx = (environment.txHistory as CompletedTransaction[])
+        .find((candidate) => candidate.id === message.txId);
+      const record = message.leg === "destination"
+        ? tx?.destAssetChanges
+        : tx?.assetChanges;
+      const transfer = record?.nftTransfers?.[message.nftIndex];
+      return transfer
+        ? {
+            success: true,
+            data: {
+              name: transfer.metadata?.name,
+              collectionName: transfer.collectionName,
+              symbol: transfer.symbol,
+              image: transfer.metadata?.image,
+              historical: true,
+            },
+          }
+        : { success: false, error: "NFT unavailable in preview" };
+    }
     case "getFailedTxResult":
       return null;
     case "checkPendingTxReceipt":

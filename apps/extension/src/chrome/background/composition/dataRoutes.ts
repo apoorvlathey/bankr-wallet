@@ -80,6 +80,8 @@ import { createBackgroundResetMessageRouter } from "../resetRouter";
 import { createBackgroundSwapBridgeDataMessageRouter } from "../swapBridgeDataRouter";
 import { createBackgroundTokenDataMessageRouter } from "../tokenDataRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
+import { clearHistoryDatabase } from "../../history/database";
+import { clearHistoryNftMetadataCache } from "../../history/nftMetadataCache";
 
 export function composeDataRoutes(pending: PendingResolutionComposition) {
   const routeBackgroundSwapBridgeDataMessage =
@@ -143,6 +145,12 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
     invalidateAuthCeremonies,
     invalidateAvatarImageCacheForWalletReset,
     clearAllAuthState,
+    clearHistoryState: async () => {
+      await Promise.all([
+        clearHistoryDatabase(),
+        clearHistoryNftMetadataCache(),
+      ]);
+    },
     resetWalletConnectForWalletReset: async () => {
       await resetWalletConnectForWalletReset();
     },

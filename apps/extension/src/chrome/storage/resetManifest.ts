@@ -13,6 +13,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "addressContacts",
   "seedGroups",
   "txHistory",
+  "historyNftMetadataCache",
   "pendingTxRequests",
   "pendingSignatureRequests",
   "pendingBatchTxRequests",

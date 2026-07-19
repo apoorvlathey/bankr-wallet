@@ -199,16 +199,10 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     const handleMessage = (message: {
       type: string;
       changedKeys?: string[];
-      updatedTx?: CompletedTransaction;
+      ownerAddress?: string;
     }) => {
       if (message.type !== "txHistoryUpdated") return;
-      const updated = message.updatedTx;
-      if (
-        updated &&
-        updated.tx?.from?.toLowerCase?.() !== address.toLowerCase() &&
-        updated.bridge?.receiverAddress?.toLowerCase?.() !==
-          address.toLowerCase()
-      ) {
+      if (message.ownerAddress && message.ownerAddress !== address.toLowerCase()) {
         return;
       }
       const changedKeys = message.changedKeys;
@@ -601,6 +595,7 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
               filterChainId={filterChainId}
               onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}
+              isActive={tabIndex === 2}
             />
           </Box>
         </Box>

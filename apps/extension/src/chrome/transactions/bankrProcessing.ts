@@ -36,6 +36,8 @@ export async function processBankrTransactionInBackground(
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
+  let submittedTxHash: string | undefined;
+  let submittedSuccessfully = false;
 
   try {
     await addTxToHistory({
@@ -82,6 +84,8 @@ export async function processBankrTransactionInBackground(
     );
     effectGuard.settleEffect();
     const txHash = result.transactionHash;
+    submittedTxHash = txHash;
+    submittedSuccessfully = result.status !== "reverted";
 
     if (result.status === "reverted") {
       await handleTransactionFailure(txId, pending, "Transaction reverted");
@@ -135,7 +139,15 @@ export async function processBankrTransactionInBackground(
           ? "Transaction submission was interrupted. Its outcome is unknown; check activity before retrying."
           : error.message;
     }
-    await handleTransactionFailure(txId, pending, errorMessage);
+    if (submittedSuccessfully) {
+      console.error("[bankr] Post-broadcast history update failed", error);
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: true,
+        txHash: submittedTxHash,
+      });
+    } else {
+      await handleTransactionFailure(txId, pending, errorMessage);
+    }
   } finally {
     effectGuard.releaseIfSafe();
     activeAbortControllers.delete(txId);
