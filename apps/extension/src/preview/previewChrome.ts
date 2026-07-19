@@ -352,6 +352,24 @@ export function responseForPreviewMessage(
       return { enabled: true };
     case "getPasswordType":
       return { passwordType: "master" };
+    case "getOnboardingInitializationStatus":
+      return {
+        configured: false,
+        setupInProgress: false,
+        recoveryRequired: false,
+      };
+    case "beginOnboardingInitialization":
+      return {
+        success: true,
+        initializationId:
+          message?.initializationId ?? "preview-onboarding-initialization",
+      };
+    case "initializeOnboardingCredential":
+      return { success: true, passwordType: "master" };
+    case "completeOnboardingInitialization":
+    case "rollbackOnboardingInitialization":
+    case "onboardingComplete":
+      return { success: true };
     case "getCachedPassword":
       return { hasCachedPassword: environment.unlocked };
     case "getCachedApiKey":
@@ -399,16 +417,27 @@ export function responseForPreviewMessage(
         }),
       };
     }
-    case "addSeedPhraseGroup":
+    case "addSeedPhraseGroup": {
+      const account =
+        environment.accounts.find((candidate) => candidate.type === "seedPhrase") ??
+        {
+          id: "preview-seed-0",
+          type: "seedPhrase",
+          address: "0x0000000000000000000000000000000000000001",
+          displayName: message?.accountDisplayName || "Seed #1 · #0",
+          seedGroupId: "preview-seed",
+          derivationIndex: 0,
+          createdAt: PREVIEW_EPOCH_MS,
+        };
       return {
         success: true,
         mnemonic:
           "test test test test test test test test test test test junk",
         group: environment.seedGroups[0],
-        accounts: [
-          environment.accounts.find((account) => account.type === "seedPhrase"),
-        ].filter(Boolean),
+        account,
+        accounts: [account],
       };
+    }
     case "deriveSeedAccount":
       return {
         success: true,

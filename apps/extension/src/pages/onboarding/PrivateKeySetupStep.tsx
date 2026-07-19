@@ -13,6 +13,7 @@ export function PrivateKeySetupStep({
   onDisplayNameChange,
   onClearError,
   onBack,
+  onProgressStepClick,
   onContinue,
 }: {
   privateKey: string;
@@ -23,6 +24,7 @@ export function PrivateKeySetupStep({
   onDisplayNameChange: (value: string) => void;
   onClearError: () => void;
   onBack: () => void;
+  onProgressStepClick: (step: number) => void;
   onContinue: () => void;
 }) {
   const [generatedBackupReady, setGeneratedBackupReady] = useState(true);
@@ -39,10 +41,12 @@ export function PrivateKeySetupStep({
 
   return (
     <OnboardingCanvas
+      currentStep={1}
+      onStepClick={onProgressStepClick}
       header={<OnboardingHeader onBack={onBack} step={1} />}
       footer={
         <OnboardingFooter>
-          <Button variant="primary" size="lg" w="full" onClick={guardedContinue} isDisabled={!canContinue}>
+          <Button variant="brand" size="lg" w="full" onClick={guardedContinue} isDisabled={!canContinue}>
             Continue
           </Button>
         </OnboardingFooter>

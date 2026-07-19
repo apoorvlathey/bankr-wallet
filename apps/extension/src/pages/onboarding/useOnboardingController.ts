@@ -6,20 +6,25 @@ import { newPasswordPolicyError } from "@/constants/securityPolicy";
 import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
 
 export type OnboardingStep =
-  | "welcome"
   | "accountType"
   | "bankrSetup"
   | "privateKey"
   | "seedPhrase"
+  | "viewOnly"
   | "password"
   | "success";
 
-export type AccountTypeChoice = "bankr" | "privateKey" | "seedPhrase";
+export type AccountTypeChoice =
+  | "seedPhrase"
+  | "privateKey"
+  | "viewOnly"
+  | "bankr";
 
 export type OnboardingErrors = {
   apiKey?: string;
   privateKey?: string;
   walletAddress?: string;
+  viewOnlyAddress?: string;
   password?: string;
   confirmPassword?: string;
 };
@@ -53,10 +58,10 @@ function getOrCreateOnboardingOwnerId(): string {
 }
 
 export function useOnboardingController() {
-  const [step, setStep] = useState<OnboardingStep>("welcome");
+  const [step, setStep] = useState<OnboardingStep>("accountType");
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [accountTypeChoice, setAccountTypeChoice] =
-    useState<AccountTypeChoice>("bankr");
+    useState<AccountTypeChoice>("seedPhrase");
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [privateKey, setPrivateKey] = useState("");
@@ -64,6 +69,8 @@ export function useOnboardingController() {
   const [pkDisplayName, setPkDisplayName] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [bankrDisplayName, setBankrDisplayName] = useState("");
+  const [viewOnlyAddress, setViewOnlyAddress] = useState("");
+  const [viewOnlyDisplayName, setViewOnlyDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -224,12 +231,34 @@ export function useOnboardingController() {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const validateViewOnlySetup = async (): Promise<boolean> => {
+    const nextErrors: OnboardingErrors = {};
+    if (!viewOnlyAddress.trim()) {
+      nextErrors.viewOnlyAddress = "Address or name is required";
+    } else {
+      setIsResolvingAddress(true);
+      try {
+        if (!(await resolveAddress(viewOnlyAddress.trim()))) {
+          nextErrors.viewOnlyAddress = "Invalid address or name";
+        }
+      } catch (error) {
+        nextErrors.viewOnlyAddress =
+          error instanceof Error ? error.message : "Failed to resolve name";
+      } finally {
+        setIsResolvingAddress(false);
+      }
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   async function handleContinue() {
     switch (step) {
       case "accountType":
         if (accountTypeChoice === "bankr") setStep("bankrSetup");
         else if (accountTypeChoice === "privateKey") setStep("privateKey");
         else if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
+        else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
         break;
       case "bankrSetup":
         if (await validateBankrSetup()) setStep("password");
@@ -241,6 +270,9 @@ export function useOnboardingController() {
         } else setStep("password");
         break;
       }
+      case "viewOnly":
+        if (await validateViewOnlySetup()) setStep("password");
+        break;
       case "password":
         if (validatePassword()) await handleSubmit();
         break;
@@ -249,9 +281,6 @@ export function useOnboardingController() {
 
   const handleBack = () => {
     switch (step) {
-      case "accountType":
-        setStep("welcome");
-        break;
       case "bankrSetup":
         setStep("accountType");
         break;
@@ -269,11 +298,40 @@ export function useOnboardingController() {
         setSeedAccountDisplayName("");
         setStep("accountType");
         break;
+      case "viewOnly":
+        setStep("accountType");
+        break;
       case "password":
         if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
         else if (accountTypeChoice === "privateKey") setStep("privateKey");
+        else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
         else setStep("bankrSetup");
         break;
+    }
+  };
+
+  const handleProgressStepClick = (targetStep: number) => {
+    if (targetStep === 0 && step !== "accountType") {
+      if (accountTypeChoice === "privateKey") {
+        setPrivateKey("");
+        setDerivedAddress(null);
+      } else if (accountTypeChoice === "seedPhrase") {
+        setCollectedMnemonic("");
+        setCollectedSeedIndices([0]);
+        setSeedGroupName("");
+        setSeedAccountDisplayName("");
+      }
+      setErrors({});
+      setStep("accountType");
+      return;
+    }
+
+    if (targetStep === 1 && step === "password") {
+      setErrors({});
+      if (accountTypeChoice === "seedPhrase") setStep("seedPhrase");
+      else if (accountTypeChoice === "privateKey") setStep("privateKey");
+      else if (accountTypeChoice === "viewOnly") setStep("viewOnly");
+      else setStep("bankrSetup");
     }
   };
 
@@ -284,6 +342,7 @@ export function useOnboardingController() {
       let finalAddress: string;
       let finalDisplayAddress: string;
       let resolvedBankrAddress: string | null = null;
+      let resolvedViewOnlyAddress: string | null = null;
 
       // Resolve and validate every input that does not mutate storage before
       // opening the initialization transaction.
@@ -296,9 +355,12 @@ export function useOnboardingController() {
         if (!collectedMnemonic.trim()) {
           throw new Error("Seed phrase is required");
         }
-      } else {
+      } else if (accountTypeChoice === "bankr") {
         resolvedBankrAddress = await resolveAddress(walletAddress.trim());
         if (!resolvedBankrAddress) throw new Error("Invalid address or name");
+      } else if (accountTypeChoice === "viewOnly") {
+        resolvedViewOnlyAddress = await resolveAddress(viewOnlyAddress.trim());
+        if (!resolvedViewOnlyAddress) throw new Error("Invalid address or name");
       }
 
       const initialization = await chrome.runtime.sendMessage({
@@ -383,6 +445,33 @@ export function useOnboardingController() {
         }
       }
 
+      if (accountTypeChoice === "viewOnly") {
+        const resolvedAddress = resolvedViewOnlyAddress!;
+        const displayName =
+          viewOnlyDisplayName.trim() ||
+          (viewOnlyAddress.trim() !== resolvedAddress
+            ? viewOnlyAddress.trim()
+            : undefined);
+        await initializeCredential("pk-only-mode");
+        const response = await new Promise<{ success: boolean; error?: string }>(
+          (resolve) => {
+            chrome.runtime.sendMessage(
+              {
+                type: "addImpersonatorAccount",
+                address: resolvedAddress,
+                displayName,
+              },
+              resolve,
+            );
+          },
+        );
+        if (!response.success) {
+          throw new Error(response.error || "Failed to add view-only account");
+        }
+        finalAddress = resolvedAddress;
+        finalDisplayAddress = displayName || resolvedAddress;
+      }
+
       if (accountTypeChoice === "bankr") {
         const resolvedAddress = resolvedBankrAddress!;
         await initializeCredential(apiKey.trim());
@@ -451,6 +540,7 @@ export function useOnboardingController() {
 
       setApiKey("");
       setPrivateKey("");
+      setViewOnlyAddress("");
       setPassword("");
       setConfirmPassword("");
       setCollectedMnemonic("");
@@ -482,10 +572,12 @@ export function useOnboardingController() {
     apiKey, setApiKey, showApiKey, setShowApiKey, privateKey, setPrivateKey,
     derivedAddress, pkDisplayName, setPkDisplayName, walletAddress,
     setWalletAddress, bankrDisplayName, setBankrDisplayName, password,
+    viewOnlyAddress, setViewOnlyAddress, viewOnlyDisplayName,
+    setViewOnlyDisplayName,
     setPassword, confirmPassword, setConfirmPassword, showPassword,
     setShowPassword, isSubmitting, isResolvingAddress, setCollectedMnemonic,
     setCollectedSeedIndices, setSeedGroupName, setSeedAccountDisplayName,
-    errors, setErrors, handleContinue, handleBack,
+    errors, setErrors, handleContinue, handleBack, handleProgressStepClick,
     setupRecoveryError,
   };
 }

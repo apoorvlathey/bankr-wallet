@@ -28,7 +28,12 @@ export type PreviewRoute =
   | "token-management"
   | "all";
 
-export type FrameMode = "compact" | "popup" | "window" | "sidepanel";
+export type FrameMode =
+  | "compact"
+  | "popup"
+  | "window"
+  | "sidepanel"
+  | "fullscreen";
 
 export type PreviewWalletType =
   | "bankr"

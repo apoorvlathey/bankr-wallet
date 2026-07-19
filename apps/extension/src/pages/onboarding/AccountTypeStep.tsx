@@ -1,26 +1,32 @@
-import { Box, Button, HStack, Text, VStack } from "@chakra-ui/react";
+import { Box, Button, HStack, Image, Text, VStack } from "@chakra-ui/react";
 import { CheckIcon } from "@chakra-ui/icons";
-import { KeyIcon, RobotIcon, SeedIcon } from "@/components/shared/AccountTypeIcons";
+import { EyeIcon, KeyIcon, SeedIcon } from "@/components/shared/AccountTypeIcons";
 import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
 
-export type AccountTypeChoice = "bankr" | "privateKey" | "seedPhrase";
+export type AccountTypeChoice =
+  | "seedPhrase"
+  | "privateKey"
+  | "viewOnly"
+  | "bankr";
 
 type AccountOptionProps = {
   title: string;
   description: string;
-  note: string;
   isSelected: boolean;
   onSelect: () => void;
   icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
 };
 
 function AccountOption({
   title,
   description,
-  note,
   isSelected,
   onSelect,
   icon,
+  iconBg,
+  iconColor,
 }: AccountOptionProps) {
   return (
     <Box
@@ -31,7 +37,7 @@ function AccountOption({
       onClick={onSelect}
       w="full"
       px={4}
-      py={4}
+      py={3.5}
       textAlign="left"
       bg={isSelected ? "surface.raisedHover" : "transparent"}
       borderBottom="1px solid"
@@ -49,8 +55,8 @@ function AccountOption({
           h="40px"
           flexShrink={0}
           borderRadius="md"
-          bg={isSelected ? "accent.primary" : "surface.sunken"}
-          color={isSelected ? "accentFg.primary" : "fg.secondary"}
+          bg={isSelected ? "accent.highlight" : iconBg}
+          color={isSelected ? "accentFg.highlight" : iconColor}
           display="grid"
           placeItems="center"
         >
@@ -63,9 +69,6 @@ function AccountOption({
           <Text fontSize="sm" lineHeight="1.45" color="fg.secondary">
             {description}
           </Text>
-          <Text fontSize="xs" color="fg.muted" pt={1}>
-            {note}
-          </Text>
         </VStack>
         <Box
           w="20px"
@@ -74,9 +77,9 @@ function AccountOption({
           flexShrink={0}
           borderRadius="full"
           border="1px solid"
-          borderColor={isSelected ? "accent.primary" : "border.strong"}
-          bg={isSelected ? "accent.primary" : "transparent"}
-          color="accentFg.primary"
+          borderColor={isSelected ? "accent.highlight" : "border.strong"}
+          bg={isSelected ? "accent.highlight" : "transparent"}
+          color="accentFg.highlight"
           display="grid"
           placeItems="center"
           aria-hidden="true"
@@ -91,20 +94,19 @@ function AccountOption({
 export function AccountTypeStep({
   choice,
   onChoiceChange,
-  onBack,
   onContinue,
 }: {
   choice: AccountTypeChoice;
   onChoiceChange: (choice: AccountTypeChoice) => void;
-  onBack: () => void;
   onContinue: () => void;
 }) {
   return (
     <OnboardingCanvas
-      header={<OnboardingHeader onBack={onBack} step={0} />}
+      currentStep={0}
+      header={<OnboardingHeader step={0} />}
       footer={
         <OnboardingFooter>
-          <Button variant="primary" size="lg" w="full" onClick={onContinue}>
+          <Button variant="brand" size="lg" w="full" onClick={onContinue}>
             Continue
           </Button>
         </OnboardingFooter>
@@ -113,10 +115,10 @@ export function AccountTypeStep({
       <VStack align="stretch" spacing={6}>
         <VStack align="stretch" spacing={1.5}>
           <Text as="h1" fontSize="2xl" fontWeight="700" letterSpacing="-0.02em">
-            How would you like to start?
+            Choose your first account
           </Text>
           <Text color="fg.secondary" fontSize="sm" lineHeight="1.5">
-            Choose your first account. You can add the others from Settings later.
+            You can add the other account types from Settings anytime.
           </Text>
         </VStack>
 
@@ -130,28 +132,47 @@ export function AccountTypeStep({
           overflow="hidden"
         >
           <AccountOption
-            title="Bankr account"
-            description="Connect an address to the Bankr API for AI-assisted wallet actions."
-            note="No seed phrase required"
-            isSelected={choice === "bankr"}
-            onSelect={() => onChoiceChange("bankr")}
-            icon={<RobotIcon boxSize="20px" />}
-          />
-          <AccountOption
-            title="Private key"
-            description="Import or generate one account and sign locally on this device."
-            note="Best for a single existing account"
-            isSelected={choice === "privateKey"}
-            onSelect={() => onChoiceChange("privateKey")}
-            icon={<KeyIcon boxSize="20px" />}
-          />
-          <AccountOption
             title="Seed phrase"
-            description="Import or create a recovery phrase with multiple derived accounts."
-            note="Best for a traditional self-custody wallet"
+            description="Import or create a recovery phrase for one or more accounts."
             isSelected={choice === "seedPhrase"}
             onSelect={() => onChoiceChange("seedPhrase")}
             icon={<SeedIcon boxSize="20px" />}
+            iconBg="status.info.bg"
+            iconColor="status.info.fg"
+          />
+          <AccountOption
+            title="Private key"
+            description="Import or generate a signer stored on this device."
+            isSelected={choice === "privateKey"}
+            onSelect={() => onChoiceChange("privateKey")}
+            icon={<KeyIcon boxSize="20px" />}
+            iconBg="status.warning.bg"
+            iconColor="status.warning.fg"
+          />
+          <AccountOption
+            title="View-only"
+            description="Follow an address without importing its signing keys."
+            isSelected={choice === "viewOnly"}
+            onSelect={() => onChoiceChange("viewOnly")}
+            icon={<EyeIcon boxSize="20px" />}
+            iconBg="status.success.bg"
+            iconColor="status.success.fg"
+          />
+          <AccountOption
+            title="Bankr API"
+            description="Use your Bankr API key for AI-assisted wallet actions."
+            isSelected={choice === "bankr"}
+            onSelect={() => onChoiceChange("bankr")}
+            icon={
+              <Image
+                src="/bankr-icon.png"
+                alt=""
+                boxSize="40px"
+                borderRadius="md"
+              />
+            }
+            iconBg="transparent"
+            iconColor="fg.primary"
           />
         </Box>
       </VStack>

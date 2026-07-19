@@ -1250,16 +1250,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 The onboarding flow varies based on account type selection:
 
-**Step 0: Welcome Screen**
-
-- Bankr logo + branding
-- "Welcome to Bankr Wallet" heading
-- "Get Started" button
-
 **Step 1: Account Type Selection**
 
-- Choose: Bankr Wallet, Private Key, Seed Phrase, or Impersonator
-- Can select multiple account types to set up
+- Choose one initial account in this order: Seed Phrase, Private Key,
+  View-only, or Bankr API
+- Additional account types can be added later from Settings
+- The full-page layout keeps Choose account, Add details, and Secure wallet
+  visible in a persistent desktop progress rail
 
 **Step 2a: Bankr Setup** (if Bankr or both selected)
 
@@ -1280,14 +1277,16 @@ The onboarding flow varies based on account type selection:
 - Uses `SeedPhraseSetup` component (import existing or generate new 12-word mnemonic)
 - Display name (optional) for the first derived account
 
-**Step 2d: Impersonator Setup** (if Impersonator selected)
+**Step 2d: View-only Setup** (if View-only selected)
 
-- Address input (view-only, no secrets stored)
+- Address or supported name input (view-only, no signing key stored)
 - Display name (optional)
+- The same master-password vault is initialized with the non-Bankr sentinel so
+  the account-management authorization model remains consistent
 
 **Step 3: Create Password**
 
-- Password + Confirm password fields (min 6 chars)
+- Password + Confirm password fields (current shared password policy)
 - Security warning about password recovery
 
 **Step 4: Success**

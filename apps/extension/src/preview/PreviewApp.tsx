@@ -31,13 +31,19 @@ import type {
 const FRAME_MODES: Array<{
   id: FrameMode;
   label: string;
-  width: number;
-  height: number;
+  width: string;
+  height: string;
 }> = [
-  { id: "compact", label: "320x568", width: 320, height: 568 },
-  { id: "popup", label: "360x600", width: 360, height: 600 },
-  { id: "window", label: "480x720", width: 480, height: 720 },
-  { id: "sidepanel", label: "420x760", width: 420, height: 760 },
+  { id: "compact", label: "320x568", width: "320px", height: "568px" },
+  { id: "popup", label: "360x600", width: "360px", height: "600px" },
+  { id: "window", label: "480x720", width: "480px", height: "720px" },
+  { id: "sidepanel", label: "420x760", width: "420px", height: "760px" },
+  {
+    id: "fullscreen",
+    label: "Full screen",
+    width: "calc(100vw - 40px)",
+    height: "100vh",
+  },
 ];
 
 const WALLET_TYPES: Array<{ id: PreviewWalletType; label: string }> = [
@@ -57,6 +63,7 @@ function stateForRoute(state: PreviewState, route: PreviewRoute): PreviewState {
     wallet: definition.wallets.includes(state.wallet)
       ? state.wallet
       : definition.wallets[0],
+    frame: route === "onboarding" ? "fullscreen" : state.frame,
   };
 }
 
@@ -81,8 +88,8 @@ function Frame({
         <Badge variant="info">{frame.label}</Badge>
       </HStack>
       <Box
-        w={`${frame.width}px`}
-        h={`${frame.height}px`}
+        w={frame.width}
+        h={frame.height}
         overflow="hidden"
         bg="surface.base"
         border="1px solid"

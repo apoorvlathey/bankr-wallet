@@ -93,6 +93,10 @@
   and short browser-window side panels are first-class viewports. Surface
   identity is independent of height; the shell fills the available viewport
   and one inner region owns vertical scrolling.
+- Full-page onboarding uses a persistent 280px progress rail at desktop widths
+  with three stages: Choose account, Add details, and Secure wallet. It starts
+  directly at account choice; compact widths collapse the rail into the shared
+  horizontal progress treatment while preserving the same step model.
 
 ## Components and states
 

@@ -30,6 +30,7 @@ export function BankrSetupStep({
   onWalletAddressChange,
   onDisplayNameChange,
   onBack,
+  onProgressStepClick,
   onContinue,
 }: {
   apiKey: string;
@@ -43,6 +44,7 @@ export function BankrSetupStep({
   onWalletAddressChange: (value: string) => void;
   onDisplayNameChange: (value: string) => void;
   onBack: () => void;
+  onProgressStepClick: (step: number) => void;
   onContinue: () => void;
 }) {
   const submitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -51,11 +53,13 @@ export function BankrSetupStep({
 
   return (
     <OnboardingCanvas
+      currentStep={1}
+      onStepClick={onProgressStepClick}
       header={<OnboardingHeader onBack={onBack} step={1} />}
       footer={
         <OnboardingFooter>
           <Button
-            variant="primary"
+            variant="brand"
             size="lg"
             w="full"
             onClick={onContinue}
@@ -104,7 +108,6 @@ export function BankrSetupStep({
                   variant="ghost"
                   onClick={onToggleApiKey}
                   color="fg.secondary"
-                  tabIndex={-1}
                 />
               </InputRightElement>
             </InputGroup>

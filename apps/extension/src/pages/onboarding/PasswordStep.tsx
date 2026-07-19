@@ -11,7 +11,7 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { LockIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { ViewIcon, ViewOffIcon, WarningIcon } from "@chakra-ui/icons";
 import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
 import {
   MAX_PASSWORD_LENGTH,
@@ -30,6 +30,7 @@ export function PasswordStep({
   onConfirmPasswordChange,
   onTogglePassword,
   onBack,
+  onProgressStepClick,
   onContinue,
 }: {
   password: string;
@@ -41,6 +42,7 @@ export function PasswordStep({
   onConfirmPasswordChange: (value: string) => void;
   onTogglePassword: () => void;
   onBack: () => void;
+  onProgressStepClick: (step: number) => void;
   onContinue: () => void;
 }) {
   const submitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -49,11 +51,13 @@ export function PasswordStep({
 
   return (
     <OnboardingCanvas
+      currentStep={2}
+      onStepClick={onProgressStepClick}
       header={<OnboardingHeader onBack={onBack} step={2} />}
       footer={
         <OnboardingFooter>
           <Button
-            variant="primary"
+            variant="brand"
             size="lg"
             w="full"
             onClick={onContinue}
@@ -94,11 +98,11 @@ export function PasswordStep({
                 <IconButton
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                  tabIndex={-1}
                   size="sm"
                   variant="ghost"
                   onClick={onTogglePassword}
                   color="fg.secondary"
-                  tabIndex={-1}
                 />
               </InputRightElement>
             </InputGroup>
@@ -121,8 +125,8 @@ export function PasswordStep({
         </VStack>
 
         <Box p={3.5} bg="surface.raised" border="1px solid" borderColor="border.default" borderRadius="lg">
-          <Box display="flex" alignItems="flex-start" gap={3}>
-            <LockIcon color="accent.secondary" mt={0.5} flexShrink={0} />
+          <Box display="flex" alignItems="center" gap={3}>
+            <WarningIcon color="accent.highlight" flexShrink={0} />
             <VStack align="stretch" spacing={1}>
               <Text fontSize="sm" fontWeight="600">WalletChan cannot recover this password</Text>
               <Text color="fg.secondary" fontSize="xs" lineHeight="1.5">

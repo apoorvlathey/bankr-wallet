@@ -15,6 +15,7 @@ const FRAME_MODES: readonly FrameMode[] = [
   "popup",
   "window",
   "sidepanel",
+  "fullscreen",
 ];
 const WALLET_TYPES: readonly PreviewWalletType[] = [
   "bankr",
@@ -57,9 +58,12 @@ export function parsePreviewState(input: string | URL): ParsedPreviewState {
   }
 
   const requestedFrame = url.searchParams.get("frame");
+  const defaultFrame = route === "onboarding"
+    ? "fullscreen"
+    : DEFAULT_PREVIEW_STATE.frame;
   const frame = FRAME_MODES.includes(requestedFrame as FrameMode)
     ? (requestedFrame as FrameMode)
-    : DEFAULT_PREVIEW_STATE.frame;
+    : defaultFrame;
   if (requestedFrame && !FRAME_MODES.includes(requestedFrame as FrameMode)) {
     warnings.push(`Unknown frame: ${requestedFrame}`);
   }
