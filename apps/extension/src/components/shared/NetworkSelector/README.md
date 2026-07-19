@@ -6,8 +6,8 @@
 - `model.ts` owns deterministic funded-first ordering. Funded networks sort by
   USD value, followed by Ethereum and then all remaining unfunded networks
   alphabetically.
-- `index.ts` is the stable cross-feature export used by Swap, Send, and the
-  homepage portfolio filter.
+- `index.ts` is the stable cross-feature export used by Swap, Send, the
+  homepage portfolio filter, and the dapp dock's chain drawer.
 
 This shared component performs no storage, RPC, signing, or transaction work.
 Feature adapters remain responsible for supplying balances, native symbols,
