@@ -4,6 +4,11 @@ import { clearAllNonces } from "../../forceInclusion/nonceManager";
 import { checkPendingTxReceipt as checkPendingTxReceiptFn } from "../../forceInclusion/receiptPoller";
 import { queueAssetChangesBackfill } from "../../receiptEnrichment";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
+import {
+  getBatchFeePaymentOptions,
+  getTransactionFeePaymentOptions,
+} from "../../feePayment/capabilities";
+import { prepareFeePaymentQuote } from "../../feePayment/quotes";
 import { handleCheckPremiumStatus } from "../../sponsoredTransfers/premiumStatus";
 import {
   handleAcknowledgeSponsoredTransfer,
@@ -49,6 +54,9 @@ export function composeExecutionRoutes(
       pendingResolutionConflict: pending.pendingResolutionConflict,
       writeResultToStorage,
       readLocalStorage: (key) => chrome.storage.local.get(key),
+      getFeePaymentOptions: getTransactionFeePaymentOptions,
+      getBatchFeePaymentOptions,
+      prepareFeePaymentQuote,
     });
 
   const runInternalIrreversibleOperation =

@@ -1923,6 +1923,143 @@ GasEstimateDisplay → onGasOverrides(overrides) → TransactionConfirmation sta
 
 **Shared utilities (`lib/gasFormatUtils.ts`):** `formatEth()`, `formatGwei()`, `formatNumber()` — extracted from `TxDetailModal.tsx` for reuse.
 
+### Fee-token gas payment (Pimlico ERC-4337 v0.7)
+
+`src/chrome/feePayment/` is the isolated ERC-4337/Pimlico domain for paying a
+transaction fee in an address-pinned Pimlico token while retaining the current native-gas path.
+The complete architecture and rollout gates are in
+[`_docs/GAS_ABSTRACTION.md`](./GAS_ABSTRACTION.md).
+
+The implemented domain contains:
+
+- `constants.ts`: WalletChan's official MetaMask DeleGator and its immutable
+  EntryPoint v0.7 address;
+- `tokens.ts`: address-pinned native/ERC-20 capability catalog. USDC covers
+  Ethereum, Base, Polygon, Arbitrum, Optimism, Monad, and their enabled
+  Sepolia/Amoy testnets. The same catalog includes provider-verified USDT,
+  USDT0, USDm, USDC.e, WETH, stETH, wstETH, and WMON chain pairs;
+- `pimlicoTypes.ts`: local v0.7 PackedUserOperation, EIP-7702 authorization,
+  quote, paymaster, gas-estimate, and receipt shapes;
+- `pimlicoClient.ts`: bounded JSON-RPC transport for token quotes, paymaster
+  stub/final data, gas-price tiers, UserOperation estimation/submission, and
+  receipts;
+- `userOperation.ts`: byte-compatible MetaMask Smart Accounts Kit single/batch
+  DeleGator calldata, v0.7 packing, the official recoverable estimation stub,
+  and `EIP7702StatelessDeleGator` EIP-712 signing;
+- `authorization.ts`: converts WalletChan's existing local EIP-7702 signature
+  into Pimlico RPC shape and enforces the third-party-sender rule: the tuple
+  uses the EOA's current nonce, not the direct type-4 path's `txNonce + 1`;
+- `paymaster.ts`: Pimlico singleton-paymaster maximum-cost arithmetic and exact
+  selected-token approval construction;
+- `prepareUserOperation.ts`: quote -> unsigned dummy-approval simulation ->
+  allowance-aware bounded approval -> stub paymaster data -> final gas estimate
+  -> signed paymaster data. The signed paymaster response is always applied
+  last; no UserOperation field is estimated or mutated afterward. Optional gas
+  limits omitted by the final paymaster response preserve the last successful
+  estimate instead of being reset to zero.
+- `chainState.ts`: configured-RPC reads for the official onchain delegate,
+  EntryPoint nonce, EOA authorization nonce, token balance, and paymaster
+  allowance;
+- `quotes.ts`: 45-second in-memory quotes pinned to request family/id, exact
+  calls, account, chain, EntryPoint nonce, and delegation state. Fresh accounts
+  use a dummy `eip7702Auth` plus an exact sender-code state override during
+  estimation, so the official delegate executes for gas/paymaster simulation
+  without creating or exposing a real authorization signature before the final
+  Confirm action. The proxy permits only the operation sender and the official
+  `0xef0100 || delegate` designator in that override, and never permits an
+  override on submission;
+- `signing.ts`: local PK/seed EIP-712 signing or Bankr `/wallet/sign` signing,
+  with recovered-signer verification inherited from `bankr/signing.ts`;
+- `execution.ts` and `batchExecution.ts`: consume a quote once, recheck account,
+  nonce, delegation, balance, allowance, and pending-request authorization,
+  then sign and submit the exact final UserOperation;
+- `submission.ts`: computes the exact EntryPoint v0.7 UserOperation hash,
+  persists that hash and public routing fields immediately before broadcast,
+  removes it after a definite rejection, and retains it when the submit
+  response is outcome-unknown;
+- `receiptValidation.ts`: independently fetches the chain receipt and requires
+  a matching EntryPoint `UserOperationEvent` for the exact hash and sender
+  before Activity or ERC-5792 status becomes terminal;
+- `pendingOperations.ts` and `recovery.ts`: serialize bounded recovery-record
+  mutations and reconcile deterministic hashes after MV3 restarts without
+  persisting calldata, authorization tuples, or UserOperation signatures;
+- `capabilities.ts`: native/token eligibility for pinned single and batch
+  requests, including precise fresh-account, different-delegate, Bankr, RPC,
+  deployment, and unsupported-chain outcomes.
+
+The client accepts only an HTTPS WalletChan proxy URL (localhost is allowed for
+development), uses the shared bounded HTTP reader, omits ambient credentials
+and referrers, pins JSON-RPC IDs, validates all returned hex/address fields,
+rejects unrequested token quotes, and rejects a paymaster address that changes
+after quote selection. A Pimlico API key must never be compiled into the
+extension.
+
+`FeePaymentSelector.tsx` is shared by normal and ERC-5792 confirmation. It uses
+the standard bottom action sheet, keeps native payment as the default, shows
+amount, stablecoin fiat equivalence, live balance, and insufficiency for native
+and every catalog token, identifies assets with their token logos where available, discloses a one-time
+official smart-account upgrade, and disables Confirm until a current
+request-pinned quote exists. The parent confirmation owns the completed quote;
+the selector derives its displayed maximum and balance from that same object
+instead of keeping a second copy. Native and force-inclusion paths remain
+unchanged; there is no silent fallback from a failed token operation to native
+payment.
+
+The options request reads every catalog-token balance independently of Pimlico quote
+preparation, so the action sheet shows each before selection. Once a token is
+selected, the compact decision row is reserved for the bounded maximum fee;
+the balance is not repeated there. The shared estimating loader is centered
+across that row while preparation is pending.
+
+When simulation shows that the requested transaction would spend too much of the selected token
+for the paymaster to collect its fee (`AA50 postOp reverted 0x7939f424`), the
+confirmation replaces the provider code with recovery guidance: reduce the
+transaction amount or choose another fee token. Other provider errors remain
+unchanged for accurate diagnosis.
+
+Fee-option discovery has a 10-second renderer deadline and quote preparation
+has a 30-second renderer deadline. A missing response invalidates that request,
+stops the loading state, and presents an explicit Retry action. Quote errors do
+not automatically retry. A per-request attempt guard prevents the renderer
+from interpreting the callback's completion render as a new idle request, and
+selector rerenders never clear a completed parent-owned quote. A valid quote
+remains usable until its actual expiry; expiry disables Confirm and presents
+explicit Retry without starting another provider request. While preparation is
+pending, the row uses the shared three-shape/dot loader with “Estimating Fees”.
+Switching back to native also cancels the renderer's pending quote state.
+Provider calls remain independently bounded in the background transport.
+
+Private-key and seed-phrase accounts can attach the one-time official
+authorization in the same submitted UserOperation. Bankr accounts use the
+remote typed-data signer only when the official delegate is already active;
+fresh Bankr accounts receive a precise setup requirement because Bankr does
+not expose the special EIP-7702 authorization signer. View-only impersonator
+accounts cannot quote or confirm. Contract deployments, cross-dapp custom
+batches, swaps, bridges, Max calculations, and force inclusion remain outside
+this first execution gate.
+
+The dummy approval uses `uint256.max` only in an unsigned estimation envelope,
+matching Pimlico's maintained `permissionless.js` helper. It is always replaced
+before typed-data signing: the submitted calls contain either no approval when
+the current allowance is sufficient, or `approve(quotedPaymaster,
+maximumTokenCost)` for the computed bound. If final paymaster data changes the
+bound, preparation rebuilds once and fails closed if the cost does not
+stabilize. Every rebuild repeats stub -> estimate -> final paymaster data, so
+Pimlico never signs an envelope whose gas fields are subsequently replaced.
+Quotes above the selected catalog token's absolute base-unit ceiling are
+rejected before signing (100 units for stablecoins and one unit for the
+currently enabled non-stable assets).
+
+The website proxy at `/api/gas/pimlico/[chainId]` keeps `PIMLICO_API_KEY`
+server-side and is policy-constrained rather than a general authenticated RPC.
+Its `tokens.ts` mirrors the extension's exact chain/token address catalog. It
+pins every allowed method to WalletChan's EntryPoint and that catalog, bounds
+bodies/time/rate, and authenticates submission by recovering the
+exact MetaMask-compatible sender EIP-712 signature before forwarding
+`eth_sendUserOperation`. Attached 7702 authorizations must cryptographically
+recover to that same sender and use the official delegate and exact route
+chain. `PIMLICO_PROXY_DISABLED=true` is the operational kill switch.
+
 ## Signature Request Handling
 
 Signature support differs by account type:
@@ -2197,6 +2334,13 @@ After a tx confirms successfully, the receipt path fires-and-forgets `extractAnd
 3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row. For chains marked `supportsFlashblocks`, receipt-derived history first waits for one following block and verifies that a refreshed receipt's `blockHash` matches the canonical block before using its fee fields. This prevents a preconfirmed L1-fee estimate from surviving as a false native transfer. Opening Transaction details queues one reconciliation per mounted Flashblocks entry, including already-enriched history, so older gas/native snapshots are repaired from the same settled receipt; ordinary-chain snapshots remain immutable.
 4. Attempts to seed `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolio/tokenCatalog.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. This happens before the tx-history broadcast when storage succeeds, so Holdings can merge the stub immediately. A seed failure is logged but must not block writing `assetChanges`. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; CoinGecko/GeckoTerminal backfills price while `tokenMetadata.ts` backfills any missing symbol/logo.
 5. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
+
+For native-flow reconciliation, direct transactions add the sender's outer
+transaction gas back to the block-to-block balance delta. USDC-funded ERC-4337
+history rows do not: the Pimlico bundler paid that outer gas, so adding its
+receipt gas to the wallet's unchanged ETH balance would fabricate an inbound
+ETH transfer. Initial extraction, receipt retries, and Activity backfill all
+derive this distinction from `feePaymentToken`.
 
 **Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
 

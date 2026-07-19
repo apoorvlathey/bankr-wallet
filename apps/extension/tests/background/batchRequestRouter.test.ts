@@ -41,7 +41,7 @@ function createDependencies(
   };
 }
 
-const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+const flush = () => new Promise<void>((resolve) => globalThis.setImmediate(resolve));
 
 function dispatch(
   dependencies: BackgroundBatchRequestDependencies,
@@ -249,7 +249,9 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     bundleId: "bankr-bundle",
     password: "password",
     functionNames: ["transfer"],
-    forceInclusion: true,
+    forceInclusion: false,
+    feePaymentToken: "token",
+    feePaymentQuoteId: "bankr-quote",
   });
   await dispatch(dependencies, {
     type: "confirmBatchTransactionAsyncPK",
@@ -259,6 +261,8 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     functionNames: ["approve"],
     gasEstimates: [1],
     forceInclusion: false,
+    feePaymentToken: "token",
+    feePaymentQuoteId: "local-quote",
   });
   await dispatch(dependencies, {
     type: "splitBatchIntoIndividualTxs",
@@ -284,7 +288,7 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     ["transaction", "tx-1", "edit"],
   ]);
   assert.deepEqual(handlers, [
-    ["bankr", "bankr-bundle", "password", ["transfer"], true],
+    ["bankr", "bankr-bundle", "password", ["transfer"], false, "token", "bankr-quote"],
     [
       "local",
       "local-bundle",
@@ -293,9 +297,25 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
       ["approve"],
       [1],
       false,
+      "token",
+      "local-quote",
     ],
     ["split", "split-bundle", 9],
     ["edit", "edit-bundle", 2, "0xdata"],
     ["tx-edit", "tx-1", "0xnew"],
   ]);
+});
+
+test("rejects a forced batch that attempts token fee payment", async () => {
+  const result = await dispatch(createDependencies(), {
+    type: "confirmBatchTransactionAsyncPK",
+    bundleId: "forced-bundle",
+    forceInclusion: true,
+    feePaymentToken: "token",
+    feePaymentQuoteId: "quote",
+  });
+  assert.deepEqual(result.response, {
+    success: false,
+    error: "Force inclusion requires native gas payment",
+  });
 });

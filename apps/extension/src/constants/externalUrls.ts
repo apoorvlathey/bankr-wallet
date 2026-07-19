@@ -37,6 +37,7 @@ export const WALLETCHAN_SPONSORED_TRANSFER_API = `${WALLETCHAN_API_BASE}/sponsor
 export const WALLETCHAN_PREMIUM_STATUS_API = `${WALLETCHAN_API_BASE}/premium-status`;
 export const WALLETCHAN_VAULT_DATA_API = `${WALLETCHAN_API_BASE}/vault-data`;
 export const WALLETCHAN_CLEAR_SIGNING_API = `${WALLETCHAN_API_BASE}/clearsigning/descriptor`;
+export const WALLETCHAN_PIMLICO_PROXY_BASE = `${WALLETCHAN_API_BASE}/gas/pimlico`;
 
 // ---------------------------------------------------------------------------
 // WalletChan Assets & Pages

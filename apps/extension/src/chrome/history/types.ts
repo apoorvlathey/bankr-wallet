@@ -132,6 +132,10 @@ export interface CompletedTransaction {
   createdAt: number;
   completedAt?: number;
   txHash?: string;
+  /** ERC-4337 operation hash while a token-funded transaction is pending. */
+  userOperationHash?: string;
+  /** Token used to settle gas through an ERC-4337 paymaster. */
+  feePaymentToken?: string;
   /** Signed bytes crossed the RPC boundary without an authoritative reply. */
   broadcastUncertain?: boolean;
   error?: string;

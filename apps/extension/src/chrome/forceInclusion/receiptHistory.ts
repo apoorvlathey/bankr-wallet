@@ -1,6 +1,7 @@
 import { getRpcUrl } from "../transactions/rpcConfig";
 import { getTxById, updateTxInHistory } from "../txHistoryStorage";
 import { fetchSettledReceiptAtRpcUrl } from "../history/receiptSettlement";
+import { isWalletOuterGasPayer } from "../history/nativeDelta";
 import { showReceiptNotification } from "./receiptNotification";
 import { buildReceiptGasData } from "./receiptRpc";
 import {
@@ -100,6 +101,7 @@ function startAssetChangeExtraction(
         userAddress: sender,
         receipt,
         rpcUrl,
+        payerForGas: isWalletOuterGasPayer(tx?.feePaymentToken),
       });
     } catch (error) {
       console.warn("[receipt] asset-changes extraction failed", error);

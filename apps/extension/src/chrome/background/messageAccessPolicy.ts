@@ -41,6 +41,8 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "confirmTransaction",
   "confirmTransactionAsync",
   "confirmTransactionAsyncPK",
+  "getFeePaymentOptions",
+  "prepareFeePaymentQuote",
   "confirmBatchTransactionAsync",
   "confirmBatchTransactionAsyncPK",
   "confirmSignatureRequest",

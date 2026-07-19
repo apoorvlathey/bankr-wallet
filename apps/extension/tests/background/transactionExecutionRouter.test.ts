@@ -23,6 +23,9 @@ function dependencies(
     }),
     writeResultToStorage: async () => {},
     readLocalStorage: async () => ({}),
+    getFeePaymentOptions: async () => ({ success: true, options: [] }),
+    getBatchFeePaymentOptions: async () => ({ success: true, options: [] }),
+    prepareFeePaymentQuote: async () => ({ success: true, quoteId: "quote" }),
     ...overrides,
   };
 }
@@ -85,7 +88,9 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
     txId: "bankr-2",
     password: "agent-or-master",
     functionName: "swap",
-    forceInclusion: true,
+    forceInclusion: false,
+    feePaymentToken: "token",
+    feePaymentQuoteId: "bankr-quote",
   });
   const local = await dispatch(
     deps,
@@ -96,6 +101,8 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
       functionName: "transfer",
       gasOverrides: { gas: "0x5208" },
       forceInclusion: false,
+      feePaymentToken: "token",
+      feePaymentQuoteId: "local-quote",
     },
     { tab: { id: 17 } } as chrome.runtime.MessageSender,
   );
@@ -119,7 +126,7 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
   assert.ok(claims.every((claim) => claim.conflictResult === deps.pendingResolutionConflict));
   assert.deepEqual(calls, [
     ["bankr-immediate", "bankr-1", "master"],
-    ["bankr-background", "bankr-2", "agent-or-master", "swap", true],
+    ["bankr-background", "bankr-2", "agent-or-master", "swap", false, "token", "bankr-quote"],
     [
       "local",
       "local-1",
@@ -128,8 +135,62 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
       "transfer",
       { gas: "0x5208" },
       false,
+      "token",
+      "local-quote",
     ],
   ]);
+});
+
+test("private-key and seed-phrase confirmations both preserve token selection", async () => {
+  const calls: unknown[][] = [];
+  const deps = dependencies({
+    handleConfirmTransactionAsyncPK: async (...args) => {
+      calls.push(args);
+      return { success: true };
+    },
+  });
+  await dispatch(deps, {
+    type: "confirmTransactionAsyncPK",
+    txId: "private-key-request",
+    feePaymentToken: "token",
+    feePaymentQuoteId: "private-quote",
+  });
+  await dispatch(deps, {
+    type: "confirmTransactionAsyncPK",
+    txId: "seed-phrase-request",
+    feePaymentToken: "token",
+    feePaymentQuoteId: "seed-quote",
+  });
+  assert.deepEqual(calls.map((call) => call.slice(-2)), [
+    ["token", "private-quote"],
+    ["token", "seed-quote"],
+  ]);
+});
+
+test("rejects an unknown gas-payment token before execution", async () => {
+  const result = await dispatch(dependencies(), {
+    type: "confirmTransactionAsync",
+    txId: "bankr-request",
+    feePaymentToken: "arbitrary-token",
+  });
+  assert.deepEqual(result.response, {
+    success: false,
+    error: "Invalid gas-payment token",
+  });
+});
+
+test("rejects token payment when force inclusion is requested", async () => {
+  const result = await dispatch(dependencies(), {
+    type: "confirmTransactionAsyncPK",
+    txId: "forced-request",
+    forceInclusion: true,
+    feePaymentToken: "token",
+    feePaymentQuoteId: "quote",
+  });
+  assert.deepEqual(result.response, {
+    success: false,
+    error: "Force inclusion requires native gas payment",
+  });
 });
 
 test("immediate confirmation never overwrites an existing durable terminal result", async () => {

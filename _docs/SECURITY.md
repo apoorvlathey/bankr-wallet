@@ -579,6 +579,75 @@ general-purpose way to overwrite it.
 
 Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any terminal receipt. Do not infer delegation state only from `receipt.status`: EIP-7702 authorization processing occurs before normal execution, so execution can revert while the EOA delegation still changed. If the `eth_getCode` read itself fails, leave the mirror unchanged; an RPC failure is not evidence that the EOA is undelegated.
 
+### ERC-20 fee payment (`feePayment/`)
+
+Token fee payment is an extension-only confirmation capability, never a new
+provider signing method. `getFeePaymentOptions` and `prepareFeePaymentQuote`
+are wallet-UI messages, and the existing transaction/batch confirmation claim
+remains the sole terminal decision. Quotes live only in service-worker memory
+for 45 seconds and bind request family/id, exact calls, account identity,
+chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum.
+They are consumed once before pending request removal; a missing/restarted
+worker, edited call, account switch, nonce race, allowance change, or delegate
+change leaves the review retryable and requires a fresh quote.
+
+The confirmation renderer bounds option discovery to 10 seconds and quote
+preparation to 30 seconds. Timeout invalidates late callbacks and enters an
+explicit-retry error state; it never creates an automatic retry loop or silently
+falls back to native payment. Quote expiry invalidates Confirm and requires an
+explicit Retry instead of starting a background refresh. Switching to native
+invalidates the pending renderer request. Background proxy calls retain their
+own transport deadlines. The confirmation parent is the sole owner of a
+completed quote. The selector never clears that quote on mount/rerender, and a
+per-request attempt guard stays set before loading begins, so callback ordering
+cannot expose a false idle state that re-enters `prepareFeePaymentQuote`.
+
+Fresh local accounts use Pimlico's documented dummy 7702 authorization plus
+an exact sender-only code state override during estimation. The proxy accepts
+that override only for `eth_estimateUserOperationGas`, only when `eip7702Auth`
+is present, and only when its sole field is WalletChan's immutable
+`0xef0100 || officialDelegate` designator; submission never accepts an override.
+The real authorization is created after final Confirm,
+targets only `EIP_7702_DEFAULT_DELEGATE`, uses the current EOA nonce, and is
+submitted only inside the exact signed UserOperation. A different/unknown
+onchain delegate fails closed. Bankr may sign the exact UserOperation through
+its recovered-signer-verified typed-data endpoint only when the official
+delegate is already active; it cannot perform first-use authorization.
+
+The submitted approval is absent when current allowance covers the maximum or
+is exactly `approve(quotedPaymaster, maximumTokenCost)` inside the atomic
+operation. `uint256.max` exists only in an unsigned estimation envelope. Final
+envelope construction uses paymaster stub data for the last gas estimation,
+then requests and applies signed paymaster data as the terminal mutation before
+the account signature. If the final response omits its optional paymaster gas
+limits, the previously estimated limits are retained; they must never be
+zeroed merely because the optional fields are absent. Estimating or replacing gas fields after that point
+would invalidate Pimlico's paymaster authorization and is forbidden. Final
+pre-sign checks re-read account, request authority, EntryPoint/EOA nonce,
+delegate, allowance, and selected-token balance. Each catalog token has an
+absolute base-unit safety ceiling (100 units for stablecoins; one unit for the
+currently enabled non-stable assets), and
+force inclusion cannot combine with token payment. There is no native fallback
+after token selection.
+
+The public website proxy owns the Pimlico key. It is policy-constrained; read
+and simulation calls are rate-limited public operations, while submission is
+authenticated by the recovered sender signature. It method/chain/token/EntryPoint
+allowlists every envelope, bounds request/response/time/rate, pins every exact
+chain/token address pair from the reviewed catalog, and cryptographically verifies the exact MetaMask-compatible sender
+signature before forwarding `eth_sendUserOperation`. Any attached 7702 tuple
+must target the official delegate on the route chain with fixed-width `r/s`
+and valid parity, and its signer must recover to the UserOperation sender.
+Immediately before broadcast, WalletChan persists only the locally computed
+EntryPoint v0.7 operation hash and public recovery routing. A definite provider
+rejection removes the record; a transport/5xx/malformed or hash-mismatched
+response remains outcome-unknown and is never blindly retried. Finality
+requires an independently fetched chain receipt containing the matching
+EntryPoint `UserOperationEvent` for the exact hash and sender; a bundler receipt
+alone cannot terminalize Activity or ERC-5792 status. Calldata, signatures,
+authorizations, quotes, paymaster data, and credentials are never written to
+`pendingUserOperations`.
+
 The `customDelegates` mirror keeps its released nested record shape. All
 read-modify-write mutations are linearized under `local:customDelegates` so
 concurrent receipt reconciliation or account cleanup cannot drop another
@@ -1068,6 +1137,7 @@ accessible resources.
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
 | `pendingBatchTxRequests`   | No               | Pending ERC-5792 queue. A newly pinned row may briefly carry non-actionable `intakeStatus: "validating"`; signing and call mutation fail closed until intake removes it, while terminal rejection may remove it safely. |
+| `pendingUserOperations`    | No               | Bounded ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, and timestamp. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
 | `dappPermissions`         | No               | Exact-origin grants allowing injected sites to read the current WalletChan account. Chrome-attested origin is authoritative; title/favicon are untrusted display metadata. |

@@ -17,6 +17,8 @@ interface UseTransactionActionsOptions {
   decodedFunctionName?: string;
   gasOverrides: GasOverrides | null;
   forceInclusion: boolean;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuoteId: string | null;
   onConfirmed: () => void;
   onRejected: () => void;
   onBeforeReject?: () => void;
@@ -33,6 +35,8 @@ export function useTransactionActions({
   decodedFunctionName,
   gasOverrides,
   forceInclusion,
+  feePaymentToken,
+  feePaymentQuoteId,
   onConfirmed,
   onRejected,
   onBeforeReject,
@@ -88,6 +92,8 @@ export function useTransactionActions({
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
         ...(forceInclusion ? { forceInclusion: true } : {}),
+        feePaymentToken: feePaymentToken === "native" ? "native" : "token",
+        ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
