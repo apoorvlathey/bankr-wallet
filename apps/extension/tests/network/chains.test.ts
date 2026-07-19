@@ -14,6 +14,7 @@ import {
   MAX_SAVED_RPC_URLS,
   normalizeNetworksInfo,
   normalizeRpcUrl,
+  normalizeSavedRpcEndpoints,
   normalizeSavedRpcUrls,
 } from "../../src/lib/chains";
 import { KNOWN_CHAINS } from "../../src/constants/knownChains.generated";
@@ -86,6 +87,30 @@ test("saved RPC URLs keep the active endpoint first and remain bounded", () => {
       "https://user:secret@unsafe.example",
     ]),
     [],
+  );
+});
+
+test("saved RPC endpoints retain the impersonated-transaction opt-in per URL", () => {
+  assert.deepEqual(
+    normalizeSavedRpcEndpoints("https://rpc.example", [
+      {
+        url: "https://rpc.example/",
+        name: "Development fork",
+        allowImpersonatedTransactions: true,
+      },
+      {
+        url: "https://other.example",
+        allowImpersonatedTransactions: "yes",
+      },
+    ]),
+    [
+      {
+        url: "https://rpc.example",
+        name: "Development fork",
+        allowImpersonatedTransactions: true,
+      },
+      { url: "https://other.example" },
+    ],
   );
 });
 

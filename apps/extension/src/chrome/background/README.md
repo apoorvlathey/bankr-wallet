@@ -37,7 +37,7 @@ Review order:
 15. `walletConnectSessionRouter.ts` — trusted-UI session management.
 16. `signingRequestRouter.ts` — provider intake plus trusted-UI pending
    transaction/signature reads, rejection, and cancellation.
-17. `transactionExecutionRouter.ts`, `swapExecutionRouter.ts`,
+17. `transactionExecutionRouter.ts`, `transactionExecutionRouterSupport.ts`, `swapExecutionRouter.ts`,
    `sponsoredTransferRouter.ts`, `internalOperationBarrier.ts` — first-action
    transaction confirmation and reset-barrier-protected internal
    execution/recovery transport.

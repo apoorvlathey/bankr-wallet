@@ -20,10 +20,8 @@ import { normalizeRpcUrl } from "@/lib/chains";
 import { InlineDisclosure } from "@/components/ui";
 import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
-import {
-  assertRpcEndpointAllowedForOrigin,
-  probeRpcChainId,
-} from "@/chrome/network/rpcClient";
+import { AddChainAdvancedDetails } from "./AddChainAdvancedDetails";
+import { assertRpcEndpointAllowedForOrigin, probeRpcChainId } from "@/chrome/network/rpcClient";
 
 interface AddChainProps {
   back: (options?: { added?: boolean }) => void;
@@ -66,6 +64,7 @@ function AddChain({
   const [isBtnLoading, setIsBtnLoading] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [technicalOpen, setTechnicalOpen] = useState(!defaultRpc);
+  const [allowImpersonatedTransactions, setAllowImpersonatedTransactions] = useState(false);
 
   // Validation states
   const [nameError, setNameError] = useState("");
@@ -272,6 +271,10 @@ function AddChain({
         {
           type: "addNetwork",
           chainName,
+          rpcEndpoints: [{
+            url: rpcToSave,
+            ...(allowImpersonatedTransactions ? { allowImpersonatedTransactions: true } : {}),
+          }],
           entry: { ...buildEntry(), rpcUrl: rpcToSave },
         },
         (response) =>
@@ -486,46 +489,19 @@ function AddChain({
 
           <InlineDisclosure
             label="Advanced network details"
-            description="Explorer and native currency metadata"
+            description="Developer, explorer, and currency settings"
+            autoScrollOnOpen
           >
-            <VStack spacing={4} align="stretch" pt={2}>
-              <FormControl>
-                <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                  Block explorer URL
-                </FormLabel>
-                <Input
-                  placeholder="https://explorer.example.com"
-                  value={explorer}
-                  onChange={(event) => setExplorer(event.target.value.trim())}
-                />
-                <Text mt={1} color="fg.secondary" fontSize="xs">
-                  Optional. Used for transaction and address links.
-                </Text>
-              </FormControl>
-
-              <HStack spacing={3} align="flex-start">
-                <FormControl flex={2}>
-                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                    Native token symbol
-                  </FormLabel>
-                  <Input
-                    placeholder="ETH"
-                    value={currencySymbol}
-                    onChange={(event) => setCurrencySymbol(event.target.value.trim())}
-                  />
-                </FormControl>
-                <FormControl flex={1}>
-                  <FormLabel mb={1.5} color="fg.secondary" fontSize="sm" fontWeight="500">
-                    Decimals
-                  </FormLabel>
-                  <Input
-                    type="number"
-                    value={currencyDecimals}
-                    onChange={(event) => setCurrencyDecimals(event.target.value)}
-                  />
-                </FormControl>
-              </HStack>
-            </VStack>
+            <AddChainAdvancedDetails
+              explorer={explorer}
+              currencySymbol={currencySymbol}
+              currencyDecimals={currencyDecimals}
+              allowImpersonatedTransactions={allowImpersonatedTransactions}
+              onExplorerChange={setExplorer}
+              onCurrencySymbolChange={setCurrencySymbol}
+              onCurrencyDecimalsChange={setCurrencyDecimals}
+              onAllowImpersonatedTransactionsChange={setAllowImpersonatedTransactions}
+            />
           </InlineDisclosure>
         </VStack>
 

@@ -1,6 +1,4 @@
 import { DEFAULT_NETWORKS } from "@/constants/networks";
-import type { GasEstimate } from "@/chrome/gasEstimation";
-import type { SimulationResult } from "@/chrome/txSimulation";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
@@ -13,102 +11,17 @@ import {
   type PreviewEnvironment,
 } from "./previewEnvironment";
 import { makeStorageArea, type StorageListener } from "./previewChromeStorage";
+import {
+  activePreviewAccount,
+  previewChainIdForName,
+  previewCustomTokens,
+  previewGasEstimate,
+  previewSimulationResult,
+  unknownPreviewMessage,
+  type PreviewChromeLogger,
+} from "./previewChromeSupport";
 
-export interface PreviewChromeLogger {
-  warn: (message: string, detail?: unknown) => void;
-  error: (message: string, detail?: unknown) => void;
-}
-
-const gasEstimate: GasEstimate = {
-  gasLimit: "138000",
-  maxFeePerGas: "125000000",
-  maxPriorityFeePerGas: "25000000",
-  baseFee: "100000000",
-  estimatedCostWei: "17250000000000",
-  nativePriceUsd: 3600,
-  nativeCurrencySymbol: "ETH",
-  accountBalance: "3000000000000000000",
-  insufficientBalance: false,
-  estimationFailed: false,
-  dappProvidedGas: false,
-  tiers: {
-    slow: {
-      maxFeePerGas: "115000000",
-      maxPriorityFeePerGas: "15000000",
-    },
-    standard: {
-      maxFeePerGas: "125000000",
-      maxPriorityFeePerGas: "25000000",
-    },
-    fast: {
-      maxFeePerGas: "145000000",
-      maxPriorityFeePerGas: "45000000",
-    },
-  },
-};
-
-const simulationResult: SimulationResult = {
-  txSuccess: true,
-  simulationFailed: false,
-  metadataComplete: true,
-  nativeChange: {
-    address: "native",
-    symbol: "ETH",
-    name: "Ether",
-    decimals: 18,
-    rawDelta: "-42000000000000000",
-    formattedAmount: "0.042",
-    valueUsd: 151.2,
-    direction: "out",
-  },
-  tokenChanges: [
-    {
-      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      symbol: "USDC",
-      name: "USD Coin",
-      decimals: 6,
-      rawDelta: "148620000",
-      formattedAmount: "148.62",
-      valueUsd: 148.62,
-      direction: "in",
-    },
-  ],
-};
-
-function chainIdForName(chainName: unknown): number {
-  if (typeof chainName !== "string") return 8453;
-  return DEFAULT_NETWORKS[chainName]?.chainId ?? 8453;
-}
-
-function activeAccount(environment: PreviewEnvironment) {
-  const activeAccountId = environment.storage.sync.activeAccountId;
-  return (
-    environment.accounts.find((account) => account.id === activeAccountId) ??
-    environment.activeAccount
-  );
-}
-
-function previewCustomTokens(environment: PreviewEnvironment): any[] {
-  const tokens = environment.storage.local.customTokens;
-  return Array.isArray(tokens) ? tokens : [];
-}
-
-function unknownMessage(
-  message: unknown,
-  logger: PreviewChromeLogger,
-): { success: false; error: string } {
-  const type =
-    message && typeof message === "object" && "type" in message
-      ? String((message as { type?: unknown }).type ?? "<missing>")
-      : "<missing>";
-  const error = `[PreviewChrome] Unhandled runtime message "${type}"; live extension runtime is disabled`;
-  const looksLikeRead = /^(get|is|can|fetch|resolve|estimate|simulate|retry|check|ensure|walletConnectGet|ens-probe)/.test(
-    type,
-  );
-  if (looksLikeRead) logger.error(error, message);
-  else logger.warn(error, message);
-  return { success: false, error };
-}
+export type { PreviewChromeLogger } from "./previewChromeSupport";
 
 export function responseForPreviewMessage(
   environment: PreviewEnvironment,
@@ -196,9 +109,9 @@ export function responseForPreviewMessage(
       return { success: true, accounts: environment.accounts };
     }
     case "getActiveAccount":
-      return { ...activeAccount(environment) };
+      return { ...activePreviewAccount(environment) };
     case "getTabAccount":
-      return { ...activeAccount(environment) };
+      return { ...activePreviewAccount(environment) };
     case "getPendingDappConnectionRequests":
       return [];
     case "getDappConnectionContext":
@@ -276,7 +189,7 @@ export function responseForPreviewMessage(
     case "walletConnectSwitchChain":
       return {
         success: true,
-        chainId: chainIdForName(message?.chainName),
+        chainId: previewChainIdForName(message?.chainName),
       };
     case "isWalletUnlocked":
       return environment.unlocked;
@@ -464,14 +377,14 @@ export function responseForPreviewMessage(
       return { success: true };
     case "estimateGas":
     case "estimateForceInclusionGas":
-      return gasEstimate;
+      return previewGasEstimate;
     case "estimateBatchGasSequential":
       return (message?.calls ?? []).map((_: unknown, index: number) => ({
-        ...gasEstimate,
-        gasLimit: String(Number(gasEstimate.gasLimit) + index * 24_000),
+        ...previewGasEstimate,
+        gasLimit: String(Number(previewGasEstimate.gasLimit) + index * 24_000),
         estimatedCostWei: String(
-          BigInt(Number(gasEstimate.gasLimit) + index * 24_000) *
-            BigInt(gasEstimate.maxFeePerGas),
+          BigInt(Number(previewGasEstimate.gasLimit) + index * 24_000) *
+            BigInt(previewGasEstimate.maxFeePerGas),
         ),
       }));
     case "simulateAssetChanges":
@@ -482,7 +395,7 @@ export function responseForPreviewMessage(
         (route === "cross-batch" && scenario === "error")
       ) {
         return {
-          ...simulationResult,
+          ...previewSimulationResult,
           txSuccess: true,
           simulationFailed: true,
           simulationError: "Deterministic preview simulation unavailable",
@@ -490,9 +403,9 @@ export function responseForPreviewMessage(
           tokenChanges: [],
         };
       }
-      return simulationResult;
+      return previewSimulationResult;
     case "retryTokenMetadata":
-      return { tokenChanges: simulationResult.tokenChanges };
+      return { tokenChanges: previewSimulationResult.tokenChanges };
     case "fetchTokenInfo":
       return {
         success: true,
@@ -797,7 +710,7 @@ export function responseForPreviewMessage(
         probe: { ok: false, kind: { kind: "unreachable" } },
       };
     default:
-      return unknownMessage(message, logger);
+      return unknownPreviewMessage(message, logger);
   }
 }
 
@@ -965,7 +878,7 @@ export function createPreviewChrome(
         message: { type?: string },
         callback?: (response: unknown) => void,
       ) => {
-        const current = activeAccount(environment);
+        const current = activePreviewAccount(environment);
         const response =
           message?.type === "getInfo"
             ? {
@@ -975,7 +888,7 @@ export function createPreviewChrome(
               }
             : message?.type === "setAccount" || message?.type === "setChainId"
               ? { success: true }
-              : unknownMessage(message, logger);
+              : unknownPreviewMessage(message, logger);
         if (callback) schedule(() => callback(response));
         return Promise.resolve(response);
       },

@@ -3,6 +3,7 @@ import {
   Flex,
   Text,
   chakra,
+  usePrefersReducedMotion,
   type HTMLChakraProps,
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
@@ -24,6 +25,8 @@ export interface InlineDisclosureProps
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  autoScrollOnOpen?: boolean;
+  autoScrollBlock?: ScrollLogicalPosition;
 }
 
 /** Native details/summary disclosure that keeps its child tree mounted. */
@@ -38,6 +41,8 @@ export const InlineDisclosure = forwardRef<
     defaultOpen = false,
     open,
     onOpenChange,
+    autoScrollOnOpen = false,
+    autoScrollBlock = "start",
     children,
     ...rest
   },
@@ -46,11 +51,22 @@ export const InlineDisclosure = forwardRef<
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const isControlled = open !== undefined;
   const expanded = open ?? uncontrolledOpen;
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const handleToggle = (event: SyntheticEvent<HTMLDetailsElement>) => {
     const nextOpen = event.currentTarget.open;
+    const disclosure = event.currentTarget;
     if (!isControlled) setUncontrolledOpen(nextOpen);
     onOpenChange?.(nextOpen);
+    if (nextOpen && autoScrollOnOpen) {
+      requestAnimationFrame(() => {
+        if (!disclosure.open) return;
+        disclosure.scrollIntoView({
+          behavior: prefersReducedMotion ? "auto" : "smooth",
+          block: autoScrollBlock,
+        });
+      });
+    }
   };
 
   return (

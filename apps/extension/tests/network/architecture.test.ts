@@ -41,6 +41,7 @@ test("network implementations remain audit-sized with one-way dependencies", asy
     "network/customNetworkUrlValidation.ts": 60,
     "network/networkRepository.ts": 70,
     "network/rpcHistoryRepository.ts": 110,
+    "network/impersonatedRpcPolicy.ts": 30,
     "network/networkPolicy.ts": 80,
     "network/networkRpcMutation.ts": 60,
     "network/networkMutations.ts": 340,

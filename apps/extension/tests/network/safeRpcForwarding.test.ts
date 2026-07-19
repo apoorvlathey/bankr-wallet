@@ -8,6 +8,7 @@ import {
 import { forwardSafeRpcRequest as forwardWalletConnectRpc } from "../../src/chrome/walletConnect/rpcRequests";
 
 const RPC_URL = "https://rpc.example";
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
 
 function rpcResponse(result: unknown): Response {
   return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), {
@@ -25,6 +26,7 @@ test("the provider RPC proxy enforces method, target, size, and concurrency limi
   let networksInfo: Record<string, any> = {
     Ethereum: { chainId: 1, rpcUrl: RPC_URL },
   };
+  const local: Record<string, unknown> = { networkRpcUrls: {} };
 
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
@@ -35,6 +37,11 @@ test("the provider RPC proxy enforces method, target, size, and concurrency limi
             return {
               networksInfo,
             };
+          },
+        },
+        local: {
+          async get() {
+            return local;
           },
         },
       },
@@ -67,16 +74,66 @@ test("the provider RPC proxy enforces method, target, size, and concurrency limi
 
       const before = fetchCalls;
       networksInfo = {
-        Ethereum: { chainId: 1, rpcUrl: "http://127.0.0.1:8545" },
+        Ethereum: { chainId: 1, rpcUrl: LOCAL_RPC_URL },
       };
       await assert.rejects(
         forwardWalletConnectRpc(1, "eth_blockNumber", []),
         /Private-network RPC access/i,
       );
       assert.equal(fetchCalls, before);
+      local.networkRpcUrls = {
+        "1": [
+          {
+            url: LOCAL_RPC_URL,
+            allowImpersonatedTransactions: true,
+          },
+        ],
+      };
+      assert.equal(
+        await forwardWalletConnectRpc(1, "eth_blockNumber", []),
+        "0x1",
+      );
+      local.networkRpcUrls = {};
       networksInfo = {
         Ethereum: { chainId: 1, rpcUrl: RPC_URL },
       };
+    });
+
+    await t.test("the selected developer RPC opt-in admits dapp preflight reads", async () => {
+      const before = fetchCalls;
+      networksInfo = {
+        Local: { chainId: 31337, rpcUrl: LOCAL_RPC_URL },
+      };
+      await assert.rejects(
+        handleSafeRpcRequest(
+          LOCAL_RPC_URL,
+          "eth_estimateGas",
+          [{ from: `0x${"1".repeat(40)}` }],
+          "https://dapp.example",
+        ),
+        /Private-network RPC access/i,
+      );
+      assert.equal(fetchCalls, before);
+
+      local.networkRpcUrls = {
+        "31337": [
+          {
+            url: LOCAL_RPC_URL,
+            allowImpersonatedTransactions: true,
+          },
+        ],
+      };
+      assert.equal(
+        await handleSafeRpcRequest(
+          LOCAL_RPC_URL,
+          "eth_estimateGas",
+          [{ from: `0x${"1".repeat(40)}` }],
+          "https://dapp.example",
+        ),
+        "0x1",
+      );
+      local.networkRpcUrls = {};
+      networksInfo = { Ethereum: { chainId: 1, rpcUrl: RPC_URL } };
     });
 
     await t.test("blocks IPv4-mapped IPv6 private RPC literals", async () => {

@@ -116,12 +116,22 @@
   require a separate reveal or copy action. Generated recovery phrases begin
   concealed so revealing the secret remains deliberate. Backup action regions
   use a compact 32px acknowledgment row and an 8px relationship gap.
+- Checkboxes that enable a durable capability or developer-only RPC behavior
+  use the shared `commitment` variant: WalletChan amber for the checked state,
+  never the ordinary blue interaction color. Their complete explanatory row
+  is the native checkbox label and hit target; do not make users aim only at
+  the checkbox glyph.
 - Generated recovery-phrase setup follows the trust sequence: show and save the
   secret first, then collect optional group and first-account labels. Helper
   copy beneath generated and imported account labels explains their
   relationship to derivation #0.
 - Lists and financial data: light row separators, aligned columns, tabular numerals, no heavy cell grid.
 - Overlays: popovers for small contextual choices; action sheets for 2 to 6 choices; full screens for search, selection, configuration, and transaction detail; dialogs only for blocking decisions.
+- Progressive disclosures that reveal content below the current viewport use
+  `InlineDisclosure autoScrollOnOpen`. On expansion, the disclosure scrolls to
+  the top of its scroll owner after layout settles, uses smooth movement by
+  default, respects reduced-motion preferences, and never scrolls on collapse.
+  Nested disclosures follow the same rule independently.
 - Empty/loading/error: actionable empty copy, geometry-matching skeletons, recoverable errors with a next step.
 - Focus ring: blue 3px outer ring with sufficient contrast and no layout shift.
 - Architecture: renderer implementations are organized by feature domain with

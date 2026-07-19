@@ -46,6 +46,7 @@ export const NETWORK_RPC_URLS_STORAGE_KEY = "networkRpcUrls";
 export interface SavedRpcEndpoint {
   url: string;
   name?: string;
+  allowImpersonatedTransactions?: true;
 }
 const CHAIN_BY_ID = new Map<number, ChainEntry>(
   CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]),
@@ -105,13 +106,27 @@ export function normalizeSavedRpcEndpoints(
     if (!url) continue;
 
     const name = normalizeRpcEndpointName(endpoint.name) ?? undefined;
+    const allowImpersonatedTransactions =
+      (endpoint as { allowImpersonatedTransactions?: unknown })
+        .allowImpersonatedTransactions === true
+        ? true
+        : undefined;
     const existing = normalized.find((saved) => saved.url === url);
     if (existing) {
       if (!existing.name && name) existing.name = name;
+      if (allowImpersonatedTransactions) {
+        existing.allowImpersonatedTransactions = true;
+      }
       continue;
     }
 
-    normalized.push({ url, ...(name ? { name } : {}) });
+    normalized.push({
+      url,
+      ...(name ? { name } : {}),
+      ...(allowImpersonatedTransactions
+        ? { allowImpersonatedTransactions }
+        : {}),
+    });
     if (normalized.length === MAX_SAVED_RPC_URLS) break;
   }
 

@@ -88,6 +88,8 @@ Files:
   portfolio, RPC, and route environment.
 - `apps/extension/src/preview/previewChrome.ts` — fail-closed preview-only
   Chrome API shim.
+- `apps/extension/src/preview/previewChromeSupport.ts` — deterministic shim
+  response fixtures and shared fail-closed helpers.
 - `apps/extension/src/preview/previewAssets.ts` — semantic manifest for local,
   deterministic preview assets.
 

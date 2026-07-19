@@ -116,7 +116,6 @@ export async function confirmLocalBatchWithExecutors(
   const forceInclusionProcessor = forceInclusion
     ? (await import("../forceInclusion/batch")).processForceInclusionBatchLocal
     : null;
-
   let feePaymentQuote;
   if (feePaymentToken === "token") {
     try {
@@ -138,7 +137,6 @@ export async function confirmLocalBatchWithExecutors(
       };
     }
   }
-
   // Remove from pending storage
   await removePendingBatchTxRequest(bundleId);
 
@@ -212,21 +210,17 @@ export async function confirmLocalBatchWithExecutors(
   }
 
   // EIP-7702 atomic / single-call shortcut / auto-sequential branching.
-  //
   // Resolution order:
-  //  - calls.length === 1 → send the inner call as a normal tx (no ERC-7821
-  //    wrap, no 7702 overhead). The ERC-7821 self-call adds cost without
-  //    benefit when there's nothing to batch.
+  //  - calls.length === 1 → send the inner call as a normal tx; ERC-7821
+  //    wrapping adds cost without benefit when there's nothing to batch.
   //  - calls.length > 1 AND a usable delegate resolves (onchain reuse OR
   //    custom override OR Pectra-supported chain default) → atomic via 7702.
   //  - else → existing auto-sequential path (preserves behavior on chains
-  //    without 7702 support and on EOAs delegated to a non-ERC-7821 contract).
-  //
+  //    without 7702 support or with a non-ERC-7821 delegate).
   // Flip the bundle's `atomic` flag the moment we commit to a path. The
-  // status was created with `atomic: isBankrAccount` (so PK/SP starts at
-  // false), but the truth only becomes known at confirm-time: single-tx
-  // and 7702 paths both ship as one onchain tx (trivially atomic by
-  // EIP-5792), while the sequential fallback genuinely isn't. We update
+  // Status starts with `atomic: isBankrAccount`, but confirm-time decides the
+  // local truth: single-tx and
+  // 7702 paths ship as one onchain tx, while sequential fallback isn't. We update
   // here once and let the merge semantics of `updateBundleStatus` carry
   // it forward through every subsequent status transition (PENDING →
   // CONFIRMED / REVERTED). Without this the dapp's `wallet_getCallsStatus`

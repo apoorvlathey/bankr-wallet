@@ -29,6 +29,7 @@ import { useTransactionBatchEligibility } from "./useTransactionBatchEligibility
 import { useTransactionMetadata } from "./useTransactionMetadata";
 import { useTransactionReviewState } from "./useTransactionReviewState";
 import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
+import { allowsImpersonatedTransactions } from "@/chrome/network/impersonatedRpcPolicy";
 
 function TransactionConfirmation({
   txRequest,
@@ -66,6 +67,26 @@ function TransactionConfirmation({
   );
   const [feePaymentQuote, setFeePaymentQuote] =
     useState<FeePaymentQuoteSummary | null>(null);
+  const [canSendImpersonatedTransaction, setCanSendImpersonatedTransaction] =
+    useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCanSendImpersonatedTransaction(false);
+    if (accountType !== "impersonator" || !resolvedChain?.rpcUrl) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    void allowsImpersonatedTransactions(tx.chainId, resolvedChain.rpcUrl)
+      .then((allowed) => {
+        if (!cancelled) setCanSendImpersonatedTransaction(allowed);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [accountType, resolvedChain?.rpcUrl, tx.chainId, txRequest.id]);
 
   const metadata = useTransactionMetadata(
     txRequest,
@@ -94,6 +115,7 @@ function TransactionConfirmation({
   const actions = useTransactionActions({
     txRequest,
     accountType,
+    canSendImpersonatedTransaction,
     isInSidePanel,
     isErc7715PermissionRevoke,
     is7702Revoke,
@@ -290,13 +312,19 @@ function TransactionConfirmation({
       }
       actionNotice={
         accountType === "impersonator" ? (
-          <ViewOnlySigningNotice />
+          <ViewOnlySigningNotice
+            message={
+              canSendImpersonatedTransaction
+                ? "Developer RPC will send this transaction without a signature"
+                : undefined
+            }
+          />
         ) : accountType === "ledger" ? (
           <LedgerSigningStatus active={isLedgerWaiting} />
         ) : undefined
       }
       confirmAction={
-        accountType === "impersonator" ? (
+        accountType === "impersonator" && !canSendImpersonatedTransaction ? (
           rejectButton
         ) : (
           <ConfirmActionButton
@@ -310,7 +338,11 @@ function TransactionConfirmation({
           />
         )
       }
-      rejectAction={accountType === "impersonator" ? undefined : rejectButton}
+      rejectAction={
+        accountType === "impersonator" && !canSendImpersonatedTransaction
+          ? undefined
+          : rejectButton
+      }
     />
   );
 }

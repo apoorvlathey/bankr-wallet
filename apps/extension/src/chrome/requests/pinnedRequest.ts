@@ -10,8 +10,9 @@
  * `accountType` — is a TypeScript error.
  *
  * Tx and signature factories accept impersonator accounts because their
- * requests are queued for Reject-only review. Actual signer resolution and
- * signing helpers continue to exclude impersonators at confirm time.
+ * requests are queued for review. Signing helpers continue to exclude them;
+ * the separate per-endpoint developer path may only submit an unsigned RPC
+ * transaction.
  */
 
 import type { Account } from "../types";

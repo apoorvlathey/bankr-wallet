@@ -59,11 +59,13 @@ export async function ensureNetworksInfo(): Promise<NetworkMutationResult> {
 export async function addNetworkIfMissing({
   chainName,
   entry,
+  rpcEndpoints,
   switchIfSupportedForAccountType,
   requestOrigin,
 }: {
   chainName: unknown;
   entry: unknown;
+  rpcEndpoints?: unknown;
   switchIfSupportedForAccountType?: ChainAccountType | null;
   /** Trusted sender origin for a dapp-proposed network. */
   requestOrigin?: string;
@@ -98,6 +100,15 @@ export async function addNetworkIfMissing({
         switchIfSupportedForAccountType !== undefined &&
         (switchIfSupportedForAccountType !== "bankr" ||
           resolvedChain?.isBankrSupported === true);
+
+      if (!existingName && rpcEndpoints !== undefined) {
+        await reconcileNetworkRpcEndpoints({
+          current: cleanedEntry,
+          savedChainId: cleanedEntry.chainId,
+          savedRpcUrl: cleanedEntry.rpcUrl,
+          requestedRpcEndpoints: rpcEndpoints,
+        });
+      }
 
       const normalized = existingName
         ? nextNetworksInfo

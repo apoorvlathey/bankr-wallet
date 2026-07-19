@@ -431,6 +431,7 @@ const budgets: Record<string, number> = {
   "transactions/bankrPolicy.ts": 80,
   "transactions/bankrProcessing.ts": 180,
   "transactions/bankrConfirmation.ts": 200,
+  "transactions/impersonatedExecution.ts": 250,
   "transactions/requestActions.ts": 100,
   "transactions/swaps/types.ts": 60,
   "transactions/swaps/accountPolicy.ts": 130,

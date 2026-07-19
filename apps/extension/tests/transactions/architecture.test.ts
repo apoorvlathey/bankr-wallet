@@ -113,6 +113,7 @@ test("focused transaction modules stay one-way and audit-sized", async () => {
     "signatures/confirmationHandlers.ts": 320,
     "transactions/localConfirmation.ts": 240,
     "transactions/localExecution.ts": 320,
+    "transactions/impersonatedExecution.ts": 250,
     "transactions/failure.ts": 100,
     "transactions/displayMetadata.ts": 160,
     "transactions/notification.ts": 80,

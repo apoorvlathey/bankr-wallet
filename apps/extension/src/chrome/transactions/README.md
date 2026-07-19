@@ -12,6 +12,11 @@ This directory owns the extracted, audit-sized transaction concerns:
   authorization capture, and master/agent/Never-session key recovery.
 - `localExecution.ts` owns nonce/gas preparation, sign-once execution, the
   final pre-RPC account/transport/authority check, and receipt publication.
+- `impersonatedExecution.ts` owns the explicit per-RPC developer exception for
+  view-only accounts: pinned confirmation policy, standard unsigned
+  `eth_sendTransaction` projection, final endpoint/account/authority checks,
+  and ambiguity-aware result publication. It never calls provider admin or
+  signing methods.
 - `failure.ts`, `displayMetadata.ts`, and `notification.ts` isolate durable
   failure effects from best-effort enrichment and Chrome notifications.
 - `bankrPolicy.ts`, `bankrSession.ts`, `bankrConfirmation.ts`, and

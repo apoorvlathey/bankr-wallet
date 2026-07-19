@@ -57,7 +57,6 @@ export async function applyReceiptToHistory(
       completedAt: Date.now(),
     });
   }
-
   await applyReceiptStateMirrors({
     txId,
     txHash,

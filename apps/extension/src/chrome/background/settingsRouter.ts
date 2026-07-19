@@ -109,6 +109,9 @@ export function createBackgroundSettingsMessageRouter(
           .addNetworkIfMissing({
             chainName: message.chainName,
             entry: message.entry,
+            ...(message.rpcEndpoints !== undefined
+              ? { rpcEndpoints: message.rpcEndpoints }
+              : {}),
           })
           .then(sendResponse);
         return HANDLED_ASYNC;

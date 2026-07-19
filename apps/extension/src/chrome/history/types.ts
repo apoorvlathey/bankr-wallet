@@ -14,11 +14,9 @@ export interface TransferMeta {
   tokenLogo: string | null;
 }
 
-/**
- * Submission-time clear-signing snapshot. Activity can render the reviewed
- * intent without re-running decoders or remote name lookups. Keeping the
- * whole snapshot optional preserves entries released before clear signing.
- */
+/** Submission-time clear-signing snapshot. Activity can render the reviewed
+ * intent without re-running decoders or remote name lookups. Keeping the whole
+ * snapshot optional preserves entries released before clear signing. */
 export interface ClearSignedMeta {
   kind: "approve" | "transfer" | "nativeSend" | "erc7730";
   /** Formatted decimal amount; omitted for descriptor-only ERC-7730 calls. */
@@ -51,10 +49,8 @@ export interface ForceInclusionMeta {
   l2Confirmed?: boolean;
 }
 
-/**
- * One ERC-20 transfer involving the observed account. Internal pool routing
- * is excluded by the parser before this public snapshot is persisted.
- */
+/** One ERC-20 transfer involving the observed account. Internal pool routing
+ * is excluded by the parser before this public snapshot is persisted. */
 export interface AssetTransferRecord {
   /** Lowercased token contract. */
   token: string;
@@ -164,7 +160,7 @@ export interface CompletedTransaction {
   broadcastUncertain?: boolean;
   error?: string;
   jobId?: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   functionName?: string;
   gasData?: GasData;
   swapMeta?: SwapMeta;

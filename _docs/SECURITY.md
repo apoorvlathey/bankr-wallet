@@ -523,7 +523,7 @@ Chainless `eip155` proposal namespaces are filled with that same visible chain s
 
 `walletConnect/keepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
 
-For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign.
+For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign; their only send path is the separately reviewed per-RPC developer opt-in described under Network Metadata Handlers.
 
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The pending request and bundle status pin exact `{ topic, requestId, method }` transport metadata, and the bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query, confirm, or open a bundle it did not create.
 
@@ -692,7 +692,10 @@ Each entry's required `rpcUrl` remains the only endpoint used at runtime.
 by decimal chain ID. The service worker validates every member with the same
 scheme, credential, private-network, length, and trusted-origin rules,
 deduplicates the list, rejects more than ten endpoints, and limits optional
-display names to 64 characters before storage. Released string-array records
+display names to 64 characters before storage. An optional exact-boolean
+`allowImpersonatedTransactions` flag grants only the selected endpoint the
+ability to receive reviewed view-only transactions through
+`eth_sendTransaction`; malformed/truthy non-booleans decode disabled. Released string-array records
 remain read-compatible and are converted to `{ url, name? }` objects only on a
 later successful save. Provider favicon lookup is derived only for public
 domain RPCs; private, loopback, literal-IP, and reserved hostnames are never
@@ -707,6 +710,21 @@ staged until the full form is saved. A custom chain-ID change is duplicate-check
 and re-keys its bounded RPC history inside the same locked service-worker
 mutation. Missing history resolves to the active endpoint and requires no eager
 migration.
+
+The impersonated-transaction path remains a trusted-UI confirmation route and
+never signs. Before the irreversible RPC call, the background revalidates the
+pinned account ID/address/type, dapp or WalletConnect authorization, current
+chain RPC, and the exact selected endpoint flag under the network mutation
+lock. The flag does not authorize provider-specific admin methods, signature
+requests, batches, swaps, fee-token gas, or delegated authority. RPCs must be
+configured separately to unlock/impersonate the `from` address. A missing RPC
+response is treated as an ambiguous submission and retains the reset effect
+lease fail-closed.
+The same exact selected-endpoint opt-in permits connected sites and
+WalletConnect peers to use the existing bounded read-only RPC allowlist against
+that configured private endpoint, so transaction preflight such as
+`eth_estimateGas` works on a local fork. It does not admit another URL or enable
+submission, signing, debug/admin, or stateful filter methods through the proxy.
 
 ### Privileged Network and Remote-Image Boundaries
 
@@ -730,7 +748,9 @@ WalletConnect RPC forwarding:
   IPv4-mapped IPv6 (including WHATWG's canonical two-hextet form), localhost,
   link-local, private, carrier-grade NAT, IPv4 documentation/benchmark,
   multicast, and reserved local hostname suffixes are covered by the
-  classifier.
+  classifier. The only remote-site exception is an exact active private RPC
+  carrying the trusted Settings-only impersonated-transaction opt-in; it still
+  receives only the read/simulation allowlist above.
 - Redirects are rejected. Requests are capped at 524,288 serialized
   characters, responses are streamed under an 8,000,000-byte ceiling, at most
   16 forwarded calls run concurrently, and each call has a 15-second timeout.
@@ -1146,7 +1166,7 @@ accessible resources.
 | `ledgerDevices`            | No               | Public Ledger label/model metadata keyed by the canonical public address at `m/44'/60'/0'/0/0`; no transport secret or private key |
 | `addressContacts`          | No               | Local-only user labels for public EVM addresses         |
 | `ensIdentityCache`         | No               | Six-hour public name/avatar cache; optional `needsAvatar` marks a forward-resolved name awaiting batched avatar lookup |
-| `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
+| `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID, including optional display names and an exact per-endpoint `allowImpersonatedTransactions` developer flag. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
 | `onboardingInitialization` | No               | Temporary `{ version, id, startedAt }` transaction marker for one fresh-wallet setup. Missing is normal; unmarked authoritative key/account state fails closed, disposable residue is cleared before begin, and complete wallets cannot be rolled back because marker cleanup failed. |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
@@ -1699,7 +1719,7 @@ Quick reference for which files to examine based on what area of security you're
 - `background/watchAssetRouter.ts` - Mixed-audience EIP-747 intake/read/confirm/reject transport with durable result and token-storage ordering
 - `background/chainPromptRouter.ts` - Mixed-audience EIP-3085 intake/read/confirm/reject and connected-site chain-notice transport
 - `background/signingRequestRouter.ts` - Post-gate provider tx/signature intake and trusted-UI pending-request reads/decisions; domain handlers retain authorization, signing, and durable publication
-- `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr and local PK/seed confirmations plus non-signing internal transfer prompt intake
+- `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr, local PK/seed, Ledger, and per-RPC-opted-in impersonated confirmations plus non-signing internal transfer prompt intake
 - `background/swapExecutionRouter.ts` - Reset-barrier-protected account-bound direct, Bankr-batch, and local-atomic swap execution transport
 - `background/sponsoredTransferRouter.ts` - Reset-barrier-protected submission plus fail-closed unresolved status and retryable acknowledgement transport
 - `background/internalOperationBarrier.ts` - Unique `internalOperation` confirmation claims that expose independent swap/relayer effects to the global reset barrier
@@ -1720,6 +1740,9 @@ Quick reference for which files to examine based on what area of security you're
   PK/seed atomic-7702 swap orchestration with ordered ambiguity stops
 - `transactions/localConfirmation.ts` and `localExecution.ts` - pinned local
   confirmation, key recovery, sign-once execution, and final authority gate
+- `transactions/impersonatedExecution.ts` - pinned view-only confirmation,
+  exact selected-endpoint opt-in, unsigned RPC submission, and ambiguity-safe
+  history/result publication
 - `localSigner.ts` - Private key signing (viem)
 - `bankr/transport.ts`, `bankr/signing.ts`, `bankr/submission.ts`, and
   `bankr/jobs.ts` - API key sent only to fixed Bankr backend endpoints
@@ -1774,8 +1797,11 @@ These are security characteristics that have been reviewed and accepted:
    page CSP for legitimate reads. The boundary rejects redirects and
    literal/reserved private-network targets according to caller origin, and
    enforces request/response/concurrency/15-second limits. Loopback requires a
-   loopback caller and LAN targets require the caller's exact hostname. The
-   background worker explicitly omits credentials and referrers.
+   loopback caller and LAN targets require the caller's exact hostname unless
+   the exact active endpoint carries the trusted Settings-only impersonated-
+   transaction opt-in. That explicit exception retains the read/simulation
+   allowlist and does not expose submission, signing, debug/admin, or filters.
+   The background worker explicitly omits credentials and referrers.
 
 6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, and `session/restoration.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging information for migration and session restore flows, and (c) no secrets are exposed in log messages.
 

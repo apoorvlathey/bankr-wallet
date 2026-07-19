@@ -40,8 +40,16 @@ export function cleanSavedRpcEndpoints(
   if (!Array.isArray(value)) throw new Error("Saved RPC endpoints must be a list.");
   const cleaned = value.map((candidate) => {
     const endpoint = candidate && typeof candidate === "object" && !Array.isArray(candidate)
-      ? candidate as { url?: unknown; name?: unknown }
-      : { url: candidate, name: undefined };
+      ? candidate as {
+          url?: unknown;
+          name?: unknown;
+          allowImpersonatedTransactions?: unknown;
+        }
+      : {
+          url: candidate,
+          name: undefined,
+          allowImpersonatedTransactions: undefined,
+        };
     const rawName = typeof endpoint.name === "string" ? endpoint.name.trim() : "";
     if (rawName.length > MAX_RPC_ENDPOINT_NAME_LENGTH) {
       throw new Error(
@@ -51,6 +59,9 @@ export function cleanSavedRpcEndpoints(
     return {
       url: cleanNetworkHttpUrl(endpoint.url, "RPC", true)!,
       ...(rawName ? { name: rawName } : {}),
+      ...(endpoint.allowImpersonatedTransactions === true
+        ? { allowImpersonatedTransactions: true as const }
+        : {}),
     };
   });
   if (new Set([activeRpcUrl, ...cleaned.map(({ url }) => url)]).size > MAX_SAVED_RPC_URLS) {

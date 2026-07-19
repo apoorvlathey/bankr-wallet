@@ -19,12 +19,14 @@ import {
   CopyIcon,
   EditIcon,
 } from "@chakra-ui/icons";
+import { InlineDisclosure } from "@/components/ui";
 import {
   MAX_RPC_ENDPOINT_NAME_LENGTH,
   normalizeRpcEndpointName,
   normalizeRpcUrl,
   type SavedRpcEndpoint,
 } from "@/lib/chains";
+import { ImpersonatedTransactionSetting } from "./ImpersonatedTransactionSetting";
 
 type RpcEndpointEditorProps = {
   mode: "add" | "edit";
@@ -45,6 +47,8 @@ export function RpcEndpointEditor({
 }: RpcEndpointEditorProps) {
   const [draftName, setDraftName] = useState(endpoint?.name ?? "");
   const [draftUrl, setDraftUrl] = useState(endpoint?.url ?? "");
+  const [allowImpersonatedTransactions, setAllowImpersonatedTransactions] =
+    useState(endpoint?.allowImpersonatedTransactions === true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,6 +91,9 @@ export function RpcEndpointEditor({
     onSubmit({
       url: normalizedUrl,
       ...(normalizedName ? { name: normalizedName } : {}),
+      ...(allowImpersonatedTransactions
+        ? { allowImpersonatedTransactions: true }
+        : {}),
     });
   };
 
@@ -118,11 +125,11 @@ export function RpcEndpointEditor({
           <Text color="fg.primary" fontSize="sm" fontWeight="600">
             {isEditing ? "Edit RPC endpoint" : "Add RPC endpoint"}
           </Text>
-          <Text mt={0.5} color="fg.muted" fontSize="xs">
-            {isEditing
-              ? "Update its label or complete URL."
-              : "Give this endpoint a recognizable label."}
-          </Text>
+          {isEditing && (
+            <Text mt={0.5} color="fg.muted" fontSize="xs">
+              Update its label or complete URL.
+            </Text>
+          )}
         </Box>
       </HStack>
 
@@ -193,7 +200,9 @@ export function RpcEndpointEditor({
           </HStack>
           <Input
             id="rpc-endpoint-url"
-            type="url"
+            type="text"
+            inputMode="url"
+            autoComplete="url"
             value={draftUrl}
             placeholder="https://rpc.example.com/path/to/endpoint"
             autoFocus
@@ -213,6 +222,21 @@ export function RpcEndpointEditor({
             {error}
           </FormErrorMessage>
         </FormControl>
+
+        <InlineDisclosure
+          label="For Devs"
+          description="Impersonated account transactions"
+          autoScrollOnOpen
+        >
+          <Box px={2}>
+            <ImpersonatedTransactionSetting
+              showSectionLabel={false}
+              isChecked={allowImpersonatedTransactions}
+              isDisabled={isLoading}
+              onChange={setAllowImpersonatedTransactions}
+            />
+          </Box>
+        </InlineDisclosure>
 
         <HStack w="full" spacing={2}>
           <Button
