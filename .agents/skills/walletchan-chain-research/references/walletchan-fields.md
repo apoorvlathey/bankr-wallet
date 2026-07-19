@@ -68,7 +68,8 @@ WalletChan's automatic PK/seed atomic path needs a deployed compatible delegate.
 
 Checks:
 
-1. `@metamask/delegation-deployments` contains the chain ID for the version used by the repo.
+1. WalletChan's installed default-delegate deployment registry contains the
+   chain ID for the version used by the repo.
 2. The chain RPC returns non-empty bytecode at `EIP_7702_DEFAULT_DELEGATE`.
 3. Ideally, `supportsExecutionMode(BATCH_MODE_PLAIN)` succeeds, or the repo's existing probe supports it.
 
@@ -76,8 +77,48 @@ If the chain supports type-4 transactions but the default delegate is absent,
 leave `isEip7702Supported: false`. Users can still use explicit/custom delegate
 flows if the product supports them.
 
+## Pimlico token-paid gas support
+
+Token-paid gas is not a `ChainEntry` boolean. It is enabled only by an exact
+chain/token pair in two independent allowlists:
+
+- `apps/extension/src/chrome/feePayment/tokens.ts` controls what the wallet UI
+  offers and contains the token symbol, decimals, stablecoin flag, logo, and
+  absolute fee safety ceiling.
+- `apps/website/app/api/gas/pimlico/[chainId]/tokens.ts` constrains the public
+  proxy to exact token addresses. It must never become a general ERC-20 or RPC
+  relay.
+
+For a new chain or testnet:
+
+1. Require `isEip7702Supported: true` for WalletChan's automatic token-paid gas
+   path. A Pimlico token listing alone is not sufficient.
+2. Use the server-side `PIMLICO_API_KEY` without printing it. Call the exact
+   chain endpoint with `pimlico_getSupportedTokens` and no parameters. Treat
+   its address, symbol, and decimals as live account-specific discovery data.
+3. Select only WalletChan-approved fee-asset families. A newly discovered
+   symbol outside the current product catalog requires explicit product and
+   security review; do not add every returned token automatically.
+4. Call `pimlico_getTokenQuotes` for each proposed exact address using
+   WalletChan's EntryPoint v0.7 and the route chain ID. Enable only addresses
+   that return a live quote. Empty quotes fail closed even when static docs
+   claim support.
+5. Verify address checksum, onchain `decimals()`, symbol, and balance-read
+   behavior. Do not infer canonicality from a ticker such as `USDC` or `USDT`.
+6. Add the same normalized address set to both files above. Include a readable
+   chain-name comment beside every hardcoded address and extend the catalog and
+   proxy tests so drift fails CI.
+7. Re-run the live quote check immediately before handoff because provider
+   availability can change independently of a WalletChan release.
+
+If discovery cannot be authenticated, returns an error, or yields no live
+quote for an approved token, document the result and leave that chain
+native-only. Never expose `PIMLICO_API_KEY` through `NEXT_PUBLIC_*`, extension
+environment variables, logs, committed fixtures, or shell command arguments.
+
 ## Documentation
 
 Update `_docs/IMPLEMENTATION.md` when built-in chain support changes.
 Update `_docs/SWAP.md` when swap chain counts or allowlists change.
+Update `_docs/GAS_ABSTRACTION.md` when the fee-token matrix changes.
 Update `_docs/ADD_CHAIN.md` only if the chain-add process itself changes.

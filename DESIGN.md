@@ -17,7 +17,10 @@
 - Aesthetic essence: warm financial confidence.
 - Single-minded proposition: WalletChan makes powerful wallet actions easy to understand before the user commits.
 - Archetype: Sage with an Everyman interaction model.
-- References: Rabby for wallet information hierarchy and full-screen mobile flows; WalletChan's Swiss Knife project for restrained Chakra composition; shadcn/ui for semantic recipes and complete state discipline. Transpose behavior and restraint, not default visuals.
+- References: established EVM information hierarchy and full-screen mobile
+  flows; WalletChan's Swiss Knife project for restrained Chakra composition;
+  shadcn/ui for semantic recipes and complete state discipline. Transpose
+  behavior and restraint, not default visuals.
 - Avoid: violet-forward web3 styling, thick outlines around every region, card-in-card stacks, desktop dropdowns squeezed into the popup.
 - Mode: both. Midnight is the default and receives the restrained product language; Bauhaus remains an intentionally expressive alternate theme.
 - Density: balanced on root screens, dense but zoned on transaction details.
@@ -937,7 +940,7 @@
 - 2026-07-16: restored token-contract disclosure to estimated and confirmed
   balance-change symbols. Hover and keyboard focus now share the help cursor,
   amber identity feedback, address, copy, and explorer tools; the request
-  simulation retry also consumes the same catalog/MetaMask logo fallback as
+  simulation retry also consumes the same catalog/verified logo fallback as
   Transaction details.
 - 2026-07-17: compacted expanded batch gas rows to three meaningful native-fee
   digits while retaining bigint-exact tooltip and assistive text. The call

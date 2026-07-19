@@ -1,4 +1,4 @@
 interface:
   display_name: "WalletChan Chain Research"
-  short_description: "Research EVM chain support for WalletChan"
-  default_prompt: "Use $walletchan-chain-research to research a new EVM chain for WalletChan."
+  short_description: "Research chain, gas-token, swap, and bridge support"
+  default_prompt: "Use $walletchan-chain-research to research a new EVM chain for WalletChan, including live Pimlico fee-token discovery and synchronized extension/proxy catalogs."

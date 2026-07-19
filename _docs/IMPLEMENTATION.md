@@ -604,7 +604,9 @@ ERC-20 display metadata is centralized behind the stable
 `src/chrome/tokens/tokenMetadata.ts`.
 
 - Resolves name/symbol/decimals via `fetchTokenInfo`
-- Resolves logos through the swap token list, Bungee token list, watched-asset custom tokens, `tokens/tokenLogoConstants.ts`, then the WalletChan API's verified MetaMask token-icon fallback
+- Resolves logos through the swap token list, Bungee token list, watched-asset
+  custom tokens, `tokens/tokenLogoConstants.ts`, then the WalletChan API's
+  verified deterministic token-icon fallback
 - Portfolio catalog calls skip the Bungee token-list fallback so holdings render from the portfolio API/RPC without waiting on bridge token metadata
 - Used by receipt asset-change extraction, tx details backfill, clear-signed snapshots, batch call summaries, approve cards, and portfolio auto-add stubs so custom swap/bridge chains do not diverge by page
 - Logo image bytes are warmed through the shared `ensAvatarImageCache` sanitizer as soon as a metadata lookup finds a URL. Renderer pages read only the reset-aware `chrome.storage.local` cache through `src/lib/avatarCacheClient.ts`; legacy DOM-localStorage mirrors are purged and never rehydrated.
@@ -701,7 +703,10 @@ Dapps that support EIP-6963 will show Bankr Wallet in their wallet selection UI.
 
 ### Multi-Wallet Conflict Handling
 
-Some wallets (like Rabby) aggressively claim `window.ethereum` using `Object.defineProperty` with a getter-only descriptor, which prevents other wallets from setting it via direct assignment. WalletChan handles this gracefully:
+Some injected providers aggressively claim `window.ethereum` using
+`Object.defineProperty` with a getter-only descriptor, which prevents another
+provider from setting it via direct assignment. WalletChan handles this
+gracefully:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1905,9 +1910,9 @@ Token metadata caches remain non-secret and behavior-compatible:
 misses use six hours and `swapTokenList:{chainId}` uses 24 hours. Pinned WalletChan
 tokens merge at read time so canonical metadata wins without a cache migration.
 Negative logo records carry a fallback version; older empty records created
-before the MetaMask source are treated as stale immediately.
+before the deterministic external source are treated as stale immediately.
 When the catalog has no ERC-20 logo, the extension asks the address-aware form
-of `/api/swap/token-list`; the website verifies the deterministic MetaMask
+of `/api/swap/token-list`; the website verifies the deterministic external
 token-icon PNG with a bounded HEAD request before returning its URL. This
 fallback also feeds simulation rows, while NFT imagery stays on its separate
 metadata path. Cache writes are best-effort; stale token lists remain the
@@ -1995,19 +2000,21 @@ The complete architecture and rollout gates are in
 
 The implemented domain contains:
 
-- `constants.ts`: WalletChan's official MetaMask DeleGator and its immutable
+- `constants.ts`: WalletChan's official Stateless DeleGator and its immutable
   EntryPoint v0.7 address;
-- `tokens.ts`: address-pinned native/ERC-20 capability catalog. USDC covers
-  Ethereum, Base, Polygon, Arbitrum, Optimism, Monad, and their enabled
-  Sepolia/Amoy testnets. The same catalog includes provider-verified USDT,
-  USDT0, USDm, USDC.e, WETH, stETH, wstETH, and WMON chain pairs;
+- `tokens.ts`: address-pinned native/ERC-20 capability catalog. The current
+  live-verified matrix is Ethereum (USDC, USDT, stETH, wstETH, WETH), Optimism
+  (USDC, USDC.e, USDT, stETH, wstETH), Base/Polygon/Arbitrum (USDC, USDT), BNB
+  Chain/Linea (USDT), MegaETH (USDm, USDT0), Monad (USDC, WMON), and USDC on
+  Ethereum Sepolia, Optimism Sepolia, Arbitrum Sepolia, and Polygon Amoy. Base
+  Sepolia remains native-only because its live quote result is empty;
 - `pimlicoTypes.ts`: local v0.7 PackedUserOperation, EIP-7702 authorization,
   quote, paymaster, gas-estimate, and receipt shapes;
 - `pimlicoClient.ts`: bounded JSON-RPC transport for token quotes, paymaster
   stub/final data, gas-price tiers, UserOperation estimation/submission, and
   receipts;
-- `userOperation.ts`: byte-compatible MetaMask Smart Accounts Kit single/batch
-  DeleGator calldata, v0.7 packing, the official recoverable estimation stub,
+- `userOperation.ts`: byte-compatible single/batch DeleGator calldata, v0.7
+  packing, the official recoverable estimation stub,
   and `EIP7702StatelessDeleGator` EIP-712 signing;
 - `authorization.ts`: converts WalletChan's existing local EIP-7702 signature
   into Pimlico RPC shape and enforces the third-party-sender rule: the tuple
@@ -2118,10 +2125,15 @@ server-side and is policy-constrained rather than a general authenticated RPC.
 Its `tokens.ts` mirrors the extension's exact chain/token address catalog. It
 pins every allowed method to WalletChan's EntryPoint and that catalog, bounds
 bodies/time/rate, and authenticates submission by recovering the
-exact MetaMask-compatible sender EIP-712 signature before forwarding
+exact WalletChan sender EIP-712 signature before forwarding
 `eth_sendUserOperation`. Attached 7702 authorizations must cryptographically
 recover to that same sender and use the official delegate and exact route
 chain. `PIMLICO_PROXY_DISABLED=true` is the operational kill switch.
+
+Every built-in EVM chain addition runs the Pimlico discovery and live-quote
+gate in `.agents/skills/walletchan-chain-research/SKILL.md`. The extension fee
+catalog and website proxy catalog must change together; the fee-payment token
+test compares their normalized chain/address sets so one-sided updates fail.
 
 ## Signature Request Handling
 
@@ -2982,7 +2994,7 @@ Dapps must use ERC-7715 provider methods:
   request shape, fixed permission/rule allowlist from
   the stable `erc7715/registry.ts` facade, `from` matching the active account, supported
   chain, configured RPC URL, and live `eth_getCode(activeEOA)` showing
-  WalletChan's default MetaMask DeleGator. If preflight passes, the request is
+  WalletChan's default Stateless DeleGator. If preflight passes, the request is
   stored in `pendingErc7715PermissionRequests`, shown in
   `Erc7715PermissionConfirmation.tsx`, and resolved after user approval or
   rejection. Permission prompts have no age-based timeout. Final approval,
@@ -2992,7 +3004,7 @@ Dapps must use ERC-7715 provider methods:
 
 While a `wallet_requestExecutionPermissions` request is in progress,
 WalletChan blocks additional external dapp requests with the same
-MetaMask-style in-process error. The injected provider holds an inpage lock so
+standard in-process error. The injected provider holds an inpage lock so
 locally answered methods like `eth_chainId` cannot bypass the block, and the
 background router enforces the same lock for injected transaction, signature,
 batch, RPC proxy, capabilities/status, watch-asset, add-chain, and execution
@@ -3035,7 +3047,7 @@ time-bounded and prevents the DeleGator stream enforcers from later reverting
 because their elapsed-time multiplication happens before the max-amount clamp.
 EVM addresses are accepted in any valid `0x` 20-byte hex capitalization and
 normalized to EIP-55 checksum form before storage, display, caveat terms, and
-responses. Omitted `startTime` values follow MetaMask's Advanced Permissions
+responses. Omitted `startTime` values follow WalletChan's Advanced Permissions
 behavior and are normalized to the preflight timestamp.
 Token approval revocation requires at least one revocation primitive and an
 expiry, and broad Permit2 nonce invalidation is rejected because it can cancel
@@ -3043,7 +3055,7 @@ unrelated pending Permit2 signatures without token/spender pinning. If any
 enabled Permit2 primitive is requested, preflight requires a WalletChan built-in
 chain and live code at canonical Permit2
 `0x000000000022D473030F116dDEE9F6B43aC78BA3` on the configured RPC.
-The field names follow MetaMask's Gator permission payloads so later caveat
+The field names follow the Delegation Framework permission payloads so later caveat
 construction and UI work can line up with the same semantics.
 `permission.justification` is accepted as optional display-only metadata
 (WalletChan also tolerates legacy `permission.data.justification` and
@@ -3054,12 +3066,12 @@ the request/response, and never used as a caveat input.
 permission-to-caveat mapping. Canonical addresses/types live in
 `caveatDefinitions.ts`, fixed-width terms in `caveatEncoding.ts`, and the
 permission switch in `caveatBuilder.ts`.
-It uses the MetaMask DeleGator v1.3.0 `DelegationManager`, `ROOT_AUTHORITY`,
+It uses the deployed DeleGator v1.3.0 `DelegationManager`, `ROOT_AUTHORITY`,
 `TimestampEnforcer`, `ExactCalldataEnforcer`, `ValueLteEnforcer`,
 `NativeTokenPeriodTransferEnforcer`, `NativeTokenStreamingEnforcer`,
 `ERC20PeriodTransferEnforcer`, `ERC20StreamingEnforcer`,
 `ApprovalRevocationEnforcer`, and `NonceEnforcer` constants and encodes terms
-with the same fixed-width layouts as `@metamask/delegation-core`.
+with the same fixed-width layouts as the installed delegation-core package.
 Native-token permissions always include `ExactCalldataEnforcer(0x)` because the
 native enforcers constrain `value` but not target/calldata. ERC-20 permissions
 always include `ValueLteEnforcer(0)` because the ERC-20 enforcers constrain
@@ -3067,10 +3079,10 @@ token transfers but should not allow native value. Standard grants include a
 `NonceEnforcer` term read from `currentNonce(DelegationManager, delegator)` at
 preflight/confirmation so nonce invalidation can revoke them. Allowance grants
 use the relevant periodic enforcer with `periodDuration = uint256.max`, which
-matches the current MetaMask/Gator permission decoder shape. Timestamp caveats
+matches the current Delegation Framework permission decoder shape. Timestamp caveats
 are expiry-only for the current ERC-7715 vocabulary; start time is enforced by
 the period/stream enforcer terms. Token approval revocation terms are the
-MetaMask/DeleGator one-byte bitmask, also paired with `NonceEnforcer`.
+DeleGator one-byte bitmask, also paired with `NonceEnforcer`.
 On approval, `erc7715/delegationSigning.ts` constructs the ERC-7710 typed data
 internally with `delegator = active account`, `delegate = request.to`,
 `authority = ROOT_AUTHORITY`, canonical `DelegationManager`, and only the
@@ -3114,8 +3126,8 @@ onchain revoke initiation fail closed instead of returning an unverified grant
 as active.
 `initiateErc7715PermissionRevoke`
 validates account/grant ownership, checks the stored delegation manager, encodes
-MetaMask's `disableDelegation((...))` call for the signed ERC-7710 delegation,
-checks `disabledDelegations(hash)` like MetaMask's Gator revoke hook, and queues
+the `disableDelegation((...))` call for the signed ERC-7710 delegation,
+checks `disabledDelegations(hash)` through the onchain revoke path, and queues
 a normal WalletChan transaction to the canonical `DelegationManager` only when
 the delegation is not already disabled and no revoke tx for that grant is
 already pending. The receipt poller marks the grant
@@ -3143,7 +3155,7 @@ and exact raw request JSON remain behind Advanced details.
 lets users adjust supported permission terms before approval only when
 `permission.isAdjustmentAllowed === true`. Locked requests keep amount,
 frequency, start time, stream caps, and identity fields immutable. To match
-MetaMask Advanced Permissions behavior, users may still add, remove, extend, or
+WalletChan Advanced Permissions behavior, users may still add, remove, extend, or
 shorten expiry on non-stream grants; stream expiry remains required and guarded
 with the streaming terms because it changes total exposure. Adjustable requests
 can set any positive bounded amount, change periodic frequency, move start time
