@@ -8,6 +8,18 @@ import {
   getPimlicoUsdcAddress,
   PIMLICO_FEE_TOKENS_BY_CHAIN_ID,
 } from "../../src/chrome/feePayment/tokens";
+import { PIMLICO_FEE_TOKENS_BY_CHAIN_ID as PROXY_FEE_TOKENS_BY_CHAIN_ID } from "../../../website/app/api/gas/pimlico/[chainId]/tokens";
+
+function normalizedCatalog(
+  catalog: Readonly<Record<number, readonly string[]>>,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    Object.entries(catalog).map(([chainId, addresses]) => [
+      chainId,
+      [...addresses].map((address) => address.toLowerCase()).sort(),
+    ]),
+  );
+}
 
 test("catalog addresses, decimals, limits, and per-chain membership are exact", () => {
   for (const [chainId, tokens] of Object.entries(PIMLICO_FEE_TOKENS_BY_CHAIN_ID)) {
@@ -22,6 +34,19 @@ test("catalog addresses, decimals, limits, and per-chain membership are exact", 
       addresses.add(token.address.toLowerCase());
     }
   }
+});
+
+test("extension and proxy fee-token address catalogs stay synchronized", () => {
+  const extensionCatalog = Object.fromEntries(
+    Object.entries(PIMLICO_FEE_TOKENS_BY_CHAIN_ID).map(([chainId, tokens]) => [
+      chainId,
+      tokens.map((token) => token.address),
+    ]),
+  );
+  assert.deepEqual(
+    normalizedCatalog(extensionCatalog),
+    normalizedCatalog(PROXY_FEE_TOKENS_BY_CHAIN_ID),
+  );
 });
 
 test("offers the exact Base fee-token catalog", () => {

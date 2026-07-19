@@ -2,7 +2,7 @@
 
 This directory owns WalletChan's fee-payment execution strategy. Native fees
 continue through existing transaction handlers. Address-pinned ERC-20 tokens use the
-official MetaMask EIP-7702 Stateless DeleGator, EntryPoint v0.7, and Pimlico's
+official WalletChan EIP-7702 Stateless DeleGator, EntryPoint v0.7, and Pimlico's
 ERC-20 paymaster/bundler through a WalletChan proxy.
 
 Implemented modules:
@@ -12,7 +12,7 @@ Implemented modules:
 - `pimlicoTypes.ts` defines the provider boundary.
 - `pimlicoClient.ts` performs bounded, strict JSON-RPC calls.
 - `errors.ts` maps known provider failures to actionable confirmation copy.
-- `userOperation.ts` encodes and signs MetaMask DeleGator UserOperations.
+- `userOperation.ts` encodes and signs WalletChan delegate UserOperations.
 - `authorization.ts` owns first-use third-party EIP-7702 authorization.
 - `paymaster.ts` computes the token bound and exact approval.
 - `prepareUserOperation.ts` assembles the final unsigned provider envelope.
