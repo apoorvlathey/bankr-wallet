@@ -26,6 +26,7 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     handleConfirmDappConnection: async () => ({ success: true }),
     handleRejectDappConnection: async () => ({ success: true }),
     handleRevokeDappPermission: async () => ({ success: true }),
+    getEnsContenthashLastUpdated: async () => null,
     runPendingRequestResolution: async (options: any) => options.resolve(),
     pendingResolutionConflict: () => ({ success: false }),
     writeResultToStorage: async () => {},
@@ -151,6 +152,54 @@ test("trusted permission reads and revocation preserve response shapes", async (
   assert.deepEqual(await revoked.response, {
     success: true,
     origin: "https://one.example",
+  });
+});
+
+test("trusted connection UI can read public ENS contenthash provenance", async () => {
+  const capture = responseCapture();
+  let receivedName: unknown;
+  const route = createBackgroundDappPermissionMessageRouter(
+    dependencies({
+      getEnsContenthashLastUpdated: async (ensName: unknown) => {
+        receivedName = ensName;
+        return 1_720_000_000_000;
+      },
+    }),
+  );
+
+  assert.deepEqual(
+    route(
+      { type: "getEnsContenthashLastUpdated", ensName: "ens.eth" },
+      {} as any,
+      capture.sendResponse,
+    ),
+    { handled: true, keepChannelOpen: true },
+  );
+  assert.deepEqual(await capture.response, {
+    success: true,
+    updatedAt: 1_720_000_000_000,
+  });
+  assert.equal(receivedName, "ens.eth");
+});
+
+test("ENS provenance failures return a sanitized diagnostic", async () => {
+  const capture = responseCapture();
+  const route = createBackgroundDappPermissionMessageRouter(
+    dependencies({
+      getEnsContenthashLastUpdated: async () => {
+        throw new Error("event-query: subgraph returned GraphQL errors");
+      },
+    }),
+  );
+  route(
+    { type: "getEnsContenthashLastUpdated", ensName: "ens.eth" },
+    {} as any,
+    capture.sendResponse,
+  );
+  assert.deepEqual(await capture.response, {
+    success: false,
+    updatedAt: null,
+    error: "event-query: subgraph returned GraphQL errors",
   });
 });
 

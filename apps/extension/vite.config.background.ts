@@ -7,15 +7,23 @@ import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 const isFirefox = process.env.BROWSER === "firefox";
 
 export default defineConfig(({ mode }) => {
+  const extensionEnv = loadEnv(mode, __dirname, "");
   const websiteEnv = loadEnv(
     mode,
     path.resolve(__dirname, "../website"),
-    "NEXT_PUBLIC_DEFILLAMA_SEARCH_KEY",
+    "NEXT_PUBLIC_",
   );
   const defillamaSearchKey =
     process.env.VITE_DEFILLAMA_SEARCH_KEY ||
     process.env.NEXT_PUBLIC_DEFILLAMA_SEARCH_KEY ||
     websiteEnv.NEXT_PUBLIC_DEFILLAMA_SEARCH_KEY ||
+    "";
+  const theGraphApiKey =
+    process.env.VITE_THE_GRAPH_API_KEY ||
+    process.env.NEXT_PUBLIC_THE_GRAPH_API_KEY ||
+    extensionEnv.VITE_THE_GRAPH_API_KEY ||
+    extensionEnv.NEXT_PUBLIC_THE_GRAPH_API_KEY ||
+    websiteEnv.NEXT_PUBLIC_THE_GRAPH_API_KEY ||
     "";
 
   return {
@@ -23,6 +31,9 @@ export default defineConfig(({ mode }) => {
     define: {
       "import.meta.env.VITE_DEFILLAMA_SEARCH_KEY": JSON.stringify(
         defillamaSearchKey,
+      ),
+      "import.meta.env.VITE_THE_GRAPH_API_KEY": JSON.stringify(
+        theGraphApiKey,
       ),
     },
     resolve: {

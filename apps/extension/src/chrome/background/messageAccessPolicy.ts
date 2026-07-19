@@ -208,6 +208,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "confirmDappConnection",
   "rejectDappConnection",
   "revokeDappPermission",
+  "getEnsContenthashLastUpdated",
 
   // Direct execution and sponsored transfers
   "executeSwapDirect",

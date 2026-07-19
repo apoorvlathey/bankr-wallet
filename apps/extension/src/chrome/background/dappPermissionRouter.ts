@@ -16,6 +16,7 @@ export const BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES = [
   "confirmDappConnection",
   "rejectDappConnection",
   "revokeDappPermission",
+  "getEnsContenthashLastUpdated",
 ] as const;
 
 export type BackgroundDappPermissionRouteResult =
@@ -34,6 +35,7 @@ type Dependencies = {
   handleConfirmDappConnection: (requestId: string) => Promise<any>;
   handleRejectDappConnection: (requestId: string) => Promise<any>;
   handleRevokeDappPermission: (origin: string) => Promise<any>;
+  getEnsContenthashLastUpdated: (ensName: unknown) => Promise<number | null>;
   runPendingRequestResolution: typeof PendingRequestResolutionModule.runPendingRequestResolution;
   pendingResolutionConflict: (action: any) => any;
   writeResultToStorage: (
@@ -147,6 +149,24 @@ export function createBackgroundDappPermissionMessageRouter(
         dependencies
           .handleRevokeDappPermission(message.origin || "")
           .then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "getEnsContenthashLastUpdated": {
+        dependencies
+          .getEnsContenthashLastUpdated(message.ensName)
+          .then((updatedAt) => sendResponse({ success: true, updatedAt }))
+          .catch((error) => {
+            const errorText = errorMessage(
+              error,
+              "ENS contenthash history lookup failed",
+            );
+            sendResponse({
+              success: false,
+              updatedAt: null,
+              error: errorText,
+            });
+          });
         return HANDLED_ASYNC;
       }
 

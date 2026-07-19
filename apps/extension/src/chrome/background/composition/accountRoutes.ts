@@ -77,6 +77,7 @@ import { createBackgroundDappPermissionMessageRouter } from "../dappPermissionRo
 import { createBackgroundSecretManagementMessageRouter } from "../secretManagementRouter";
 import { createBackgroundWalletConnectSessionMessageRouter } from "../walletConnectSessionRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
+import { getEnsContenthashLastUpdated } from "../../ensBrowsing/contenthashHistory";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
@@ -91,6 +92,7 @@ export function composeAccountRoutes(
       handleConfirmDappConnection,
       handleRejectDappConnection,
       handleRevokeDappPermission,
+      getEnsContenthashLastUpdated,
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,
       writeResultToStorage,

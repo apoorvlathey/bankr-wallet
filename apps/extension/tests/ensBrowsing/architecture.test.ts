@@ -94,6 +94,7 @@ test("extracted ENS browsing modules remain independently auditable", async () =
     "resolverSupport.ts": 120,
     "nameResolvers.ts": 240,
     "erc4804Resolver.ts": 220,
+    "contenthashHistory.ts": 220,
   };
   for (const [path, maximumLines] of Object.entries(budgets)) {
     const lines = (await source(path)).split("\n").length;

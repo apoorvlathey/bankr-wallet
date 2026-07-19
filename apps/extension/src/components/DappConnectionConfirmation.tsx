@@ -9,6 +9,8 @@ import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import DappSiteIcon from "@/components/DappSiteIcon";
 import DisplayModeMenu from "@/components/DisplayModeMenu";
 import { playInteractionSound } from "@/sounds/soundManager";
+import { contenthashHistoryLabel } from "@/components/DappConnection/contenthashHistoryModel";
+import { useEnsContenthashLastUpdated } from "@/components/DappConnection/useEnsContenthashLastUpdated";
 
 interface DappConnectionConfirmationProps {
   request: PendingDappConnectionRequest;
@@ -104,6 +106,11 @@ export default function DappConnectionConfirmation({
   const [isRejecting, setIsRejecting] = useState(false);
   const formatOrigin = useDappOriginFormatter();
   const displayOrigin = formatOrigin(request.origin);
+  const contenthashHistory = useEnsContenthashLastUpdated(
+    displayOrigin.resolvedName,
+    displayOrigin.isEnsIpfsGateway,
+  );
+  const contenthashLabel = contenthashHistoryLabel(contenthashHistory);
   const favicon = useMemo(
     () => request.favicon || googleFaviconUrl(request.hostname, 64),
     [request.favicon, request.hostname],
@@ -171,6 +178,27 @@ export default function DappConnectionConfirmation({
             >
               {displayOrigin.label}
             </Heading>
+            {contenthashLabel && (
+              <Text
+                as="span"
+                role="status"
+                aria-live="polite"
+                maxW="full"
+                px={2}
+                py={1}
+                borderWidth="1px"
+                borderColor="border.subtle"
+                borderRadius="full"
+                bg="surface.raisedHover"
+                color="fg.secondary"
+                fontSize="xs"
+                fontWeight="500"
+                lineHeight="1.35"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {contenthashLabel}
+              </Text>
+            )}
           </VStack>
         </VStack>
       }

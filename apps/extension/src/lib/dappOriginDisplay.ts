@@ -15,10 +15,16 @@ export type DappOriginDisplay = {
   hostname: string | null;
   resolvedName: string | null;
   isLocalGateway: boolean;
+  isEnsIpfsGateway: boolean;
   faviconSrc: string | null;
   faviconFallbackSrc: string | null;
   browserFaviconPageUrl: string | null;
 };
+
+function hostedEnsGatewayName(hostname: string): string | null {
+  const match = hostname.match(/^((?:[a-z0-9-]+\.)+eth)\.(?:limo|link)$/);
+  return match?.[1] ?? null;
+}
 
 function matchesGatewayPort(url: URL, gatewayPort: number): boolean {
   const effectivePort = url.port || (url.protocol === "http:" ? "80" : "443");
@@ -118,6 +124,7 @@ export function getDappOriginDisplay(
       hostname: null,
       resolvedName: null,
       isLocalGateway: false,
+      isEnsIpfsGateway: false,
       faviconSrc: null,
       faviconFallbackSrc: null,
       browserFaviconPageUrl: null,
@@ -125,12 +132,26 @@ export function getDappOriginDisplay(
   }
 
   const hostname = url.hostname.toLowerCase();
+  const hostedEnsName = hostedEnsGatewayName(hostname);
+  if (hostedEnsName) {
+    return {
+      label: hostedEnsName,
+      hostname: hostedEnsName,
+      resolvedName: hostedEnsName,
+      isLocalGateway: false,
+      isEnsIpfsGateway: true,
+      faviconSrc: null,
+      faviconFallbackSrc: null,
+      browserFaviconPageUrl: null,
+    };
+  }
   if (url.protocol !== "http:") {
     return {
       label: hostname || rawOrigin,
       hostname: hostname || null,
       resolvedName: null,
       isLocalGateway: false,
+      isEnsIpfsGateway: false,
       faviconSrc: null,
       faviconFallbackSrc: null,
       browserFaviconPageUrl: null,
@@ -143,6 +164,7 @@ export function getDappOriginDisplay(
       hostname: hostname || null,
       resolvedName: null,
       isLocalGateway: false,
+      isEnsIpfsGateway: false,
       faviconSrc: null,
       faviconFallbackSrc: null,
       browserFaviconPageUrl: null,
@@ -155,11 +177,16 @@ export function getDappOriginDisplay(
     cachedSites,
   );
   const resolvedName = cachedSite?.ensName ?? null;
+  const isEnsIpfsGateway = Boolean(
+    resolvedName?.endsWith(".eth") &&
+      (cachedSite?.kind === "ipfs" || cachedSite?.kind === "ipns"),
+  );
   return {
     label: resolvedName || hostname || rawOrigin,
     hostname: resolvedName || hostname || null,
     resolvedName,
     isLocalGateway: true,
+    isEnsIpfsGateway,
     ...(cachedSite
       ? faviconSources(rawOrigin, cachedSite)
       : {

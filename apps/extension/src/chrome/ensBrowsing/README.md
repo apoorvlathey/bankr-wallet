@@ -25,6 +25,11 @@
   It sends a bounded user query to one exact HTTPS endpoint and projects at
   most eight name/HTTPS-route/sanitized-logo results. The public client key is
   compiled into the background bundle only.
+- `contenthashHistory.ts` queries the ENS subgraph for the latest contenthash
+  change block and resolves its timestamp through the bounded Ethereum RPC
+  client. The background build accepts the public `VITE_THE_GRAPH_API_KEY` (or
+  `NEXT_PUBLIC_THE_GRAPH_API_KEY`) used by swiss-knife. Only trusted wallet UI
+  can request this display-only provenance.
 - `ens-cache-browser-image` lets only the exact top-level browser page request
   the shared bounded raster fetch/decode/re-encode cache. Remote image URLs are
   never assigned directly in the renderer.

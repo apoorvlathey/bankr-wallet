@@ -310,6 +310,18 @@ The extension maintains address consistency between storage and the active accou
   unconnected, subframe, and navigation-race requests fail with EIP-1193 code
   `4100` through the normal storage result channel.
 - Site title and favicon are bounded, display-only metadata. The canonical hostname is always the primary identity in confirmation and management UI.
+- Connection prompts opened from an exact `*.eth.limo` / `*.eth.link` origin,
+  or from a configured local/custom IPFS gateway that maps back to a cached
+  `.eth` IPFS/IPNS resolution, show a non-blocking contenthash provenance pill.
+  Trusted wallet UI calls `getEnsContenthashLastUpdated`; the service worker
+  queries the ENS subgraph for the current resolver's newest
+  `ContenthashChanged` block and resolves that block timestamp through the
+  bounded Ethereum RPC client. The pill mounts immediately with `Checking…`,
+  then shows the elapsed time or a quiet `Unavailable` state; network failure
+  never delays connection approval. The background build accepts the
+  public `VITE_THE_GRAPH_API_KEY` / `NEXT_PUBLIC_THE_GRAPH_API_KEY` used by
+  swiss-knife and compiles it only into the service-worker bundle; without a
+  configured key it falls back to the legacy public ENS subgraph endpoint.
 - Pending prompt storage is globally and per-origin bounded before mutation.
   Connection prompts allow one outstanding request per exact origin; add-chain
   and watch-asset prompts allow five per exact origin (with twenty globally).
@@ -1512,6 +1524,11 @@ cards, connection and signing prompts, pending requests, delegated permissions,
 activity, and transaction details synchronized after cache or gateway-setting
 changes. Resolver records older than the one-hour navigation TTL may be used
 for this label only; they are never restored to the navigation cache path.
+Exact `*.eth.limo` and `*.eth.link` hosts are also projected back to their
+underlying `.eth` identity. That hosted match, or a cached local IPFS/IPNS
+match, is the sole renderer eligibility signal for the connection prompt's
+contenthash-history lookup; ordinary sites, lookalike suffixes, `.gwei`, and
+ERC-4804 address-mode pages do not trigger it.
 The same projection supplies favicon sources across those surfaces: a safe
 cached raster or processed Chrome favicon first, a local asset path projected
 onto the matching public eth.limo/gwei.domains/w3eth.io gateway next, Chrome's

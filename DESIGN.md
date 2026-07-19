@@ -225,6 +225,12 @@
 
 ## Slop audit
 
+- 2026-07-19 ENS connection provenance audit: exact `.eth.limo`, `.eth.link`,
+  and configured local/custom IPFS gateway connection requests gain one quiet
+  status pill beneath the recovered ENS identity. The pill uses existing
+  semantic surface, border, foreground, radius, and tabular-number tokens; it
+  remains secondary to the hostname and preserves its position through quiet
+  checking, resolved, and unavailable states.
 - 2026-07-19 browse-page bookmark audit: a quiet upper-right reminder exposes
   the platform-native bookmark shortcut without presenting a nonfunctional
   bookmark button or requesting broad browser bookmark access. It is fixed to
@@ -492,6 +498,10 @@
 
 ## Changelog
 
+- 2026-07-19: added a quiet, theme-token-driven contenthash provenance pill to
+  ENS/IPFS connection requests. It appears only for exact hosted or configured
+  local/custom gateway identities and keeps stable loading, resolved, and
+  unavailable states, preserving the connection decision hierarchy.
 - 2026-07-18: made the dapp3 launcher favorite-first and stateful: the resolver
   input filters connected sites, connected results scroll after three rows, and
   hover/focus actions favorite or disconnect without coupling saved sites to

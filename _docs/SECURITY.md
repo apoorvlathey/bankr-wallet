@@ -769,6 +769,18 @@ metadata is skipped; renderer components accept only a previously sanitized
 raster, a public HTTPS image that crosses the decode/re-encode cache, or
 Chrome's same-extension fixed-size processed favicon URL.
 
+ENS contenthash provenance is likewise display-only. Only trusted wallet UI
+can call `getEnsContenthashLastUpdated`; content scripts and web-accessible ENS
+pages fail the exhaustive background audience gate. The handler accepts one
+bounded `.eth` name, sends GraphQL only to the fixed ENS subgraph endpoint with
+credentials omitted, applies an 8-second/128-KiB response boundary, and reads
+the returned public block through the bounded Ethereum RPC client. It returns
+only a public millisecond timestamp or null, does not read account/session
+state, and cannot authorize, delay, or mutate a connection request. Diagnostic
+logs include only the bounded ENS name, public block number/timestamp, transport
+mode, and sanitized failure stage; they never include the Graph API key,
+resolver ID, or contenthash value.
+
 `remoteImagePolicy.ts` and the `avatar/` audit domain behind the stable
 `avatarImageCache.ts` facade therefore require public HTTPS on the default TLS
 port with no URL credentials, reject reserved/private hosts through the same
