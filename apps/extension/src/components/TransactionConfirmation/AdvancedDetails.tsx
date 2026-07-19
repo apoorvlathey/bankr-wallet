@@ -16,6 +16,8 @@ import { InlineDisclosure } from "@/components/ui";
 import { CopyButton } from "./CopyButton";
 import { ForceInclusionOption } from "@/components/RequestConfirmation/ForceInclusionOption";
 import type { ForceInclusionInfo } from "./types";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
+import { FeePaymentAdvancedDetails } from "@/components/FeePaymentAdvancedDetails";
 
 interface AdvancedDetailsProps {
   txRequest: PendingTxRequest;
@@ -29,6 +31,8 @@ interface AdvancedDetailsProps {
   batchedCount: number;
   forceInclusion: boolean;
   forceInclusionInfo: ForceInclusionInfo | null;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuote: FeePaymentQuoteSummary | null;
   onFunctionName: (name: string | undefined) => void;
   onAddToBatch: () => void;
   onForceInclusionChange: (enabled: boolean) => void;
@@ -88,6 +92,8 @@ export function AdvancedDetails({
   batchedCount,
   forceInclusion,
   forceInclusionInfo,
+  feePaymentToken,
+  feePaymentQuote,
   onFunctionName,
   onAddToBatch,
   onForceInclusionChange,
@@ -115,8 +121,13 @@ export function AdvancedDetails({
       label="Advanced details"
       onOpenChange={handleOpenChange}
     >
-      <Box
-        mt={2}
+      <VStack mt={2} spacing={2} align="stretch">
+        <FeePaymentAdvancedDetails
+          chainId={tx.chainId}
+          token={feePaymentToken}
+          quote={feePaymentQuote}
+        />
+        <Box
         bg="surface.raised"
         borderWidth="1px"
         borderStyle="solid"
@@ -213,7 +224,8 @@ export function AdvancedDetails({
             />
           )}
         </VStack>
-      </Box>
+        </Box>
+      </VStack>
       <Box ref={contentEndRef} h="1px" aria-hidden />
     </InlineDisclosure>
   );

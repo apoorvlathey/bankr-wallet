@@ -5,7 +5,10 @@ import { resolvePinnedAccount } from "./runtime";
 
 export async function validatePinnedBankrTransaction(
   pending: PendingTxRequest,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; account: Extract<Awaited<ReturnType<typeof resolvePinnedAccount>>, { ok: true }>["account"] & { type: "bankr" } }
+  | { ok: false; error: string }
+> {
   const pinned = await resolvePinnedAccount(pending);
   if (!pinned.ok) return pinned;
   if (pinned.account.type !== "bankr") {
@@ -21,7 +24,7 @@ export async function validatePinnedBankrTransaction(
       error: "Transaction 'from' does not match active account",
     };
   }
-  return { ok: true };
+  return { ok: true, account: pinned.account };
 }
 
 export function validateBankrTransactionChain(

@@ -241,6 +241,13 @@
   eliminating repeated identity and nested icon chrome. Derivation choices
   separate human labels from monospace paths for faster scanning, retain native
   radio semantics and focus behavior, and consume existing theme tokens only.
+- 2026-07-19 fee-token confirmation audit: single and ERC-5792 confirmation
+  reuse one compact `Pay gas with` decision row and the existing bottom action
+  sheet for the native/USDC choice. Selection stays financial blue, final
+  Confirm stays amber, quote/balance values use the existing compact numeric
+  hierarchy, and the one-time smart-account upgrade uses the semantic warning
+  tint. Relay mechanics remain subordinate footer copy; no promotional banner,
+  gradient, card stack, or desktop dropdown was introduced.
 - 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
   now gates ENS-friendly rewriting across every request surface. With browsing
   disabled, the literal gateway hostname remains the primary security identity
@@ -1070,3 +1077,20 @@
   tile and dark trailing spinner, moved `Waiting` to a dark-to-muted three-dot
   loader, reserved the submitting banner for broadcast, locked request edits
   until the device resolves, and kept Back available as non-mutating navigation.
+- 2026-07-19: made fee-asset selection visually scannable with native-token and
+  USDC marks in both the compact pill and action sheet. USDC preparation now
+  reuses the established transaction-fee progress pulse and concise
+  “Estimating Fees” label, while the resolved maximum remains stable through
+  confirmation rerenders instead of returning to a loading presentation.
+- 2026-07-19: moved the independently fetched USDC balance into the fee-asset
+  action sheet before quote preparation, removed its duplicate from the
+  confirmation summary, and centered the shared estimating pulse across the
+  pending fee row.
+- 2026-07-19: replaced the ERC-20 paymaster's opaque post-operation code with
+  an actionable fee-selection error when a transaction would leave too little
+  USDC: reduce the amount or choose the native token. Retry remains available
+  without exposing provider internals in the confirmation hierarchy.
+- 2026-07-19: expanded the network-fee picker from native/USDC to WalletChan's
+  reviewed Pimlico token catalog. Each choice now carries its own symbol,
+  decimals, balance, logo fallback, bounded quote, and stablecoin-only fiat
+  equivalence while preserving the same compact pill and action sheet.

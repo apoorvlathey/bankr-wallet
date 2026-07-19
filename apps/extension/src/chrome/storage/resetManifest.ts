@@ -18,6 +18,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "pendingTxRequests",
   "pendingSignatureRequests",
   "pendingBatchTxRequests",
+  "pendingUserOperations",
   "pendingErc7715PermissionRequests",
   "erc7715PermissionGrants",
   "pendingWatchAssetRequests",

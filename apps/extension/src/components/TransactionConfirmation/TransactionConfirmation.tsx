@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { ConfirmationScreen } from "@/components/ui";
 import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -11,6 +11,7 @@ import {
   RejectActionButton,
 } from "./ConfirmationActions";
 import { CopyButton } from "./CopyButton";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
 import { QueueNavigation } from "./QueueNavigation";
 import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation/simulationFailure";
 import { ForceInclusionScreen, TransactionSentScreen } from "./StateScreens";
@@ -60,6 +61,11 @@ function TransactionConfirmation({
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
+  const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>(
+    "native",
+  );
+  const [feePaymentQuote, setFeePaymentQuote] =
+    useState<FeePaymentQuoteSummary | null>(null);
 
   const metadata = useTransactionMetadata(
     txRequest,
@@ -69,6 +75,16 @@ function TransactionConfirmation({
     txRequest,
     accountType,
   );
+  useEffect(() => {
+    if (review.forceInclusion) {
+      setFeePaymentToken("native");
+      setFeePaymentQuote(null);
+    }
+  }, [review.forceInclusion]);
+  useEffect(() => {
+    setFeePaymentToken("native");
+    setFeePaymentQuote(null);
+  }, [txRequest.id]);
   const batch = useTransactionBatchEligibility(
     txRequest,
     accountType,
@@ -85,6 +101,8 @@ function TransactionConfirmation({
     decodedFunctionName,
     gasOverrides: review.gasOverrides,
     forceInclusion: review.forceInclusion,
+    feePaymentToken,
+    feePaymentQuoteId: feePaymentQuote?.quoteId ?? null,
     onConfirmed,
     onRejected,
     onBeforeReject,
@@ -123,8 +141,10 @@ function TransactionConfirmation({
           ? "Transaction value is malformed — signing blocked"
           : !review.splitState.ready
             ? review.splitState.label || "Waiting for prior transaction to land"
-            : !review.gasValid
+            : feePaymentToken === "native" && !review.gasValid
               ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+              : feePaymentToken !== "native" && !feePaymentQuote?.quoteId
+                ? "Waiting for a bounded fee-token quote"
               : null;
   const decodedActionFallback = getDecodedActionFallback({
     clearSigningStatus: review.clearSigningStatus,
@@ -246,6 +266,8 @@ function TransactionConfirmation({
           onAddToBatch={actions.handleAddToBatch}
           onForceInclusionChange={review.setForceInclusion}
           isReadOnly={isLedgerWaiting}
+          feePaymentToken={feePaymentToken}
+          feePaymentQuote={feePaymentQuote}
         />
       }
       actionSummary={
@@ -260,6 +282,10 @@ function TransactionConfirmation({
           onGasOverrides={review.setGasOverrides}
           onGasValidityChange={review.setGasValid}
           isReadOnly={isLedgerWaiting}
+          feePaymentToken={feePaymentToken}
+          feePaymentQuote={feePaymentQuote}
+          onFeePaymentTokenChange={setFeePaymentToken}
+          onFeePaymentQuoteChange={setFeePaymentQuote}
         />
       }
       actionNotice={

@@ -11,6 +11,8 @@ export interface SourceExtractionArgs {
   userAddress: string;
   receipt: any;
   rpcUrl: string;
+  /** Defaults to true for legacy direct-transaction callers. */
+  payerForGas?: boolean;
 }
 
 export async function extractAndStoreAssetChanges(
@@ -22,7 +24,7 @@ export async function extractAndStoreAssetChanges(
       userAddress: args.userAddress,
       chainId: args.chainId,
       rpcUrl: args.rpcUrl,
-      payerForGas: true,
+      payerForGas: args.payerForGas ?? true,
     });
     if (!record) return;
     await seedRecentlyReceivedSafely(args.chainId, record);

@@ -21,6 +21,8 @@ export async function handleConfirmBatchTransactionPK(
   functionNames?: string[],
   precomputedGasEstimates?: GasEstimate[],
   forceInclusion?: boolean,
+  feePaymentToken?: "native" | "token",
+  feePaymentQuoteId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   return confirmLocalBatchWithExecutors(
     {
@@ -34,6 +36,8 @@ export async function handleConfirmBatchTransactionPK(
     functionNames,
     precomputedGasEstimates,
     forceInclusion,
+    feePaymentToken,
+    feePaymentQuoteId,
   );
 }
 

@@ -1,8 +1,8 @@
-# Gas abstraction and fee-token payments exploration
+# Gas abstraction and fee-token payments
 
-> Research status: exploration, not an implementation specification
+> Status: implementation code-complete behind capability gates; live Pimlico token quotes verified, while the manual wallet matrix and external security review remain release blockers
 >
-> Last verified: 2026-07-13
+> Last verified: 2026-07-19
 >
 > Scope: native-gas-free transactions across every WalletChan EVM chain with a
 > verified smart-account deployment, ERC-20 fee payments, EIP-7702, ERC-7710,
@@ -16,20 +16,22 @@ WalletChan should add **Pay network fee with** as a native property of every
 transaction review, not create a separate “gas wallet” product for the first
 release.
 
-For private-key and seed-phrase accounts, the best architectural fit is a
-WalletChan-operated relay using the MetaMask Delegation Framework that
-WalletChan already makes the default EIP-7702 delegate:
+For private-key and seed-phrase accounts, the first implementation should use
+**Pimlico's ERC-4337 v0.7 bundler and ERC-20 paymaster** with the MetaMask
+Delegation Framework contract that WalletChan already makes the default
+EIP-7702 delegate:
 
 1. Prepare and simulate the user's exact requested call or atomic batch.
-2. Quote an allowlisted fee token such as USDC, including WalletChan's bounded
-   service/risk spread.
-3. Append one exact ERC-20 transfer to WalletChan's fee collector.
-4. Have the account sign a **single-use, exact-execution ERC-7710 delegation**
-   covering the original calls and that exact fee transfer.
-5. If the account is not yet delegated to the canonical MetaMask
-   `EIP7702StatelessDeleGator`, also collect an EIP-7702 authorization tuple.
-6. Have the WalletChan relayer submit `DelegationManager.redeemDelegations` and
-   pay the outer transaction's native gas.
+2. Construct a MetaMask `EIP7702StatelessDeleGator` PackedUserOperation for
+   EntryPoint v0.7, using the DeleGator's `execute`/`executeWithMode` encoding.
+3. Ask Pimlico for the selected catalog-token quote and paymaster data. If the current
+   allowance is insufficient, prepend an exact bounded approval to the quoted
+   paymaster inside the same UserOperation.
+4. Have the local account sign the MetaMask DeleGator UserOperation typed data.
+5. If the account is not yet delegated to WalletChan's canonical official
+   delegate, attach an `eip7702Auth` signed with the EOA's current nonce.
+6. Submit through Pimlico's v0.7 bundler and track the UserOperation through
+   inclusion, replacement, timeout, and final transaction receipt.
 
 This is materially different from WalletChan's current self-sponsored EIP-7702
 path. EIP-7702 makes the account programmable, but a normal type-4 transaction
@@ -37,34 +39,38 @@ signed and sent by the EOA still requires that EOA to hold the chain's native
 gas token. Gas abstraction requires a second account, bundler, or relayer to
 pay the outer transaction.
 
-The recommended relay model is the closest match to MetaMask's current
-gas-included transaction implementation. It fits WalletChan better than making
-ERC-4337 the primary path because it:
+Pimlico is the primary infrastructure choice because it supports the exact
+standards WalletChan needs: EntryPoint v0.7, `eip7702Auth` on
+`eth_sendUserOperation`, ERC-20 token quotes, and token paymaster data. This
+keeps the official MetaMask delegate at the user's address while avoiding a
+custom production relayer in the first release. It:
 
-- reuses the exact MetaMask DeleGator, DelegationManager, and caveat enforcers
-  already present in WalletChan's architecture;
-- is chain-neutral and works wherever WalletChan verifies the v1.3 DeleGator,
-  DelegationManager, required enforcers, EIP-7702 activation, gas estimation,
-  and relayer health;
-- needs no standing ERC-20 allowance to a paymaster;
-- can atomically bind the fee payment to the user-approved action;
-- can sponsor the first EIP-7702 setup without requiring native gas;
+- reuses the exact MetaMask DeleGator already present in WalletChan's
+  architecture and its fixed EntryPoint v0.7;
+- lets the approval, user calls, and fee settlement share one atomic
+  UserOperation;
+- can install the official delegate on first use without requiring native gas;
+- provides standardized estimation, submission, and receipt endpoints;
 - preserves the original EOA address and dapp-facing account;
 - can be added behind the current transaction confirmation paths without
   exposing a new dapp signing method.
 
 The first production scope should be deliberately narrow:
 
-- **Accounts:** private key and seed phrase first. Bankr API accounts require a
-  separate Bankr capability/cooperation gate described below; never silently
-  promise feature parity that the API cannot execute.
-- **Chains:** every WalletChan built-in chain with `isEip7702Supported` and a
-  verified canonical deployment is in product scope. Enable each chain/token
-  pair only after its own gas, token, RPC, and relayer go/no-go checks; do not
-  make one chain the architectural default.
-- **Fee assets:** canonical USDC first wherever that chain has a canonical,
-  liquid USDC deployment. Use a chain-specific stablecoin allowlist elsewhere,
-  and add USDT/DAI or other assets only after token-specific testing.
+- **Accounts:** private key and seed phrase accounts support both existing and
+  one-time official delegation. Bankr API accounts are enabled only when the
+  official delegate is already active: Bankr can sign the UserOperation typed
+  data, but its API does not expose the special first-use EIP-7702 authorization
+  signer. View-only impersonator accounts remain ineligible.
+- **Chains:** USDC payment ships on the verified Pimlico/EIP-7702 overlap:
+  Ethereum, Base, Polygon, Arbitrum, Optimism, Monad, Ethereum Sepolia,
+  Polygon Amoy, Arbitrum Sepolia, and Optimism Sepolia. Base Sepolia is omitted
+  because Pimlico currently returns no USDC quote there. Native payment remains
+  available through the existing transaction path on every supported chain.
+- **Fee assets:** the chain's native token plus exact catalog entries for USDC,
+  USDT, USDT0, USDm, USDC.e, WETH, stETH, wstETH, and WMON. Additional chains
+  and tokens require an explicit provider/token capability entry and
+  the same conformance gate; never infer support from token deployment alone.
 - **Flows:** normal dapp `eth_sendTransaction`, WalletChan Send, ERC-5792 atomic
   batches, then in-wallet swap and bridge after Max/reserve accounting is
   correct.
@@ -178,23 +184,20 @@ Primary standards:
 ## Multi-chain scope
 
 Gas abstraction is a WalletChan account capability, not a Base feature. The
-recommended exact-delegation relay has no Base-specific contract dependency.
-Its product boundary is the intersection of:
+first USDC implementation boundary is the intersection of:
 
 ```text
 WalletChan built-in EVM chain
 AND EIP-7702 active
 AND canonical MetaMask v1.3 contracts verified onchain
 AND chain gas estimation validated
-AND at least one safe fee token configured
-AND WalletChan relay funded and healthy on that chain
+AND canonical USDC configured
+AND Pimlico documents and live-verifies EntryPoint v0.7 ERC-20 paymaster support
 ```
 
-The current `CHAIN_REGISTRY` marks the following built-in mainnets as
-EIP-7702-capable, and the installed MetaMask deployment registry contains the
-v1.3 same-address DeleGator stack for each. Every row is part of this research
-and eventual product target; “special gate” means more chain-specific work, not
-out of scope.
+The initial production set is Ethereum, Base, Polygon, Arbitrum, and Optimism.
+The wider table remains the research target for future provider support or the
+custom-relay fallback; deployment presence alone does not enable USDC payment.
 
 | Chain | Chain ID | Native fee asset | Canonical v1.3 stack in installed registry | Gas-abstraction focus |
 | --- | ---: | --- | --- | --- |
@@ -288,6 +291,9 @@ The implementation is more informative than the marketing language:
 2. The confirmation stores a selected gas token. If native balance is
    insufficient, the first eligible non-native token is selected
    automatically.
+   The compact selected-token control shows an icon, symbol, and chevron; its
+   modal rows show balance on the left and fee in fiat/token units on the
+   right, with a visible selection rail and actionable native-balance warning.
 3. Confirmation builds an extra `ERC20.transfer(feeRecipient, amount)`
    execution.
 4. The original execution plus fee transfer are encoded into a constrained
@@ -546,8 +552,8 @@ migration, trust, pricing, and lock-in decision.
 
 | Approach | Fits current MetaMask delegate | First use with zero native | Same-chain ERC-20 | Cross-chain fee source | New backend | Main risk | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Exact ERC-7710 delegation + WalletChan relay | Yes, directly | Yes, relay carries 7702 auth | Yes | No | Quote, submit, relay inventory | Relayer loses gas on revert; custom backend correctness | **Primary** |
-| ERC-4337 UserOp + token paymaster | Yes, but only its fixed v0.7 EntryPoint | Yes | Provider-dependent | Generally no | Bundler/paymaster integration | Fragmented chain/EntryPoint coverage, allowance/permit, UserOp state | Per-chain benchmark/fallback |
+| Pimlico ERC-4337 v0.7 UserOp + ERC-20 paymaster | Yes, its fixed v0.7 EntryPoint is supported | Yes, bundler carries `eip7702Auth` | Yes, USDC on verified chains | No | Thin authenticated API-key proxy | Provider availability, allowance, UserOp lifecycle | **Primary** |
+| Exact ERC-7710 delegation + WalletChan relay | Yes, directly | Yes, relay carries 7702 auth | Yes | No | Quote, submit, relay inventory | Relayer loses gas on revert; custom backend correctness | Fallback/later |
 | WalletChan prepaid Gas Tank | Execution-independent | Yes after deposit | Yes | Yes | Custodial ledger and relayer | Custody, solvency, reconciliation, regulation | Not v1 |
 | Just-in-time native top-up then user tx | Works with any normal signer | Potentially | Indirect | Hosted balance can be cross-chain | Funding and submission backend | Funding front-run, leftover dust, two txs, nonce races | Avoid as primary |
 | In-action swap of token to native | Current batching helps | Usually no: outer tx still needs gas | Yes after sponsor fronts gas | No | Solver/relay | Circular dependency and slippage | Useful settlement detail, not execution model |
@@ -562,35 +568,53 @@ For an account already delegated to WalletChan's canonical MetaMask delegate:
 ```text
 WalletChan UI
   -> prepares calls C[0..n]
-  -> fee quote chooses token T and exact/max amount F
-  -> appends fee transfer C[n] = T.transfer(FEE_COLLECTOR, F)
-  -> signs ERC-7710 delegation D:
-       delegator = user EOA
-       delegate = relay policy (see below)
-       authority = ROOT_AUTHORITY
-       caveats =
-         LimitedCallsEnforcer(1)
-         ExactExecutionBatchEnforcer(C[0..n])
-         TimestampEnforcer(validAfter, validUntil)
-         optional RedeemerEnforcer(relayer set)
-       random salt
-  -> sends signed intent to WalletChan relay
+  -> creates an unsigned EntryPoint v0.7 PackedUserOperation
+  -> requests Pimlico USDC token quote and paymaster data
+  -> prepends USDC.approve(paymaster, boundedMaxCost) only when needed
+  -> re-estimates and obtains final paymaster data
+  -> signs MetaMask DeleGator PackedUserOperation typed data
+  -> submits eth_sendUserOperation through the WalletChan Pimlico proxy
 
-WalletChan relay
-  -> independently validates and simulates D and C
-  -> submits DelegationManager.redeemDelegations(...)
-  -> pays native gas
-  -> receives F tokens only if atomic execution succeeds
+Pimlico bundler
+  -> validates and simulates the complete UserOperation
+  -> submits EntryPoint.handleOps(...)
+  -> Pimlico ERC-20 paymaster settles the bounded USDC fee
 ```
 
-For a fresh or differently delegated account, include an EIP-7702
-authorization to the canonical delegate in the relay's outer type-4
-transaction. Because the EOA is not the outer transaction sender, the
+For a fresh account, the same UserOperation carries `eip7702Auth` for the
+canonical delegate. Because the EOA is not the outer transaction sender, the
 authorization nonce is the EOA's current nonce, not WalletChan's existing
-`txNonce + 1` self-sponsored case. This must be implemented as a distinct
-signing helper and tested against the EIP-7702 processing order.
+`txNonce + 1` self-sponsored case. A differently delegated account is not
+silently overwritten: the review must show the one-time upgrade and require
+explicit confirmation.
 
-### Delegatee policy
+When the user selects the native token, WalletChan keeps the existing direct
+transaction/type-4 path. Native payment must not be wrapped in a UserOperation
+for v1; this limits change and avoids bundler overhead for an already healthy
+flow.
+
+### UserOperation construction contract
+
+- EntryPoint is the MetaMask v1.3 DeleGator's fixed v0.7 address
+  `0x0000000071727De22E5E9d8BAf0edAc6f37da032`.
+- Account calldata uses MetaMask Smart Accounts Kit semantics:
+  `execute` for one call and `executeWithMode` for a batch. Do not reuse the
+  self-call ERC-7821 envelope without verifying byte-for-byte compatibility.
+- The account signs MetaMask's `PackedUserOperation` EIP-712 domain
+  (`name = EIP7702StatelessDeleGator`, `version = 1`, verifying contract = the
+  EOA address) and includes the EntryPoint in the signed message.
+- Quote and paymaster responses are pinned to chain, account, calls hash,
+  token address, paymaster address, expiry, and bounded maximum token cost.
+- The extension builds all approval and execution calldata locally. Provider
+  responses are data inputs, never opaque executable calldata.
+- A failed or ambiguous submission is recovered by UserOperation hash and
+  receipt queries; it is never automatically resubmitted as a native-gas tx.
+
+### Custom relay fallback: delegatee policy
+
+The remainder of this section documents the previously researched exact
+ERC-7710 WalletChan relay. It is retained as a provider-outage or future
+chain-coverage fallback, not part of the first Pimlico implementation.
 
 MetaMask currently signs to an “any beneficiary” delegate and relies on exact
 execution plus a single-call caveat. WalletChan has two reasonable choices:
@@ -676,7 +700,7 @@ An exact post-execution refund requires another transfer from the relayer or a
 paymaster-style `postOp`, which adds state and failure modes. Do not add it to
 the first release. Keep quote lifetimes short and margins bounded instead.
 
-### ERC-4337 alternative
+### Pimlico ERC-4337 provider requirements
 
 The canonical MetaMask DeleGator implements `validateUserOp`, but v1.3.0 is
 immutably tied to EntryPoint v0.7. On a chain where a compatible token
@@ -691,8 +715,8 @@ EOA at same address
   -> bundler submits outer transaction
 ```
 
-This route is more standardized and gets post-op actual-cost settlement, but
-requires:
+This primary route is standardized and gets post-op actual-cost settlement,
+but requires:
 
 - MetaMask-specific UserOperation typed-data signing;
 - EntryPoint nonce management separate from EOA nonce management;
@@ -703,9 +727,10 @@ requires:
 - version-aware capabilities;
 - a second simulation stack.
 
-It is a useful per-chain backup if operating a custom relay is undesirable,
-but it cannot be the chain-neutral foundation unless one compatible provider
-demonstrates coverage across WalletChan's full smart-account chain set.
+USDC must be capability-gated per chain. Pimlico currently documents canonical
+USDC support on Ethereum, Base, Polygon, Arbitrum, and Optimism (plus their
+listed testnets). WalletChan must not offer USDC on another chain until both
+the token address and live Pimlico v0.7 quote/paymaster behavior are verified.
 
 ## WalletChan architecture fit
 
@@ -747,15 +772,16 @@ outer sender = EOA
 outer gas payer = EOA
 ```
 
-The gas-abstracted path should be a separate execution strategy selected after
-the same calls are prepared:
+The gas-abstracted path is a separate execution strategy selected after the
+same calls are prepared:
 
 ```text
-to = DelegationManager
-data = redeemDelegations(exact signed calls)
-outer sender = WalletChan relayer
-outer gas payer = WalletChan relayer
-token reimbursement = final exact inner call
+sender = user EOA with MetaMask Stateless DeleGator code
+callData = DeleGator execute(...) or executeWithMode(...)
+envelope = EntryPoint v0.7 PackedUserOperation
+outer sender = Pimlico bundler
+outer gas payer = Pimlico ERC-20 paymaster
+token settlement = bounded USDC paymaster charge
 ```
 
 Do not overload `confirmTransactionAsyncPK` with remote quote/submission
@@ -763,15 +789,16 @@ business logic. The future implementation should use focused modules such as:
 
 ```text
 chrome/
-  feePaymentQuote.ts             # types, strict response parsing, expiry
+  pimlicoClient.ts               # bounded JSON-RPC transport and strict parsing
+  pimlicoUserOperation.ts        # v0.7 construction, packing, typed-data signing
+  pimlicoPaymaster.ts            # token quote, allowance, final paymaster data
   feePaymentEligibility.ts       # account/chain/token/call eligibility
   feePaymentIntent.ts            # exact calls hash and local reconstruction
-  feePaymentDelegation.ts        # one-time ERC-7710 caveats/signing
-  feePaymentAuthorization.ts     # relayed EIP-7702 auth nonce/signing
+  feePaymentAuthorization.ts     # third-party EIP-7702 auth nonce/signing
   feePaymentHandlers.ts          # extension-only prepare/confirm/cancel routes
-  feePaymentSubmission.ts        # idempotent relay submit + status poll
-  feePaymentStorage.ts           # pending job persistence and reconciliation
-  feePaymentTokens.ts            # signed allowlist and metadata
+  feePaymentSubmission.ts        # UserOp submit + receipt recovery
+  feePaymentStorage.ts           # pending UserOp persistence and reconciliation
+  feePaymentTokens.ts            # built-in chain/token capability catalog
 ```
 
 `background.ts` remains a router.
@@ -803,8 +830,8 @@ The planner decides execution strategy only after the user selects a fee plan:
 ```text
 native + Bankr       -> existing Bankr API path
 native + PK/seed     -> existing direct/type-4 path
-token + PK/seed      -> exact delegation relay
-sponsored + PK/seed  -> exact delegation relay without fee transfer
+token + PK/seed      -> MetaMask DeleGator UserOp + Pimlico paymaster
+sponsored + PK/seed  -> future sponsor adapter
 token + Bankr        -> Bankr-specific adapter or unsupported
 view-only            -> never executable
 ```
@@ -819,9 +846,9 @@ must test all three signing types as required by `AGENTS.md`.
 
 Feasible with the recommended model:
 
-- sign exact ERC-7710 typed data locally;
+- sign the exact MetaMask DeleGator PackedUserOperation typed data locally;
 - sign relayed EIP-7702 authorization locally when needed;
-- never expose the private key to relay or renderer;
+- never expose the private key to Pimlico, the proxy, or renderer;
 - agent-password policy may allow a single-use exact transaction intent only
   after the authority policy described below is implemented.
 
@@ -833,10 +860,11 @@ quote is open.
 
 #### Bankr API account
 
-The Bankr Wallet API can sign EIP-712 typed data, so it can theoretically sign
-the exact ERC-7710 delegation if the onchain account already uses the canonical
-MetaMask delegate. WalletChan's existing sponsored Base-USDC transfer proves
-that all three signing types can participate in a typed-data relay flow.
+The Bankr Wallet API can sign some EIP-712 typed data, but the first release
+must report USDC gas payment as unsupported until its ability to sign the exact
+MetaMask PackedUserOperation domain and first-use EIP-7702 authorization is
+proven. WalletChan's existing sponsored Base-USDC transfer does not establish
+that broader capability.
 
 The blocking first-use issue is the EIP-7702 authorization tuple. Bankr's
 public Wallet API documents `personal_sign`, `eth_signTypedData_v4`, and
@@ -976,7 +1004,7 @@ The main review shows total payment. Advanced details show:
 
 ```text
 Network cost estimate             $0.22
-WalletChan relay fee              $0.04
+Provider/service fee              $0.04
 You pay                       0.26 USDC
 Quote expires in                     38s
 ```
@@ -988,8 +1016,8 @@ to validators.
 Advanced smart-account detail:
 
 ```text
-Execution: Sponsored smart-account transaction
-Gas payer: WalletChan relayer
+Execution: ERC-4337 smart-account transaction
+Gas payer: Pimlico ERC-20 paymaster
 Account delegate: MetaMask Stateless DeleGator
 ```
 
@@ -1169,9 +1197,11 @@ continues through the existing bridge state machine.
 Require all of:
 
 - chain has EIP-7702 active;
-- canonical v1.3 DeleGator, DelegationManager, and required enforcers have code
-  at expected addresses;
-- configured WalletChan relay has funded native inventory and healthy RPC;
+- canonical v1.3 DeleGator has code at the expected address and its fixed
+  EntryPoint v0.7 is available;
+- chain/token pair is in WalletChan's built-in Pimlico USDC capability catalog;
+- live Pimlico token quote, paymaster, bundler, and receipt endpoints pass
+  bounded health checks;
 - simulation supports the final envelope;
 - chain gas model is explicitly tested;
 - chain finality/reorg policy is configured;
@@ -1532,37 +1562,129 @@ and WalletChan's relay envelope.
 - agent session signs a reusable or non-exact delegation;
 - relayer key submits outside allowed manager/destination policy.
 
+## Implementation task breakdown
+
+These tasks are ordered delivery units. Each task must leave the native-gas
+path working and must be tested against private-key, seed-phrase, and Bankr API
+account behavior before the next task is considered complete.
+
+### Task 1: provider and capability foundation
+
+**Implementation status:** complete; production enablement remains chain-gated.
+
+- Add a typed Pimlico JSON-RPC client for EntryPoint v0.7 token quotes,
+  paymaster data, UserOperation estimation/submission, and receipts.
+- Route requests through a bounded, policy-constrained WalletChan proxy so a
+  reusable Pimlico API key is never shipped in extension code.
+- Add an address-based fee-token catalog containing native currency and exact
+  Pimlico-supported ERC-20 entries; enable only chain/token pairs returned by
+  live provider capability checks.
+- Fail closed when the chain, EntryPoint, token, delegate, or provider response
+  does not match the built-in capability definition.
+
+### Task 2: MetaMask DeleGator UserOperation construction
+
+**Implementation status:** complete with byte/signature compatibility tests.
+
+- Implement `execute`/`executeWithMode` calldata using the official MetaMask
+  Smart Accounts Kit behavior as the compatibility reference.
+- Implement v0.7 PackedUserOperation packing, hashing, nonce lookup, gas
+  estimation, and MetaMask DeleGator EIP-712 signing.
+- Keep this strategy separate from WalletChan's existing EOA-funded EIP-7702
+  self-call encoding.
+- Unit-test single calls, batches, value calls, reverts, and signature recovery.
+
+### Task 3: USDC quote, allowance, and first-use upgrade
+
+**Implementation status:** complete for fresh local accounts and already
+officially delegated Bankr/local accounts; foreign delegates fail closed.
+
+- Fetch `pimlico_getTokenQuotes`, calculate a bounded maximum USDC cost, and
+  obtain final `pm_getPaymasterData` after all calls are fixed.
+- Read USDC allowance and prepend `approve(paymaster, boundedMaxCost)` only when
+  insufficient. Never request an unlimited allowance.
+- Add a distinct third-party-sender EIP-7702 authorization signer using the
+  EOA's current nonce, and attach `eip7702Auth` for a fresh account.
+- Treat an undelegated local account as a visible one-time upgrade. A different
+  or unknown delegate fails closed and is never overwritten implicitly.
+
+### Task 4: background execution and lifecycle
+
+**Implementation status:** complete, including pre-broadcast deterministic-hash
+recovery and independently verified EntryPoint receipt finality.
+
+- Add focused quote, prepare, submit, and receipt modules; keep
+  `background.ts` as routing only.
+- Persist only the minimum pending UserOperation state needed to recover after
+  an MV3 worker restart, with idempotent migration and bounded retention.
+- Map UserOperation states to WalletChan Activity and ERC-5792 statuses without
+  inventing success before the transaction receipt is final.
+- Handle timeout-after-submit as outcome unknown and recover by hash.
+
+### Task 5: confirmation UX
+
+**Implementation status:** complete for single and ERC-5792 confirmation.
+
+- Add a compact **Pay network fee with** row to single and batch confirmation.
+- Open an action sheet containing only currently eligible native and USDC
+  options, with token amount, fiat estimate, balance, and insufficiency state.
+- Show **One-time smart account upgrade** in the same review when first-use
+  authorization is required; preserve one final Confirm action.
+- Put EntryPoint, bundler, paymaster, allowance, and UserOperation details under
+  Advanced. Use the existing Warm Midnight/Bauhaus tokens and selection states.
+
+### Task 6: account and flow gates
+
+**Implementation status:** complete for the v1 single/Send and atomic ERC-5792
+scope; swap, bridge, cross-dapp custom batches, and Max remain deliberately
+deferred.
+
+- Enable signing for private-key and seed-phrase accounts first.
+- Capability-gate Bankr API accounts and return a precise unsupported error
+  until Bankr can sign both the MetaMask UserOperation typed data and the
+  first-use authorization tuple.
+- Start with dapp single transactions and Send; then add atomic ERC-5792
+  batches. Defer swap, bridge, and Max flows until reserve/fixed-point tests
+  pass.
+
+### Task 7: verification and release hardening
+
+**Implementation status:** automated unit/integration coverage and docs are in
+place. Base Sepolia zero-native proofs, the manual three-wallet matrix, and
+external review remain release gates.
+
+- First prove Base Sepolia with a zero-native test account: already delegated
+  and fresh-account authorization, private-key then seed-phrase.
+- Run unit/integration tests for quote pinning, malicious provider responses,
+  approval bounds, nonce races, replay, replacement, reverts, and ambiguous
+  submission.
+- Run the full extension build and manual three-account-type matrix.
+- Update implementation, security, storage, and design documentation before
+  release; require an external review before mainnet enablement.
+
 ## Rollout plan and gates
 
 ### Phase 0: local research prototype
 
-- Reproduce MetaMask's exact-delegation transaction on a local Pectra chain.
-- Use the canonical v1.3 DeleGator, DelegationManager, LimitedCalls, Exact
-  Execution, Timestamp, and Redeemer enforcers.
-- Prove a third-party-funded first EIP-7702 authorization plus repayment in an
-  allowlisted ERC-20 (use USDC for the first fixture where available).
-- Verify replay rejection, nonce semantics, atomic revert, and code state when
-  execution reverts.
+- Reproduce the official MetaMask v1.3 DeleGator UserOperation signature and
+  call encoding against EntryPoint v0.7.
+- Prove Pimlico bundler submission and ERC-20 paymaster settlement on Base
+  Sepolia with test USDC.
+- Prove both already-delegated and first-use `eip7702Auth` accounts with zero
+  native balance.
+- Verify replay rejection, nonce semantics, approval behavior, atomic revert,
+  and delegated-code state when execution reverts.
 - No production API or UI.
 
-### Phase 1: multi-chain test relays
+### Phase 1: Base Sepolia extension slice
 
 - PK and seed only.
-- Canonical USDC where available; otherwise one vetted canonical stablecoin or
-  a test token used only to validate execution mechanics.
 - Send and a fixed test contract call.
-- At least one representative chain from each gas family in the first harness:
-  Ethereum L1, OP Stack, Arbitrum-style rollup, non-ETH-native EVM, MegaETH
-  dual-gas, and Tempo's fee-token model.
-- Then run the same conformance suite on every WalletChan EIP-7702 built-in
-  before any general availability claim.
-- Strict per-user rate limit and tiny per-chain relay hot balances.
-- Persistent job/idempotency model.
-- Compare the custom exact-delegation relay with compatible EntryPoint v0.7
-  paymasters on every chain where one exists. Circle on Base/Arbitrum is one
-  benchmark, not the scope boundary. Keep CDP as an API/UX benchmark because
-  its current EntryPoint v0.6 is incompatible with the canonical MetaMask v1.3
-  delegate.
+- Thin WalletChan proxy with origin/auth/rate/size limits and no extension-side
+  provider secret.
+- Persistent UserOperation lifecycle and restart recovery.
+- Native/USDC picker and visible one-time-upgrade state.
+- Explicit unsupported behavior for Bankr API accounts.
 
 Exit gate:
 
@@ -1573,11 +1695,11 @@ Exit gate:
 - outcome-unknown recovery is safe;
 - fee accounting reconciles exactly.
 
-### Phase 2: limited multi-chain private beta
+### Phase 2: five-chain private beta
 
 - dapp single transactions and Send;
-- a reviewed initial set of chain/token pairs selected from the full scope by
-  test readiness, not by treating any one chain as WalletChan's home chain;
+- canonical USDC on Ethereum, Base, Polygon, Arbitrum, and Optimism, enabled
+  independently after live v0.7 quote/paymaster conformance;
 - native-insufficient automatic selection;
 - per-chain sponsor budgets for failed/reverted transactions;
 - user-visible service fee and relayer terms;
@@ -1651,12 +1773,11 @@ insufficient. Evaluate:
 
 ## Open decisions
 
-1. Operate one chain-neutral WalletChan exact-delegation relay network or a
-   patchwork of per-chain ERC-4337 providers?
+1. What authentication, quota, and deployment model should the thin Pimlico
+   API-key proxy use?
 2. Fixed token fee or actual-cost refund/accounting?
 3. Fee collector per chain or deterministic same address?
-4. Redeemer-constrained delegation or any redeemer with exact short-lived
-   authority?
+4. Which secondary v0.7 bundler/paymaster should be qualified for failover?
 5. Who absorbs gas for onchain reverts, and what limits apply?
 6. Should true WalletChan sponsorship be a premium benefit, while token-paid
    relay remains available to everyone?
@@ -1697,6 +1818,12 @@ insufficient. Evaluate:
 
 ### Paymasters and infrastructure
 
+- [Pimlico ERC-20 paymaster](https://docs.pimlico.io/references/paymaster/erc20-paymaster)
+- [Pimlico supported ERC-20 tokens](https://docs.pimlico.io/references/paymaster/erc20-paymaster/supported-tokens)
+- [Pimlico token quotes](https://docs.pimlico.io/references/paymaster/erc20-paymaster/endpoints/pimlico_getTokenQuotes)
+- [Pimlico paymaster data](https://docs.pimlico.io/references/paymaster/erc20-paymaster/endpoints/pm_getPaymasterData)
+- [Pimlico send UserOperation](https://docs.pimlico.io/references/bundler/endpoints/eth_sendUserOperation)
+- [Pimlico permissionless.js inspected commit](https://github.com/pimlicolabs/permissionless.js/tree/660c8e25fe455faf05deaa258f54789b5abc14ab)
 - [Coinbase CDP ERC-20 gas payments](https://docs.cdp.coinbase.com/paymaster/guides/erc20-gas-payments)
 - [Coinbase CDP Paymaster](https://docs.cdp.coinbase.com/paymaster/introduction/welcome)
 - [Coinbase CDP EntryPoint compatibility](https://docs.cdp.coinbase.com/api-reference/json-rpc-api/paymaster)
@@ -1712,21 +1839,23 @@ WalletChan does not need a new smart-account contract to solve the USDC-only
 account problem. It already defaults to the contract family MetaMask uses for
 this exact feature.
 
-The optimal first build is:
+The approved first build is:
 
 - keep the ordinary confirmation;
 - add a changeable **Paid with** asset to the Network fee row;
 - auto-rescue insufficient native balance with canonical USDC;
-- sign a short-lived, exact, single-use ERC-7710 delegation containing the
-  user's calls and an exact USDC fee transfer;
-- let a tightly controlled WalletChan relay submit through the canonical
-  DelegationManager and pay native gas;
-- treat ERC-4337 paymasters as per-chain fallbacks/benchmarks where their exact
-  EntryPoint and chain coverage match;
+- build and sign the official MetaMask DeleGator PackedUserOperation for its
+  fixed EntryPoint v0.7;
+- obtain a bounded USDC quote/paymaster envelope and submit through Pimlico;
+- include first-use `eip7702Auth` in the UserOperation submission so a
+  zero-native account can install WalletChan's official delegate atomically;
+- protect the Pimlico credential behind a thin, rate-limited WalletChan proxy;
+- retain the researched exact ERC-7710 custom relay as a future fallback;
 - defer prepaid cross-chain Gas Tank until the custody and demand justify it.
 
-The largest engineering risks are not EIP-7702 itself. They are relayer
-economics on reverts, exact intent reconstruction, first-use authorization
-nonce correctness, quote/idempotency behavior across MV3 restarts, Max balance
-accounting in swap/bridge/send, and honest capability handling for Bankr API
-accounts. Those should be the gates around any implementation plan.
+The largest engineering risks are not EIP-7702 itself. They are exact
+MetaMask-compatible UserOperation construction, malicious or stale paymaster
+responses, bounded allowance handling, first-use authorization nonce
+correctness, outcome-unknown recovery across MV3 restarts, API-key abuse,
+Max-balance accounting, and honest capability handling for Bankr API accounts.
+Those are release gates, not follow-up polish.

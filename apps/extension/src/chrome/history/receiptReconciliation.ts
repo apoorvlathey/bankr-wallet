@@ -1,6 +1,7 @@
 import { FLASHBLOCKS_CHAIN_IDS } from "../../constants/networks";
 import { getRpcUrl } from "../transactions/rpcConfig";
 import { extractAssetChangesFromConfirmedReceipt } from "./assetChangeExtraction";
+import { isWalletOuterGasPayer } from "./nativeDelta";
 import { seedRecentlyReceivedSafely } from "./assetChangePersistence";
 import { buildHistoryGasData } from "./receiptGasData";
 import { getTxById, updateTxInHistory } from "./repository";
@@ -32,7 +33,13 @@ export async function queueReceiptDerivedHistoryReconciliation(
     return { success: true, queued: false };
   }
 
-  void reconcile(txId, tx.txHash, tx.chainId, tx.tx.from);
+  void reconcile(
+    txId,
+    tx.txHash,
+    tx.chainId,
+    tx.tx.from,
+    isWalletOuterGasPayer(tx.feePaymentToken),
+  );
   return { success: true, queued: true };
 }
 
@@ -41,6 +48,7 @@ async function reconcile(
   txHash: string,
   chainId: number,
   sender: string,
+  payerForGas: boolean,
 ): Promise<void> {
   try {
     const rpcUrl = await getRpcUrl(chainId);
@@ -60,7 +68,7 @@ async function reconcile(
         userAddress: sender,
         chainId,
         rpcUrl,
-        payerForGas: true,
+        payerForGas,
       }),
       fetchTxAtRpcUrl(rpcUrl, txHash),
     ]);

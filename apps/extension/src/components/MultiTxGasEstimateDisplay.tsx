@@ -1,14 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, memo } from "react";
-import {
-  Box,
-  VStack,
-  HStack,
-  Text,
-  Input,
-  IconButton,
-  Tooltip,
-  Icon,
-} from "@chakra-ui/react";
+import { Box, VStack, HStack, Text, Input, IconButton, Tooltip } from "@chakra-ui/react";
 import { WarningIcon, ExternalLinkIcon } from "@chakra-ui/icons";
 import { GasEstimate } from "@/chrome/gasEstimation";
 import {
@@ -37,20 +28,8 @@ import {
   getBatchedNativeOutlayWei,
   getInsufficientBalanceMessage,
 } from "@/components/GasEstimate/model/balanceWarnings";
-
-// Inline icons for the Auto / Edited badge — kept in sync with
-// GasEstimateDisplay.tsx so single-tx and batch UX read identically.
-const ChainLinkIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
-  </Icon>
-);
-
-const PencilIcon = (props: any) => (
-  <Icon viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-  </Icon>
-);
+import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
+import { ChainLinkIcon, PencilIcon } from "@/components/GasEstimate/BatchGasIcons";
 
 interface TxGasInput {
   tx: {
@@ -95,6 +74,7 @@ interface MultiTxGasEstimateDisplayProps {
    * issuing duplicate CoinGecko lookups.
    */
   onNativePriceUsd?: (priceUsd: number | null) => void;
+  onFeeSummaryChange?: (summary: NativeFeePaymentSummary | null) => void;
   /** When true, estimate gas for L1 deposit transactions (force inclusion) */
   forceInclusion?: boolean;
   /**
@@ -231,6 +211,7 @@ function MultiTxGasEstimateDisplay({
   onGasEstimates,
   onValidityChange,
   onNativePriceUsd,
+  onFeeSummaryChange,
   forceInclusion,
   onAnyFailedChange,
   eip7702Delegate,
@@ -915,6 +896,22 @@ function MultiTxGasEstimateDisplay({
   const totalCostWei = perCallDisplayCostWei
     .reduce((sum, w) => sum + BigInt(w || "0"), 0n)
     .toString();
+
+  const firstEstimate = validEstimates[0];
+  const feeSummary = useMemo<NativeFeePaymentSummary | null>(() => {
+    const seed = firstEstimate;
+    if (!seed) return null;
+    return {
+      amount: formatEthCompact(totalCostWei, sym),
+      fiat: formatWeiToUsd(totalCostWei, nativePriceUsd) || null,
+      balance: formatEthCompact(seed.accountBalance || "0", sym),
+      insufficient: anyInsufficient,
+    };
+  }, [anyInsufficient, firstEstimate, nativePriceUsd, sym, totalCostWei]);
+
+  useEffect(() => {
+    onFeeSummaryChange?.(feeSummary);
+  }, [feeSummary, onFeeSummaryChange]);
 
   // Detect which calls used the hardcoded fallback instead of a real estimate.
   // Read from passthroughEstimates (the L2 gas source — for force inclusion

@@ -7,6 +7,8 @@ export const BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES = [
   "confirmTransactionAsync",
   "confirmTransactionAsyncPK",
   "confirmTransactionAsyncLedger",
+  "getFeePaymentOptions",
+  "prepareFeePaymentQuote",
   "initiateTransfer",
 ] as const;
 
@@ -22,6 +24,8 @@ export type BackgroundTransactionExecutionDependencies = {
     password: string,
     functionName?: string,
     forceInclusion?: boolean,
+    feePaymentToken?: "native" | "token",
+    feePaymentQuoteId?: string,
   ) => Promise<any>;
   handleConfirmTransactionAsyncPK: (
     txId: string,
@@ -30,6 +34,8 @@ export type BackgroundTransactionExecutionDependencies = {
     functionName?: string,
     gasOverrides?: any,
     forceInclusion?: boolean,
+    feePaymentToken?: "native" | "token",
+    feePaymentQuoteId?: string,
   ) => Promise<any>;
   handleConfirmTransactionAsyncLedger: (
     txId: string,
@@ -44,6 +50,13 @@ export type BackgroundTransactionExecutionDependencies = {
   pendingResolutionConflict: (action: any) => any;
   writeResultToStorage: (key: string, result: any) => Promise<void>;
   readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
+  getFeePaymentOptions: (txId: string) => Promise<any>;
+  getBatchFeePaymentOptions: (bundleId: string) => Promise<any>;
+  prepareFeePaymentQuote: (
+    family: "transaction" | "batchTransaction",
+    requestId: string,
+    tokenId: unknown,
+  ) => Promise<any>;
 };
 
 const HANDLED_ASYNC: BackgroundTransactionExecutionRouteResult = {
@@ -55,6 +68,23 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function feePaymentToken(value: unknown): "native" | "token" {
+  if (value === undefined || value === "native") return "native";
+  if (value === "token") return "token";
+  throw new Error("Invalid gas-payment token");
+}
+
+function validatedFeePaymentToken(
+  value: unknown,
+  forceInclusion: unknown,
+): "native" | "token" {
+  const token = feePaymentToken(value);
+  if (token === "token" && forceInclusion === true) {
+    throw new Error("Force inclusion requires native gas payment");
+  }
+  return token;
+}
+
 export function createBackgroundTransactionExecutionMessageRouter(
   dependencies: BackgroundTransactionExecutionDependencies,
 ): (
@@ -64,6 +94,35 @@ export function createBackgroundTransactionExecutionMessageRouter(
 ) => BackgroundTransactionExecutionRouteResult {
   return (message, sender, sendResponse) => {
     switch (message?.type) {
+      case "getFeePaymentOptions": {
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        const query = message.requestKind === "batch"
+          ? dependencies.getBatchFeePaymentOptions(txId)
+          : dependencies.getFeePaymentOptions(txId);
+        query.then(sendResponse).catch((error) =>
+          sendResponse({
+            success: false,
+            error: errorMessage(error, "Failed to load gas-payment options"),
+          }),
+        );
+        return HANDLED_ASYNC;
+      }
+
+      case "prepareFeePaymentQuote": {
+        const requestId =
+          typeof message.requestId === "string" ? message.requestId : "";
+        const family = message.requestKind === "batch"
+          ? "batchTransaction"
+          : "transaction";
+        dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken)
+          .then(sendResponse)
+          .catch((error) => sendResponse({
+            success: false,
+            error: errorMessage(error, "Failed to prepare fee-token quote"),
+          }));
+        return HANDLED_ASYNC;
+      }
+
       case "confirmTransaction": {
         const txId = typeof message.txId === "string" ? message.txId : "";
         dependencies
@@ -118,6 +177,11 @@ export function createBackgroundTransactionExecutionMessageRouter(
                 message.password,
                 message.functionName,
                 message.forceInclusion,
+                validatedFeePaymentToken(
+                  message.feePaymentToken,
+                  message.forceInclusion,
+                ),
+                message.feePaymentQuoteId,
               ),
             conflictResult: dependencies.pendingResolutionConflict,
           })
@@ -147,6 +211,11 @@ export function createBackgroundTransactionExecutionMessageRouter(
                 message.functionName,
                 message.gasOverrides,
                 message.forceInclusion,
+                validatedFeePaymentToken(
+                  message.feePaymentToken,
+                  message.forceInclusion,
+                ),
+                message.feePaymentQuoteId,
               ),
             conflictResult: dependencies.pendingResolutionConflict,
           })

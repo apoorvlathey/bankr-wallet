@@ -1,10 +1,16 @@
 import { HStack, Text, VStack } from "@chakra-ui/react";
+import { useState } from "react";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import ChainIcon from "@/components/ChainIcon";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import type { ForceInclusionInfo } from "./types";
+import {
+  FeePaymentSelector,
+  type FeePaymentQuoteSummary,
+} from "@/components/FeePaymentSelector";
+import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
 
 interface EncodedBatch {
   to: string;
@@ -28,6 +34,12 @@ interface BatchDecisionSummaryProps {
   onGasEstimates: (estimates: GasEstimate[]) => void;
   onGasValidityChange: (valid: boolean) => void;
   onAnyFailedChange: (failed: boolean) => void;
+  bundleId: string;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuote: FeePaymentQuoteSummary | null;
+  allowFeePaymentSelection: boolean;
+  onFeePaymentTokenChange: (token: "native" | `0x${string}`) => void;
+  onFeePaymentQuoteChange: (quote: FeePaymentQuoteSummary | null) => void;
 }
 
 /** Keeps the pinned signer, execution route, and batch gas at the decision point. */
@@ -47,7 +59,16 @@ export function BatchDecisionSummary({
   onGasEstimates,
   onGasValidityChange,
   onAnyFailedChange,
+  bundleId,
+  feePaymentToken,
+  feePaymentQuote,
+  allowFeePaymentSelection,
+  onFeePaymentTokenChange,
+  onFeePaymentQuoteChange,
 }: BatchDecisionSummaryProps) {
+  const [nativeFeeSummary, setNativeFeeSummary] =
+    useState<NativeFeePaymentSummary | null>(null);
+
   return (
     <VStack align="stretch" spacing={2}>
       <HStack minW={0} justify="space-between" spacing={3}>
@@ -58,6 +79,20 @@ export function BatchDecisionSummary({
           <FromAccountDisplay address={fromAddress} />
         </HStack>
       </HStack>
+
+      {allowFeePaymentSelection && (
+        <FeePaymentSelector
+          txId={bundleId}
+          chainId={chainId}
+          requestKind="batch"
+          value={feePaymentToken}
+          quote={feePaymentQuote}
+          disabled={forceInclusion}
+          nativeSummary={nativeFeeSummary}
+          onChange={onFeePaymentTokenChange}
+          onQuoteChange={onFeePaymentQuoteChange}
+        />
+      )}
 
       {forceInclusion && forceInclusionInfo && (
         <HStack minW={0} justify="space-between" spacing={3}>
@@ -85,7 +120,7 @@ export function BatchDecisionSummary({
         </HStack>
       )}
 
-      <MultiTxGasEstimateDisplay
+      {feePaymentToken === "native" && <MultiTxGasEstimateDisplay
         transactions={calls.map((call, index) => ({
           tx: {
             from: fromAddress,
@@ -118,7 +153,8 @@ export function BatchDecisionSummary({
               }
         }
         eip7702Delegate={eip7702Delegate}
-      />
+        onFeeSummaryChange={setNativeFeeSummary}
+      />}
     </VStack>
   );
 }
