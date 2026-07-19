@@ -26,7 +26,7 @@ export function RecipientSection({
 }: RecipientSectionProps) {
   const { tokens } = useTheme();
   const [activeSuggestion, setActiveSuggestion] = useState(0);
-  const [dismissedRecipient, setDismissedRecipient] = useState("");
+  const [isSuggestionsOpen, setSuggestionsOpen] = useState(false);
   const suggestionListId = useId();
   const {
     recipient,
@@ -47,9 +47,15 @@ export function RecipientSection({
     selectRecipientAddress,
   } = recipientState;
   const hasRecipientChoices = otherAccounts.length + recipientContacts.length > 0;
-  const showSuggestions = suggestions.length > 0 && dismissedRecipient !== recipient;
+  const showSuggestions = isSuggestionsOpen && suggestions.length > 0;
 
   useEffect(() => setActiveSuggestion(0), [recipient, suggestions.length]);
+  useEffect(() => {
+    if (!showSuggestions) return;
+    document
+      .getElementById(`${suggestionListId}-${activeSuggestion}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeSuggestion, showSuggestions, suggestionListId]);
 
   return (
     <Box>
@@ -102,8 +108,10 @@ export function RecipientSection({
           id="send-recipient"
           placeholder="0x, contacts, .eth, .gwei"
           value={recipient}
+          onFocus={() => setSuggestionsOpen(true)}
+          onClick={() => setSuggestionsOpen(true)}
           onChange={(event) => {
-            setDismissedRecipient("");
+            setSuggestionsOpen(true);
             setRecipient(event.target.value);
           }}
           onKeyDown={(event) => {
@@ -119,14 +127,14 @@ export function RecipientSection({
               const selected = suggestions[activeSuggestion];
               if (selected) {
                 selectRecipientAddress(selected.address);
-                setDismissedRecipient(selected.address);
+                setSuggestionsOpen(false);
               }
             } else if (event.key === "Escape") {
               event.preventDefault();
-              setDismissedRecipient(recipient);
+              setSuggestionsOpen(false);
             }
           }}
-          onBlur={() => window.setTimeout(() => setDismissedRecipient(recipient), 100)}
+          onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 100)}
           fontFamily="mono"
           fontSize="md"
           autoComplete="off"
@@ -155,7 +163,8 @@ export function RecipientSection({
             borderColor="border.default"
             borderRadius="lg"
             boxShadow="overlay"
-            overflow="hidden"
+            maxH="min(320px, 45vh)"
+            overflowY="auto"
           >
             {suggestions.map((suggestion, index) => (
               <Box
@@ -170,10 +179,10 @@ export function RecipientSection({
                 borderBottom={index < suggestions.length - 1 ? "1px solid" : undefined}
                 borderColor="border.subtle"
                 onMouseEnter={() => setActiveSuggestion(index)}
-                onMouseDown={(event) => {
-                  event.preventDefault();
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
                   selectRecipientAddress(suggestion.address);
-                  setDismissedRecipient(suggestion.address);
+                  setSuggestionsOpen(false);
                 }}
               >
                 <HStack justify="space-between" spacing={3}>

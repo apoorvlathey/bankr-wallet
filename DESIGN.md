@@ -242,11 +242,16 @@
 
 ## Slop audit
 
+- 2026-07-20 Send recipient-discovery audit: opening or clicking the recipient
+  input now reveals its wallet and contact suggestions immediately. An empty
+  query shows the complete ordered set in a bounded scrollable combobox, while
+  typing keeps the existing relevance-ranked search and concise placeholder.
 - 2026-07-20 home RPC-alert audit: collapsed the warning into a compact
-  two-row status surface. The affected chain and dismissal action now share
-  the header, while the shortened recovery guidance receives the full width
-  beneath it instead of wrapping inside a narrow middle column. Multi-chain
-  warnings show one chain plus a count so narrow popup layouts remain stable.
+  two-row status surface. The title and quiet compact dismissal action share
+  the header; the affected-chain control and intentional two-line recovery
+  guidance form one grouped context row beneath it. Multi-chain warnings show
+  one chain plus a compact count so narrow popup layouts remain stable without
+  stranding the chain pill or breaking guidance mid-sentence.
 - 2026-07-20 manual add-token audit: the final Add token/Add back action now
   uses WalletChan amber in both enabled and disabled states, matching the
   screen's saved-state commitment while leaving blue reserved for focus and

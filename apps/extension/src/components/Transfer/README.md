@@ -32,7 +32,9 @@ existing direct and lazy imports retain the same default-export contract.
   clicked token and chain.
 - `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
   cached-public-name matching, relevance ranking, and stored-order tie breaking
-  for the recipient combobox. Suggestion rows reuse the shared safe avatar and
+  for the recipient combobox. Focusing an empty recipient input exposes every
+  eligible wallet and contact in group order; typed queries keep the bounded
+  relevance-ranked results. Suggestion rows reuse the shared safe avatar and
   blockie fallback used by the full contact picker.
 
 ## Hooks and effects

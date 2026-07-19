@@ -28,6 +28,8 @@ test("Address Book and Send share contact identity enrichment and contact-list c
   assert.match(picker, /trailing\?: ReactNode/u);
   assert.match(recipientSection, /AddressContactAvatar/u);
   assert.match(recipientSection, /placeholder="0x, contacts, \.eth, \.gwei"/u);
+  assert.match(recipientSection, /onFocus=\{\(\) => setSuggestionsOpen\(true\)\}/u);
+  assert.match(recipientSection, /onClick=\{\(\) => setSuggestionsOpen\(true\)\}/u);
   assert.match(
     recipientSection,
     /<HStack spacing=\{1\}>[\s\S]*?Recipient[\s\S]*?hasRecipientChoices && \([\s\S]*?My contacts/u,

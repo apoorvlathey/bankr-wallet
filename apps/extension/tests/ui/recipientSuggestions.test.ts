@@ -39,3 +39,21 @@ test("recipient suggestions match cached public names", () => {
     { label: "VVV", publicName: "vitalik.eth" },
   ]);
 });
+
+test("an empty recipient query returns every wallet and contact in group order", () => {
+  const accounts = [
+    wallet("two", "0x2222222222222222222222222222222222222222", "Wallet Two"),
+    wallet("one", "0x1111111111111111111111111111111111111111", "Wallet One"),
+  ];
+  const contacts = Array.from({ length: 7 }, (_, index) => ({
+    address: `0x${String(index + 3).padStart(40, "0")}` as `0x${string}`,
+    label: `Contact ${index + 1}`,
+  }));
+  const result = buildRecipientSuggestions("", accounts, contacts, (account) => account.displayName || account.address);
+
+  assert.equal(result.length, 9);
+  assert.deepEqual(
+    result.map(({ label }) => label),
+    ["Wallet Two", "Wallet One", ...contacts.map(({ label }) => label)],
+  );
+});

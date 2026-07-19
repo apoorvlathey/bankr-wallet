@@ -87,8 +87,8 @@ export function RpcIssueAlert({
       px={3}
       py={2}
     >
-      <VStack align="stretch" spacing={1}>
-        <HStack spacing={2}>
+      <VStack align="stretch" spacing={1.5}>
+        <HStack spacing={2} w="full">
           <Box
             p={1}
             bg={isDarkTheme ? "status.warning.fg" : "accent.secondary"}
@@ -104,7 +104,8 @@ export function RpcIssueAlert({
             />
           </Box>
           <Text
-            flexShrink={0}
+            flex={1}
+            minW={0}
             fontSize="2xs"
             fontWeight="800"
             color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
@@ -113,8 +114,26 @@ export function RpcIssueAlert({
           >
             RPC issue detected
           </Text>
+          <Button
+            size="xs"
+            variant="ghost"
+            color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
+            fontSize="2xs"
+            fontWeight="700"
+            h="24px"
+            minH="24px"
+            minW="auto"
+            px={1.5}
+            flexShrink={0}
+            _hover={{ bg: "whiteAlpha.200" }}
+            onClick={onDismiss}
+          >
+            Dismiss
+          </Button>
+        </HStack>
+        <HStack spacing={2} align="center" minW={0}>
           {hasResolvedChain && (
-            <HStack flex={1} minW={0} spacing={1} overflow="hidden">
+            <HStack spacing={1} flexShrink={0}>
               {chainIds.slice(0, 1).map((chainId) => {
                 const chain = getResolvedChainById(chainId, networksInfo);
                 if (!chain) return null;
@@ -128,7 +147,8 @@ export function RpcIssueAlert({
                     borderColor="border.default"
                     borderRadius={isDarkTheme ? "md" : undefined}
                     px={1.5}
-                    h="24px"
+                    h="26px"
+                    minH="26px"
                     minW={0}
                     flexShrink={0}
                     _hover={{ bg: "surface.raisedHover" }}
@@ -162,32 +182,28 @@ export function RpcIssueAlert({
                   opacity={0.8}
                   whiteSpace="nowrap"
                 >
-                  +{chainIds.length - 1} more
+                  +{chainIds.length - 1}
                 </Text>
               )}
             </HStack>
           )}
-          <Button
-            size="xs"
-            variant="ghost"
-            color={isDarkTheme ? "status.warning.fg" : "status.info.fg"}
-            fontWeight="700"
-            flexShrink={0}
-            _hover={{ bg: "whiteAlpha.200" }}
-            onClick={onDismiss}
+          <Text
+            flex={1}
+            minW={0}
+            fontSize="xs"
+            color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
+            fontWeight="600"
+            lineHeight="short"
+            opacity={isDarkTheme ? 1 : 0.9}
           >
-            Dismiss
-          </Button>
+            <Text as="span" display="block">
+              Balances may be stale.
+            </Text>
+            <Text as="span" display="block">
+              Check RPC settings.
+            </Text>
+          </Text>
         </HStack>
-        <Text
-          fontSize="xs"
-          color={isDarkTheme ? "fg.secondary" : "status.info.fg"}
-          fontWeight="600"
-          opacity={isDarkTheme ? 1 : 0.9}
-          whiteSpace="nowrap"
-        >
-          Balances may be stale. Check RPC settings.
-        </Text>
       </VStack>
     </Box>
   );
