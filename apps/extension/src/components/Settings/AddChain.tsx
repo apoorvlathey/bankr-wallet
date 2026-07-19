@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Button,
   Box,
@@ -16,6 +16,7 @@ import { ExternalLinkIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import { KNOWN_CHAINS } from "@/constants/knownChains.generated";
+import { normalizeRpcUrl } from "@/lib/chains";
 import { InlineDisclosure } from "@/components/ui";
 import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
@@ -71,6 +72,7 @@ function AddChain({
   const [chainIdConflict, setChainIdConflict] = useState("");
   const [rpcWarning, setRpcWarning] = useState("");
   const [rpcError, setRpcError] = useState("");
+  const rpcProbeSequence = useRef(0);
   const knownChainForHint = useMemo(() => {
     const parsed = parseInt(chainId, 10);
     if (!Number.isFinite(parsed)) return null;
@@ -132,13 +134,19 @@ function AddChain({
     setRpc(trimmed);
     setRpcWarning("");
     setRpcError("");
+    const probeSequence = ++rpcProbeSequence.current;
+    const probeUrl = mode === "settings" ? normalizeRpcUrl(trimmed) : trimmed;
 
-    if (!trimmed || !trimmed.startsWith("http")) return;
+    if (!probeUrl || (mode === "dapp" && !trimmed.startsWith("http"))) {
+      setIsDetecting(false);
+      return;
+    }
 
     // Auto-detect chainId from RPC
     setIsDetecting(true);
     try {
-      const detectedId = await probeRpcChainId(trimmed, rpcProbeOptions);
+      const detectedId = await probeRpcChainId(probeUrl, rpcProbeOptions);
+      if (probeSequence !== rpcProbeSequence.current) return;
       if (detectedId !== null) {
         setChainId(detectedId.toString());
         checkChainIdConflict(detectedId.toString());
@@ -148,9 +156,10 @@ function AddChain({
         setRpcError("Could not fetch chain ID from this RPC. It may be down or invalid.");
       }
     } catch {
+      if (probeSequence !== rpcProbeSequence.current) return;
       setRpcError("Failed to connect to RPC endpoint.");
     }
-    setIsDetecting(false);
+    if (probeSequence === rpcProbeSequence.current) setIsDetecting(false);
   };
 
   const handleRpcPaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
@@ -172,6 +181,15 @@ function AddChain({
       return;
     }
 
+    const rpcToSave = mode === "settings" ? normalizeRpcUrl(rpc) : rpc.trim();
+    if (!rpcToSave) {
+      setRpcWarning("Enter a valid HTTP or HTTPS RPC URL.");
+      setTechnicalOpen(true);
+      setIsBtnLoading(false);
+      return;
+    }
+    setRpc(rpcToSave);
+
     // Check name uniqueness
     if (networksInfo && networksInfo[chainName]) {
       setNameError("Chain name already exists");
@@ -182,7 +200,7 @@ function AddChain({
     // Validate RPC returns expected chainId
     try {
       assertRpcEndpointAllowedForOrigin(
-        rpc,
+        rpcToSave,
         mode === "dapp" ? initialRequest?.origin : undefined,
         { allowPrivateWithoutOrigin: mode !== "dapp" },
       );
@@ -195,7 +213,7 @@ function AddChain({
       return;
     }
 
-    const detectedId = await probeRpcChainId(rpc, rpcProbeOptions);
+    const detectedId = await probeRpcChainId(rpcToSave, rpcProbeOptions);
     if (detectedId === null) {
       setRpcWarning("Could not verify RPC — endpoint may be down. Chain saved anyway.");
       setTechnicalOpen(true);
@@ -218,7 +236,7 @@ function AddChain({
             requestId: initialRequest.id,
             chainName,
             chainId: parseInt(chainId, 10),
-            rpcUrl: rpc,
+            rpcUrl: rpcToSave,
             explorer: explorer.replace(/\/+$/, "") || undefined,
             nativeCurrency: {
               name: currencySymbol || "ETH",
@@ -254,7 +272,7 @@ function AddChain({
         {
           type: "addNetwork",
           chainName,
-          entry: buildEntry(),
+          entry: { ...buildEntry(), rpcUrl: rpcToSave },
         },
         (response) =>
           resolve(
@@ -391,7 +409,7 @@ function AddChain({
             <HStack>
               <Input
                 autoFocus
-                placeholder="https://rpc.example.com"
+                placeholder="https://rpc.example.com or localhost:8545"
                 value={rpc}
                 onChange={(event) => handleRpcChange(event.target.value)}
                 onPaste={handleRpcPaste}

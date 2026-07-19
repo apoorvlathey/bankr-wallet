@@ -10,7 +10,7 @@ const source = await readFile(
 test("manual add-network setup starts at the RPC field", () => {
   assert.match(
     source,
-    /<Input\s+autoFocus\s+placeholder="https:\/\/rpc\.example\.com"/u,
+    /<Input\s+autoFocus\s+placeholder="https:\/\/rpc\.example\.com or localhost:8545"/u,
   );
 });
 
