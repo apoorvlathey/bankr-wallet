@@ -2242,6 +2242,10 @@ raw-message block.
 
 1. EIP-4361 required structure and field ordering
 2. Domain, address, URI, version, chain ID, nonce, and RFC 3339 timestamps
+   - Nonce warnings use a 32-bit estimated-entropy floor plus explicit common,
+     sequential, repeated-run, and repeated-pattern checks. Long random hex
+     values are evaluated by their distribution rather than a length-dependent
+     unique-character ratio.
 3. Expiration / not-before timing
 4. Message domain ↔ URI host consistency
 5. Connected site origin, connected chain, and signing account match. For

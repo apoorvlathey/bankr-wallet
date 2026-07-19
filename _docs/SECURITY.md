@@ -961,6 +961,10 @@ share that preflight rather than maintaining parallel security checks.
 Warnings such as missing expiration, weak nonce, old issued-at time, insecure
 HTTP URI, or non-checksummed address remain visible in the UI but do not block
 signing unless they become validation errors.
+Nonce weakness uses a 32-bit estimated Shannon-entropy floor together with
+explicit common-prefix, sequential-prefix, repeated-run, and repeated-pattern
+checks. It does not use a unique-character percentage, which would
+systematically misclassify long random hexadecimal nonces.
 
 Users can bypass SIWE validation errors only from the extension UI by opening
 the sticky decision-bar warning popover and explicitly checking its
