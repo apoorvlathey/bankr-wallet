@@ -15,7 +15,12 @@ import {
 import { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import { GasEstimate, GasEstimateTier } from "@/chrome/gasEstimation";
 import { GasOverrides } from "@/chrome/txHandlers";
-import { formatEth, formatGwei, formatWeiToUsd } from "@/lib/gasFormatUtils";
+import {
+  formatEth,
+  formatEthCompact,
+  formatGwei,
+  formatWeiToUsd,
+} from "@/lib/gasFormatUtils";
 import { useTheme } from "@/theme";
 import {
   DEFAULT_TIER,
@@ -28,6 +33,7 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { CustomGasEditor } from "@/components/GasEstimate/CustomGasEditor";
 import { GasFeePopover } from "@/components/GasEstimate/GasFeePopover";
 import { getInsufficientBalanceMessage } from "@/components/GasEstimate/model/balanceWarnings";
+import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
 
 interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
@@ -40,6 +46,7 @@ interface GasEstimateDisplayProps {
    */
   onValidityChange?: (valid: boolean) => void;
   forceInclusion?: boolean;
+  onFeeSummaryChange?: (summary: NativeFeePaymentSummary | null) => void;
 }
 
 function GasRow({ label, value }: { label: string; value: string }) {
@@ -148,6 +155,7 @@ function GasEstimateDisplay({
   onGasOverrides,
   onValidityChange,
   forceInclusion,
+  onFeeSummaryChange,
 }: GasEstimateDisplayProps) {
   const { tokens } = useTheme();
   const [estimate, setEstimate] = useState<GasEstimate | null>(null);
@@ -580,6 +588,21 @@ function GasEstimateDisplay({
     if (!maxFeeWei) return displayCostWei;
     return (BigInt(draftGasLimit) * BigInt(maxFeeWei)).toString();
   })();
+
+  const feeSummary = useMemo<NativeFeePaymentSummary | null>(() => {
+    if (!estimate) return null;
+    const symbol = estimate.nativeCurrencySymbol || "ETH";
+    return {
+      amount: formatCompactFee(displayCostWei, symbol),
+      fiat: formatWeiToUsd(displayCostWei, estimate.nativePriceUsd) || null,
+      balance: formatEthCompact(estimate.accountBalance || "0", symbol),
+      insufficient: estimate.insufficientBalance === true,
+    };
+  }, [displayCostWei, estimate]);
+
+  useEffect(() => {
+    onFeeSummaryChange?.(feeSummary);
+  }, [feeSummary, onFeeSummaryChange]);
 
   if (loading) {
     return (

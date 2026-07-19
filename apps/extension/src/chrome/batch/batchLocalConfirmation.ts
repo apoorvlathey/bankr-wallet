@@ -29,6 +29,8 @@ export async function confirmLocalBatchWithExecutors(
   functionNames?: string[],
   precomputedGasEstimates?: import("../gasEstimation").GasEstimate[],
   forceInclusion?: boolean,
+  feePaymentToken?: "native" | "token",
+  feePaymentQuoteId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   if (processingBundleIds.has(bundleId)) {
     return { success: false, error: "Bundle already being processed" };
@@ -122,6 +124,28 @@ export async function confirmLocalBatchWithExecutors(
     ? (await import("../forceInclusion/batch")).processForceInclusionBatchLocal
     : null;
 
+  let feePaymentQuote;
+  if (feePaymentToken === "token") {
+    try {
+      const { consumeFeePaymentQuote, feePaymentBatchCalls } = await import(
+        "../feePayment/quotes"
+      );
+      feePaymentQuote = consumeFeePaymentQuote({
+        quoteId: feePaymentQuoteId ?? "",
+        family: "batchTransaction",
+        requestId: bundleId,
+        account,
+        calls: feePaymentBatchCalls(pending),
+      });
+    } catch (error) {
+      processingBundleIds.delete(bundleId);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Fee-token quote is invalid",
+      };
+    }
+  }
+
   // Remove from pending storage
   await removePendingBatchTxRequest(bundleId);
 
@@ -139,6 +163,34 @@ export async function confirmLocalBatchWithExecutors(
     }
     return { authorized: true };
   };
+
+  if (feePaymentToken === "token") {
+    const authorization = await authorizeFinalEffect();
+    if (!authorization.authorized) {
+      return { success: false, error: authorization.error };
+    }
+    const effectLease = beginPendingRequestEffectLease(
+      "batchTransaction",
+      bundleId,
+    );
+    if (!effectLease) {
+      processingBundleIds.delete(bundleId);
+      return { success: false, error: "Wallet reset is in progress" };
+    }
+    await updateBundleStatus(bundleId, { atomic: true });
+    const { processUsdcBatchInBackground } = await import(
+      "../feePayment/batchExecution"
+    );
+    void processUsdcBatchInBackground({
+      bundleId,
+      pending,
+      signer: { account, privateKey },
+      functionNames,
+      effectLease,
+      quote: feePaymentQuote,
+    });
+    return { success: true };
+  }
 
   // Branch to force inclusion if requested
   if (forceInclusionProcessor) {

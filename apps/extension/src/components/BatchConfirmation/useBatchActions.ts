@@ -12,6 +12,8 @@ interface UseBatchActionsOptions {
   cachedGasEstimates: GasEstimate[] | null;
   decodedFunctionNames: Record<number, string>;
   forceInclusion: boolean;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuoteId: string | null;
   customConfirmHandler?: (
     gasEstimates?: GasEstimate[] | null,
   ) => Promise<{ success: boolean; error?: string }>;
@@ -31,6 +33,8 @@ export function useBatchActions({
   cachedGasEstimates,
   decodedFunctionNames,
   forceInclusion,
+  feePaymentToken,
+  feePaymentQuoteId,
   customConfirmHandler,
   customRejectHandler,
   onConfirmed,
@@ -106,6 +110,8 @@ export function useBatchActions({
           ? { gasEstimates: cachedGasEstimates }
           : {}),
         ...(forceInclusion ? { forceInclusion: true } : {}),
+        feePaymentToken: feePaymentToken === "native" ? "native" : "token",
+        ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {

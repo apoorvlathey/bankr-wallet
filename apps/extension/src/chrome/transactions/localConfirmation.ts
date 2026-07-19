@@ -72,6 +72,8 @@ export async function handleConfirmTransactionAsyncPK(
   functionName?: string,
   gasOverrides?: GasOverrides,
   forceInclusion?: boolean,
+  feePaymentToken?: "native" | "token",
+  feePaymentQuoteId?: string,
 ): Promise<ConfirmationResult> {
   if (processingTxIds.has(txId)) {
     return { success: false, error: "Transaction already being processed" };
@@ -123,6 +125,28 @@ export async function handleConfirmTransactionAsyncPK(
     return { success: false, error: key.error };
   }
 
+  let feePaymentQuote;
+  if (feePaymentToken === "token") {
+    try {
+      const { consumeFeePaymentQuote, feePaymentSingleCalls } = await import(
+        "../feePayment/quotes"
+      );
+      feePaymentQuote = consumeFeePaymentQuote({
+        quoteId: feePaymentQuoteId ?? "",
+        family: "transaction",
+        requestId: txId,
+        account,
+        calls: feePaymentSingleCalls(pending),
+      });
+    } catch (error) {
+      processingTxIds.delete(txId);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Fee-token quote is invalid",
+      };
+    }
+  }
+
   let forceInclusionProcessor:
     | typeof import("../forceInclusion/single")["processForceInclusionLocal"]
     | null = null;
@@ -158,7 +182,19 @@ export async function handleConfirmTransactionAsyncPK(
     return { success: false, error: "Wallet reset is in progress" };
   }
 
-  if (forceInclusionProcessor) {
+  if (feePaymentToken === "token") {
+    const { processUsdcTransactionInBackground } = await import(
+      "../feePayment/execution"
+    );
+    void processUsdcTransactionInBackground({
+      txId,
+      pending,
+      signer: { account, privateKey: key.privateKey },
+      functionName,
+      effectLease,
+      quote: feePaymentQuote,
+    });
+  } else if (forceInclusionProcessor) {
     void forceInclusionProcessor(
       txId,
       pending,

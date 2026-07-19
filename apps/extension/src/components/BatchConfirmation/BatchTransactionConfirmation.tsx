@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { getChainConfig } from "@/constants/chainConfig";
 import {
   FORCE_INCLUSION_CHAINS,
@@ -18,6 +18,7 @@ import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
 import { ConfirmationScreen } from "@/components/ui";
 import { ViewOnlySigningNotice } from "@/components/shared/ViewOnlySigningNotice";
 import { CopyButton } from "@/components/CopyButton";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { QueueNavigation } from "@/components/RequestConfirmation/QueueNavigation";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
@@ -61,6 +62,11 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const formatOrigin = useDappOriginFormatter();
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+  const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>(
+    "native",
+  );
+  const [feePaymentQuote, setFeePaymentQuote] =
+    useState<FeePaymentQuoteSummary | null>(null);
   const isIntakeValidating = batchRequest.intakeStatus === "validating";
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const chainConfig = getChainConfig(chainId);
@@ -115,6 +121,16 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     if (entry.protocol !== "op-stack") return null;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [chainId, accountType, isAtomic7702]);
+  useEffect(() => {
+    if (review.forceInclusion || customConfirmHandler) {
+      setFeePaymentToken("native");
+      setFeePaymentQuote(null);
+    }
+  }, [customConfirmHandler, review.forceInclusion]);
+  useEffect(() => {
+    setFeePaymentToken("native");
+    setFeePaymentQuote(null);
+  }, [batchRequest.id]);
   const actions = useBatchActions({
     batchRequest,
     accountType,
@@ -123,6 +139,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     cachedGasEstimates: review.cachedGasEstimates,
     decodedFunctionNames: review.decodedFunctionNames,
     forceInclusion: review.forceInclusion,
+    feePaymentToken,
+    feePaymentQuoteId: feePaymentQuote?.quoteId ?? null,
     customConfirmHandler,
     customRejectHandler,
     onConfirmed,
@@ -186,8 +204,10 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
             ? "Calldata is malformed — signing blocked"
             : isLocalSigningAccount && batchPlan.strategy === "loading"
               ? "Checking smart account support"
-              : !review.gasValid
+            : feePaymentToken === "native" && !review.gasValid
                 ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
+                : feePaymentToken !== "native" && !feePaymentQuote?.quoteId
+                  ? "Waiting for a bounded fee-token quote"
                 : null;
   const rejectAction = (
     <RejectAction
@@ -291,6 +311,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
             batchedCount={crossDappBatch?.entries.length ?? 0}
             onForceInclusionChange={review.setForceInclusion}
             onAddToBatch={actions.handleAddBundleToBatch}
+            feePaymentToken={feePaymentToken}
+            feePaymentQuote={feePaymentQuote}
           />
         }
         actionSummary={<BatchDecisionSummary
@@ -310,6 +332,12 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           onGasEstimates={review.setCachedGasEstimates}
           onGasValidityChange={review.setGasValid}
           onAnyFailedChange={review.setAnyTxMayRevert}
+          bundleId={batchRequest.id}
+          feePaymentToken={feePaymentToken}
+          feePaymentQuote={feePaymentQuote}
+          allowFeePaymentSelection={!customConfirmHandler}
+          onFeePaymentTokenChange={setFeePaymentToken}
+          onFeePaymentQuoteChange={setFeePaymentQuote}
         />}
         actionNotice={
           accountType === "impersonator" && !customConfirmHandler

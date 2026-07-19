@@ -45,6 +45,7 @@ import {
 import { cleanupStaleProcessingTxs } from "../../txHistoryStorage";
 import { openPopupWindow } from "../../txHandlers";
 import { fullscreenRequestNotificationWindowId } from "../../windowing/providerRequestSurface";
+import { resumePendingFeePaymentOperations } from "../../feePayment/recovery";
 import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
 import { initWalletConnect } from "../../walletConnect/client";
 import { clearExpiredWalletConnectPendingRequests } from "../../walletConnect/storage";
@@ -135,6 +136,9 @@ export function registerBackgroundLifecycle(
     startupEvent: chrome.runtime.onStartup,
     warn: (...args) => console.warn(...args),
   });
+  void resumePendingFeePaymentOperations().catch((error) =>
+    console.warn("[fee-payment] recovery failed", error),
+  );
 
   registerActionFallbackLifecycle({
     actionClickedEvent: chrome.action.onClicked as any,

@@ -13,6 +13,7 @@ export async function extractAssetChangesFromReceipt(args: {
   userAddress: string;
   receipt: any;
   rpcUrl: string;
+  payerForGas?: boolean;
 }): Promise<void> {
   const { extractAndStoreAssetChanges } = await import(
     "./assetChangePersistence"
@@ -28,6 +29,7 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
   receipt?: any;
   rpcUrl?: string;
   logPrefix?: string;
+  payerForGas?: boolean;
 }): void {
   void (async () => {
     const logPrefix = args.logPrefix ?? "[receipt]";
@@ -46,6 +48,7 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
           userAddress: args.userAddress,
           receipt,
           rpcUrl: args.rpcUrl,
+          payerForGas: args.payerForGas,
         });
         return;
       }
@@ -66,6 +69,7 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
             userAddress: args.userAddress,
             receipt,
             rpcUrl: raw.rpcUrl,
+            payerForGas: args.payerForGas,
           });
           return;
         }

@@ -6,7 +6,10 @@ import {
   toHistoryBigInt,
 } from "../../src/chrome/history/assetTransferParser";
 import { toBundleReceipt } from "../../src/chrome/history/receiptTransport";
-import { deriveNativeDelta } from "../../src/chrome/history/nativeDelta";
+import {
+  deriveNativeDelta,
+  isWalletOuterGasPayer,
+} from "../../src/chrome/history/nativeDelta";
 import { fetchSettledReceiptAtRpcUrl } from "../../src/chrome/history/receiptSettlement";
 import { shouldReconcileReceiptDerivedHistory } from "../../src/chrome/history/receiptReconciliation";
 import type { CompletedTransaction } from "../../src/chrome/history/types";
@@ -124,6 +127,21 @@ test("sealed Base fees remove the exact false native residual", () => {
       previousBalance,
       receipt: { ...commonReceipt, l1Fee: "0x2ef4f272" },
       payerForGas: true,
+    }),
+    undefined,
+  );
+});
+
+test("token-funded UserOperations do not attribute bundler gas to the wallet", () => {
+  const balance = 10_000_000_000_000_000n;
+  assert.equal(isWalletOuterGasPayer("USDC"), false);
+  assert.equal(isWalletOuterGasPayer(undefined), true);
+  assert.equal(
+    deriveNativeDelta({
+      currentBalance: balance,
+      previousBalance: balance,
+      receipt: { gasUsed: "0x5208", effectiveGasPrice: "0x3b9aca00" },
+      payerForGas: isWalletOuterGasPayer("USDC"),
     }),
     undefined,
   );

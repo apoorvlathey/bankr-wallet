@@ -52,6 +52,23 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function feePaymentToken(value: unknown): "native" | "token" {
+  if (value === undefined || value === "native") return "native";
+  if (value === "token") return "token";
+  throw new Error("Invalid gas-payment token");
+}
+
+function validatedFeePaymentToken(
+  value: unknown,
+  forceInclusion: unknown,
+): "native" | "token" {
+  const token = feePaymentToken(value);
+  if (token === "token" && forceInclusion === true) {
+    throw new Error("Force inclusion requires native gas payment");
+  }
+  return token;
+}
+
 function resolveBatchAction(
   options: {
     bundleId: unknown;
@@ -216,6 +233,11 @@ export function createBackgroundBatchRequestMessageRouter(
                 message.password,
                 message.functionNames,
                 message.forceInclusion,
+                validatedFeePaymentToken(
+                  message.feePaymentToken,
+                  message.forceInclusion,
+                ),
+                message.feePaymentQuoteId,
               ),
             fallback: "Failed to confirm batch transaction",
           },
@@ -236,6 +258,11 @@ export function createBackgroundBatchRequestMessageRouter(
                 message.functionNames,
                 message.gasEstimates,
                 message.forceInclusion,
+                validatedFeePaymentToken(
+                  message.feePaymentToken,
+                  message.forceInclusion,
+                ),
+                message.feePaymentQuoteId,
               ),
             fallback: "Failed to confirm batch transaction",
           },

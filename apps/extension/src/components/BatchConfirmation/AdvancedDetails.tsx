@@ -6,6 +6,8 @@ import { RequestToolActions } from "@/components/RequestConfirmation/RequestTool
 import { InlineDisclosure } from "@/components/ui";
 import { makeTenderlyUrl } from "./helpers";
 import type { ForceInclusionInfo } from "./types";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
+import { FeePaymentAdvancedDetails } from "@/components/FeePaymentAdvancedDetails";
 
 interface EncodedBatch {
   to: string;
@@ -25,6 +27,8 @@ interface AdvancedDetailsProps {
   addToBatchDisabledReason: string | null;
   isAddingToBatch: boolean;
   batchedCount: number;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuote: FeePaymentQuoteSummary | null;
   onForceInclusionChange: (enabled: boolean) => void;
   onAddToBatch: () => void;
 }
@@ -41,6 +45,8 @@ export function AdvancedDetails({
   addToBatchDisabledReason,
   isAddingToBatch,
   batchedCount,
+  feePaymentToken,
+  feePaymentQuote,
   onForceInclusionChange,
   onAddToBatch,
 }: AdvancedDetailsProps) {
@@ -67,6 +73,11 @@ export function AdvancedDetails({
       onOpenChange={handleOpenChange}
     >
       <VStack spacing={3} align="stretch" pt={3}>
+        <FeePaymentAdvancedDetails
+          chainId={chainId}
+          token={feePaymentToken}
+          quote={feePaymentQuote}
+        />
         <VStack spacing={2} align="stretch">
           {isAtomic7702 && outerEncodedBatch.data && outerEncodedBatch.data !== "0x" && (
             <CalldataDigestDisplay calldata={outerEncodedBatch.data} />

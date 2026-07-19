@@ -540,10 +540,10 @@ Security rules:
 - `eth_sign` and deprecated `eth_signTypedData` v1 are rejected, matching the injected-provider path.
 - `eth_signTypedData_v3` / `_v4` run the same EIP-712 validation and sanitization as injected requests, including raw ERC-7710 `Delegation` rejection.
 - ERC-7715 requests (`wallet_getSupportedExecutionPermissions`, `wallet_getGrantedExecutionPermissions`, `wallet_requestExecutionPermissions`) route through the stable `erc7715PermissionHandlers.ts` facade. Method dispatch/intake, account-scoped queries, onchain status, revoke prompt creation, and master-only confirmation live together in the `chrome/erc7715/` audit domain. Permission requests preflight local-signer account type, request shape, permission/rule allowlists through the stable `erc7715/registry.ts` facade (`permissionTypes.ts` → `ruleValidation.ts` → `permissionValidation.ts`), relaxed EVM address validation plus checksum normalization from `erc7715/address.ts`, WalletChan-owned caveat derivation through the stable `erc7715/caveats.ts` facade (`caveatDefinitions.ts` → `caveatEncoding.ts` → `caveatBuilder.ts`), `from`/selected-account consistency, supported chain/RPC availability, and live EIP-7702 delegation to `EIP_7702_DEFAULT_DELEGATE`. Pure validation, normalization, and caveat encoding cannot import account/session/Chrome/RPC state; `preflightEligibility.ts` is the stateful orchestration boundary and `preflightRpc.ts` owns only bounded public-chain reads. Injected requests resolve the sender tab account with `getTabAccount(tabId)` before preflight/listing; WalletConnect requests resolve the session-authorized account. `erc7715/confirmation.ts` signs only WalletChan-constructed ERC-7710 typed data after user confirmation and requires a live master/password-or-biometric session; an agent session cannot issue the reusable capability even when the prompt was queued under master. The auth epoch and live master type are re-checked synchronously at one atomic local-storage commit that writes `erc7715PermissionGrants`, removes the pending prompt, and publishes its success result. That commit is the grant linearization point, preventing both post-commit false failures and duplicate approval retries.
-- ERC-7715 caveat generation follows the MetaMask DeleGator v1.3.0 standard shapes: native-token grants include `ExactCalldataEnforcer(0x)`, ERC-20 grants include `ValueLteEnforcer(0)`, standard grants include `NonceEnforcer(currentNonce)`, allowance grants use the relevant periodic enforcer with `periodDuration = uint256.max`, and the EIP-712 `Caveat` type signs only `enforcer` and `terms` while ABI context/revoke encoding retains `args`. Dapps cannot supply arbitrary caveat enforcer addresses through ERC-7715.
-- If the user edits a request in the confirmation UI, `lib/erc7715PermissionEditing.ts` keeps fixed identity fields immutable (chain, account, delegate, permission type, token, adjustment policy). `permission.isAdjustmentAllowed` gates amount, periodic frequency, start time, stream rate / initial allowance / max allowance edits; streams still require expiry and `maxAmount > initialAmount`. Non-stream expiry can be added, removed, extended, or shortened even when permission terms are locked, matching MetaMask's confirmation behavior. Token-approval-revocation method flags remain immutable and only the required expiry can be adjusted. Confirmation then re-runs ERC-7715 preflight and recomputes caveats from the edited request before signing.
+- ERC-7715 caveat generation follows the deployed DeleGator v1.3.0 standard shapes: native-token grants include `ExactCalldataEnforcer(0x)`, ERC-20 grants include `ValueLteEnforcer(0)`, standard grants include `NonceEnforcer(currentNonce)`, allowance grants use the relevant periodic enforcer with `periodDuration = uint256.max`, and the EIP-712 `Caveat` type signs only `enforcer` and `terms` while ABI context/revoke encoding retains `args`. Dapps cannot supply arbitrary caveat enforcer addresses through ERC-7715.
+- If the user edits a request in the confirmation UI, `lib/erc7715PermissionEditing.ts` keeps fixed identity fields immutable (chain, account, delegate, permission type, token, adjustment policy). `permission.isAdjustmentAllowed` gates amount, periodic frequency, start time, stream rate / initial allowance / max allowance edits; streams still require expiry and `maxAmount > initialAmount`. Non-stream expiry can be added, removed, extended, or shortened even when permission terms are locked, matching WalletChan's confirmation behavior. Token-approval-revocation method flags remain immutable and only the required expiry can be adjusted. Confirmation then re-runs ERC-7715 preflight and recomputes caveats from the edited request before signing.
 - The registry rejects ambiguous extras, unbounded non-stream amounts, periodic durations over ten years, streams without expiry, stream max caps that do not exceed initial allowance, token approval revocation without an expiry, token approval revocation without at least one enabled method, broad `permit2InvalidateNonces` revocation, malformed token addresses, expired/duplicate expiry rules, invalid start times, start times after expiry, and oversized/ambiguous justification metadata. Missing non-revocation `startTime` values are normalized to the preflight timestamp. Permit2 revocation primitives additionally require a WalletChan built-in chain with live code at the canonical Permit2 address on the configured RPC. `permission.justification` is display-only and normalized out of `permission.data` before caveat derivation.
-- While a `wallet_requestExecutionPermissions` request is active, the injected provider, background router, and WalletConnect router block additional external dapp transaction/signature/batch/RPC proxy/capabilities/status/watch/add-chain/execution-permission requests with the MetaMask-style in-process error. The background/WC block is backed by every valid row in `pendingErc7715PermissionRequests`, not only process memory, so it survives MV3 service-worker restarts and fails closed until storage-backed lock state is loaded.
+- While a `wallet_requestExecutionPermissions` request is active, the injected provider, background router, and WalletConnect router block additional external dapp transaction/signature/batch/RPC proxy/capabilities/status/watch/add-chain/execution-permission requests with the standard in-process error. The background/WC block is backed by every valid row in `pendingErc7715PermissionRequests`, not only process memory, so it survives MV3 service-worker restarts and fails closed until storage-backed lock state is loaded.
 - The ERC-7715 enqueue path must synchronize `erc7715/requestLock.ts` from the saved pending-request list before releasing the in-memory request lock. Do not rely only on `chrome.storage.onChanged`; that event can arrive after the handler returns and briefly reopen external request processing.
 - ERC-7715 approval/rejection/explicit-invalidation results are delivered through `erc7715PermissionResult:{id}` instead of long-lived `sendMessage` channels. Injected dapps create the request id in `inject.ts` and wait on that storage key without an age timer; WalletConnect stores kind `erc7715Permission` in `walletConnectPendingRequests`, commits the first terminal response before relay delivery, and replays only that result after relay/MV3 recovery.
 - ERC-7715 grant management uses extension-only messages (`getErc7715PermissionGrantsForAccount`, `initiateErc7715PermissionRevoke`). They must not be forwarded from content scripts because grant records contain reusable signed delegation context. Active grant reads check `eth_getCode(account)`, `disabledDelegations(hash)`, and stored `NonceEnforcer` terms through the configured chain RPC, then locally mark grants revoked before returning them to Account Settings or dapps if the EOA is no longer delegated to WalletChan's default DeleGator, the delegation hash is disabled, or the nonce was invalidated. Any onchain status read failure fails closed. Onchain revoke validates account/grant ownership, canonical DelegationManager consistency, and the stored delegator before checking onchain status and queueing `disableDelegation(delegation)` through the normal transaction confirmation path; the pending tx carries only public display metadata plus `grantId`, while the reusable delegation context stays in the extension-only grant store. The receipt poller marks the grant locally revoked only after a successful receipt.
@@ -578,6 +578,75 @@ routes: `customDelegates` is a UI mirror, and extension pages do not need a
 general-purpose way to overwrite it.
 
 Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any terminal receipt. Do not infer delegation state only from `receipt.status`: EIP-7702 authorization processing occurs before normal execution, so execution can revert while the EOA delegation still changed. If the `eth_getCode` read itself fails, leave the mirror unchanged; an RPC failure is not evidence that the EOA is undelegated.
+
+### ERC-20 fee payment (`feePayment/`)
+
+Token fee payment is an extension-only confirmation capability, never a new
+provider signing method. `getFeePaymentOptions` and `prepareFeePaymentQuote`
+are wallet-UI messages, and the existing transaction/batch confirmation claim
+remains the sole terminal decision. Quotes live only in service-worker memory
+for 45 seconds and bind request family/id, exact calls, account identity,
+chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum.
+They are consumed once before pending request removal; a missing/restarted
+worker, edited call, account switch, nonce race, allowance change, or delegate
+change leaves the review retryable and requires a fresh quote.
+
+The confirmation renderer bounds option discovery to 10 seconds and quote
+preparation to 30 seconds. Timeout invalidates late callbacks and enters an
+explicit-retry error state; it never creates an automatic retry loop or silently
+falls back to native payment. Quote expiry invalidates Confirm and requires an
+explicit Retry instead of starting a background refresh. Switching to native
+invalidates the pending renderer request. Background proxy calls retain their
+own transport deadlines. The confirmation parent is the sole owner of a
+completed quote. The selector never clears that quote on mount/rerender, and a
+per-request attempt guard stays set before loading begins, so callback ordering
+cannot expose a false idle state that re-enters `prepareFeePaymentQuote`.
+
+Fresh local accounts use Pimlico's documented dummy 7702 authorization plus
+an exact sender-only code state override during estimation. The proxy accepts
+that override only for `eth_estimateUserOperationGas`, only when `eip7702Auth`
+is present, and only when its sole field is WalletChan's immutable
+`0xef0100 || officialDelegate` designator; submission never accepts an override.
+The real authorization is created after final Confirm,
+targets only `EIP_7702_DEFAULT_DELEGATE`, uses the current EOA nonce, and is
+submitted only inside the exact signed UserOperation. A different/unknown
+onchain delegate fails closed. Bankr may sign the exact UserOperation through
+its recovered-signer-verified typed-data endpoint only when the official
+delegate is already active; it cannot perform first-use authorization.
+
+The submitted approval is absent when current allowance covers the maximum or
+is exactly `approve(quotedPaymaster, maximumTokenCost)` inside the atomic
+operation. `uint256.max` exists only in an unsigned estimation envelope. Final
+envelope construction uses paymaster stub data for the last gas estimation,
+then requests and applies signed paymaster data as the terminal mutation before
+the account signature. If the final response omits its optional paymaster gas
+limits, the previously estimated limits are retained; they must never be
+zeroed merely because the optional fields are absent. Estimating or replacing gas fields after that point
+would invalidate Pimlico's paymaster authorization and is forbidden. Final
+pre-sign checks re-read account, request authority, EntryPoint/EOA nonce,
+delegate, allowance, and selected-token balance. Each catalog token has an
+absolute base-unit safety ceiling (100 units for stablecoins; one unit for the
+currently enabled non-stable assets), and
+force inclusion cannot combine with token payment. There is no native fallback
+after token selection.
+
+The public website proxy owns the Pimlico key. It is policy-constrained; read
+and simulation calls are rate-limited public operations, while submission is
+authenticated by the recovered sender signature. It method/chain/token/EntryPoint
+allowlists every envelope, bounds request/response/time/rate, pins every exact
+chain/token address pair from the reviewed catalog, and cryptographically verifies the exact WalletChan sender
+signature before forwarding `eth_sendUserOperation`. Any attached 7702 tuple
+must target the official delegate on the route chain with fixed-width `r/s`
+and valid parity, and its signer must recover to the UserOperation sender.
+Immediately before broadcast, WalletChan persists only the locally computed
+EntryPoint v0.7 operation hash and public recovery routing. A definite provider
+rejection removes the record; a transport/5xx/malformed or hash-mismatched
+response remains outcome-unknown and is never blindly retried. Finality
+requires an independently fetched chain receipt containing the matching
+EntryPoint `UserOperationEvent` for the exact hash and sender; a bundler receipt
+alone cannot terminalize Activity or ERC-5792 status. Calldata, signatures,
+authorizations, quotes, paymaster data, and credentials are never written to
+`pendingUserOperations`.
 
 The `customDelegates` mirror keeps its released nested record shape. All
 read-modify-write mutations are linearized under `local:customDelegates` so
@@ -1068,6 +1137,7 @@ accessible resources.
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
 | `pendingBatchTxRequests`   | No               | Pending ERC-5792 queue. A newly pinned row may briefly carry non-actionable `intakeStatus: "validating"`; signing and call mutation fail closed until intake removes it, while terminal rejection may remove it safely. |
+| `pendingUserOperations`    | No               | Bounded ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, and timestamp. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
 | `dappPermissions`         | No               | Exact-origin grants allowing injected sites to read the current WalletChan account. Chrome-attested origin is authoritative; title/favicon are untrusted display metadata. |
@@ -1658,7 +1728,7 @@ These are security characteristics that have been reviewed and accepted:
    loopback caller and LAN targets require the caller's exact hostname. The
    background worker explicitly omits credentials and referrers.
 
-6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, and `session/restoration.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging info for migration and session restore flows, (c) industry standard practice (MetaMask logs extensively), (d) no secrets are exposed in log messages.
+6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, and `session/restoration.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging information for migration and session restore flows, and (c) no secrets are exposed in log messages.
 
 7. **Private-network classification is hostname-based.** Browser `fetch()` does
    not expose the selected socket address, so the service worker can reject

@@ -285,6 +285,16 @@ order: requesting identity and plain-language action, financial impact
 technical detail. The single-transaction screen keeps the pinned signer and
 network-fee selector directly above Reject/Confirm; local accounts open an
 upward fee-tier popover so the decision buttons remain visible. The outcome
+Fee-asset selection reuses the compact `ActionSheet`: each native/USDC choice
+shows its token logo, amount, fiat estimate, balance, and a text insufficiency
+state; the compact trigger repeats the selected token logo. USDC preparation
+uses the shared transaction-fee `ShapesLoader` beside “Estimating Fees”, not a
+provider-specific progress sentence. Keep Pimlico, EntryPoint, paymaster,
+allowance, nonce, and one-time delegate details inside the existing Advanced
+disclosure; only the material one-time-upgrade warning appears in the primary
+review.
+
+The outcome
 masthead is the only deliberately emphasized content surface. Asset direction
 always has a text label or signed amount in addition to semantic color. Review
 default, long-number, and disabled/error states at

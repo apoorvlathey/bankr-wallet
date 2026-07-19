@@ -1,8 +1,15 @@
 # Adding a New Chain
 
-All chain data lives in a single file: `src/constants/chainRegistry.ts`. Adding a new chain means adding **one entry** to the `CHAIN_REGISTRY` array.
+Core chain metadata lives in `src/constants/chainRegistry.ts`. Adding a new
+chain starts with one `CHAIN_REGISTRY` entry. Feature-specific security
+allowlists, including token-paid gas, remain separate and must be updated only
+after their own live capability checks.
 
-> **Before adding a built-in entry:** if the only reason you're adding the chain is so that custom-chain users get its metadata + 7702 atomic batching out of the box, you might not need a registry entry at all. Every chain where MM has deployed `EIP7702StatelessDeleGator` is already covered by the auto-generated `KNOWN_CHAINS` map (see [§ Auto-prefill from KNOWN_CHAINS](#auto-prefill-from-known_chains)). The default chain dropdown should stay lean — only promote a chain to `CHAIN_REGISTRY` when WalletChan's own surfaces (chain switcher, swap, bridge, etc.) need first-class support.
+> **Before adding a built-in entry:** if the only reason is to give a custom
+> chain known metadata and EIP-7702 atomic batching, a registry entry may not
+> be necessary. Chains with WalletChan's default delegate are already covered
+> by the generated `KNOWN_CHAINS` map. Keep the default dropdown lean and
+> promote a chain only when WalletChan surfaces need first-class support.
 
 ## Step 1: Add a chain icon
 
@@ -76,7 +83,33 @@ that entry's local mainnet icon and brand colors. The existing testnet overlay
 testnet look like mainnet. Keep this relationship in the registry instead of
 adding one-off icon aliases.
 
-## Step 3: Build and test
+## Step 3: Verify token-paid gas support
+
+Follow `.agents/skills/walletchan-chain-research/SKILL.md` and
+`_docs/GAS_ABSTRACTION.md` for every built-in EVM chain addition.
+
+1. Confirm WalletChan's official delegate is deployed and usable. Protocol
+   support or a type-4 transaction sample alone is insufficient.
+2. Using the server-side developer key, call `pimlico_getSupportedTokens` on
+   the exact chain endpoint. Never print, commit, or pass the key as a shell
+   argument.
+3. Consider only WalletChan-approved fee-asset families. Do not automatically
+   expose every provider result.
+4. Confirm every proposed exact token address with
+   `pimlico_getTokenQuotes`, WalletChan's EntryPoint v0.7, and the route chain
+   ID. Empty quotes fail closed even if static documentation lists the token.
+5. Verify checksum, symbol, and decimals onchain.
+6. Update both exact-address catalogs in the same change:
+   - `apps/extension/src/chrome/feePayment/tokens.ts`
+   - `apps/website/app/api/gas/pimlico/[chainId]/tokens.ts`
+7. Put a readable chain-name comment beside each hardcoded address and extend
+   catalog/proxy tests so normalized address-set drift fails CI.
+
+If no approved token returns a live quote, the chain remains native-only.
+Never infer token-paid gas support from a ticker, token deployment, static
+support table, or another chain.
+
+## Step 4: Build and test
 
 ```bash
 pnpm build:extension
@@ -87,6 +120,10 @@ Then load the extension in Chrome and verify:
 - Transactions can be signed and broadcast on the new chain (PK account)
 - Gas estimation shows USD values (if `coingeckoTokenId` was provided)
 - Explorer links work correctly
+- The native fee path still works for Bankr, private-key, and seed-phrase
+  accounts
+- Every enabled fee token appears only on its exact chain, shows its balance,
+  produces a bounded live quote, and follows the account/delegation gates
 
 ## Files you should NOT need to edit
 
@@ -102,8 +139,14 @@ The old pattern required touching 4+ files. With the registry, these are now thi
 
 The custom-chain add form (`Settings/AddChain.tsx`) consults `apps/extension/src/constants/knownChains.generated.ts` whenever the user enters or auto-detects a chainId. If the chainId matches an entry, the form prefills name, explorer, native currency, decimals — and an inline hint notes that EIP-7702 atomic batching is enabled by default for the chain.
 
-`KNOWN_CHAINS` is auto-generated from MetaMask's `@metamask/delegation-deployments` package — every chainId in the map has the same `EIP_7702_DEFAULT_DELEGATE` address deployed (CREATE2 → identical addresses on every chain MM supports). Currently covers 38 chains (15 mainnet, 23 testnet) — see [`_docs/7702.md` § Known chains](./7702.md#known-chains) for the regeneration workflow.
+`KNOWN_CHAINS` is auto-generated from WalletChan's installed delegate
+deployment registry. Every included chain ID has the same
+`EIP_7702_DEFAULT_DELEGATE` address deployed. See [`_docs/7702.md` § Known
+chains](./7702.md#known-chains) for the regeneration workflow.
 
 Practical effect: a user who adds Linea or Monad or Sonic as a custom chain skips the manual delegate-setup step entirely. The resolver's `hasDefaultDelegateForChain()` automatically extends 7702 eligibility to anything in `KNOWN_CHAINS`, so the first batch on the chain atomically bundles a delegation to the WalletChan default without the user touching Settings.
 
-To add a chain to `KNOWN_CHAINS` outside of the auto-regen path (e.g., MM hasn't deployed there yet but you've verified the delegator manually), add a `MANUAL_OVERRIDES` entry in `apps/extension/scripts/generate-known-chains.ts` and re-run `pnpm regen-chains`.
+To add a chain to `KNOWN_CHAINS` outside the generated registry after manually
+verifying the delegate, add a `MANUAL_OVERRIDES` entry in
+`apps/extension/scripts/generate-known-chains.ts` and run
+`pnpm regen-chains`.

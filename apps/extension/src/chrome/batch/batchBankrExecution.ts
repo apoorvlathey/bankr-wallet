@@ -28,6 +28,8 @@ export async function handleConfirmBatchTransaction(
   password: string,
   functionNames?: string[],
   forceInclusion?: boolean,
+  feePaymentToken?: "native" | "token",
+  feePaymentQuoteId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   if (processingBundleIds.has(bundleId)) {
     return { success: false, error: "Bundle already being processed" };
@@ -105,6 +107,28 @@ export async function handleConfirmBatchTransaction(
     }
   }
 
+  let feePaymentQuote;
+  if (feePaymentToken === "token") {
+    try {
+      const { consumeFeePaymentQuote, feePaymentBatchCalls } = await import(
+        "../feePayment/quotes"
+      );
+      feePaymentQuote = consumeFeePaymentQuote({
+        quoteId: feePaymentQuoteId ?? "",
+        family: "batchTransaction",
+        requestId: bundleId,
+        account: pinnedAccount,
+        calls: feePaymentBatchCalls(pending),
+      });
+    } catch (error) {
+      processingBundleIds.delete(bundleId);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Fee-token quote is invalid",
+      };
+    }
+  }
+
   const forceInclusionProcessor = forceInclusion
     ? (await import("../forceInclusion/batch")).processForceInclusionBatchBankr
     : null;
@@ -129,6 +153,21 @@ export async function handleConfirmBatchTransaction(
   if (!effectLease) {
     processingBundleIds.delete(bundleId);
     return { success: false, error: "Wallet reset is in progress" };
+  }
+
+  if (feePaymentToken === "token") {
+    const { processUsdcBatchInBackground } = await import(
+      "../feePayment/batchExecution"
+    );
+    void processUsdcBatchInBackground({
+      bundleId,
+      pending,
+      signer: { account: pinnedAccount, apiKey },
+      functionNames,
+      effectLease,
+      quote: feePaymentQuote,
+    });
+    return { success: true };
   }
 
   // Branch to force inclusion if requested

@@ -17,7 +17,10 @@
 - Aesthetic essence: warm financial confidence.
 - Single-minded proposition: WalletChan makes powerful wallet actions easy to understand before the user commits.
 - Archetype: Sage with an Everyman interaction model.
-- References: Rabby for wallet information hierarchy and full-screen mobile flows; WalletChan's Swiss Knife project for restrained Chakra composition; shadcn/ui for semantic recipes and complete state discipline. Transpose behavior and restraint, not default visuals.
+- References: established EVM information hierarchy and full-screen mobile
+  flows; WalletChan's Swiss Knife project for restrained Chakra composition;
+  shadcn/ui for semantic recipes and complete state discipline. Transpose
+  behavior and restraint, not default visuals.
 - Avoid: violet-forward web3 styling, thick outlines around every region, card-in-card stacks, desktop dropdowns squeezed into the popup.
 - Mode: both. Midnight is the default and receives the restrained product language; Bauhaus remains an intentionally expressive alternate theme.
 - Density: balanced on root screens, dense but zoned on transaction details.
@@ -225,6 +228,13 @@
 
 ## Slop audit
 
+- 2026-07-19 fee-token confirmation audit: single and ERC-5792 confirmation
+  reuse one compact `Pay gas with` decision row and the existing bottom action
+  sheet for the native/USDC choice. Selection stays financial blue, final
+  Confirm stays amber, quote/balance values use the existing compact numeric
+  hierarchy, and the one-time smart-account upgrade uses the semantic warning
+  tint. Relay mechanics remain subordinate footer copy; no promotional banner,
+  gradient, card stack, or desktop dropdown was introduced.
 - 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
   now gates ENS-friendly rewriting across every request surface. With browsing
   disabled, the literal gateway hostname remains the primary security identity
@@ -900,7 +910,7 @@
 - 2026-07-16: restored token-contract disclosure to estimated and confirmed
   balance-change symbols. Hover and keyboard focus now share the help cursor,
   amber identity feedback, address, copy, and explorer tools; the request
-  simulation retry also consumes the same catalog/MetaMask logo fallback as
+  simulation retry also consumes the same catalog/verified logo fallback as
   Transaction details.
 - 2026-07-17: compacted expanded batch gas rows to three meaningful native-fee
   digits while retaining bigint-exact tooltip and assistive text. The call
@@ -1032,3 +1042,20 @@
   signing, activity, and detail surfaces. Local IPFS/onchain marks now reuse
   the browser launcher's safe raster/remap/Chrome-processed fallback order and
   existing light contrast canvas instead of collapsing to a CID letter tile.
+- 2026-07-19: made fee-asset selection visually scannable with native-token and
+  USDC marks in both the compact pill and action sheet. USDC preparation now
+  reuses the established transaction-fee progress pulse and concise
+  “Estimating Fees” label, while the resolved maximum remains stable through
+  confirmation rerenders instead of returning to a loading presentation.
+- 2026-07-19: moved the independently fetched USDC balance into the fee-asset
+  action sheet before quote preparation, removed its duplicate from the
+  confirmation summary, and centered the shared estimating pulse across the
+  pending fee row.
+- 2026-07-19: replaced the ERC-20 paymaster's opaque post-operation code with
+  an actionable fee-selection error when a transaction would leave too little
+  USDC: reduce the amount or choose the native token. Retry remains available
+  without exposing provider internals in the confirmation hierarchy.
+- 2026-07-19: expanded the network-fee picker from native/USDC to WalletChan's
+  reviewed Pimlico token catalog. Each choice now carries its own symbol,
+  decimals, balance, logo fallback, bounded quote, and stablecoin-only fiat
+  equivalence while preserving the same compact pill and action sheet.

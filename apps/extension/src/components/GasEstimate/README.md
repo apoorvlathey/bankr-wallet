@@ -14,6 +14,8 @@
 - `MaxFeeField.tsx` isolates the computed/read-only Max Fee state, its linked
   Auto information tooltip, animated inline Edit affordance, and manual-to-auto
   control.
+- `BatchGasIcons.tsx` owns the small linked/edited SVG marks shared by the
+  batch gas-tier presentation.
 - `model/balanceWarnings.ts` is the pure policy for aggregating native outlay,
   separating force-inclusion L1 gas from L2 transaction value, and producing
   chain-specific insufficient-balance copy.

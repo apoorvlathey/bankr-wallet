@@ -27,6 +27,7 @@ test("wallet reset local and sync manifests retain their exact released keys", (
     "pendingTxRequests",
     "pendingSignatureRequests",
     "pendingBatchTxRequests",
+    "pendingUserOperations",
     "pendingErc7715PermissionRequests",
     "erc7715PermissionGrants",
     "pendingWatchAssetRequests",
