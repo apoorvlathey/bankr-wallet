@@ -37,14 +37,14 @@ function requestFor(source: Account) {
 function publicQuote(canAfford = true) {
   return Object.freeze({
     chainId: 11_155_111,
-    amountWei: "100000000000000000",
+    amountWei: "101010101010101010",
     balanceWei: "500000000000000000",
     minimumAmountWei: "1000000000000000",
-    protocolFeeWei: "1000000000000000",
-    shieldedAmountWei: "99000000000000000",
+    protocolFeeWei: "1010101010101010",
+    shieldedAmountWei: "100000000000000000",
     gasReserveWei: "200000000000000",
-    totalRequiredWei: "100200000000000000",
-    maxShieldableWei: "499800000000000000",
+    totalRequiredWei: "101210101010101010",
+    maxShieldableWei: "494802000000000000",
     vettingFeeBPS: "100",
     canAfford,
   });
@@ -89,7 +89,8 @@ test("review preparation supports every custody wallet without persistence", asy
       assert.equal(first.accountType, type);
       assert.equal(first.intent.submittable, false);
       assert.equal(decoded.sourceAddress, ADDRESS);
-      assert.equal(decoded.valueWei, 100_000_000_000_000_000n);
+      assert.equal(decoded.valueWei, 101_010_101_010_101_010n);
+      assert.equal(decoded.shieldedAmountWei, 100_000_000_000_000_000n);
       assert.equal(second.intent.callData, first.intent.callData);
       assert.equal(harness.writes.length, writesBefore);
       assert.equal("nullifier" in first.intent, false);

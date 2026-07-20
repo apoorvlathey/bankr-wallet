@@ -59,6 +59,7 @@ export function useShieldReview(input: {
         accountAddress: account.address,
         accountType: account.type,
         amount: quote.ethAmount,
+        grossAmountWei: quote.state.quote.amountWei,
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;

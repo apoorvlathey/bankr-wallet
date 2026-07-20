@@ -19,14 +19,14 @@ function response() {
     success: true,
     quote: {
       chainId: 11_155_111,
-      amountWei: "100000000000000000",
+      amountWei: "101010101010101010",
       balanceWei: "500000000000000000",
       minimumAmountWei: "1000000000000000",
-      protocolFeeWei: "1000000000000000",
-      shieldedAmountWei: "99000000000000000",
+      protocolFeeWei: "1010101010101010",
+      shieldedAmountWei: "100000000000000000",
       gasReserveWei: "200000000000000",
-      totalRequiredWei: "100200000000000000",
-      maxShieldableWei: "499800000000000000",
+      totalRequiredWei: "101210101010101010",
+      maxShieldableWei: "494802000000000000",
       vettingFeeBPS: "100",
       canAfford: true,
     },
@@ -68,8 +68,9 @@ test("Shield quote parser verifies exact shape and arithmetic", () => {
     100_000_000_000_000_000n,
   );
   assert.ok(parsed);
-  assert.equal(parsed.protocolFeeWei, 1_000_000_000_000_000n);
-  assert.equal(shieldMaximumInput(parsed), "0.4998");
+  assert.equal(parsed.protocolFeeWei, 1_010_101_010_101_010n);
+  assert.equal(parsed.shieldedAmountWei, 100_000_000_000_000_000n);
+  assert.equal(shieldMaximumInput(parsed), "0.494802");
 
   const extra = response() as any;
   extra.quote.debug = "not accepted";

@@ -22,14 +22,14 @@ function account(type: "privateKey" | "seedPhrase"): Account {
 function quote() {
   return Object.freeze({
     chainId: 11_155_111,
-    amountWei: "100000000000000000",
+    amountWei: "101010101010101010",
     balanceWei: "500000000000000000",
     minimumAmountWei: "1000000000000000",
-    protocolFeeWei: "1000000000000000",
-    shieldedAmountWei: "99000000000000000",
+    protocolFeeWei: "1010101010101010",
+    shieldedAmountWei: "100000000000000000",
     gasReserveWei: "200000000000000",
-    totalRequiredWei: "100200000000000000",
-    maxShieldableWei: "499800000000000000",
+    totalRequiredWei: "101210101010101010",
+    maxShieldableWei: "494802000000000000",
     vettingFeeBPS: "100",
     canAfford: true,
   });
@@ -119,7 +119,7 @@ test("durable Shield operations queue one exact normal confirmation for both loc
         queued.tx.to.toLowerCase(),
         "0x34a2068192b1297f2a7f85d7d8cde66f8f0921cb",
       );
-      assert.equal(queued.tx.value, "0x16345785d8a0000");
+      assert.equal(queued.tx.value, "0x166dc26d56ef312");
       assert.match(queued.tx.data, /^0xb6b55f25[0-9a-f]{64}$/i);
       assert.equal(JSON.stringify(queued).includes("nullifier"), false);
       assert.equal(JSON.stringify(queued).includes("secret"), false);

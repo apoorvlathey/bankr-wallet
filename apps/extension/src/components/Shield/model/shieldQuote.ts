@@ -1,5 +1,11 @@
 import { formatEther, parseEther } from "viem";
 import { formatUsd } from "@/lib/currencyFormatUtils";
+import {
+  MAX_PRIVACY_SHIELD_AMOUNT_WEI,
+  privacyShieldGrossAmountWei,
+  privacyShieldNetAmountWei,
+  privacyShieldProtocolFeeWei,
+} from "@/lib/privacyShieldAmounts";
 import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 
 export const SHIELD_MINIMUM_WEI =
@@ -7,8 +13,6 @@ export const SHIELD_MINIMUM_WEI =
 export const DEFAULT_SHIELD_AMOUNT = formatEther(SHIELD_MINIMUM_WEI);
 export const SHIELD_VETTING_FEE_BPS =
   PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
-const BASIS_POINTS_SCALE = 10_000n;
-const MAX_UINT256 = (1n << 256n) - 1n;
 const ETH_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
 const SERIALIZED_WEI_PATTERN = /^(?:0|[1-9]\d{0,79})$/;
 
@@ -62,7 +66,7 @@ export function parseShieldAmountInputWei(amount: string): bigint | null {
   if (!ETH_AMOUNT_PATTERN.test(amount)) return null;
   try {
     const amountWei = parseEther(amount);
-    return amountWei <= MAX_UINT256 ? amountWei : null;
+    return amountWei <= MAX_PRIVACY_SHIELD_AMOUNT_WEI ? amountWei : null;
   } catch {
     return null;
   }
@@ -86,7 +90,7 @@ export function validateShieldAmountInput(
     return {
       status: "below-minimum",
       amountWei: null,
-      message: `Minimum is ${formatEther(SHIELD_MINIMUM_WEI)} ETH.`,
+      message: `Minimum amount to shield is ${formatEther(SHIELD_MINIMUM_WEI)} ETH. The protocol fee is added on top.`,
     };
   }
   return { status: "valid", amountWei, message: null };
@@ -168,15 +172,25 @@ export function parseShieldQuoteResponse(
     totalRequiredWei === null ||
     maxShieldableWei === null ||
     vettingFeeBPS !== SHIELD_VETTING_FEE_BPS ||
-    amountWei !== expectedAmountWei ||
-    amountWei > MAX_UINT256
+    shieldedAmountWei !== expectedAmountWei ||
+    amountWei > MAX_PRIVACY_SHIELD_AMOUNT_WEI
   ) {
     return null;
   }
-  const expectedFee = (amountWei * vettingFeeBPS) / BASIS_POINTS_SCALE;
-  const expectedMax =
+  let expectedGross: bigint;
+  const maximumGross =
     balanceWei > gasReserveWei ? balanceWei - gasReserveWei : 0n;
+  const expectedMax = privacyShieldNetAmountWei(maximumGross, vettingFeeBPS);
+  try {
+    expectedGross = expectedAmountWei === expectedMax
+      ? maximumGross
+      : privacyShieldGrossAmountWei(expectedAmountWei, vettingFeeBPS);
+  } catch {
+    return null;
+  }
+  const expectedFee = privacyShieldProtocolFeeWei(amountWei, vettingFeeBPS);
   if (
+    amountWei !== expectedGross ||
     protocolFeeWei !== expectedFee ||
     shieldedAmountWei !== amountWei - expectedFee ||
     totalRequiredWei !== amountWei + gasReserveWei ||

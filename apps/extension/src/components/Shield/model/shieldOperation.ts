@@ -224,7 +224,7 @@ export function parseShieldOperationResponse(
     operation.accountType !== expectedAccount.type ||
     operation.accountAddress.toLowerCase() !==
       expectedAccount.address.toLowerCase() ||
-    operation.amountWei !== expectedAmountWei
+    operation.shieldedAmountWei !== expectedAmountWei
   ) {
     return null;
   }

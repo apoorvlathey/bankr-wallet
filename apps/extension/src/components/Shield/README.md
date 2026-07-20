@@ -53,9 +53,15 @@ home transition or consuming its status. The Shield screen repeats that request
 and receives only a ready/action-required status so it can offer Retry. Shield
 opens directly on amount entry; no prover/readiness job blocks the form. The
 quote hook sends only exact account metadata and a public amount, then accepts
-only arithmetic-consistent responses. `Review shield` obtains a bounded intent
+only arithmetic-consistent responses. The amount is the exact Shielded ETH the
+user wants; shared wei-exact policy derives a canonical gross Entrypoint value
+whose fee-deducted output equals it. At one-wei rounding boundaries it selects
+the exact available gross amount, so Max/100% consumes the full post-gas
+balance. Review and durable preparation pin that accepted public gross value.
+Max is the net shieldable value after gas and protocol fee. `Review shield` obtains a bounded intent
 review and immediately persists the encrypted operation so the existing normal
-transaction request becomes the single review/confirmation screen. React never
+transaction request becomes the single review/confirmation screen. That review
+shows the chosen shielded amount, fee added on top, and gross wallet debit. React never
 receives calldata or note material and never signs or submits.
 Backing out of that confirmation does not reject it. The next Shield entry
 resumes the newest exact trusted Privacy Pools transaction request instead of

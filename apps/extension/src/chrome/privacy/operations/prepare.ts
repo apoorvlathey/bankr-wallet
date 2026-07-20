@@ -25,7 +25,9 @@ import {
   type PrivacyShieldQuoteRequest,
 } from "../deposit/quote";
 import {
+  grossPrivacyShieldAmount,
   parsePrivacyShieldAmount,
+  parsePrivacyShieldGrossAmount,
   type PrivacyShieldQuoteValues,
 } from "../deposit/quotePolicy";
 import {
@@ -192,7 +194,15 @@ export async function preparePrivacyShieldOperation(
   }
   const dependencies = { ...productionDependencies, ...overrides };
   const expectedAuthEpoch = await requireLiveMasterSession();
-  const amountWei = parsePrivacyShieldAmount(request.amount).toString();
+  const requestedShieldedAmountWei = parsePrivacyShieldAmount(request.amount);
+  const amountWei = (
+    request.grossAmountWei === undefined
+      ? grossPrivacyShieldAmount(requestedShieldedAmountWei)
+      : parsePrivacyShieldGrossAmount(
+          request.grossAmountWei,
+          requestedShieldedAmountWei,
+        )
+  ).toString();
   const dedupeKey = privacyShieldOperationDedupeKey({
     chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     accountId: request.accountId,
@@ -218,7 +228,10 @@ export async function preparePrivacyShieldOperation(
     throw new PrivacyShieldOperationError("operation-unavailable");
   });
   const quote = await dependencies.quotePrivacyShield(request);
-  if (quote.amountWei !== amountWei) {
+  if (
+    quote.amountWei !== amountWei ||
+    quote.shieldedAmountWei !== requestedShieldedAmountWei.toString()
+  ) {
     throw new PrivacyShieldOperationError("operation-unavailable");
   }
   if (!quote.canAfford) {

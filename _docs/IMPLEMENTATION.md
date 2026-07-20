@@ -183,7 +183,7 @@ authorize phrase replacement.
 
 Pressing Shield opens the inline amount form immediately, without blocking on
 deployment reads or a fixed proof self-test. `hooks/useShieldQuote.ts` debounces
-exact ETH input at or above the active manifest's onchain minimum (`0.001 ETH`
+exact Shielded ETH input at or above the active manifest's onchain minimum (`0.001 ETH`
 on Sepolia, `0.01 ETH` on mainnet) and sends wallet-UI-only
 `privacyQuoteShield` with the current
 `{ accountId, accountAddress, accountType }` snapshot. `privacy/deposit/quote.ts`
@@ -191,10 +191,18 @@ resolves that exact stored account, rejects impersonators, and supports Bankr,
 private-key, and seed-phrase public addresses. `quoteClient.ts` uses the same
 bounded active-chain transport to read the public balance, estimate the standard fee
 tier, and simulate the pinned Entrypoint `deposit(uint256)` call with the
-entered value and a fresh throwaway public precommitment. The pure policy
-applies the active manifest's onchain vetting fee (1% Sepolia, 0.5% mainnet),
+canonical gross value that produces the entered shielded amount after fees,
+plus a fresh throwaway public precommitment. The pure policy applies the active
+manifest's onchain vetting fee on top of the entered amount (1% Sepolia, 0.5%
+mainnet),
 the existing 20% gas-limit buffer,
-total-required check, and gas-aware Max. It deliberately does not adopt the
+total-required check, and gas-aware net Max. At a one-wei fee-rounding
+ambiguity, the balance-aware Max quote pins the exact available gross value
+rather than the context-free upper value, so Max/100% consumes the complete
+post-gas balance. Entering `0.01 ETH` on mainnet
+therefore creates exactly `0.01 ETH` of Shielded ETH; the quote and normal
+transaction review separately show the `0.000050251256281407 ETH` fee and
+`0.010050251256281407 ETH` gross wallet debit. It deliberately does not adopt the
 official website's app-only `1 ETH` preference; amounts are limited only by
 valid `uint256` input and the source balance after gas. All returned integers
 are decimal strings. No privacy phrase, derived commitment, signer, pending
@@ -210,7 +218,8 @@ packaged fixed-proof readiness check remains available as a trusted diagnostic
 route but is not part of the user-facing Shield interaction.
 
 The amount panel's single `Continue` action sends
-`privacyPrepareShieldReview`. This separate background path requires a live
+`privacyPrepareShieldReview` with the public gross value pinned by the accepted
+quote. This separate background path requires a live
 password or fresh biometric master session, then holds the wallet-secret lock
 while it rechecks the auth epoch, re-pins the exact stored account, decrypts
 the Privacy Pools recovery phrase, and derives a disposable deposit
@@ -219,11 +228,13 @@ pinned Entrypoint `deposit(uint256)` call and
 independently decodes the exact selector, one-word argument, source,
 destination, chain, transaction value, and fee math. The internal review type
 is explicitly `submittable: false`; the router strips calldata and commitment
-material and returns only a public account/amount/destination tuple. No storage
+material and returns only the public account, gross amount, protocol fee,
+shielded amount, and destination tuple. No storage
 write, pending request, signature, confirmation route, or RPC submission occurs.
 
 The review's `Confirm details` action sends `privacyPrepareShield` with a
-renderer-stable UUID. The background repeats the live deployment, quote,
+renderer-stable UUID and the same public gross quote pin. The background
+repeats the live deployment, quote,
 master-epoch, exact stored-account, and dedicated privacy-key checks, and
 derives a distinct durable index. A fresh matching biometric master session can
 prepare this operation without first adding a main-password wrapper; plaintext

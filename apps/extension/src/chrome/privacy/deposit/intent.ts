@@ -6,6 +6,10 @@ import {
 } from "viem";
 
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
+import {
+  privacyShieldNetAmountWei,
+  privacyShieldProtocolFeeWei,
+} from "../../../lib/privacyShieldAmounts";
 
 const ENTRYPOINT_NATIVE_DEPOSIT_ABI = parseAbi([
   "function deposit(uint256 precommitment) payable returns (uint256 commitment)",
@@ -17,7 +21,6 @@ const ZERO_ADDRESS = /^0x0{40}$/i;
 const SNARK_SCALAR_FIELD =
   21_888_242_871_839_275_222_246_405_745_257_275_088_548_364_400_416_034_343_698_204_186_575_808_495_617n;
 const UINT128_MAX = (1n << 128n) - 1n;
-const BASIS_POINTS_SCALE = 10_000n;
 
 export interface PrivacyShieldReviewIntent {
   readonly kind: "privacy-shield-review-intent";
@@ -63,10 +66,14 @@ function feeValues(valueWei: bigint): {
   ) {
     throw new Error("invalid-shield-intent");
   }
-  const protocolFeeWei =
-    (valueWei * deployment.assetConfig.vettingFeeBPS) /
-    BASIS_POINTS_SCALE;
-  const shieldedAmountWei = valueWei - protocolFeeWei;
+  const protocolFeeWei = privacyShieldProtocolFeeWei(
+    valueWei,
+    deployment.assetConfig.vettingFeeBPS,
+  );
+  const shieldedAmountWei = privacyShieldNetAmountWei(
+    valueWei,
+    deployment.assetConfig.vettingFeeBPS,
+  );
   if (shieldedAmountWei >= UINT128_MAX) {
     throw new Error("invalid-shield-intent");
   }

@@ -72,7 +72,7 @@ test("Shield operation response accepts only the pinned account and amount", () 
   const parsed = parseShieldOperationResponse(
     response,
     account,
-    100_000_000_000_000_000n,
+    99_000_000_000_000_000n,
   );
   assert.ok(parsed);
   assert.equal(parsed.state, "awaiting_wallet_confirmation");
@@ -82,7 +82,7 @@ test("Shield operation response accepts only the pinned account and amount", () 
     parseShieldOperationResponse(
       response,
       account,
-      100_000_000_000_000_000n,
+      99_000_000_000_000_000n,
     ),
     null,
   );

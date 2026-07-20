@@ -157,6 +157,7 @@ interface PrivacyAmountMessage {
   accountAddress: string;
   accountType: AccountType;
   amount: string;
+  grossAmountWei?: string;
 }
 
 interface PrivacyPrepareOperationMessage {
@@ -166,6 +167,7 @@ interface PrivacyPrepareOperationMessage {
   accountAddress: string;
   accountType: AccountType;
   amount: string;
+  grossAmountWei: string;
 }
 
 interface PrivacyPrepareUnshieldMessage {
@@ -232,8 +234,9 @@ function isPrivacyAmountMessage(
     return false;
   }
   const value = message as Record<string, unknown>;
+  const isReview = type === "privacyPrepareShieldReview";
   return (
-    Object.keys(value).length === 5 &&
+    Object.keys(value).length === (isReview ? 6 : 5) &&
     value.type === type &&
     typeof value.accountId === "string" &&
     typeof value.accountAddress === "string" &&
@@ -241,7 +244,10 @@ function isPrivacyAmountMessage(
       value.accountType === "privateKey" ||
       value.accountType === "seedPhrase" ||
       value.accountType === "impersonator") &&
-    typeof value.amount === "string"
+    typeof value.amount === "string" &&
+    (isReview
+      ? typeof value.grossAmountWei === "string"
+      : value.grossAmountWei === undefined)
   );
 }
 
@@ -253,7 +259,7 @@ function isPrivacyPrepareOperationMessage(
   }
   const value = message as Record<string, unknown>;
   return (
-    Object.keys(value).length === 6 &&
+    Object.keys(value).length === 7 &&
     value.type === "privacyPrepareShield" &&
     typeof value.requestId === "string" &&
     typeof value.accountId === "string" &&
@@ -262,7 +268,8 @@ function isPrivacyPrepareOperationMessage(
       value.accountType === "privateKey" ||
       value.accountType === "seedPhrase" ||
       value.accountType === "impersonator") &&
-    typeof value.amount === "string"
+    typeof value.amount === "string" &&
+    typeof value.grossAmountWei === "string"
   );
 }
 
@@ -292,7 +299,7 @@ function privacyOperationFailure(error: unknown): {
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
     "amount-below-minimum":
-      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
+      `Minimum amount to shield is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH. The protocol fee is added on top.`,
     "quote-unavailable": "Quote unavailable. Try again.",
     "auth-required": "Unlock with your main password or biometrics and try again.",
     "recovery-unavailable": "Shield recovery needs attention before you continue.",
@@ -368,7 +375,7 @@ function privacyReviewFailure(error: unknown): {
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
     "amount-below-minimum":
-      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
+      `Minimum amount to shield is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH. The protocol fee is added on top.`,
     "quote-unavailable": "Quote unavailable. Try again.",
     "auth-required": "Unlock with your main password or biometrics and try again.",
     "recovery-unavailable": "Shield recovery needs attention before you continue.",
@@ -394,7 +401,7 @@ function privacyQuoteFailure(error: unknown): {
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
     "amount-below-minimum":
-      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
+      `Minimum amount to shield is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH. The protocol fee is added on top.`,
     "quote-unavailable": "Quote unavailable. Try again.",
   };
   return { success: false, code, error: messages[code] };
@@ -510,6 +517,7 @@ export function createBackgroundPrivacyMessageRouter(
             accountAddress: message.accountAddress,
             accountType: message.accountType,
             amount: message.amount,
+            grossAmountWei: message.grossAmountWei,
           })
           .then((prepared) =>
             sendResponse({
@@ -521,6 +529,8 @@ export function createBackgroundPrivacyMessageRouter(
                 accountAddress: prepared.intent.sourceAddress,
                 accountType: prepared.accountType,
                 amountWei: prepared.intent.valueWei.toString(),
+                protocolFeeWei: prepared.intent.protocolFeeWei.toString(),
+                shieldedAmountWei: prepared.intent.shieldedAmountWei.toString(),
                 destinationAddress: prepared.intent.destinationAddress,
               },
             }),
@@ -548,6 +558,7 @@ export function createBackgroundPrivacyMessageRouter(
             accountAddress: message.accountAddress,
             accountType: message.accountType,
             amount: message.amount,
+            grossAmountWei: message.grossAmountWei,
           })
           .then((operation) =>
             dependencies.queuePrivacyShieldConfirmation(operation.id),

@@ -3,6 +3,7 @@ import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { SimulationResult } from "@/chrome/txSimulation";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
+import { createPrivacyShieldQuoteValues } from "@/chrome/privacy/deposit/quotePolicy";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
@@ -252,40 +253,29 @@ function previewPrivacyShieldQuote(
       error: "View-only accounts can’t Shield.",
     };
   }
-  const amountWei = parsePreviewShieldAmount(message?.amount);
-  if (amountWei === null) {
+  const shieldedAmountWei = parsePreviewShieldAmount(message?.amount);
+  if (shieldedAmountWei === null) {
     return {
       success: false,
       code: "invalid-amount",
       error: "Enter a valid ETH amount.",
     };
   }
-  if (amountWei < PREVIEW_SHIELD_MINIMUM_WEI) {
+  if (shieldedAmountWei < PREVIEW_SHIELD_MINIMUM_WEI) {
     return {
       success: false,
       code: "amount-below-minimum",
-      error: "Minimum is 0.001 ETH.",
+      error: "Minimum amount to shield is 0.001 ETH. The protocol fee is added on top.",
     };
   }
-  const protocolFeeWei = amountWei / 100n;
-  const totalRequiredWei = amountWei + PREVIEW_SHIELD_GAS_RESERVE_WEI;
-  const maxShieldableWei =
-    PREVIEW_SHIELD_BALANCE_WEI - PREVIEW_SHIELD_GAS_RESERVE_WEI;
   return {
     success: true,
-    quote: {
-      chainId: 11_155_111,
-      amountWei: amountWei.toString(),
-      balanceWei: PREVIEW_SHIELD_BALANCE_WEI.toString(),
-      minimumAmountWei: PREVIEW_SHIELD_MINIMUM_WEI.toString(),
-      protocolFeeWei: protocolFeeWei.toString(),
-      shieldedAmountWei: (amountWei - protocolFeeWei).toString(),
-      gasReserveWei: PREVIEW_SHIELD_GAS_RESERVE_WEI.toString(),
-      totalRequiredWei: totalRequiredWei.toString(),
-      maxShieldableWei: maxShieldableWei.toString(),
-      vettingFeeBPS: "100",
-      canAfford: totalRequiredWei <= PREVIEW_SHIELD_BALANCE_WEI,
-    },
+    quote: createPrivacyShieldQuoteValues({
+      shieldedAmountWei,
+      balanceWei: PREVIEW_SHIELD_BALANCE_WEI,
+      gasLimit: 1n,
+      maxFeePerGas: PREVIEW_SHIELD_GAS_RESERVE_WEI,
+    }),
   };
 }
 
@@ -312,6 +302,8 @@ function previewPrivacyShieldReview(
       accountAddress: account.address.toLowerCase(),
       accountType: account.type,
       amountWei: quoted.quote.amountWei,
+      protocolFeeWei: quoted.quote.protocolFeeWei,
+      shieldedAmountWei: quoted.quote.shieldedAmountWei,
       destinationAddress: PREVIEW_SHIELD_ENTRYPOINT,
     },
   };

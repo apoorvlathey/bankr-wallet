@@ -246,6 +246,16 @@
   conflicts without changing visual motion. The focused audit passes
   visible label, focus, 44px target, retained-input error, one-primary-action,
   defined-edge, compact financial hierarchy, and no-decorative-motion gates.
+- 2026-07-20 Shield fee-on-top audit: the amount field now names the exact ETH
+  that becomes Shielded ETH. Protocol math gross-ups that value in wei, so the
+  minimum remains the memorable `0.01 ETH` mainnet output instead of exposing
+  a fee-adjusted input threshold. The existing transaction review labels the
+  chosen amount, the 0.5% fee added on top, and the total wallet debit. Max
+  accounts for both gas and the fee; Max/100% also consumes the final one wei
+  at protocol fee-rounding boundaries. No new picker, panel, token, or decorative
+  treatment was introduced; the focused audit passes retained-input,
+  plain-language, tabular-number, one-primary-action, and color-independent
+  error gates.
 - 2026-07-20 Privacy action consistency audit: Shield, Unshield, and Send keep
   one route identity from page title through recipient selection, review,
   loading, failure, and final commitment. Unshield and Send both begin with an
@@ -641,6 +651,9 @@
 
 ## Changelog
 
+- 2026-07-20: made Shield input represent the exact Shielded ETH output, added
+  the protocol fee on top with wei-exact gross-up arithmetic, made Max fee- and
+  gas-aware, and clarified the amount/fee/total breakdown in transaction review.
 - 2026-07-20: resumed exact pending Shield confirmations after review Back,
   made the queue re-announcement idempotent without redundant deployment RPC
   work, moved Shield errors below route metadata, and added Send-style in-field

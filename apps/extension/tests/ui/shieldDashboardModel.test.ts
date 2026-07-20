@@ -212,6 +212,39 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.ok(externalErrorIndex > routeMetadataIndex);
 });
 
+test("Shield review presents the chosen amount with the protocol fee added on top", async () => {
+  const [source, reviewHook, operationHook] = await Promise.all([
+    readFile(
+      new URL(
+        "../../src/components/TransactionConfirmation/TransactionSummary.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/Shield/hooks/useShieldReview.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/Shield/hooks/useShieldOperation.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(source, /Total from \{SHIELDED_ETH_NETWORK_NAME\} wallet/);
+  assert.match(source, />Amount to shield</);
+  assert.match(source, /Protocol fee \(\{feePercent\}%, added on top\)/);
+  assert.match(source, /privacyShieldNetAmountWei\(amountWei, feeBPS\)/);
+  assert.match(reviewHook, /grossAmountWei: quote\.state\.quote\.amountWei/);
+  assert.match(operationHook, /grossAmountWei: quote\.state\.quote\.amountWei/);
+});
+
 test("Shield details and Activity use the same durable lifecycle projection", async () => {
   const [statusSource, detailSource, mediaSource] = await Promise.all([
     readFile(

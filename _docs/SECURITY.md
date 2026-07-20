@@ -194,8 +194,8 @@ The agent password model restricts what operations are available when the wallet
 | Run Privacy Pools readiness check | Yes | Yes | Fixed public active-profile deployment fields plus packaged proof fixtures only; no account, phrase, balance, signing, or transaction input |
 | Run Privacy Pools prover QA self-test | Yes | Yes | Trusted-UI-only route returns aggregate self-test timing only; no proof, signal, fixture, input, phrase, or wallet key |
 | Quote an active-chain Shield amount | Yes | Yes | Read-only exact-account public balance/fee/gas simulation; impersonators rejected and no intent, note, signer, or submission exists |
-| Prepare an active-chain Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; produces a non-persisted, non-submittable background intent and returns no calldata or commitment material |
-| Persist an active-chain Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
+| Prepare an active-chain Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; exact-shape validation pins the accepted public gross quote to the entered net amount and produces a non-persisted, non-submittable background intent with no calldata or commitment material returned |
+| Persist an active-chain Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, verifies the accepted public gross quote pin against the entered net amount, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
 | Confirm/submit active-chain Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, account, and master epoch are rechecked at confirmation and the final effect boundary. Sepolia blocks Bankr; mainnet supports Bankr/private-key/seed-phrase. Impersonators never submit. |
 | Prepare/submit private Unshield | Yes | **BLOCKED** | Wallet-wide privacy authority: no active public account is accepted in the request or consulted during quote/proof work. `privacy/withdrawals/` validates the dedicated master capability, signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST. |
 | Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, locally verifies the commitment proof/calldata, and rechecks the encrypted commitment claim at the raw-RPC boundary |
@@ -791,17 +791,21 @@ fallback or success. The response remains in the service worker. Durable
 operation preparation independently runs the same deployment verification
 before it can persist or queue a deposit.
 
-After the user enters an amount, the wallet-UI-only quote route uses the
+After the user enters the desired net Shielded ETH amount, the wallet-UI-only
+quote route uses the
 selected active-chain RPC for public balance and fee reads plus
 `eth_estimateGas` against the pinned Entrypoint native `deposit(uint256)` call.
-The RPC receives the selected public address, candidate amount, exact calldata,
+The RPC receives the selected public address, grossed-up candidate amount,
+exact calldata,
 and a random throwaway public precommitment, and can correlate those with IP
 and timing. That precommitment is never returned, stored, or accepted by a
 later preparation path. The handler resolves the submitted account ID,
 address, and type against storage; Bankr/private-key/seed-phrase addresses may
 quote and impersonators fail before RPC. The response is exact decimal strings
-for balance, minimum, protocol fee, expected Shield credit, gas reserve, total,
-Max, and affordability. Internal RPC errors collapse to one
+for balance, minimum, gross deposit, protocol fee, exact Shield credit, gas
+reserve, total, net Max, and affordability. Max selects and re-simulates the
+exact post-gas gross balance when fee-floor rounding gives one net amount two
+adjacent gross values. Internal RPC errors collapse to one
 bounded message. There is no secret access, signing, durable operation, or
 mutation dependency.
 
@@ -811,10 +815,15 @@ biometric master session before quoting, then rechecks the auth epoch and exact
 stored account under the wallet-secret lock. The dedicated privacy key
 decrypts the phrase only in the service worker; neither phrase, derived
 nullifier/secret, precommitment, nor calldata is returned. The router projects
-only the public chain/account/amount/Entrypoint tuple and ready status.
+only the public chain/account/gross/fee/net/Entrypoint tuple and ready status.
+The exact-shape wallet-UI request carries the accepted public gross quote; the
+background proves that its fee-deducted value equals the entered net amount and
+simulates that exact gross value before using it.
 
 `privacyPrepareShield` performs one fresh deployment verification and quote,
 then rechecks the master epoch and exact account under the wallet-secret lock.
+Its exact-shape request carries the same public gross quote pin, which is
+revalidated against the entered net amount and used in the durable dedupe key.
 The real durable index is distinct from the review-only reserved index. Its
 precommitment and exact calldata are encrypted with the dedicated privacy key
 before the IndexedDB operation row and next-index counter commit atomically.

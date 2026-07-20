@@ -74,7 +74,7 @@ The implementation is covered by:
 - UI labels, explorer links, minimums, protocol fees, maximum relay fees, and
   account choices derived from the active manifest.
 
-Latest run on 2026-07-20: `190/190` privacy tests, `232/232` UI tests, `6/6`
+Latest run on 2026-07-20: `193/193` privacy tests, `233/233` UI tests, `6/6`
 architecture guards, all three typechecks, changed-file lint, and `14/14`
 Shield preview states passed. The full production extension build and frozen
 bundle budgets passed. The final bounded live RPC assertion returned chain `1`,
@@ -109,8 +109,14 @@ controlled rollout, use disposable, explicitly funded accounts and pre-agreed
 spend/fee caps:
 
 1. Inspect the normal production UI: Ethereum labels, Etherscan links,
-   `0.01 ETH` minimum, `0.5%` fee, ETH/USD amount switching, full-width form
-   errors below the route metadata, and no Sepolia selection or copy.
+   `0.01 ETH` minimum shielded amount, `0.5%` fee added on top, ETH/USD amount
+   switching, full-width form errors below the route metadata, and no Sepolia
+   selection or copy. Enter exactly `0.01 ETH`; review must show exactly
+   `0.01 ETH` to shield, a `0.000050251256281407 ETH` protocol fee, and a
+   `0.010050251256281407 ETH` pre-gas wallet debit.
+   Press Max and drag the slider to 100%; in both cases the displayed shielded
+   amount plus the added protocol fee and quoted network reserve must equal the
+   full ETH balance.
 2. Exercise quote/review without submitting for Bankr, private-key, and seed
    accounts. Confirm impersonator, agent, below-minimum, insufficient-funds,
    deployment-drift, ASP/root, expired-quote, and relayer-substitution failures.

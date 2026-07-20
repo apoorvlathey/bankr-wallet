@@ -830,26 +830,31 @@ amount, recipient, or transaction. This diagnostic is not invoked by the
 normal Shield UI; final durable preparation independently repeats the pinned
 deployment checks before persisting or queuing an operation.
 
-Pressing Shield opens amount entry immediately. `privacyQuoteShield` sends the
-selected public account address, entered public amount, fixed Entrypoint address, and a fresh
+Pressing Shield opens amount entry immediately. The entered value is the exact
+amount the user wants to become Shielded ETH; the fee is grossed up and added
+on top. `privacyQuoteShield` sends the selected public account address,
+grossed-up public deposit amount, fixed Entrypoint address, and a fresh
 throwaway public precommitment only to that same bounded active-chain RPC for
 `eth_getBalance`, fee reads, and `eth_estimateGas`. The throwaway value is never
 returned, persisted, or reused as a deposit note. The quote response contains
-only serialized public amounts and affordability state. The RPC can observe
+only serialized public gross, fee, shielded, gas, maximum, and affordability
+state. The RPC can observe
 the address, candidate amount, IP, and timing; the quote path has no vault,
 signer, operation-storage, or submission dependency.
 
 Pressing `Continue` starts a separate master-authorized background-only review
-step. Under the wallet-secret lock it re-pins the stored source account,
+step, carrying the accepted public gross quote as an exact fee-rounding pin.
+Under the wallet-secret lock it re-pins the stored source account,
 decrypts the Privacy Pools phrase, derives a disposable deposit
 precommitment, ABI-encodes the exact native Entrypoint call, and then manually
 decodes and checks the selector, single argument, destination, value, chain,
 and fee math. Its internal type is explicitly `submittable: false`; the
-renderer receives only the public account/amount/destination tuple and a ready
+renderer receives only the public account/gross/fee/shielded/destination tuple and a ready
 status. This step writes nothing and cannot sign or submit.
 
 Pressing `Confirm details` sends `privacyPrepareShield` with a stable request
-UUID. The background repeats deployment, quote, master-epoch, and exact account
+UUID and the same public gross quote pin. The background repeats deployment,
+quote, master-epoch, and exact account
 validation; requires the authenticated dedicated privacy capability from a
 password or fresh matching biometric master session; derives a distinct
 durable deposit index; and independently decodes the real intent again. A

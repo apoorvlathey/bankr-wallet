@@ -9,7 +9,9 @@ import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
 import { readPrivacyShieldRpcQuote } from "./quoteClient";
 import {
   createPrivacyShieldQuoteValues,
+  grossPrivacyShieldAmount,
   parsePrivacyShieldAmount,
+  parsePrivacyShieldGrossAmount,
   PrivacyShieldQuoteError,
   type PrivacyShieldQuoteValues,
 } from "./quotePolicy";
@@ -26,6 +28,7 @@ export interface PrivacyShieldQuoteRequest {
   readonly accountAddress: string;
   readonly accountType: AccountType;
   readonly amount: string;
+  readonly grossAmountWei?: string;
 }
 
 type Dependencies = {
@@ -51,7 +54,9 @@ function assertQuoteRequest(request: PrivacyShieldQuoteRequest): void {
     typeof request.accountType !== "string" ||
     (!SUPPORTED_SOURCE_TYPES.has(request.accountType) &&
       request.accountType !== "impersonator") ||
-    typeof request.amount !== "string"
+    typeof request.amount !== "string" ||
+    (request.grossAmountWei !== undefined &&
+      typeof request.grossAmountWei !== "string")
   ) {
     throw new PrivacyShieldQuoteError("invalid-request");
   }
@@ -96,18 +101,46 @@ export async function quotePrivacyShield(
 ): Promise<PrivacyShieldQuoteValues> {
   const dependencies = { ...productionDependencies, ...overrides };
   assertQuoteRequest(request);
-  const amountWei = parsePrivacyShieldAmount(request.amount);
+  const shieldedAmountWei = parsePrivacyShieldAmount(request.amount);
+  let amountWei = grossPrivacyShieldAmount(shieldedAmountWei);
+  if (request.grossAmountWei !== undefined) {
+    amountWei = parsePrivacyShieldGrossAmount(
+      request.grossAmountWei,
+      shieldedAmountWei,
+    );
+  }
   const account = await dependencies.getAccountById(request.accountId);
   const sourceAddress = assertPinnedSourceAccount(request, account);
 
   try {
     const rpcUrl = await dependencies.resolveRpcUrl();
-    const rpcQuote = await dependencies.readRpcQuote(
-      rpcUrl,
-      sourceAddress,
-      amountWei,
-    );
-    return createPrivacyShieldQuoteValues({ amountWei, ...rpcQuote });
+    if (request.grossAmountWei !== undefined) {
+      const rpcQuote = await dependencies.readRpcQuote(
+        rpcUrl,
+        sourceAddress,
+        amountWei,
+      );
+      return createPrivacyShieldQuoteValues({
+        shieldedAmountWei,
+        amountWei,
+        ...rpcQuote,
+      });
+    }
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const rpcQuote = await dependencies.readRpcQuote(
+        rpcUrl,
+        sourceAddress,
+        amountWei,
+      );
+      const quote = createPrivacyShieldQuoteValues({
+        shieldedAmountWei,
+        ...rpcQuote,
+      });
+      if (quote.amountWei === amountWei.toString()) return quote;
+      amountWei = BigInt(quote.amountWei);
+    }
+    throw new PrivacyShieldQuoteError("quote-unavailable");
   } catch (error) {
     if (error instanceof PrivacyShieldQuoteError) throw error;
     throw new PrivacyShieldQuoteError("quote-unavailable");

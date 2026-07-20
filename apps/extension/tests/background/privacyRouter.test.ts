@@ -133,6 +133,7 @@ test("privacy operation routes expose only durable public summaries", async () =
     accountAddress: operation.accountAddress,
     accountType: operation.accountType,
     amount: "0.1",
+    grossAmountWei: "101010101010101010",
   };
   route(message, operationCapture.sendResponse);
   const prepared = await operationCapture.response as any;
@@ -150,6 +151,7 @@ test("privacy operation routes expose only durable public summaries", async () =
     accountAddress: message.accountAddress,
     accountType: message.accountType,
     amount: message.amount,
+    grossAmountWei: message.grossAmountWei,
   });
 
   route({ type: "privacyListShieldOperations" }, listCapture.sendResponse);
@@ -331,6 +333,7 @@ test("privacy operation route rejects malformed and agent-gated requests", async
     accountAddress: "0x1111111111111111111111111111111111111111",
     accountType: "privateKey",
     amount: "0.1",
+    grossAmountWei: "101010101010101010",
   };
   route({ ...request, extra: true }, invalidCapture.sendResponse);
   assert.deepEqual(await invalidCapture.response, {
@@ -361,7 +364,9 @@ test("privacy router projects a prepared intent without calldata or secrets", as
           chainId: 11_155_111,
           sourceAddress: "0x1111111111111111111111111111111111111111",
           destinationAddress: "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB",
-          valueWei: 100_000_000_000_000_000n,
+          valueWei: 101_010_101_010_101_010n,
+          protocolFeeWei: 1_010_101_010_101_010n,
+          shieldedAmountWei: 100_000_000_000_000_000n,
           callData: "must-not-leave-background",
         },
       };
@@ -373,6 +378,7 @@ test("privacy router projects a prepared intent without calldata or secrets", as
     accountAddress: "0x1111111111111111111111111111111111111111",
     accountType: "privateKey",
     amount: "0.1",
+    grossAmountWei: "101010101010101010",
   };
 
   assert.deepEqual(route(message, capture.sendResponse), {
@@ -388,7 +394,9 @@ test("privacy router projects a prepared intent without calldata or secrets", as
       accountId: "pk-1",
       accountAddress: message.accountAddress,
       accountType: "privateKey",
-      amountWei: "100000000000000000",
+      amountWei: "101010101010101010",
+      protocolFeeWei: "1010101010101010",
+      shieldedAmountWei: "100000000000000000",
       destinationAddress: "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB",
     },
   });
@@ -398,6 +406,7 @@ test("privacy router projects a prepared intent without calldata or secrets", as
     accountAddress: message.accountAddress,
     accountType: message.accountType,
     amount: message.amount,
+    grossAmountWei: message.grossAmountWei,
   });
 });
 
@@ -418,6 +427,7 @@ test("privacy review route rejects extra fields and bounds authorization failure
     accountAddress: "0x1111111111111111111111111111111111111111",
     accountType: "privateKey",
     amount: "0.1",
+    grossAmountWei: "101010101010101010",
   };
 
   assert.deepEqual(

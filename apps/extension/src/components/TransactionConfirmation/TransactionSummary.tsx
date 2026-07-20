@@ -16,6 +16,10 @@ import {
 } from "@/components/Shield/model/shieldedAsset";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import {
+  privacyShieldNetAmountWei,
+  privacyShieldProtocolFeeWei,
+} from "@/lib/privacyShieldAmounts";
 
 interface TransactionOutcomeProps {
   txRequest: PendingTxRequest;
@@ -56,8 +60,8 @@ export function PrivacyShieldTransactionOutcome({
     amountWei = 0n;
   }
   const feeBPS = PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
-  const feeWei = amountWei * feeBPS / 10_000n;
-  const shieldedWei = amountWei - feeWei;
+  const feeWei = privacyShieldProtocolFeeWei(amountWei, feeBPS);
+  const shieldedWei = privacyShieldNetAmountWei(amountWei, feeBPS);
   const feePercent = Number(feeBPS) / 100;
 
   return (
@@ -72,7 +76,7 @@ export function PrivacyShieldTransactionOutcome({
       <HStack justify="space-between" spacing={3}>
         <VStack align="start" spacing={0} minW={0}>
           <Text fontSize="xs" color="fg.secondary">
-            From {SHIELDED_ETH_NETWORK_NAME} ETH
+            Total from {SHIELDED_ETH_NETWORK_NAME} wallet
           </Text>
           <Text fontFamily="mono" fontSize="xl" fontWeight="700">
             {formatShieldWei(amountWei)} ETH
@@ -83,7 +87,7 @@ export function PrivacyShieldTransactionOutcome({
       <ArrowDownIcon my={2.5} color="fg.muted" />
       <HStack justify="space-between" spacing={3}>
         <VStack align="start" spacing={0} minW={0}>
-          <Text fontSize="xs" color="fg.secondary">To Shielded ETH</Text>
+          <Text fontSize="xs" color="fg.secondary">Amount to shield</Text>
           <Text fontFamily="mono" fontSize="xl" fontWeight="700">
             {formatShieldWei(shieldedWei)} ETH
           </Text>
@@ -92,7 +96,7 @@ export function PrivacyShieldTransactionOutcome({
       </HStack>
       <HStack mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle" justify="space-between">
         <Text fontSize="xs" color="fg.secondary">
-          Protocol fee ({feePercent}%)
+          Protocol fee ({feePercent}%, added on top)
         </Text>
         <Text fontSize="xs" fontWeight="600" fontFamily="mono">
           {formatShieldWei(feeWei)} ETH

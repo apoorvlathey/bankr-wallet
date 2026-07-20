@@ -1,12 +1,17 @@
 import { parseUnits } from "viem";
 
+import {
+  MAX_PRIVACY_SHIELD_AMOUNT_WEI,
+  privacyShieldGrossAmountForAvailableWei,
+  privacyShieldGrossAmountWei,
+  privacyShieldNetAmountWei,
+} from "../../../lib/privacyShieldAmounts";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
 const ETH_DECIMALS = 18;
-const BASIS_POINTS_SCALE = 10_000n;
 const MAX_AMOUNT_INPUT_LENGTH = 80;
-const MAX_UINT256 = (1n << 256n) - 1n;
 const CANONICAL_ETH_AMOUNT = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
+const SERIALIZED_WEI = /^(?:0|[1-9]\d{0,79})$/;
 
 export type PrivacyShieldQuoteErrorCode =
   | "invalid-request"
@@ -59,23 +64,60 @@ export function parsePrivacyShieldAmount(amount: unknown): bigint {
   if (amountWei < minimumDepositAmount) {
     throw new PrivacyShieldQuoteError("amount-below-minimum");
   }
-  if (amountWei > MAX_UINT256) {
+  if (amountWei > MAX_PRIVACY_SHIELD_AMOUNT_WEI) {
     throw new PrivacyShieldQuoteError("invalid-amount");
   }
   return amountWei;
 }
 
+export function grossPrivacyShieldAmount(
+  shieldedAmountWei: bigint,
+): bigint {
+  try {
+    return privacyShieldGrossAmountWei(
+      shieldedAmountWei,
+      PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS,
+    );
+  } catch {
+    throw new PrivacyShieldQuoteError("invalid-amount");
+  }
+}
+
+export function parsePrivacyShieldGrossAmount(
+  amountWei: unknown,
+  expectedShieldedAmountWei: bigint,
+): bigint {
+  if (typeof amountWei !== "string" || !SERIALIZED_WEI.test(amountWei)) {
+    throw new PrivacyShieldQuoteError("invalid-amount");
+  }
+  try {
+    const parsed = BigInt(amountWei);
+    if (
+      privacyShieldNetAmountWei(
+        parsed,
+        PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS,
+      ) !== expectedShieldedAmountWei
+    ) {
+      throw new Error("Gross amount does not match shielded amount");
+    }
+    return parsed;
+  } catch {
+    throw new PrivacyShieldQuoteError("invalid-amount");
+  }
+}
+
 export function createPrivacyShieldQuoteValues(input: {
-  amountWei: bigint;
+  shieldedAmountWei: bigint;
+  amountWei?: bigint;
   balanceWei: bigint;
   gasLimit: bigint;
   maxFeePerGas: bigint;
 }): PrivacyShieldQuoteValues {
   const deployment = PRIVACY_POOLS_DEPLOYMENT;
-  const { amountWei, balanceWei, gasLimit, maxFeePerGas } = input;
+  const { shieldedAmountWei, balanceWei, gasLimit, maxFeePerGas } = input;
   if (
-    amountWei < deployment.assetConfig.minimumDepositAmount ||
-    amountWei > MAX_UINT256 ||
+    shieldedAmountWei < deployment.assetConfig.minimumDepositAmount ||
+    shieldedAmountWei > MAX_PRIVACY_SHIELD_AMOUNT_WEI ||
     balanceWei < 0n ||
     gasLimit <= 0n ||
     maxFeePerGas <= 0n
@@ -83,14 +125,34 @@ export function createPrivacyShieldQuoteValues(input: {
     throw new PrivacyShieldQuoteError("quote-unavailable");
   }
 
-  const protocolFeeWei =
-    (amountWei * deployment.assetConfig.vettingFeeBPS) /
-    BASIS_POINTS_SCALE;
-  const shieldedAmountWei = amountWei - protocolFeeWei;
   const gasReserveWei = gasLimit * maxFeePerGas;
-  const totalRequiredWei = amountWei + gasReserveWei;
   const balanceAfterGas =
     balanceWei > gasReserveWei ? balanceWei - gasReserveWei : 0n;
+  const maxShieldableWei = privacyShieldNetAmountWei(
+    balanceAfterGas,
+    deployment.assetConfig.vettingFeeBPS,
+  );
+  let amountWei: bigint;
+  try {
+    amountWei = input.amountWei ?? privacyShieldGrossAmountForAvailableWei(
+      shieldedAmountWei,
+      deployment.assetConfig.vettingFeeBPS,
+      balanceAfterGas,
+    );
+    if (
+      amountWei > MAX_PRIVACY_SHIELD_AMOUNT_WEI ||
+      privacyShieldNetAmountWei(
+        amountWei,
+        deployment.assetConfig.vettingFeeBPS,
+      ) !== shieldedAmountWei
+    ) {
+      throw new Error("Gross amount does not match shielded amount");
+    }
+  } catch {
+    throw new PrivacyShieldQuoteError("quote-unavailable");
+  }
+  const protocolFeeWei = amountWei - shieldedAmountWei;
+  const totalRequiredWei = amountWei + gasReserveWei;
 
   return Object.freeze({
     chainId: deployment.chainId,
@@ -101,7 +163,7 @@ export function createPrivacyShieldQuoteValues(input: {
     shieldedAmountWei: shieldedAmountWei.toString(),
     gasReserveWei: gasReserveWei.toString(),
     totalRequiredWei: totalRequiredWei.toString(),
-    maxShieldableWei: balanceAfterGas.toString(),
+    maxShieldableWei: maxShieldableWei.toString(),
     vettingFeeBPS: deployment.assetConfig.vettingFeeBPS.toString(),
     canAfford: totalRequiredWei <= balanceWei,
   });

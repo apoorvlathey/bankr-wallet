@@ -160,8 +160,8 @@ test("Shield preview quotes all custody account types and rejects view-only", ()
       amount: "0.1",
     }) as any;
     assert.equal(response.success, true, wallet);
-    assert.equal(response.quote.amountWei, "100000000000000000");
-    assert.equal(response.quote.protocolFeeWei, "1000000000000000");
+    assert.equal(response.quote.amountWei, "101010101010101010");
+    assert.equal(response.quote.protocolFeeWei, "1010101010101010");
 
     const review = responseForPreviewMessage(environment, {
       type: "privacyPrepareShieldReview",
@@ -169,11 +169,13 @@ test("Shield preview quotes all custody account types and rejects view-only", ()
       accountAddress: account.address,
       accountType: account.type,
       amount: "0.1",
+      grossAmountWei: response.quote.amountWei,
     }) as any;
     assert.equal(review.success, true, wallet);
     assert.equal(review.status, "ready");
     assert.equal(review.review.accountType, wallet);
-    assert.equal(review.review.amountWei, "100000000000000000");
+    assert.equal(review.review.amountWei, "101010101010101010");
+    assert.equal(review.review.shieldedAmountWei, "100000000000000000");
   }
 
   const environment = createPreviewEnvironment(

@@ -51,7 +51,15 @@ mainnet rehearsal.
   restore remain main-password-only under Settings -> Shield recovery.
 - Shield quotes use the selected public account, the active contract minimum
   and fee (`0.001 ETH`/1% on Sepolia; `0.01 ETH`/0.5% on mainnet), estimated
-  gas, and a gas-aware Max.
+  gas, and a gas-aware Max. The entered value is the exact Shielded ETH output;
+  WalletChan gross-ups the transaction value so the protocol fee is added on
+  top. Mainnet `0.01 ETH` input therefore produces exactly `0.01 ETH` shielded,
+  with a `0.000050251256281407 ETH` fee and
+  `0.010050251256281407 ETH` pre-gas wallet debit shown in review.
+  Max/100% derives the net shielded input from the complete post-gas balance
+  and pins the exact available gross value when one net amount has two valid
+  one-wei-adjacent gross values, so no spendable wei is stranded by the
+  conversion.
   WalletChan deliberately has no arbitrary 1 ETH application cap.
 - Private-key and seed-phrase accounts use the normal local WalletChan
   confirmation/signing path. Sepolia development builds reject Bankr before a
@@ -97,6 +105,10 @@ mainnet rehearsal.
   dragging does not start quote requests or flash the ETH balance to zero.
   The source field also reuses Send's in-field ETH/USD switch when an ETH price
   is available; only canonical ETH reaches quote/review/operation messages.
+  That canonical input remains the desired shielded amount; background quote
+  and operation policy derive and verify the gross transaction value. Review
+  and durable preparation carry the accepted public gross quote as an exact
+  pin so the fee-rounding choice cannot drift between screens.
   Recoverable errors render below the route metadata rather than inside the
   source balance row.
 - Backing out of the normal Shield transaction review leaves its request

@@ -29,14 +29,14 @@ function account(type: AccountType): Account {
 function quote(canAfford = true) {
   return Object.freeze({
     chainId: 11_155_111,
-    amountWei: "100000000000000000",
+    amountWei: "101010101010101010",
     balanceWei: "500000000000000000",
     minimumAmountWei: "1000000000000000",
-    protocolFeeWei: "1000000000000000",
-    shieldedAmountWei: "99000000000000000",
+    protocolFeeWei: "1010101010101010",
+    shieldedAmountWei: "100000000000000000",
     gasReserveWei: "200000000000000",
-    totalRequiredWei: "100200000000000000",
-    maxShieldableWei: "499800000000000000",
+    totalRequiredWei: "101210101010101010",
+    maxShieldableWei: "494802000000000000",
     vettingFeeBPS: "100",
     canAfford,
   });

@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { formatEther } from "viem";
 
 import type { Account, AccountType } from "../../src/chrome/types";
 import { quotePrivacyShield } from "../../src/chrome/privacy/deposit/quote";
 import { PrivacyShieldQuoteError } from "../../src/chrome/privacy/deposit/quotePolicy";
+import {
+  privacyShieldGrossAmountWei,
+  privacyShieldNetAmountWei,
+} from "../../src/lib/privacyShieldAmounts";
 
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
@@ -37,7 +42,7 @@ test("quote supports Bankr, private-key, and seed-phrase source accounts", async
       resolveRpcUrl: async () => "https://sepolia.example",
       readRpcQuote: async (rpcUrl, address, amountWei) => {
         assert.equal(rpcUrl, "https://sepolia.example");
-        assert.equal(amountWei, 100_000_000_000_000_000n);
+        assert.equal(amountWei, 101_010_101_010_101_010n);
         observedAddress = address;
         return {
           balanceWei: 500_000_000_000_000_000n,
@@ -47,9 +52,50 @@ test("quote supports Bankr, private-key, and seed-phrase source accounts", async
       },
     });
     assert.equal(observedAddress, ADDRESS);
-    assert.equal(quote.amountWei, "100000000000000000");
+    assert.equal(quote.amountWei, "101010101010101010");
+    assert.equal(quote.shieldedAmountWei, "100000000000000000");
     assert.equal(quote.canAfford, true);
   }
+});
+
+test("Max re-simulates the exact full-balance gross value", async () => {
+  const source = account("privateKey");
+  const availableGrossAmountWei = 2_000_000_000_000_099n;
+  const shieldedAmountWei = privacyShieldNetAmountWei(
+    availableGrossAmountWei,
+    100n,
+  );
+  assert.equal(
+    privacyShieldGrossAmountWei(shieldedAmountWei, 100n),
+    availableGrossAmountWei + 1n,
+  );
+  const simulatedAmounts: bigint[] = [];
+
+  const quote = await quotePrivacyShield(
+    {
+      ...requestFor(source),
+      amount: formatEther(shieldedAmountWei),
+    },
+    {
+      getAccountById: async () => source,
+      resolveRpcUrl: async () => "https://sepolia.example",
+      readRpcQuote: async (_rpcUrl, _address, amountWei) => {
+        simulatedAmounts.push(amountWei);
+        return {
+          balanceWei: availableGrossAmountWei + 1n,
+          gasLimit: 1n,
+          maxFeePerGas: 1n,
+        };
+      },
+    },
+  );
+
+  assert.deepEqual(simulatedAmounts, [
+    availableGrossAmountWei + 1n,
+    availableGrossAmountWei,
+  ]);
+  assert.equal(quote.amountWei, availableGrossAmountWei.toString());
+  assert.equal(quote.totalRequiredWei, quote.balanceWei);
 });
 
 test("quote rejects view-only and stale account snapshots before RPC", async () => {
