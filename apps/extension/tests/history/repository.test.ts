@@ -70,6 +70,13 @@ test("IndexedDB history migrates, compacts, pages, hydrates, and protects active
 
     await repository.addTxToHistory(transaction("active", { createdAt: 30 }));
     assert.equal((await repository.getTxById("active"))?.tx.data, "0x12345678");
+    const notificationCount = harness.runtimeMessages.length;
+    const existing = await repository.addTxToHistoryIfAbsent(
+      transaction("active", { status: "failed" }),
+    );
+    assert.equal(existing.status, "processing");
+    assert.equal((await repository.getTxById("active"))?.status, "processing");
+    assert.equal(harness.runtimeMessages.length, notificationCount);
     await repository.updateTxInHistory("active", {
       status: "pending",
       txHash: `0x${"2".repeat(64)}`,

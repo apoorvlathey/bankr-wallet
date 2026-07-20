@@ -242,6 +242,13 @@
 
 ## Slop audit
 
+- 2026-07-20 Safe integration audit: Safe account setup, authority state,
+  pending approvals, execution review, and terminal Activity reuse WalletChan's
+  existing Warm Midnight hierarchy instead of introducing a parallel visual
+  system. The request flow keeps nonce/order constraints, owner identity,
+  simulation bypass, and execution state explicit at popup width. Detailed
+  product and security decisions live in `_docs/SAFE_ACCOUNTS.md` and
+  `_docs/SAFE_ACCOUNTS_PRD.md`.
 - 2026-07-20 in-wallet staking audit: replaced More's external Stake link with
   a focused Warm Midnight decision path. The screen keeps staked sWCHAN and
   claimable WETH in one thin shared surface, places the Stake/Unstake selector
