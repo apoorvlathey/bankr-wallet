@@ -984,9 +984,9 @@ function App() {
       if (message.type === "newPendingTxRequest" && message.txRequest) {
         void playInteractionSound("requestReceived");
         const txRequest = message.txRequest;
-        // Don't append to pendingRequests here — the storage change listener
-        // will sync the full list from chrome.storage.local, avoiding duplicates.
-        // Just handle view switching.
+        setPendingRequests((current) =>
+          current.some((request) => request.id === txRequest.id) ? current : [...current, txRequest]
+        );
         (async () => {
           const isUnlocked = await checkLockState();
           setIsWalletUnlocked(isUnlocked);

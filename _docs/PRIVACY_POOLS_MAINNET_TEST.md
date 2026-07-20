@@ -74,7 +74,7 @@ The implementation is covered by:
 - UI labels, explorer links, minimums, protocol fees, maximum relay fees, and
   account choices derived from the active manifest.
 
-Latest run on 2026-07-20: `189/189` privacy tests, `231/231` UI tests, `6/6`
+Latest run on 2026-07-20: `190/190` privacy tests, `232/232` UI tests, `6/6`
 architecture guards, all three typechecks, changed-file lint, and `14/14`
 Shield preview states passed. The full production extension build and frozen
 bundle budgets passed. The final bounded live RPC assertion returned chain `1`,
@@ -114,10 +114,12 @@ spend/fee caps:
 2. Exercise quote/review without submitting for Bankr, private-key, and seed
    accounts. Confirm impersonator, agent, below-minimum, insufficient-funds,
    deployment-drift, ASP/root, expired-quote, and relayer-substitution failures.
-   From each Shield transaction review, use Back and then tap Shield again;
-   confirm the exact existing request reopens without a second operation or
-   `operation-unavailable` error. Explicit Reject must still terminalize that
-   request and allow a later Shield attempt to create a fresh operation.
+   From each Shield transaction review, immediately use Back and then tap
+   Shield again before the storage-change event could normally settle; confirm
+   the exact existing request reopens without a second operation,
+   `operation-unavailable`, or hidden-focused-descendant ARIA warning. Explicit
+   Reject must still terminalize that request and allow a later Shield attempt
+   to create a fresh operation.
 3. For each of Bankr, private-key, and seed accounts, complete a capped Shield
    and observe confirmation, pool indexing, ASP classification, and Private
    Activity/balance transitions across UI and service-worker restarts.

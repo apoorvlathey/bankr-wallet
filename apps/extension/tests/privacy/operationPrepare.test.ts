@@ -178,6 +178,8 @@ test("operation preparation returns the existing pending operation without reser
   let stored: StoredPrivacyShieldOperationV1 | null = null;
   let indexReads = 0;
   let commits = 0;
+  let deploymentChecks = 0;
+  let quoteReads = 0;
   const request = {
     requestId: REQUEST_ID,
     accountId: source.id,
@@ -186,8 +188,13 @@ test("operation preparation returns the existing pending operation without reser
     amount: "0.1",
   };
   const shared = {
-    verifyDeployment: async () => {},
-    quotePrivacyShield: async () => quote(),
+    verifyDeployment: async () => {
+      deploymentChecks += 1;
+    },
+    quotePrivacyShield: async () => {
+      quoteReads += 1;
+      return quote();
+    },
     getAccountById: async () => source,
     createOperationId: () => "00000000-0000-4000-8000-000000000009",
     now: () => 100,
@@ -208,7 +215,10 @@ test("operation preparation returns the existing pending operation without reser
       },
     });
     assert.ok(stored);
-    const second = await preparePrivacyShieldOperation(request, {
+    const second = await preparePrivacyShieldOperation({
+      ...request,
+      requestId: "00000000-0000-4000-8000-000000000003",
+    }, {
       ...shared,
       findOperation: async () => stored,
       readNextDepositIndex: async () => {
@@ -223,6 +233,8 @@ test("operation preparation returns the existing pending operation without reser
     assert.deepEqual(second, first);
     assert.equal(indexReads, 1);
     assert.equal(commits, 1);
+    assert.equal(deploymentChecks, 1);
+    assert.equal(quoteReads, 1);
   } finally {
     session.clearInMemoryAuthCache();
     harness.restore();

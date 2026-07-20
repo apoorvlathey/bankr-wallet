@@ -74,4 +74,8 @@ test("the app reopens a pending Shield confirmation before mounting the amount s
   assert.ok(
     entry.indexOf('setView("txConfirm")') < entry.indexOf('setView("shield")'),
   );
+  assert.match(
+    source,
+    /newPendingTxRequest[\s\S]*?setPendingRequests\(\(current\) => current\.some/,
+  );
 });

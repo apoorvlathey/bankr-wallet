@@ -238,9 +238,12 @@
   the route metadata, preserving source balance legibility. The balance slider
   reflects syntactically valid sub-minimum amounts independently of policy
   validation, so corrective copy never resets the user's chosen position.
-  Returning from the
-  normal transaction review resumes the exact pending commitment instead of
-  making the primary Shield action appear to fail. The focused audit passes
+  Returning from the normal transaction review resumes the exact pending
+  commitment instead of
+  making the primary Shield action appear to fail, even when Back wins the race
+  against the storage-change event. Forward transitions release focus before
+  the outgoing layer becomes inert, eliminating hidden-focused-descendant ARIA
+  conflicts without changing visual motion. The focused audit passes
   visible label, focus, 44px target, retained-input error, one-primary-action,
   defined-edge, compact financial hierarchy, and no-decorative-motion gates.
 - 2026-07-20 Privacy action consistency audit: Shield, Unshield, and Send keep
@@ -643,6 +646,9 @@
   work, moved Shield errors below route metadata, and added Send-style in-field
   ETH/USD amount entry backed by the current private-portfolio ETH price. The
   slider now retains sub-minimum amounts while validation reports the minimum.
+  Pending runtime events close the fast-Back storage race, durable retries skip
+  redundant RPC work, and outgoing controls release focus before their screen
+  becomes inert.
 - 2026-07-20: made Unshield and Send keep intent-correct labels through empty,
   input, review, loading, error, and confirmation states; both require an
   explicit recipient, and an empty balance disables the current route action

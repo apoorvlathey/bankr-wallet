@@ -101,9 +101,12 @@ mainnet rehearsal.
   source balance row.
 - Backing out of the normal Shield transaction review leaves its request
   pending. Tapping Shield again reopens that exact trusted confirmation instead
-  of preparing another durable operation. The queue's idempotent fallback also
-  re-announces an exact pending request without repeating deployment RPC work;
-  Confirm still revalidates deployment and authorization before submission.
+  of preparing another durable operation, even when Back occurs before the
+  authoritative storage-change notification. The renderer adopts the trusted
+  pending runtime event immediately, an exact durable retry skips repeated
+  quote/deployment RPC work, and queue creation performs no redundant
+  deployment read. Confirm still revalidates deployment and authorization
+  before submission.
 - Unshield always mirrors Shield's two-card amount grammar. When no Shielded
   ETH is privately available but ragequit is, the same cards show the fixed
   public-exit amount and original depositor. A required unchecked commitment

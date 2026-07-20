@@ -93,7 +93,9 @@ test("durable Shield operations queue one exact normal confirmation for both loc
         getOperation: async () => stored,
         getAccountById: async () => selected,
         getPending: async () => null,
-        verifyDeployment: async () => {},
+        verifyDeployment: async () => {
+          throw new Error("queueing a verified operation must not repeat the RPC check");
+        },
         savePending: async (pending) => {
           queued = pending;
         },

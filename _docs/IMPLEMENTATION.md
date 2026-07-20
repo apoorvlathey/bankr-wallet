@@ -85,7 +85,10 @@ Hierarchy transitions move horizontally, root/auth replacement fades, covered
 layers are inert, and the shared `data-screen-scroll-owner` /
 `data-screen-heading` hooks support scroll and focus restoration. See
 `_docs/STYLING.md` for component anatomy and `_docs/IMPROVE_UI.md` for the
-frozen Phase 2 contract.
+frozen Phase 2 contract. Before a forward destination covers the current
+screen, focus is released from the outgoing descendant; `inert` alone removes
+that covered layer from focus and the accessibility tree without a redundant
+`aria-hidden` conflict.
 
 ### Public/private home boundary
 
@@ -230,8 +233,16 @@ the dedicated privacy key. `privacy/operations/repository.ts`
 then atomically advances `nextDepositIndex` and adds the operation in the
 active profile's IndexedDB (`walletchan-privacy-v1` on Sepolia,
 `walletchan-privacy-mainnet-v1` on mainnet); request-ID and pending account/amount lookups make a
-retry idempotent. Only the sanitized public summary is returned. The background
-then creates a trusted, pinned normal WalletChan transaction request. Local
+retry idempotent. A retry finds and account-validates that exact active durable
+operation before another deployment/quote RPC pass. Only the sanitized public
+summary is returned. The background then creates a trusted, pinned normal
+WalletChan transaction request without repeating deployment verification;
+durable preparation already verified it, and the eventual Confirm authority
+gate verifies it again before signing or submission. The pending-request
+runtime event immediately updates the open renderer's in-memory queue, while
+the subsequent `chrome.storage.local` change remains authoritative. This
+prevents a fast Review → Back → Shield sequence from missing the saved request
+and starting preparation again. Local
 private-key and seed-phrase accounts repeat the encrypted intent, account,
 deployment, and master-epoch checks at confirmation and immediately before raw
 RPC publication. Sepolia development builds reject Bankr before a prompt.

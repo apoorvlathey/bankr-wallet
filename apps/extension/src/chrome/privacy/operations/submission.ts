@@ -170,12 +170,7 @@ export async function queuePrivacyShieldConfirmation(
   const expectedAuthEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new PrivacyShieldSubmissionError("auth-required");
   });
-  const pendingBeforeVerification = await dependencies.getPending(operationId);
-  if (!pendingBeforeVerification) {
-    await dependencies.verifyDeployment().catch(() => {
-      throw new PrivacyShieldSubmissionError("operation-unavailable");
-    });
-  }
+  const pendingBeforeLock = await dependencies.getPending(operationId);
 
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     try {
@@ -206,7 +201,7 @@ export async function queuePrivacyShieldConfirmation(
         .catch(() => undefined);
       return privacyShieldOperationPublicSummary(operation);
     }
-    if (pendingBeforeVerification) {
+    if (pendingBeforeLock) {
       throw new PrivacyShieldSubmissionError("operation-unavailable");
     }
     const pending = pinnedTxRequest(account, {

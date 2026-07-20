@@ -60,8 +60,13 @@ receives calldata or note material and never signs or submits.
 Backing out of that confirmation does not reject it. The next Shield entry
 resumes the newest exact trusted Privacy Pools transaction request instead of
 re-running preparation. The background queue path is also idempotent: an exact
-existing pending request is re-announced without another deployment RPC check;
-the eventual Confirm path still revalidates deployment and authorization.
+existing pending request is re-announced, and a retry can resume the exact
+account/amount-bound durable operation before another quote or deployment RPC
+pass. Queue creation itself does not repeat deployment verification; durable
+preparation already verified it, and the eventual Confirm path still
+revalidates deployment and authorization. The runtime pending event updates the
+mounted renderer queue immediately so a fast Back cannot race the authoritative
+storage-change notification and reopen preparation.
 
 The Shield amount field uses the private portfolio's current ETH price for the
 same in-field ETH/USD switch as Send. USD is a renderer-only denomination:

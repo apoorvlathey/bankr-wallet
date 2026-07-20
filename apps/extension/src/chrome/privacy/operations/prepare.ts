@@ -24,7 +24,10 @@ import {
   quotePrivacyShield,
   type PrivacyShieldQuoteRequest,
 } from "../deposit/quote";
-import type { PrivacyShieldQuoteValues } from "../deposit/quotePolicy";
+import {
+  parsePrivacyShieldAmount,
+  type PrivacyShieldQuoteValues,
+} from "../deposit/quotePolicy";
 import {
   derivePrivacyPoolDepositPrecommitment,
   derivePrivacyPoolDepositSecrets,
@@ -148,6 +151,26 @@ function publicSummary(
   return privacyShieldOperationPublicSummary(operation);
 }
 
+function resumeExistingOperation(
+  operation: StoredPrivacyShieldOperationV1,
+  request: PrivacyShieldOperationRequest,
+  amountWei: string,
+  dedupeKey: string,
+): PrivacyShieldOperationPublicV1 {
+  const released = publicSummary(operation);
+  const summary = operation.summary;
+  if (
+    (summary.requestId !== request.requestId && summary.dedupeKey !== dedupeKey) ||
+    summary.accountId !== request.accountId ||
+    summary.accountType !== request.accountType ||
+    summary.accountAddress.toLowerCase() !== request.accountAddress.toLowerCase() ||
+    summary.amountWei !== amountWei
+  ) {
+    throw new PrivacyShieldOperationError("operation-unavailable");
+  }
+  return released;
+}
+
 /** Reserve, encrypt, and atomically persist a real deposit operation. */
 export async function preparePrivacyShieldOperation(
   request: PrivacyShieldOperationRequest,
@@ -169,10 +192,35 @@ export async function preparePrivacyShieldOperation(
   }
   const dependencies = { ...productionDependencies, ...overrides };
   const expectedAuthEpoch = await requireLiveMasterSession();
+  const amountWei = parsePrivacyShieldAmount(request.amount).toString();
+  const dedupeKey = privacyShieldOperationDedupeKey({
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+    accountId: request.accountId,
+    amountWei,
+  });
+  const resumable = await dependencies.findOperation({
+    requestId: request.requestId,
+    dedupeKey,
+  });
+  if (resumable) {
+    return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
+      try {
+        assertCurrentMasterAuthorization(expectedAuthEpoch);
+      } catch {
+        throw new PrivacyShieldOperationError("auth-required");
+      }
+      const account = await dependencies.getAccountById(request.accountId);
+      assertPinnedSourceAccount(request, account);
+      return resumeExistingOperation(resumable, request, amountWei, dedupeKey);
+    });
+  }
   await dependencies.verifyDeployment().catch(() => {
     throw new PrivacyShieldOperationError("operation-unavailable");
   });
   const quote = await dependencies.quotePrivacyShield(request);
+  if (quote.amountWei !== amountWei) {
+    throw new PrivacyShieldOperationError("operation-unavailable");
+  }
   if (!quote.canAfford) {
     throw new PrivacyShieldOperationError("insufficient-funds");
   }
@@ -207,11 +255,6 @@ export async function preparePrivacyShieldOperation(
       throw new PrivacyShieldOperationError("recovery-unavailable");
     }
 
-    const dedupeKey = privacyShieldOperationDedupeKey({
-      chainId: quote.chainId,
-      accountId: request.accountId,
-      amountWei: quote.amountWei,
-    });
     const existing = await dependencies.findOperation({
       requestId: request.requestId,
       dedupeKey,

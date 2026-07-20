@@ -272,9 +272,12 @@ Import public app primitives from `@/components/ui` only.
 
 `ScreenStack` uses horizontal hierarchy motion. Forward destinations push
 from the right; Back exits to the right; root/auth replacement fades. Covered
-layers are inert. The new screen heading receives focus after a push, while
-Back restores the prior scroll owner and focus path. Reduced motion uses a
-short opacity transition instead of viewport travel.
+layers are inert. Before a forward layer covers the current screen, focus is
+released from the outgoing control so the browser never hides a focused
+descendant; `inert` supplies both interaction and accessibility-tree exclusion
+without redundant `aria-hidden`. The new screen heading receives focus after a
+push, while Back restores the prior scroll owner and focus path. Reduced motion
+uses a short opacity transition instead of viewport travel.
 
 Review these contracts at `/preview/mobile-primitives` in `journey`, `picker`,
 and `sheet` scenarios before migrating a production destination.

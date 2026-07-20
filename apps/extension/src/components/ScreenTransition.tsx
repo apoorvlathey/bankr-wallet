@@ -139,7 +139,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   const [enteredKeys, setEnteredKeys] = useState<Set<number>>(
     () => new Set([0]),
   );
-
   useEffect(() => {
     const prevView = lastViewRef.current;
 
@@ -206,8 +205,10 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         scrollTop: scrollOwner?.scrollTop ?? 0,
         focusPath,
       });
+      const shouldReleaseFocus = (forward || useFade) &&
+        activeElement instanceof HTMLElement && container.contains(activeElement);
+      if (shouldReleaseFocus) activeElement.blur();
     }
-
     pendingBackRestoreRef.current = forward ? null : view;
 
     setState((s) => {
@@ -495,7 +496,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
             key={layer.key}
             data-screen-layer={layer.key}
             {...inertProps}
-            aria-hidden={isCovered || undefined}
             initial={initial}
             animate={animate}
             transition={transition}
