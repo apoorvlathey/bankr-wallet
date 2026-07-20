@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHAIN_REGISTRY,
+  MAINNET_CHAIN_REGISTRY,
+  TESTNET_CHAIN_REGISTRY,
   DEFAULT_NETWORKS,
   ZEROX_SUPPORTED_CHAIN_IDS,
   chainHasNativeToken,
@@ -58,6 +59,69 @@ test("a stored visible choice overrides the registry default", () => {
   assert.equal(normalized.Blast.hidden, undefined);
   assert.equal(visibleNames.has("Blast"), true);
   assert.equal(normalized.Mantle.hidden, true, "missing default-hidden chains stay hidden");
+});
+
+test("native testnets ship hidden with complete runtime metadata", () => {
+  assert.equal(TESTNET_CHAIN_REGISTRY.length, 26);
+
+  for (const testnet of TESTNET_CHAIN_REGISTRY) {
+    assert.equal(testnet.isTestnet, true, `${testnet.name} should be a testnet`);
+    assert.equal(testnet.hiddenByDefault, true, `${testnet.name} should default hidden`);
+    assert.equal(DEFAULT_NETWORKS[testnet.name]?.hidden, true);
+    assert.equal(DEFAULT_NETWORKS[testnet.name]?.rpcUrl, testnet.rpcUrl);
+    assert.match(testnet.rpcUrl, /^https:\/\//u);
+    assert.match(testnet.explorer, /^https:\/\//u);
+    assert.equal(testnet.isBankrSupported, false);
+    assert.equal(testnet.isSwapSupported, false);
+    assert.equal(getResolvedChainById(testnet.chainId, undefined)?.isCustom, false);
+    assert.equal(getVisibleChains(undefined).some(({ chainId }) => chainId === testnet.chainId), false);
+  }
+});
+
+test("an existing custom testnet is promoted without losing user choices", () => {
+  const stored = {
+    "My Base testnet": {
+      chainId: 84532,
+      rpcUrl: "https://base-sepolia-rpc.publicnode.com",
+      explorer: "https://example.invalid",
+      hidden: undefined,
+      isCustom: true,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    },
+  };
+  const normalized = normalizeNetworksInfo(stored);
+
+  assert.deepEqual(normalized["Base Sepolia"], {
+    chainId: 84532,
+    rpcUrl: "https://base-sepolia-rpc.publicnode.com",
+    hidden: undefined,
+  });
+  assert.equal(getResolvedChainById(84532, normalized)?.isCustom, false);
+  assert.equal(getVisibleChains(normalized).some(({ chainId }) => chainId === 84532), true);
+});
+
+test("enabled testnets follow every wallet type's chain policy", () => {
+  const enabled = normalizeNetworksInfo({
+    "Base Sepolia": {
+      chainId: 84532,
+      rpcUrl: "https://base-sepolia.drpc.org",
+      hidden: undefined,
+    },
+  });
+
+  assert.equal(getVisibleChains(enabled, "bankr").some(({ chainId }) => chainId === 84532), false);
+  for (const accountType of [
+    "privateKey",
+    "seedPhrase",
+    "ledger",
+    "impersonator",
+  ] as const) {
+    assert.equal(
+      getVisibleChains(enabled, accountType).some(({ chainId }) => chainId === 84532),
+      true,
+      `${accountType} should see an enabled testnet`,
+    );
+  }
 });
 
 test("saved RPC URLs keep the active endpoint first and remain bounded", () => {
@@ -124,10 +188,10 @@ test("manual RPC normalization accepts local development shorthand only", () => 
 });
 
 test("registered testnets reuse their mainnet chain identity", () => {
-  const mainnetIds = new Set(CHAIN_REGISTRY.map((chain) => chain.chainId));
+  const mainnetIds = new Set(MAINNET_CHAIN_REGISTRY.map((chain) => chain.chainId));
   const seenTestnetIds = new Set<number>();
 
-  for (const chain of CHAIN_REGISTRY) {
+  for (const chain of MAINNET_CHAIN_REGISTRY) {
     for (const testnetChainId of chain.testnetChainIds) {
       assert.equal(
         mainnetIds.has(testnetChainId),
@@ -153,6 +217,13 @@ test("registered testnets reuse their mainnet chain identity", () => {
         "TESTNET",
       );
     }
+  }
+
+  const nativeTestnetIds = new Set(TESTNET_CHAIN_REGISTRY.map(({ chainId }) => chainId));
+  assert.equal(nativeTestnetIds.has(41454), false, "legacy Monad ID stays visual-only");
+  assert.equal(nativeTestnetIds.has(57054), false, "legacy Sonic Blaze ID stays visual-only");
+  for (const testnet of TESTNET_CHAIN_REGISTRY) {
+    assert.equal(seenTestnetIds.has(testnet.chainId), true);
   }
 });
 
@@ -237,7 +308,7 @@ test("swap support matches the official 0x Swap API table", () => {
     1, 10, 56, 130, 137, 143, 146, 480, 999, 2741, 4217, 4663, 5000,
     8453, 9745, 42161, 43114, 57073, 59144, 80094, 534352,
   ];
-  const registrySwapIds = CHAIN_REGISTRY.filter((chain) => chain.isSwapSupported)
+  const registrySwapIds = MAINNET_CHAIN_REGISTRY.filter((chain) => chain.isSwapSupported)
     .map((chain) => chain.chainId)
     .sort((a, b) => a - b);
 

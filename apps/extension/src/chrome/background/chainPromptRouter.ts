@@ -3,7 +3,7 @@
 import type * as AccountStorage from "../accountStorage";
 import type * as DappRequestPolicy from "../dapp/requestPolicy";
 import type * as MetadataPromptLifecycle from "../requests/pendingMetadataPromptLifecycle";
-import type * as NetworkStorage from "../network/networkMutations";
+import type * as DappNetworkApproval from "../network/dappNetworkApproval";
 import type * as PendingAddChainStorage from "../requests/pendingAddChainStorage";
 import type * as PendingResolution from "../requests/pendingRequestResolution";
 import type * as RpcHttpClient from "../network/rpcClient";
@@ -33,7 +33,7 @@ type Dependencies = {
   savePendingAddChainRequest: typeof PendingAddChainStorage.savePendingAddChainRequest;
   removePendingAddChainRequest: typeof PendingAddChainStorage.removePendingAddChainRequest;
   getActiveAccount: typeof AccountStorage.getActiveAccount;
-  addNetworkIfMissing: typeof NetworkStorage.addNetworkIfMissing;
+  approveDappNetworkRequest: typeof DappNetworkApproval.approveDappNetworkRequest;
   writeResultToStorage: (
     key: string,
     result: Record<string, unknown>,
@@ -162,7 +162,7 @@ export function createBackgroundChainPromptMessageRouter(
               if (!authorization.authorized) {
                 return { success: false, error: authorization.error };
               }
-              const addResult = await dependencies.addNetworkIfMissing({
+              const addResult = await dependencies.approveDappNetworkRequest({
                 chainName: name,
                 entry: {
                   chainId: message.chainId || pending.chainId,
@@ -171,6 +171,7 @@ export function createBackgroundChainPromptMessageRouter(
                   explorer: explorer || undefined,
                   nativeCurrency,
                 },
+                requestChainId: pending.chainId,
                 switchIfSupportedForAccountType: activeAccount?.type ?? null,
                 requestOrigin: pending.origin,
               });

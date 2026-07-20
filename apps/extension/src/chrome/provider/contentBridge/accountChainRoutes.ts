@@ -137,6 +137,13 @@ function postAddChainFailure(id: string, error: string, code?: number): void {
   post("addEthereumChainResult", { id, success: false, error, code });
 }
 
+export function existingAddChainNeedsApproval(
+  chainId: number,
+  networksInfo: NetworksInfo | undefined,
+): boolean {
+  return getResolvedChainById(chainId, networksInfo)?.hidden === true;
+}
+
 async function handleAddChain(msg: AddChainMessage): Promise<void> {
   const { id, chainId, chainName, nativeCurrency, rpcUrls, blockExplorerUrls } = msg;
   if (!(await hasConnectedAccount())) {
@@ -146,27 +153,24 @@ async function handleAddChain(msg: AddChainMessage): Promise<void> {
   const { networksInfo } = (await chrome.storage.sync.get(
     "networksInfo",
   )) as { networksInfo?: NetworksInfo };
-  if (networksInfo) {
-    for (const name of Object.keys(networksInfo)) {
-      if (networksInfo[name].chainId !== chainId) continue;
-      const resolved = getResolvedChainById(chainId, networksInfo);
-      const shouldSwitch =
-        bridgeState.accountType !== "bankr" ||
-        resolved?.isBankrSupported === true;
-      if (shouldSwitch) {
-        bridgeState.chainName = name;
-        bridgeState.chainId = chainId;
-        await chrome.storage.sync.set({ chainName: name });
-      }
-      post("addEthereumChainResult", {
-        id,
-        success: true,
-        chainId,
-        shouldSwitch,
-      });
-      if (shouldSwitch) post("switchEthereumChain", { chainId });
-      return;
+  const resolved = getResolvedChainById(chainId, networksInfo);
+  if (resolved && !existingAddChainNeedsApproval(chainId, networksInfo)) {
+    const shouldSwitch =
+      bridgeState.accountType !== "bankr" ||
+      resolved.isBankrSupported === true;
+    if (shouldSwitch) {
+      bridgeState.chainName = resolved.name;
+      bridgeState.chainId = chainId;
+      await chrome.storage.sync.set({ chainName: resolved.name });
     }
+    post("addEthereumChainResult", {
+      id,
+      success: true,
+      chainId,
+      shouldSwitch,
+    });
+    if (shouldSwitch) post("switchEthereumChain", { chainId });
+    return;
   }
 
   const requestId = crypto.randomUUID();

@@ -66,6 +66,10 @@ export interface ChainLogoStyle {
 
 export interface ChainEntry {
   chainId: number;
+  /** True for first-class testnets that ship hidden until explicitly enabled. */
+  isTestnet?: boolean;
+  /** Mainnet whose icon, colors, and compatible runtime policy this testnet inherits. */
+  parentChainId?: number;
   /** Testnet chain IDs that should reuse this chain's visual identity. */
   testnetChainIds: readonly number[];
   name: string;
@@ -173,7 +177,7 @@ export interface ChainConfig {
 
 const ETH_CURRENCY = { name: "Ether", symbol: "ETH", decimals: 18 };
 
-export const CHAIN_REGISTRY: readonly ChainEntry[] = [
+export const MAINNET_CHAIN_REGISTRY: readonly ChainEntry[] = [
   // Ethereum first, then alphabetical
   {
     chainId: 1,
@@ -699,6 +703,83 @@ export const CHAIN_REGISTRY: readonly ChainEntry[] = [
     viemChain: zkSync,
   },
 ] as const;
+
+interface NativeTestnetSpec {
+  chainId: number;
+  parentChainId: number;
+  name: string;
+  rpcUrl: string;
+  explorer: string;
+  nativeCurrency: ChainEntry["nativeCurrency"];
+}
+
+/**
+ * Current public testnets for WalletChan's built-in mainnets.
+ *
+ * RPCs are keyless endpoints verified with live `eth_chainId` calls. dRPC is
+ * preferred when its public endpoint is available; operator/public endpoints
+ * cover the remaining networks. Legacy IDs remain in the mainnet
+ * `testnetChainIds` arrays for icon recognition but are not native entries.
+ */
+const NATIVE_TESTNET_SPECS: readonly NativeTestnetSpec[] = [
+  { chainId: 11155111, parentChainId: 1, name: "Ethereum Sepolia", rpcUrl: "https://sepolia.drpc.org", explorer: "https://sepolia.etherscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 560048, parentChainId: 1, name: "Ethereum Hoodi", rpcUrl: "https://rpc.hoodi.ethpandaops.io", explorer: "https://hoodi.etherscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 11124, parentChainId: 2741, name: "Abstract Sepolia", rpcUrl: "https://api.testnet.abs.xyz", explorer: "https://sepolia.abscan.org", nativeCurrency: ETH_CURRENCY },
+  { chainId: 421614, parentChainId: 42161, name: "Arbitrum Sepolia", rpcUrl: "https://arbitrum-sepolia.drpc.org", explorer: "https://sepolia.arbiscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 43113, parentChainId: 43114, name: "Avalanche Fuji", rpcUrl: "https://avalanche-fuji.drpc.org", explorer: "https://testnet.snowscan.xyz", nativeCurrency: { name: "Avalanche", symbol: "AVAX", decimals: 18 } },
+  { chainId: 84532, parentChainId: 8453, name: "Base Sepolia", rpcUrl: "https://base-sepolia.drpc.org", explorer: "https://sepolia.basescan.org", nativeCurrency: ETH_CURRENCY },
+  { chainId: 80069, parentChainId: 80094, name: "Berachain Bepolia", rpcUrl: "https://bepolia.rpc.berachain.com", explorer: "https://bepolia.beratrail.io", nativeCurrency: { name: "Testnet BERA Token", symbol: "BERA", decimals: 18 } },
+  { chainId: 168587773, parentChainId: 81457, name: "Blast Sepolia", rpcUrl: "https://blast-sepolia.drpc.org", explorer: "https://testnet.blastscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 97, parentChainId: 56, name: "BNB Chain Testnet", rpcUrl: "https://bsc-testnet.drpc.org", explorer: "https://testnet.bscscan.com", nativeCurrency: { name: "Test BNB", symbol: "tBNB", decimals: 18 } },
+  { chainId: 998, parentChainId: 999, name: "HyperEVM Testnet", rpcUrl: "https://rpc.hyperliquid-testnet.xyz/evm", explorer: "https://testnet.purrsec.com", nativeCurrency: { name: "HYPE", symbol: "HYPE", decimals: 18 } },
+  { chainId: 763373, parentChainId: 57073, name: "Ink Sepolia", rpcUrl: "https://rpc-gel-sepolia.inkonchain.com", explorer: "https://explorer-sepolia.inkonchain.com", nativeCurrency: ETH_CURRENCY },
+  { chainId: 59141, parentChainId: 59144, name: "Linea Sepolia", rpcUrl: "https://linea-sepolia.drpc.org", explorer: "https://sepolia.lineascan.build", nativeCurrency: ETH_CURRENCY },
+  { chainId: 5003, parentChainId: 5000, name: "Mantle Sepolia", rpcUrl: "https://mantle-sepolia.drpc.org", explorer: "https://explorer.sepolia.mantle.xyz", nativeCurrency: { name: "Sepolia Mantle", symbol: "MNT", decimals: 18 } },
+  { chainId: 11155420, parentChainId: 10, name: "Optimism Sepolia", rpcUrl: "https://optimism-sepolia.drpc.org", explorer: "https://sepolia-optimism.etherscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 6343, parentChainId: 4326, name: "MegaETH Testnet", rpcUrl: "https://carrot.megaeth.com/rpc", explorer: "https://testnet-mega.etherscan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 919, parentChainId: 34443, name: "Mode Testnet", rpcUrl: "https://sepolia.mode.network", explorer: "https://testnet.modescan.io", nativeCurrency: ETH_CURRENCY },
+  { chainId: 10143, parentChainId: 143, name: "Monad Testnet", rpcUrl: "https://testnet-rpc.monad.xyz", explorer: "https://testnet.monadexplorer.com", nativeCurrency: { name: "Testnet MON", symbol: "MON", decimals: 18 } },
+  { chainId: 9746, parentChainId: 9745, name: "Plasma Testnet", rpcUrl: "https://testnet-rpc.plasma.to", explorer: "https://testnet.plasmascan.to", nativeCurrency: { name: "Testnet Plasma", symbol: "XPL", decimals: 18 } },
+  { chainId: 80002, parentChainId: 137, name: "Polygon Amoy", rpcUrl: "https://polygon-amoy.drpc.org", explorer: "https://amoy.polygonscan.com", nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 } },
+  { chainId: 46630, parentChainId: 4663, name: "Robinhood Chain Testnet", rpcUrl: "https://rpc.testnet.chain.robinhood.com/rpc", explorer: "https://explorer.testnet.chain.robinhood.com", nativeCurrency: ETH_CURRENCY },
+  { chainId: 534351, parentChainId: 534352, name: "Scroll Sepolia", rpcUrl: "https://scroll-sepolia.drpc.org", explorer: "https://sepolia.scrollscan.com", nativeCurrency: ETH_CURRENCY },
+  { chainId: 14601, parentChainId: 146, name: "Sonic Testnet", rpcUrl: "https://rpc.testnet.soniclabs.com", explorer: "https://explorer.testnet.soniclabs.com", nativeCurrency: { name: "Sonic", symbol: "S", decimals: 18 } },
+  { chainId: 42431, parentChainId: 4217, name: "Tempo Moderato", rpcUrl: "https://rpc.moderato.tempo.xyz", explorer: "https://explore.testnet.tempo.xyz", nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 } },
+  { chainId: 1301, parentChainId: 130, name: "Unichain Sepolia", rpcUrl: "https://unichain-sepolia.drpc.org", explorer: "https://sepolia.uniscan.xyz", nativeCurrency: ETH_CURRENCY },
+  { chainId: 4801, parentChainId: 480, name: "World Chain Sepolia", rpcUrl: "https://worldchain-sepolia.drpc.org", explorer: "https://sepolia.worldscan.org", nativeCurrency: ETH_CURRENCY },
+  { chainId: 300, parentChainId: 324, name: "ZKsync Sepolia", rpcUrl: "https://zksync-sepolia.drpc.org", explorer: "https://sepolia.explorer.zksync.io", nativeCurrency: ETH_CURRENCY },
+] as const;
+
+export const TESTNET_CHAIN_REGISTRY: readonly ChainEntry[] = NATIVE_TESTNET_SPECS.map(
+  (testnet) => {
+    const parent = MAINNET_CHAIN_REGISTRY.find(
+      (chain) => chain.chainId === testnet.parentChainId,
+    );
+    if (!parent) throw new Error(`Missing parent chain ${testnet.parentChainId}`);
+
+    return {
+      ...parent,
+      ...testnet,
+      testnetChainIds: [],
+      isTestnet: true,
+      hiddenByDefault: true,
+      isBankrSupported: false,
+      isSwapSupported: false,
+      isEip7702Supported: false,
+      supportsFlashblocks: undefined,
+      supportsSyncSend: undefined,
+      coingeckoPlatformId: undefined,
+      geckoTerminalNetworkId: undefined,
+      viemChain: undefined,
+    };
+  },
+);
+
+/** Every chain that is natively available in Settings and local signing. */
+export const CHAIN_REGISTRY: readonly ChainEntry[] = [
+  ...MAINNET_CHAIN_REGISTRY,
+  ...TESTNET_CHAIN_REGISTRY,
+];
 
 // ---------------------------------------------------------------------------
 // Derived: chainConfig.ts exports

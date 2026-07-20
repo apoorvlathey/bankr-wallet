@@ -33,7 +33,10 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     savePendingAddChainRequest: async () => {},
     removePendingAddChainRequest: async () => {},
     getActiveAccount: async () => null,
-    addNetworkIfMissing: async () => ({ success: false, error: "not added" }),
+    approveDappNetworkRequest: async () => ({
+      success: false,
+      error: "not added",
+    }),
     writeResultToStorage: async () => {},
     openExtensionPopup: async () => {},
     sendRuntimeMessage: async () => {},
@@ -195,7 +198,7 @@ test("add-chain confirmation preserves authorization and network write inputs", 
         events.push(["authorize", ...args]);
         return { authorized: true };
       },
-      addNetworkIfMissing: async (input: unknown) => {
+      approveDappNetworkRequest: async (input: unknown) => {
         events.push(["network", input]);
         return {
           success: true,
@@ -249,6 +252,7 @@ test("add-chain confirmation preserves authorization and network write inputs", 
           explorer: "https://chosen-explorer.example",
           nativeCurrency: pending.nativeCurrency,
         },
+        requestChainId: 999,
         switchIfSupportedForAccountType: "privateKey",
         requestOrigin: "https://app.example",
       },

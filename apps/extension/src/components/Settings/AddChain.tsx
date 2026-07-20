@@ -21,6 +21,7 @@ import { InlineDisclosure } from "@/components/ui";
 import { AddChainConfirmationScreen } from "./AddChainConfirmationScreen";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
 import { AddChainAdvancedDetails } from "./AddChainAdvancedDetails";
+import { getChainIdConflict, hasChainNameConflict } from "./addChainModel";
 import { assertRpcEndpointAllowedForOrigin, probeRpcChainId } from "@/chrome/network/rpcClient";
 
 interface AddChainProps {
@@ -83,18 +84,13 @@ function AddChain({
       : { allowPrivateWithoutOrigin: true };
 
   const checkChainIdConflict = (id: string) => {
-    if (!id || !networksInfo) {
-      setChainIdConflict("");
-      return;
-    }
-    const numId = parseInt(id);
-    for (const name of Object.keys(networksInfo)) {
-      if (networksInfo[name].chainId === numId) {
-        setChainIdConflict(`Chain ID ${numId} already exists as "${name}". You can edit its RPC in the chain list.`);
-        return;
-      }
-    }
-    setChainIdConflict("");
+    setChainIdConflict(
+      getChainIdConflict(
+        networksInfo,
+        id,
+        mode === "dapp" ? initialRequest?.chainId : undefined,
+      ),
+    );
   };
 
   /**
@@ -190,7 +186,15 @@ function AddChain({
     setRpc(rpcToSave);
 
     // Check name uniqueness
-    if (networksInfo && networksInfo[chainName]) {
+    const requestedChainId = parseInt(chainId, 10);
+    if (
+      hasChainNameConflict(
+        networksInfo,
+        chainName,
+        requestedChainId,
+        mode === "dapp" ? initialRequest?.chainId : undefined,
+      )
+    ) {
       setNameError("Chain name already exists");
       setIsBtnLoading(false);
       return;

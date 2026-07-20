@@ -37,6 +37,9 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
     const { addNetworkIfMissing, updateNetworkEntry } = await import(
       "../../src/chrome/network/networkMutations"
     );
+    const { approveDappNetworkRequest } = await import(
+      "../../src/chrome/network/dappNetworkApproval"
+    );
     const { allowsImpersonatedTransactions } = await import(
       "../../src/chrome/network/impersonatedRpcPolicy"
     );
@@ -196,6 +199,127 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
     });
     assert.equal(lanCrossHost.success, false);
     assert.match(lanCrossHost.error, /Private-network RPC access/i);
+
+    const walletTypes = [
+      "privateKey",
+      "seedPhrase",
+      "ledger",
+      "impersonator",
+    ] as const;
+    const hiddenTestnets = [84532, 421614, 43113, 168587773] as const;
+    const canonicalNames = [
+      "Base Sepolia",
+      "Arbitrum Sepolia",
+      "Avalanche Fuji",
+      "Blast Sepolia",
+    ] as const;
+    for (const [index, accountType] of walletTypes.entries()) {
+      const chainId = hiddenTestnets[index];
+      const requestedRpc = `https://${accountType.toLowerCase()}-rpc.example`;
+      const result = await approveDappNetworkRequest({
+        chainName: `Dapp name ${accountType}`,
+        entry: {
+          chainId,
+          rpcUrl: requestedRpc,
+          isCustom: true,
+          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        },
+        requestChainId: chainId,
+        switchIfSupportedForAccountType: accountType,
+        requestOrigin: "https://app.example",
+      });
+      assert.equal(result.success, true, accountType);
+      if (!result.success) continue;
+      const saved = result.networksInfo[result.chainName];
+      assert.equal(saved.hidden, undefined, accountType);
+      assert.equal(saved.rpcUrl, requestedRpc, accountType);
+      assert.equal(saved.isCustom, undefined, accountType);
+      assert.equal(result.chainName, canonicalNames[index], accountType);
+      assert.equal(result.existed, true, accountType);
+      assert.equal(result.shouldSwitch, true, accountType);
+      assert.equal(sync.chainName, result.chainName, accountType);
+    }
+
+    assert.deepEqual(
+      (local.networkRpcUrls as Record<string, Array<{ url: string }>>)["84532"],
+      [
+        { url: "https://privatekey-rpc.example" },
+        { url: "https://base-sepolia.drpc.org" },
+      ],
+      "the approved RPC becomes active while WalletChan's RPC remains selectable",
+    );
+
+    const bankrResult = await approveDappNetworkRequest({
+      chainName: "Ethereum Sepolia",
+      entry: {
+        chainId: 11155111,
+        rpcUrl: "https://bankr-requested-rpc.example",
+        isCustom: true,
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+      requestChainId: 11155111,
+      switchIfSupportedForAccountType: "bankr",
+      requestOrigin: "https://app.example",
+    });
+    assert.equal(bankrResult.success, true);
+    if (bankrResult.success) {
+      assert.equal(bankrResult.shouldSwitch, false);
+      assert.equal(
+        bankrResult.networksInfo[bankrResult.chainName].hidden,
+        undefined,
+      );
+      assert.notEqual(sync.chainName, bankrResult.chainName);
+    }
+
+    const blockedPrivatePromotion = await approveDappNetworkRequest({
+      chainName: "Linea Sepolia",
+      entry: {
+        chainId: 59141,
+        rpcUrl: "http://127.0.0.1:8545",
+        isCustom: true,
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+      requestChainId: 59141,
+      switchIfSupportedForAccountType: "privateKey",
+      requestOrigin: "https://app.example",
+    });
+    assert.equal(blockedPrivatePromotion.success, false);
+    assert.match(blockedPrivatePromotion.error, /Private-network RPC access/i);
+
+    const repurposedPrompt = await approveDappNetworkRequest({
+      chainName: "Ethereum",
+      entry: {
+        chainId: 1,
+        rpcUrl: "https://replacement-ethereum-rpc.example",
+        isCustom: true,
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+      requestChainId: 7654321,
+      switchIfSupportedForAccountType: "privateKey",
+      requestOrigin: "https://app.example",
+    });
+    assert.equal(repurposedPrompt.success, false);
+    assert.match(repurposedPrompt.error, /already exists/i);
+
+    const dappAdded = await approveDappNetworkRequest({
+      chainName: "Fresh dapp chain",
+      entry: {
+        chainId: 7654321,
+        rpcUrl: "https://fresh-rpc.example",
+        isCustom: true,
+        explorer: "https://fresh-explorer.example",
+        nativeCurrency: { name: "Fresh", symbol: "FRH", decimals: 18 },
+      },
+      requestChainId: 7654321,
+      switchIfSupportedForAccountType: "privateKey",
+      requestOrigin: "https://app.example",
+    });
+    assert.equal(dappAdded.success, true);
+    if (dappAdded.success) {
+      assert.equal(dappAdded.existed, undefined);
+      assert.equal(dappAdded.networksInfo[dappAdded.chainName].isCustom, true);
+      assert.equal(dappAdded.shouldSwitch, true);
+    }
   } finally {
     if (originalChrome) {
       Object.defineProperty(globalThis, "chrome", originalChrome);

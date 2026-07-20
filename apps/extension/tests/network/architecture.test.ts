@@ -25,7 +25,7 @@ test("network infrastructure has no legacy root implementations", async () => {
   );
 
   const background = await source("background/composition/providerRoutes.ts");
-  assert.match(background, /from "\.\.\/\.\.\/network\/networkMutations"/);
+  assert.match(background, /from "\.\.\/\.\.\/network\/dappNetworkApproval"/);
   assert.match(background, /from "\.\.\/\.\.\/network\/rpcClient"/);
   assert.match(background, /from "\.\.\/\.\.\/network\/safeRpcForwarding"/);
 });
@@ -45,6 +45,7 @@ test("network implementations remain audit-sized with one-way dependencies", asy
     "network/networkPolicy.ts": 80,
     "network/networkRpcMutation.ts": 60,
     "network/networkMutations.ts": 340,
+    "network/dappNetworkApproval.ts": 140,
   };
   for (const [path, maximum] of Object.entries(budgets)) {
     const moduleSource = await source(path);
@@ -72,6 +73,11 @@ test("network implementations remain audit-sized with one-way dependencies", asy
   assert.match(mutations, /from "\.\/networkRpcMutation"/);
   assert.match(mutations, /from "\.\/rpcHistoryRepository"/);
   assert.match(mutations, /NETWORKS_INFO_LOCK_KEY/);
+  const dappApproval = await source("network/dappNetworkApproval.ts");
+  assert.match(dappApproval, /from "\.\/customNetworkValidation"/);
+  assert.match(dappApproval, /from "\.\/networkRpcMutation"/);
+  assert.match(dappApproval, /from "\.\/networkRepository"/);
+  assert.match(dappApproval, /NETWORKS_INFO_LOCK_KEY/);
 });
 
 test("network source freezes egress and storage security constants", async () => {

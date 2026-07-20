@@ -28,6 +28,9 @@
   fields behind the advanced disclosure.
 - `AddChainRequestSummary.tsx` presents the standard dapp identity and proposed
   network summary for provider-originated add-chain decisions.
+- `addChainModel.ts` keeps duplicate chain-ID/name validation pure while
+  allowing an approval request to target the same hidden chain it was opened
+  for.
 - The remaining chain screens own network list and add-chain flows.
 - Authentication screens own password, biometric, agent-factor, auto-lock, and
   sound preference flows. Agent-factor creation explicitly collects the

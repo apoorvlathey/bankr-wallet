@@ -723,8 +723,10 @@ bounded list and never expands authority or performs a transaction.
 
 ### Network Metadata Handlers
 
-`networksInfo` mutations are routed through `network/networkMutations.ts` in the service
-worker and classified as `wallet-ui`. Popup/sidepanel pages mirror
+`networksInfo` mutations are routed through the service-worker-owned network
+domain and classified as `wallet-ui`. Settings changes use
+`network/networkMutations.ts`; confirmed EIP-3085 changes use
+`network/dappNetworkApproval.ts`. Popup/sidepanel pages mirror
 `chrome.storage.sync.networksInfo` through `NetworksContext`; they must not
 write full local snapshots back to storage. This prevents a stale long-lived
 sidepanel from deleting a chain that was added by a dapp confirmation in the
@@ -753,6 +755,17 @@ staged until the full form is saved. A custom chain-ID change is duplicate-check
 and re-keys its bounded RPC history inside the same locked service-worker
 mutation. Missing history resolves to the active endpoint and requires no eager
 migration.
+
+An add-chain request for an already-visible chain remains a content-bridge
+no-op success. A matching hidden chain must enter the durable confirmation flow.
+On approval, `dappNetworkApproval.ts` revalidates the endpoint against the
+request origin, re-resolves the chain ID under `sync:networksInfo`, preserves
+WalletChan-owned identity/capability metadata, moves the previous active RPC
+into bounded local history, promotes the approved RPC, and clears `hidden`.
+Existing-chain promotion is pinned to the original pending request chain ID,
+so editing or forging the confirmation payload cannot replace another known
+chain's RPC. Rejection performs no network or RPC-history mutation. Bankr may
+unhide the chain but cannot switch to a chain outside its supported allowlist.
 
 The impersonated-transaction path remains a trusted-UI confirmation route and
 never signs. Send and built-in Swap may stage the same review UI for a

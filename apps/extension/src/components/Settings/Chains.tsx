@@ -6,14 +6,12 @@ import { Box,
   Input,
   InputGroup,
   InputLeftElement,
+  InputRightElement,
   FormControl,
   FormLabel,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
+  Tabs,
+  TabList,
+  Tab,
   useDisclosure,
 } from "@chakra-ui/react";
 import {
@@ -22,6 +20,7 @@ import {
   DeleteIcon,
   AddIcon,
   Search2Icon,
+  SmallCloseIcon,
 } from "@chakra-ui/icons";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { NetworksInfo } from "@/types";
@@ -30,6 +29,12 @@ import { useThemedToast } from "@/hooks/useThemedToast";
 import ChainIcon from "@/components/ChainIcon";
 import EditChain from "./EditChain";
 import AddChain from "./AddChain";
+import ChainDeleteDialog from "./ChainDeleteDialog";
+import {
+  getChainEntriesForTab,
+  getChainVisibilityCounts,
+  type ChainVisibilityTab,
+} from "./chainsModel";
 import {
   AppHeader,
   AppScreen,
@@ -139,6 +144,8 @@ function Chains({
   const [pendingInitialEditChainName, setPendingInitialEditChainName] = useState(initialEditChainName);
   const [activeChainName, setActiveChainName] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [visibilityTab, setVisibilityTab] =
+    useState<ChainVisibilityTab>("active");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const networksInfoRef = React.useRef(networksInfo);
   const activeChainNameRef = React.useRef(activeChainName);
@@ -330,66 +337,22 @@ function Chains({
     return () => window.clearTimeout(timeout);
   }, []);
 
-  const chainEntries = networksInfo
-    ? Object.entries(networksInfo).sort(([nameA, networkA], [nameB, networkB]) => {
-        const score = (name: string, network: NetworksInfo[string]) => {
-          if (name === activeChainName) return 0;
-          if (network.hidden) return 3;
-          if (network.isCustom) return 2;
-          return 1;
-        };
-
-        const diff = score(nameA, networkA) - score(nameB, networkB);
-        if (diff !== 0) return diff;
-        return nameA.localeCompare(nameB);
-      })
-    : [];
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredChainEntries = normalizedSearch
-    ? chainEntries.filter(([name, network]) => {
-        const rpcDisplay = getRpcDisplay(network.rpcUrl).toLowerCase();
-        return (
-          name.toLowerCase().includes(normalizedSearch) ||
-          String(network.chainId).includes(normalizedSearch) ||
-          rpcDisplay.includes(normalizedSearch)
-        );
-      })
-    : chainEntries;
+  const visibilityCounts = getChainVisibilityCounts(networksInfo);
+  const filteredChainEntries = getChainEntriesForTab({
+    networksInfo,
+    activeChainName,
+    visibilityTab,
+    search,
+  });
 
   const deleteDialog = (
-    <AlertDialog
+    <ChainDeleteDialog
+      chainName={chainToDelete}
       isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
+      cancelRef={cancelRef}
       onClose={onClose}
-      isCentered
-    >
-      <AlertDialogOverlay bg="surface.overlay">
-        <AlertDialogContent mx={4} maxW="320px" w="calc(100% - 2rem)">
-          <AlertDialogHeader
-            fontWeight="900"
-            fontSize="md"
-            textTransform="uppercase"
-            color="fg.primary"
-            borderBottomWidth="1px"
-            borderColor="border.subtle"
-          >
-            Delete Chain
-          </AlertDialogHeader>
-          <AlertDialogBody color="text.secondary" py={4} fontSize="sm" fontWeight="500">
-            Remove <strong>{chainToDelete}</strong> from your networks? This
-            cannot be undone.
-          </AlertDialogBody>
-          <AlertDialogFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
-            <Button ref={cancelRef} variant="secondary" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="danger" size="sm" onClick={doDelete}>
-              Delete
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
-    </AlertDialog>
+      onDelete={doDelete}
+    />
   );
 
   if (tab !== undefined) {
@@ -424,7 +387,7 @@ function Chains({
           <FormControl mb={4}>
             <FormLabel htmlFor="network-search">Search networks</FormLabel>
             <InputGroup>
-              <InputLeftElement pointerEvents="none">
+              <InputLeftElement pointerEvents="none" h="full">
                 <Search2Icon color="fg.muted" />
               </InputLeftElement>
               <Input
@@ -434,11 +397,42 @@ function Chains({
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Name, chain ID, or RPC host"
                 pl={10}
+                pr={search ? 12 : undefined}
               />
+              {search && (
+                <InputRightElement h="full" w="44px">
+                  <IconButton
+                    aria-label="Clear search"
+                    icon={<SmallCloseIcon boxSize={4} />}
+                    variant="ghost"
+                    minW="40px"
+                    w="40px"
+                    h="40px"
+                    onClick={() => {
+                      setSearch("");
+                      searchInputRef.current?.focus();
+                    }}
+                  />
+                </InputRightElement>
+              )}
             </InputGroup>
           </FormControl>
 
-          <ListSurface aria-label="Networks">
+          <Tabs
+            index={visibilityTab === "active" ? 0 : 1}
+            onChange={(index) => setVisibilityTab(index === 0 ? "active" : "hidden")}
+            variant="line"
+            mb={4}
+          >
+            <TabList aria-label="Chain visibility">
+              <Tab>Active ({visibilityCounts.active})</Tab>
+              <Tab>Hidden ({visibilityCounts.hidden})</Tab>
+            </TabList>
+          </Tabs>
+
+          <ListSurface
+            aria-label={`${visibilityTab === "active" ? "Active" : "Hidden"} networks`}
+          >
         {filteredChainEntries.map(([chainName, network]) => (
             <Chain
               key={chainName}
@@ -459,9 +453,15 @@ function Chains({
           {filteredChainEntries.length === 0 && (
             <EmptyState mt={4}>
               <EmptyStateHeader>
-                <EmptyStateTitle>No matching networks</EmptyStateTitle>
+                <EmptyStateTitle>{search.trim()
+                  ? "No matching networks"
+                  : `No ${visibilityTab} networks`}</EmptyStateTitle>
                 <EmptyStateDescription>
-                  Try another network name, chain ID, or RPC host.
+                  {search.trim()
+                    ? "Try another network name, chain ID, or RPC host."
+                    : visibilityTab === "hidden"
+                      ? "Networks you hide will appear here."
+                      : "Show a hidden network to make it active."}
                 </EmptyStateDescription>
               </EmptyStateHeader>
             </EmptyState>

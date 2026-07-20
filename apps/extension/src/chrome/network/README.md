@@ -21,6 +21,10 @@
   mutation results.
 - `networkMutations.ts` serializes ensure/add/update/hide/delete operations and
   keeps the active `rpcUrl` separate from its bounded Settings-only history.
+- `dappNetworkApproval.ts` applies a confirmed EIP-3085 request under the same
+  network lock. Existing hidden chains are unhidden without replacing their
+  identity metadata, the approved RPC becomes active, and prior endpoints stay
+  available in Settings.
 
 There are no root compatibility facades for these internal boundaries. Imports
 must point directly into this domain. URL validation must remain at final egress

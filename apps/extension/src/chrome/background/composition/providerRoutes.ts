@@ -3,7 +3,7 @@
 import { getActiveAccount } from "../../accountStorage";
 import { addCustomToken } from "../../customTokenStorage";
 import { authorizeConnectedDappRequest } from "../../dapp/requestPolicy";
-import { addNetworkIfMissing } from "../../network/networkMutations";
+import { approveDappNetworkRequest } from "../../network/dappNetworkApproval";
 import { assertRpcEndpointAllowedForOrigin } from "../../network/rpcClient";
 import { handleSafeRpcRequest } from "../../network/safeRpcForwarding";
 import { unhidePortfolioToken } from "../../portfolio/hiddenTokens";
@@ -89,7 +89,7 @@ export function composeProviderRoutes(
       savePendingAddChainRequest,
       removePendingAddChainRequest,
       getActiveAccount,
-      addNetworkIfMissing,
+      approveDappNetworkRequest,
       writeResultToStorage,
       openExtensionPopup,
       sendRuntimeMessage: (runtimeMessage) =>

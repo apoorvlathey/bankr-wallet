@@ -1,7 +1,7 @@
 # Adding a New Chain
 
 Core chain metadata lives in `src/constants/chainRegistry.ts`. Adding a new
-chain starts with one `CHAIN_REGISTRY` entry. Feature-specific security
+mainnet starts with one `MAINNET_CHAIN_REGISTRY` entry. Feature-specific security
 allowlists, including token-paid gas, remain separate and must be updated only
 after their own live capability checks.
 
@@ -17,7 +17,8 @@ Place an SVG icon at `public/chainIcons/<chain-name>.svg`.
 
 ## Step 2: Add the registry entry
 
-Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTRY` array:
+Open `src/constants/chainRegistry.ts` and add a new object to the
+`MAINNET_CHAIN_REGISTRY` array:
 
 ```ts
 {
@@ -45,7 +46,7 @@ Open `src/constants/chainRegistry.ts` and add a new object to the `CHAIN_REGISTR
 | Field | Required | Description |
 | --- | --- | --- |
 | `chainId` | yes | The chain's numeric ID |
-| `testnetChainIds` | yes | Numeric IDs of current official public testnets that should reuse this mainnet entry's icon and brand colors. Use `[]` when none are verified. Do not add testnet RPC, explorer, currency, or other metadata. |
+| `testnetChainIds` | yes | Numeric IDs of current official public testnets that should reuse this mainnet entry's icon and brand colors. Use `[]` when none are verified. Current public testnets also receive a `NATIVE_TESTNET_SPECS` entry; retain deprecated IDs here only when legacy icon recognition is useful. |
 | `name` | yes | Human-readable name (used in UI dropdown, `CHAIN_NAMES`, and `DEFAULT_NETWORKS` key) |
 | `rpcUrl` | yes | Default public RPC URL |
 | `explorer` | yes | Block explorer base URL (used for address/tx links) |
@@ -77,11 +78,19 @@ From that single entry, the following are all derived automatically:
 | `RPC_URLS[chainId]` | Local signing fallback, onchain balance fetching |
 | `CHAIN_TOKEN_IDS[chainId]` | CoinGecko native token price for gas estimation |
 
-Custom chains whose ID appears in a built-in entry's `testnetChainIds` reuse
-that entry's local mainnet icon and brand colors. The existing testnet overlay
-(`SEP`, `FUJI`, or `T`) remains visible, so the shared logo does not make the
-testnet look like mainnet. Keep this relationship in the registry instead of
-adding one-off icon aliases.
+Current public testnets are declared in `NATIVE_TESTNET_SPECS` with their own
+name, verified keyless RPC, explorer, and native currency. They become
+first-class `TESTNET_CHAIN_REGISTRY` entries, inherit their parent's visual
+identity and compatible gas policy, and always ship hidden by default. A user
+can enable them from Settings → Chains → Hidden without completing the custom
+chain form. Bankr and 0x support remain false unless those exact testnet chain
+IDs are independently supported and reviewed.
+
+All IDs in a mainnet's `testnetChainIds` reuse that mainnet's icon and colors,
+including legacy visual-only IDs. The testnet overlay (`SEP`, `FUJI`, or `T`)
+remains visible, so the shared logo does not make the testnet look like
+mainnet. Never promote a deprecated or unreachable testnet into
+`NATIVE_TESTNET_SPECS`.
 
 ## Step 3: Verify token-paid gas support
 

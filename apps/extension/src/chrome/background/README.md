@@ -30,7 +30,8 @@ Review order:
 12. `settingsRouter.ts` — non-secret wallet UI settings.
 13. `dappPermissionRouter.ts`, `providerRpcRouter.ts`, `watchAssetRouter.ts`,
    `chainPromptRouter.ts` — exact sender/tab/origin-bound provider prompts and
-   durable read-only RPC forwarding.
+   durable read-only RPC forwarding. Hidden known-chain additions still queue
+   user approval before the network domain can unhide or promote an RPC.
 14. `providerIngress.ts`, `signatureValidation.ts`,
    `chainSwitchNotification.ts` — connected-origin rejection, EIP-712 intake,
    and notification/cooldown helpers used by the ordered provider pipeline.

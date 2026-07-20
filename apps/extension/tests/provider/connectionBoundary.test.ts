@@ -164,7 +164,7 @@ test("provider bridge exposes account state and network mutation only to connect
     else Reflect.deleteProperty(globalThis, name);
   };
   const flush = async () => {
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     await Promise.resolve();
   };
   const dispatchWindowMessage = async (data: any) => {
@@ -283,6 +283,49 @@ test("provider bridge exposes account state and network mutation only to connect
       assert.equal(allowed?.msg.success, true);
     });
 
+    await t.test("an existing hidden chain enters the approval flow", async () => {
+      posts.length = 0;
+      runtimeMessages.length = 0;
+      connected = true;
+      (syncState.networksInfo as Record<string, any>)["Base Sepolia"] = {
+        chainId: 84532,
+        rpcUrl: "https://base-sepolia.drpc.org",
+        explorer: "https://sepolia.basescan.org",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        hidden: true,
+      };
+
+      await dispatchWindowMessage({
+        type: "i_addEthereumChain",
+        msg: {
+          id: "add-hidden",
+          chainId: 84532,
+          chainName: "Base Sepolia",
+          rpcUrls: ["https://dapp-rpc.example"],
+          blockExplorerUrls: ["https://sepolia.basescan.org"],
+          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        },
+      });
+
+      assert.equal(
+        posts.some(
+          (message) =>
+            message.type === "addEthereumChainResult" &&
+            message.msg.id === "add-hidden",
+        ),
+        false,
+        "the dapp must wait for the user's approval",
+      );
+      assert.ok(
+        runtimeMessages.some(
+          (message) =>
+            message.type === "addEthereumChain" &&
+            message.chainId === 84532 &&
+            message.rpcUrls?.[0] === "https://dapp-rpc.example",
+        ),
+      );
+    });
+
     await t.test("watch/add background intake uses the exact-origin connection policy", async () => {
       const sender = {
         origin: DAPP_ORIGIN,
@@ -326,8 +369,8 @@ test("provider bridge exposes account state and network mutation only to connect
           new URL(`../../src/chrome/${file}`, import.meta.url),
           "utf8",
         );
-        const start = source.indexOf(`case \"${caseName}\":`);
-        const end = source.indexOf(`case \"${nextCase}\":`, start);
+        const start = source.indexOf(`case "${caseName}":`);
+        const end = source.indexOf(`case "${nextCase}":`, start);
         assert.ok(start >= 0 && end > start, `${caseName} handler should exist`);
         assert.match(
           source.slice(start, end),

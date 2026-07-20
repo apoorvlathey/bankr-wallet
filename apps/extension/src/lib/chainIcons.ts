@@ -1,5 +1,6 @@
 import {
   CHAIN_REGISTRY,
+  MAINNET_CHAIN_REGISTRY,
   DEFAULT_CHAIN_CONFIG,
   type ChainLogoStyle,
 } from "@/constants/chainRegistry";
@@ -28,7 +29,7 @@ interface ChainIconAlias {
 
 const REGISTRY_BY_ID = new Map(CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]));
 const TESTNET_REGISTRY_BY_ID = new Map(
-  CHAIN_REGISTRY.flatMap((chain) =>
+  MAINNET_CHAIN_REGISTRY.flatMap((chain) =>
     chain.testnetChainIds.map((chainId) => [chainId, chain] as const),
   ),
 );
@@ -196,6 +197,9 @@ export function resolveChainIconMeta(
     return {
       iconSrc: builtIn.icon || undefined,
       logoStyle: builtIn.logoStyle,
+      overlayLabel: builtIn.isTestnet
+        ? inferOverlayLabel(chainName || builtIn.name) ?? "T"
+        : undefined,
       fallbackText: getChainInitials(chainName || builtIn.name),
       bg: builtIn.bg,
       border: builtIn.border,
@@ -274,6 +278,7 @@ export function getChainEnvironmentLabel(
   chainId: number,
   chainName?: string,
 ): "TESTNET" | undefined {
+  if (REGISTRY_BY_ID.get(chainId)?.isTestnet) return "TESTNET";
   if (TESTNET_REGISTRY_BY_ID.has(chainId)) return "TESTNET";
 
   // KNOWN_CHAINS is the next precise testnet signal after the registry-owned

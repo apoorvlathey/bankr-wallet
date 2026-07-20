@@ -40,6 +40,10 @@ const pureModules = [
     url: new URL("Activity/activityModel.ts", componentsUrl),
   },
   {
+    path: "components/Settings/addChainModel.ts",
+    url: new URL("Settings/addChainModel.ts", componentsUrl),
+  },
+  {
     path: "components/ClearSigning/formatters/valueFormatters.ts",
     url: new URL("ClearSigning/formatters/valueFormatters.ts", componentsUrl),
   },
