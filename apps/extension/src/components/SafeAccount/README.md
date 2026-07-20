@@ -20,7 +20,12 @@
   controls and applies the same verified-owner capability gate to Send and
   same-chain Swap. Shield remains unavailable. The proposal banner is the only
   homepage approvals entry point; account settings owns security.
-- `SafeSecurityScreen.tsx`: exact chain authority, owner identities, explorers, refresh, and removal.
+- `SafeSecurityScreen.tsx`: Warm Midnight account-settings composition,
+  display-name editing, state loading, refresh, and removal orchestration.
+- `SafeChainSettingsSection.tsx`: presentational per-chain authority ledger with
+  owners, verified metadata, security extensions, and explorer/Safe links.
+- `SafeRemoveDialog.tsx`: focused destructive confirmation that keeps published
+  proposals and onchain data consequences explicit.
 
 These components consume secret-free background responses. Signing and
 authority decisions remain in `chrome/safe/`.

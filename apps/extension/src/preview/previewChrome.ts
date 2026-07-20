@@ -499,6 +499,7 @@ export function responseForPreviewMessage(
       const account = environment.accounts.find(
         (candidate) => candidate.id === message?.accountId,
       );
+      if (message?.accountId === "preview-safe") return { success: true };
       if (!account) return { success: false, error: "Preview account not found" };
       account.displayName = String(message?.displayName ?? "").trim() || undefined;
       return { success: true };

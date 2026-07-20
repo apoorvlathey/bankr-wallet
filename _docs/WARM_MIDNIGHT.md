@@ -803,6 +803,7 @@ Every displayed `0x` address still follows the repository standard:
 | dapp3 browser | Implemented and reviewed | Standalone Warm Midnight launcher with amber brand/action emphasis, blue focus, and responsive dapp tiles |
 | Confirmations and signing | Transaction review implemented; signing review pending | Transaction uses the Warm Midnight decision path; preserve information-first trust hierarchy |
 | Settings/account management | Mobile baseline exists; Warm Midnight review pending | Review by leaf surface, not as one large rewrite |
+| Safe account settings | Implemented and reviewed | Shared account identity/name editing, quiet per-chain authority ledger, compact tool rows, and focused removal confirmation verified at compact/popup/sidepanel widths |
 
 Recommended immediate order:
 
@@ -897,6 +898,13 @@ in the same workstream so the next chat does not depend on conversation history.
 
 ## 12. Changelog
 
+- 2026-07-20: completed the Safe account-settings leaf surface. It now uses the
+  shared account identity, editable account name, and section/list grammar; one
+  compact authority ledger per chain without redundant readiness/verified-block
+  labels; middle-truncated explorer-aware addresses; and a deliberate removal
+  dialog instead of browser-native confirmation. Added a deterministic settings
+  scenario to the Safe preview route and verified the 320px and sidepanel
+  compositions.
 - 2026-07-18: promoted Favorite dapps above Connected dapps; added a three-row
   connected-site scroll region, launcher-input filtering, keyboard-accessible
   favorite/disconnect tile actions, HTTP(S) favorites independent of

@@ -99,6 +99,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "getSafeProposal",
   "syncSafeRequests",
   "createSafeProposal",
+  "changeSafeProposalNonce",
   "approveSafeProposal",
   "publishSafeProposal",
   "retrySafePublication",
@@ -251,6 +252,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "simulateAssetChanges",
   "simulateBatchAssetChanges",
   "simulateBatchAssetChangesNonAtomic",
+  "simulateSafeAssetChanges",
   "retryTokenMetadata",
 
   // Chat

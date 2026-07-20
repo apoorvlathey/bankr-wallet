@@ -358,7 +358,7 @@ configured auto-lock boundary.
 | Handler Class | Examples | Why Extension-Only |
 | --- | --- | --- |
 | Account/session reads and ordering | `getAccounts`, `reorderAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state or allowing webpages to mutate wallet UI ordering. |
-| Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
+| Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers including `simulateSafeAssetChanges` | Avoid letting content scripts inspect or alter local pending/history/status state. Safe composite simulation is read-only and accepts only the already reviewed calls plus exact public execution envelope from trusted wallet UI. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
@@ -1703,7 +1703,18 @@ Quick reference for which files to examine based on what area of security you're
    signer. The background resolves the selected account ID afresh, validates
    the shared gas override quantities, rechecks live quorum/configuration, and
    simulates the exact immutable `execTransaction` envelope immediately before
-   the serialized transaction crosses the RPC boundary.
+   the serialized transaction crosses the RPC boundary. If that simulation
+   reverts, execution remains blocked by default. The trusted WalletChan UI may
+   retry only after the user accepts the shared likely-to-fail warning; the
+   background recognizes only literal boolean `true` and still performs every
+   account, auth-epoch, quorum, nonce, configuration, fee, serialization, and
+   duplicate-submit check before broadcast.
+   Review-time asset simulation also treats the exact signed outer envelope as
+   the revert authority. A separate Safe-address bytecode pass may contribute
+   asset deltas, but cannot override that verdict because installing simulator
+   code at the Safe necessarily replaces the proxy runtime and makes Safe
+   self-calls unrepresentative. The composite route is trusted-UI-only,
+   read-only, and carries no credential or signing capability.
 
 8. **Signed rejection is onchain only.** Local cancellation rejects only a
    proposal with zero supported and zero unsupported collected confirmations.
@@ -1715,6 +1726,21 @@ Quick reference for which files to examine based on what area of security you're
    gates. The original proposal is not marked cancelled and provider/ERC-5792
    outcomes are not failed until the rejection execution receipt confirms.
    Pending signed proposals cannot be hidden as a substitute for rejection.
+
+9. **Nonce allocation is fresh and atomic; replacement is explicit.** Ordinary
+   wallet, provider, WalletConnect, ERC-5792, and Safe-swap intake first reads
+   verified onchain Safe state, then allocates the lowest unreserved nonce under
+   the same storage lock that persists the proposal.
+   Unresolved local and service-verified requests reserve nonces; terminal and
+   hidden records do not. The trusted-UI-only `changeSafeProposalNonce` route
+   accepts a canonical bounded decimal string, re-verifies the Safe directly
+   onchain, rejects values below the live nonce, and atomically replaces only a
+   zero-signature draft/future request. Calls, Safe/account/chain identity,
+   configuration epoch, creation time, and provider route remain immutable.
+   Existing signatures, unsupported confirmations, effect claims, execution
+   hashes, signed bytes, and canonical rejection proposals all fail closed.
+   Choosing an occupied nonce is therefore possible only through the explicit
+   Advanced details pencil action; automatic allocation never selects one.
 
 ### Extension permissions
 

@@ -2,6 +2,7 @@ import { getAddress } from "viem";
 import { withStorageLock } from "../storageLock";
 import { computeSafeTransactionHash } from "./transactionHash";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
+import { getNextAvailableSafeNonce, isUnsignedSafeNonceEditable } from "./proposalNonce";
 import type {
   SafeAddress,
   SafeCall,
@@ -271,6 +272,65 @@ export async function createSafeProposal(record: SafeProposalRecord) {
     if (existing) return { records, result: existing };
     if (records.length >= MAX_PROPOSALS) throw new Error("Too many Safe proposals");
     return { records: [...records, decoded], result: decoded };
+  });
+}
+
+/** Allocates and persists one proposal under the proposal-storage lock. */
+export async function createSafeProposalAtNextNonce(input: {
+  safeAccountId: string;
+  chainId: number;
+  onchainNonce: bigint;
+  build: (nonce: bigint) => SafeProposalRecord;
+}) {
+  return mutate((records) => {
+    if (records.length >= MAX_PROPOSALS) throw new Error("Too many Safe proposals");
+    const nonce = getNextAvailableSafeNonce({ ...input, proposals: records });
+    const decoded = decodeSafeProposal(input.build(nonce));
+    if (
+      decoded.safeAccountId !== input.safeAccountId ||
+      decoded.chainId !== input.chainId ||
+      BigInt(decoded.transaction.nonce) !== nonce
+    ) {
+      throw new Error("Allocated Safe proposal scope changed");
+    }
+    if (records.some((record) => record.id === decoded.id)) {
+      throw new Error("Safe proposal already exists");
+    }
+    return { records: [...records, decoded], result: decoded };
+  });
+}
+
+/** Atomically replaces only an unsigned, editable proposal with a new nonce. */
+export async function replaceUnsignedSafeProposal(
+  id: string,
+  replacement: SafeProposalRecord,
+) {
+  const decoded = decodeSafeProposal(replacement);
+  return mutate((records) => {
+    const index = records.findIndex((record) => record.id === id);
+    if (index < 0) throw new Error("Safe proposal not found");
+    const current = records[index];
+    if (!isUnsignedSafeNonceEditable(current) || !isUnsignedSafeNonceEditable(decoded)) {
+      throw new Error("Safe nonce can only be changed before signing");
+    }
+    if (
+      decoded.safeAccountId !== current.safeAccountId ||
+      decoded.chainId !== current.chainId ||
+      decoded.safeAddress !== current.safeAddress ||
+      decoded.safeVersion !== current.safeVersion ||
+      decoded.safeConfigEpoch !== current.safeConfigEpoch ||
+      decoded.createdAt !== current.createdAt ||
+      JSON.stringify(decoded.calls) !== JSON.stringify(current.calls) ||
+      JSON.stringify(decoded.route) !== JSON.stringify(current.route)
+    ) {
+      throw new Error("Safe nonce update changed immutable proposal data");
+    }
+    if (records.some((record, candidate) => candidate !== index && record.id === decoded.id)) {
+      throw new Error("An identical Safe proposal already uses this nonce");
+    }
+    const next = [...records];
+    next[index] = decoded;
+    return { records: next, result: decoded };
   });
 }
 export async function updateSafeProposal(id: string, updater: (record: SafeProposalRecord) => SafeProposalRecord) {

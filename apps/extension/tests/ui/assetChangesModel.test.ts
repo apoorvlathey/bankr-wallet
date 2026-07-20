@@ -62,6 +62,27 @@ test("simulation messages preserve single, atomic-batch, and non-atomic paths", 
       .type,
     "simulateBatchAssetChangesNonAtomic",
   );
+
+  const safeExecutionRequest = {
+    id: "safe-execution:1",
+    tx: {
+      from: "0xexecutor",
+      to: "0xfrom",
+      data: "0xexec",
+      value: "0",
+      chainId: 8453,
+    },
+  } as Parameters<typeof buildSimulationMessage>[0]["txRequest"];
+  assert.deepEqual(
+    buildSimulationMessage({ txRequest, batchCalls: calls, safeExecutionRequest }),
+    {
+      type: "simulateSafeAssetChanges",
+      calls,
+      safeAddress: "0xfrom",
+      executionTx: safeExecutionRequest.tx,
+      chainId: 8453,
+    },
+  );
 });
 
 test("batch call keys preserve call order and optional field changes", () => {

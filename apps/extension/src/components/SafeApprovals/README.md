@@ -11,6 +11,9 @@
   the same confirmation composition used by transaction and batch requests.
   It owns the live authority refresh and exact outer fee state, while keeping
   the selected action visible through intermediate proposal-storage updates.
+  A simulated revert uses the shared likely-to-fail confirmation and sends an
+  explicit acknowledgement to the final background execution gate; it never
+  silently enables execution.
   Terminal Activity records switch to a receipt-style, read-only transaction
   detail: no live simulation, route-waiting notice, authority refresh, signer
   or executor controls, rejection action, or sticky request footer.
@@ -33,13 +36,24 @@
   execution shows a yellow retrying notice only when every trusted receipt RPC
   is unavailable.
 - `SafeProposalFinancialImpact.tsx`: request-only estimated-change surface
-  backed by the Safe's reviewed calls. It is never mounted for terminal
+  backed by the Safe's reviewed calls. At execution quorum it also supplies
+  the exact signed outer request, whose result owns the revert verdict while
+  the direct Safe-address pass remains responsible for asset deltas. This
+  prevents the simulator's temporary Safe bytecode replacement from falsely
+  rejecting Safe self-calls. It is never mounted for terminal
   Activity details because replaying an old Safe nonce against current chain
   state is neither a receipt nor a trustworthy historical estimate.
-- `SafeProposalAdvancedDetails.tsx`: proposal nonce/hash metadata and secondary
-  lifecycle actions. Terminal details keep explorer/copy utilities and the
-  Activity hide action, but suppress request-only publication and route
-  detachment controls.
+- `SafeProposalAdvancedDetails.tsx`: proposal nonce/hash metadata, unsigned
+  inline nonce editing, and secondary lifecycle actions. Automatic requests
+  reserve the next free nonce; the pencil action deliberately permits an
+  occupied nonce as a competing replacement, while inline validation blocks
+  values below the verified live nonce. Opening the disclosure scrolls its
+  heading to the top like other request surfaces. Terminal details keep
+  explorer/copy utilities and the Activity hide action, but suppress
+  request-only publication and route detachment controls.
+- `SafeProposalNonceEditor.tsx`: local pencil/input/cancel/confirm interaction
+  for the nonce row. It owns focus, keyboard Escape/Enter behavior, and
+  immediate bounds feedback; the background remains the mutation authority.
 - `safeProposalActionModel.ts`: pure owner/executor filtering, owner-first
   executor defaulting, action selection, and synthetic review request builders.
 - `SafeProposalRow.tsx`: Nonce-labeled, Activity-style chain-led request row with

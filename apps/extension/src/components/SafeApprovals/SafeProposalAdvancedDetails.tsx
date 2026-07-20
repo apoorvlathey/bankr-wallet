@@ -1,8 +1,19 @@
 import { ExternalLinkIcon } from "@chakra-ui/icons";
-import { Box, Button, HStack, Link, Text, VStack } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  HStack,
+  Link,
+  Text,
+  usePrefersReducedMotion,
+  VStack,
+} from "@chakra-ui/react";
+import { useRef } from "react";
+import { isUnsignedSafeNonceEditable } from "@/chrome/safe/proposalNonce";
 import type { SafeProposalRecord } from "@/chrome/safe/types";
 import { CopyButton } from "@/components/CopyButton";
 import { InlineDisclosure } from "@/components/ui";
+import { SafeProposalNonceEditor } from "./SafeProposalNonceEditor";
 
 function short(value: string) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
@@ -26,24 +37,52 @@ export function SafeProposalAdvancedDetails({
   busy,
   readOnly,
   onAction,
+  minimumNonce,
+  onNonceChange,
 }: {
   proposal: SafeProposalRecord;
   explorer?: string;
   busy: boolean;
   readOnly: boolean;
   onAction: (message: Record<string, unknown>, notice?: string) => void;
+  minimumNonce: `${bigint}`;
+  onNonceChange: (nonce: string) => Promise<boolean>;
 }) {
+  const disclosureRef = useRef<HTMLDetailsElement>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const hasUnpublishedApproval = proposal.confirmations.some((item) => !item.publishedAt);
   const canDetach = !readOnly &&
     (proposal.route.kind === "injected" || proposal.route.kind === "walletConnect") &&
     !proposal.route.detachedAt;
   const canHide =
     ["cancelled", "executed", "failed", "replaced"].includes(proposal.state);
+  const canChangeNonce = !readOnly && isUnsignedSafeNonceEditable(proposal);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) return;
+    requestAnimationFrame(() => {
+      if (!disclosureRef.current?.open) return;
+      disclosureRef.current.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  };
 
   return (
-    <InlineDisclosure label="Advanced details">
+    <InlineDisclosure
+      ref={disclosureRef}
+      label="Advanced details"
+      onOpenChange={handleOpenChange}
+    >
       <Box bg="surface.raised" border="1px solid" borderColor="border.default" borderRadius="lg" overflow="hidden">
-        <DetailRow label="Safe nonce" value={String(proposal.transaction.nonce)} />
+        <SafeProposalNonceEditor
+          nonce={proposal.transaction.nonce}
+          minimumNonce={minimumNonce}
+          busy={busy}
+          editable={canChangeNonce}
+          onNonceChange={onNonceChange}
+        />
         <DetailRow label="Safe proposal" value={short(proposal.safeTxHash)} copy={proposal.safeTxHash} />
         {proposal.transactionHash && (
           <DetailRow label="Onchain transaction" value={short(proposal.transactionHash)} copy={proposal.transactionHash} />

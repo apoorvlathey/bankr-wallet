@@ -6,12 +6,16 @@ Safe private key or treats a Safe as an EOA.
 
 - `types.ts`, `featurePolicy.ts`: validated vocabulary and staged fail-closed policy.
 - `deploymentRegistry.ts`, `onchainState.ts`, `capabilities.ts`, `discovery.ts`: canonical onchain verification and import capability projection.
-- `accountRepository.ts`, `proposalRepository.ts`: bounded versioned storage and effect claims.
+- `accountRepository.ts`, `proposalRepository.ts`: bounded versioned storage,
+  atomic proposal nonce reservation/rebasing, and effect claims.
 - `accountRefresh.ts`: chain-scoped direct-RPC re-verification for already
   imported Safes. Transaction Service discovery never decides whether a known
   Safe remains available onchain.
 - `proposalStatus.ts`: shared pending/terminal request classification used by
   both renderer summaries and the extension action badge.
+- `proposalNonce.ts`, `proposalNonceReconciliation.ts`: lowest-free automatic
+  allocation, explicit unsigned custom-nonce rules, and queued-request
+  activation/terminalization as the verified onchain nonce advances.
 - `transactionBuilder.ts`, `transactionHash.ts`, `multiSend.ts`: immutable Safe transaction construction.
 - `proposalRejectionPolicy.ts`, `proposalRejection.ts`: canonical same-nonce
   rejection classification and creation. Unsigned requests may cancel locally;
@@ -40,7 +44,10 @@ Safe private key or treats a Safe as an EOA.
   validated fee overrides, configured-then-pinned receipt fallback reads,
   explicit retryable RPC status, MV3-alarm/startup recovery, broadcast
   ambiguity, and terminalization of provider/ERC-5792 routes only after a
-  competing or rejection transaction consumes the nonce onchain.
+  competing or rejection transaction consumes the nonce onchain. A failed
+  final simulation remains blocking unless the trusted UI forwards the user's
+  explicit likely-to-fail acknowledgement; every authority and broadcast gate
+  still runs in either case.
 - `sync.ts`, `notifications.ts`: serialized full/targeted refresh, alarm-driven
   reconciliation, and deduplicated transitions.
 

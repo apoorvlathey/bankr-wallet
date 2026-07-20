@@ -21,7 +21,10 @@ import { writeResultToStorage } from "../transactions/runtime";
 import { updateBundleStatus } from "../bundleStatusStorage";
 import { BUNDLE_STATUS } from "../erc5792Types";
 import { notifySafeExecutionResult } from "./notifications";
-import { hasUnresolvedSafeExecution } from "./executionPolicy";
+import {
+  enforceSafeExecutionSimulation,
+  hasUnresolvedSafeExecution,
+} from "./executionPolicy";
 import {
   lookupSafeExecutionReceipt,
   SafeExecutionReceiptRpcError,
@@ -106,6 +109,7 @@ export async function executeSafeProposal(input: {
   proposalId: string;
   executorAccountId: string;
   gasOverrides?: GasOverrides;
+  allowSimulationFailure?: unknown;
 }) {
   const { proposal, account } = await executionContext(input.proposalId, input.executorAccountId);
   const claim = await claimSafeProposalEffect(proposal.id, { kind: "execute" });
@@ -141,7 +145,12 @@ export async function executeSafeProposal(input: {
         // transaction crosses the broadcast boundary. Simulate the exact
         // immutable Safe envelope with the selected executor, not merely its
         // underlying calls or an earlier estimate.
-        await simulateExecutionEnvelope(proposal, account.address, rpcUrl);
+        await enforceSafeExecutionSimulation(
+          async () => {
+            await simulateExecutionEnvelope(proposal, account.address, rpcUrl);
+          },
+          input.allowSimulationFailure,
+        );
         const preparedAt = Date.now();
         const prepared = await updateSafeProposal(proposal.id, (record) => ({
           ...record,

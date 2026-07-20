@@ -17,6 +17,7 @@ import { verifySafeOnchainState } from "./onchainState";
 import { claimSafeNotification } from "./notifications";
 import { mergeSafeServiceProposal } from "./serviceMerge";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
+import { reconcileSafeProposalNonceQueue } from "./proposalNonceReconciliation";
 
 const STORAGE_KEY = "safeSyncState";
 const LOCK_KEY = "walletchan:safe-sync";
@@ -125,6 +126,12 @@ async function syncSafeRecords(
           address: safe.address,
           importedBy: safe.importedBy,
           snapshots: [live],
+        });
+        await reconcileSafeProposalNonceQueue({
+          safeAccountId: safe.accountId,
+          chainId: live.chainId,
+          liveNonce: live.nonce,
+          threshold: live.threshold,
         });
         const raw = await fetchSafePendingTransactions(snapshot.chainId, safe.address) as any;
         if (!Array.isArray(raw?.results) || raw.results.length > 100) throw new Error("Invalid Safe proposal page");

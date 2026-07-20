@@ -22,6 +22,7 @@ type SimulationProps = Pick<
   | "txRequest"
   | "batchCalls"
   | "isNonAtomic"
+  | "safeExecutionRequest"
   | "onRevertedChange"
   | "onSimulationUnavailableChange"
 >;
@@ -30,6 +31,7 @@ export function useAssetChangesSimulation({
   txRequest,
   batchCalls,
   isNonAtomic,
+  safeExecutionRequest,
   onRevertedChange,
   onSimulationUnavailableChange,
 }: SimulationProps) {
@@ -50,6 +52,7 @@ export function useAssetChangesSimulation({
       txRequest,
       batchCalls,
       isNonAtomic,
+      safeExecutionRequest,
     });
 
     console.log(
@@ -91,7 +94,7 @@ export function useAssetChangesSimulation({
     };
     // Simulate from the stable request id plus batch-call signature, not array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txRequest.id, batchCallsKey, screenEntered]);
+  }, [txRequest.id, batchCallsKey, safeExecutionRequest?.id, screenEntered]);
 
   useEffect(() => {
     if (!onRevertedChange) return;

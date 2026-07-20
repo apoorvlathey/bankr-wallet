@@ -9,6 +9,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation/SimulationFailureConfirmButton";
+import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation/simulationFailure";
 import { ConfirmationScreen } from "@/components/ui";
 import { useIconChipBg } from "@/theme";
 import { SafeProposalAdvancedDetails } from "./SafeProposalAdvancedDetails";
@@ -183,6 +184,7 @@ export function SafeProposalConfirmation({
     busy,
     error: actionError,
     handleConfirm,
+    handleNonceChange,
     handleReject,
     notice,
     operation,
@@ -221,9 +223,7 @@ export function SafeProposalConfirmation({
     ? "Refreshing Safe authority"
     : !selectedAccount
         ? primaryActionKind === "execute" ? "No local execution account is available" : "No available Safe owner is linked"
-      : simulationReverted
-        ? "The reviewed Safe transaction reverted during simulation"
-        : primaryActionKind === "execute" && (!gasValid || !gasOverrides)
+      : primaryActionKind === "execute" && (!gasValid || !gasOverrides)
           ? "Set a valid network fee"
           : null;
   const primaryAction = !isRequestView ? undefined : primaryActionKind ? (
@@ -234,9 +234,13 @@ export function SafeProposalConfirmation({
       label={isRejection
         ? primaryActionKind === "execute" ? "Execute rejection" : "Sign rejection"
         : primaryActionKind === "execute" ? "Execute" : "Sign offchain"}
-      onConfirm={() => void handleConfirm()}
+      onConfirm={() => void handleConfirm({
+        allowSimulationFailure: simulationReverted,
+      })}
       requestKind={proposal.calls.length > 1 ? "batch" : "transaction"}
-      simulationFailed={false}
+      simulationFailed={shouldConfirmSimulationFailure({
+        simulationReverted,
+      })}
     />
   ) : executionPending ? (
     <Button
@@ -290,6 +294,7 @@ export function SafeProposalConfirmation({
         <SafeProposalFinancialImpact
           proposal={proposal}
           reviewRequest={reviewRequest}
+          executionRequest={executionRequest}
           onRevertedChange={setSimulationReverted}
           onUnavailableChange={setSimulationUnavailable}
         />
@@ -316,6 +321,8 @@ export function SafeProposalConfirmation({
           explorer={explorer}
           busy={busy}
           readOnly={!isRequestView}
+          minimumNonce={snapshot.nonce}
+          onNonceChange={handleNonceChange}
           onAction={(message, successNotice) => void runAction(message, successNotice)}
         />
       )}

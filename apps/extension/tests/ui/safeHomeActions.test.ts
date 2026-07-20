@@ -84,6 +84,10 @@ const safeAdvancedDetailsUrl = new URL(
   "../../src/components/SafeApprovals/SafeProposalAdvancedDetails.tsx",
   import.meta.url,
 );
+const safeNonceEditorUrl = new URL(
+  "../../src/components/SafeApprovals/SafeProposalNonceEditor.tsx",
+  import.meta.url,
+);
 const confirmationScreenUrl = new URL(
   "../../src/components/ui/ConfirmationScreen.tsx",
   import.meta.url,
@@ -386,6 +390,8 @@ test("Safe request review uses the standard confirmation grammar without passwor
   assert.match(screen, /<RequestIdentity/);
   assert.match(screen, /<EstimatedChangesHeading/);
   assert.match(screen, /<SafeProposalFinancialImpact/);
+  assert.match(screen, /executionRequest=\{executionRequest\}/);
+  assert.match(financialImpact, /safeExecutionRequest=\{executionRequest \?\? undefined\}/);
   assert.match(actions, /type: "startSafeProposalRejection"/);
   assert.match(screen, /chainId: proposal\.chainId/);
   assert.match(screen, /variant=\{requiresOnchainRejection \? "danger" : "secondary"\}/);
@@ -472,6 +478,18 @@ test("Safe primary actions remain stable through intermediate storage states", (
   assert.equal(getSafeProposalDisplayActionKind(null, "execute"), "execute");
   assert.equal(getSafeProposalDisplayActionKind("execute", "reject"), "execute");
   assert.equal(getSafeProposalDisplayActionKind(null, null), null);
+});
+
+test("Safe execution can explicitly proceed after a simulated revert", async () => {
+  const [screen, hook] = await Promise.all([
+    readFile(safeConfirmationUrl, "utf8"),
+    readFile(safeActionsHookUrl, "utf8"),
+  ]);
+
+  assert.match(screen, /simulationFailed=\{shouldConfirmSimulationFailure\(\{/);
+  assert.match(screen, /allowSimulationFailure: simulationReverted/);
+  assert.doesNotMatch(screen, /simulationReverted\s*\?\s*"The reviewed Safe transaction reverted/);
+  assert.match(hook, /allowSimulationFailure: options\?\.allowSimulationFailure === true/);
 });
 
 test("Safe request completion routes only on a same-proposal executed transition", async () => {
@@ -601,6 +619,22 @@ test("future Safe requests name the visible request that must execute first", ()
   assert.equal(blockedByNonce, 2);
   assert.equal(presentation.status, "Blocked · Execute nonce #2 first");
   assert.equal(presentation.statusTone, "error");
+});
+
+test("Safe advanced details exposes inline nonce editing only before signing", async () => {
+  const source = await readFile(safeAdvancedDetailsUrl, "utf8");
+  const editor = await readFile(safeNonceEditorUrl, "utf8");
+  const hook = await readFile(safeActionsHookUrl, "utf8");
+
+  assert.match(editor, /aria-label="Edit Safe nonce"/);
+  assert.match(editor, /aria-label="Cancel Safe nonce edit"/);
+  assert.match(editor, /aria-label="Confirm Safe nonce"/);
+  assert.match(editor, /isDisabled=\{!!nonceError\}/);
+  assert.doesNotMatch(editor, /unchanged/);
+  assert.match(source, /disclosureRef\.current\.scrollIntoView/);
+  assert.match(source, /isUnsignedSafeNonceEditable\(proposal\)/);
+  assert.match(hook, /type: "changeSafeProposalNonce"/);
+  assert.match(hook, /onOpenProposal\(response\.result\.id\)/);
 });
 
 test("configuration-blocked Safe requests do not claim a nonce dependency", () => {

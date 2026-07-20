@@ -6,6 +6,7 @@ import {
 } from "./accountRepository";
 import { withDerivedSafeCapability } from "./capabilities";
 import { verifySafeOnchainState } from "./onchainState";
+import { reconcileSafeProposalNonceQueue } from "./proposalNonceReconciliation";
 import type { SafeAccountRecord, SafeChainSnapshot } from "./types";
 
 type RefreshDependencies = {
@@ -13,6 +14,7 @@ type RefreshDependencies = {
   getSafeAccountRecord: typeof getSafeAccountRecord;
   importVerifiedSafeAccount: typeof importVerifiedSafeAccount;
   verifySafeOnchainState: typeof verifySafeOnchainState;
+  reconcileSafeProposalNonceQueue: typeof reconcileSafeProposalNonceQueue;
 };
 
 const production: RefreshDependencies = {
@@ -20,6 +22,7 @@ const production: RefreshDependencies = {
   getSafeAccountRecord,
   importVerifiedSafeAccount,
   verifySafeOnchainState,
+  reconcileSafeProposalNonceQueue,
 };
 
 function parseAccountId(value: unknown): string {
@@ -74,5 +77,13 @@ export async function refreshSafeAccountState(
     importedBy: record.importedBy,
     snapshots,
   });
+  await Promise.all(snapshots.map((snapshot) =>
+    dependencies.reconcileSafeProposalNonceQueue({
+      safeAccountId: record.accountId,
+      chainId: snapshot.chainId,
+      liveNonce: snapshot.nonce,
+      threshold: snapshot.threshold,
+    }),
+  ));
   return refreshed.record;
 }

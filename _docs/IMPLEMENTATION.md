@@ -4966,6 +4966,16 @@ endpoints. A provider exception is never collapsed into “receipt not found”:
 if every trusted endpoint fails, the durable request carries an explicit
 retrying RPC warning until any endpoint responds. Safe sync also recovers stale
 claims and deduplicates privacy-safe notifications.
+New wallet, injected, WalletConnect, ERC-5792, and Safe-swap proposals first
+refresh the Safe directly onchain, then reserve the lowest unused nonce at or
+above that value while holding the `safeProposals` storage lock. Pending local
+and service-verified records reserve their nonce; confirmed executed/replaced
+evidence advances a stale local floor without reserving the old nonce. This makes concurrent
+dapp intake deterministic and prevents an ordinary request from silently
+becoming a same-nonce replacement. A future-nonce request remains visibly
+blocked until account refresh or Safe sync observes that nonce onchain, then
+returns to draft/approval/readiness state. If a competitor consumed its nonce,
+the queued request and its provider/ERC-5792 route are terminalized.
 Selecting a Safe or opening the popup/sidepanel while one is active also sends
 the trusted-UI-only `syncSafeRequests` message. It runs the same validated sync
 for that exact Safe immediately; the Safe Requests header exposes the same
@@ -5059,7 +5069,7 @@ records into human action, a wallet/contact-resolved counterparty, and lifecycle
 status. The leading chain logo owns network context; rows do not repeat the
 chain name or Safe-service origin in text. Each visible row shows its actual
 Safe nonce as **Nonce #N**; same-nonce alternatives deliberately repeat it. For
-service-verified future-nonce records only, `safeProposalSequence.ts` resolves
+verified future-nonce records, `safeProposalSequence.ts` resolves
 the earliest pending lower nonce for the same Safe and chain, allowing the row
 to say **Blocked · Execute nonce #N first**. Configuration-blocked rows remain simply
 **Blocked**, so the UI never invents a nonce dependency.
@@ -5084,7 +5094,14 @@ single and batch transaction requests: requesting-app identity, chain-qualified
 estimated changes, read-only reviewed call cards, progressive advanced details,
 and one sticky decision bar. Safe lifecycle state and validated owner progress
 stay inside Request details instead of creating a separate Safe-shaped approval
-form. Before quorum the footer says **Signing with** and defaults to the first
+form. Advanced details permits changing the nonce only while a request is
+unsigned. The trusted-UI `changeSafeProposalNonce` route re-verifies live Safe
+configuration and the minimum onchain nonce, then atomically replaces the
+proposal identity without changing its calls or dapp route. Advanced details
+keeps this exceptional action behind a pencil beside the nonce; its inline
+editor accepts an already reserved nonce as a deliberate competing replacement,
+while automatic intake never does so. Before quorum the footer says
+**Signing with** and defaults to the first
 available linked owner. At `readyToExecute` it changes to **Execute with**,
 defaults to a locally controlled Safe owner, and exposes the other supported
 private-key/seed accounts through the identity dropdown. The exact outer
@@ -5113,15 +5130,26 @@ rejection proposal is instead marked replaced.
 
 Execution refreshes authority, packs sorted confirmations, and estimates and
 simulates the exact `execTransaction` envelope for the selected local executor.
-The inner asset-change preview still executes the reviewed calls directly from
-the Safe address, but its read-only TxSimulator code override now replaces the
-Safe proxy's storage for that `eth_call`. This preserves the Safe as the token
-call's `msg.sender` without allowing proxy slot 0 to collide with the
-simulator's slot-zero NFT receipt array. The same isolated override is used by
-single, batch, and injected batch-gas simulation paths for every account type.
+Once an executor is selected, the estimated-change preview runs two read-only
+simulations in parallel. The underlying-call pass executes the reviewed calls
+directly from the Safe address and owns Safe token/native deltas. Its isolated
+TxSimulator override fully replaces the Safe proxy code and storage, preventing
+proxy slot 0 from colliding with the simulator's slot-zero NFT receipt array.
+Because that replacement cannot faithfully execute a Safe self-call such as
+`addOwnerWithThreshold`, a second pass invokes the exact signed
+`execTransaction` envelope from the selected executor without replacing the
+Safe. That exact outer pass owns the success/revert verdict; an unavailable
+outer pass is reported as unavailable rather than inheriting a false revert
+from the underlying pass. The same isolated override remains used by single,
+batch, and injected batch-gas simulation paths for every account type.
 The shared transaction fee control supplies bounded gas-limit and EIP-1559
 overrides; the background validates them and repeats the exact envelope
-simulation immediately before RPC submission. The broadcaster persists the
+simulation immediately before RPC submission. A revert keeps execution blocked
+by default, but the shared likely-to-fail confirmation lets the user explicitly
+proceed; that literal boolean acknowledgement is forwarded to the background,
+which may tolerate only the simulation error while retaining every live Safe,
+executor, auth-epoch, gas, serialization, and duplicate-submit gate. The
+broadcaster persists the
 exact serialized outer transaction and its deterministic hash before crossing
 the RPC boundary. Any durable execution claim, hash, or signed-byte record
 blocks both renderer and background from preparing another outer transaction,

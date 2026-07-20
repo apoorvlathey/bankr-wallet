@@ -320,6 +320,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     label: "Safe accounts",
     defaultScenario: "approval-needed",
     scenarios: [
+      "settings",
       "import-scanning",
       "import-partial-failure",
       "observe-only",

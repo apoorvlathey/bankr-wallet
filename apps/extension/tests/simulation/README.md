@@ -13,6 +13,8 @@
   native/contract cache keys without making a portfolio request.
 - `facade.test.ts` freezes every legacy `txSimulation.ts` runtime export.
 - `nonAtomicBatch.test.ts` freezes dual-path failure and merge precedence.
+- `safeSimulation.test.ts` freezes exact-envelope verdict precedence while
+  retaining Safe-owned asset deltas from the underlying-call pass.
 - `architecture.test.ts` keeps extracted modules focused, dependency-safe, and
   wired through the stable `txSimulation.ts` facade.
 

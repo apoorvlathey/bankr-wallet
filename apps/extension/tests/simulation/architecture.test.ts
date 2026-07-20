@@ -13,6 +13,7 @@ test("txSimulation is a policy-free stable facade", async () => {
   assert.match(coordinator, /from "\.\/simulation\/singleSimulation"/);
   assert.match(coordinator, /from "\.\/simulation\/batchSimulation"/);
   assert.match(coordinator, /from "\.\/simulation\/nonAtomicBatch"/);
+  assert.match(coordinator, /from "\.\/simulation\/safeSimulation"/);
   assert.match(
     coordinator,
     /export type \{[\s\S]*SimulationResult[\s\S]*\} from "\.\/simulation\/types"/,
@@ -42,6 +43,7 @@ test("focused simulation modules do not depend on coordinator or authority domai
     "simulation/batchSimulation.ts",
     "simulation/ethSimulateBatch.ts",
     "simulation/nonAtomicBatch.ts",
+    "simulation/safeSimulation.ts",
   ]) {
     const moduleSource = await source(path);
     assert.ok(moduleSource.split("\n").length <= 400, `${path} exceeds 400 lines`);

@@ -84,7 +84,9 @@ export function useSafeProposalActions({
     }
   }, [beginOperation, endOperation, onReload]);
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async (options?: {
+    allowSimulationFailure?: boolean;
+  }) => {
     if (actionKind === "approve" && selectedOwner) {
       if (!beginOperation("approve")) return;
       try {
@@ -118,6 +120,7 @@ export function useSafeProposalActions({
         proposalId: proposal.id,
         executorAccountId: selectedExecutor.id,
         gasOverrides,
+        allowSimulationFailure: options?.allowSimulationFailure === true,
       }, undefined, "execute");
     }
   }, [
@@ -169,11 +172,39 @@ export function useSafeProposalActions({
     proposal.id,
   ]);
 
+  const handleNonceChange = useCallback(async (nonce: string) => {
+    if (!beginOperation("secondary")) return false;
+    try {
+      const response = await send<{
+        success: boolean;
+        result?: SafeProposalRecord;
+        error?: string;
+      }>({
+        type: "changeSafeProposalNonce",
+        proposalId: proposal.id,
+        nonce,
+      });
+      if (!response.success || !response.result) {
+        throw new Error(response.error || "Could not update Safe nonce");
+      }
+      setNotice("Safe nonce updated.");
+      await onReload();
+      onOpenProposal(response.result.id);
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update Safe nonce");
+      return false;
+    } finally {
+      endOperation();
+    }
+  }, [beginOperation, endOperation, onOpenProposal, onReload, proposal.id]);
+
   return {
     busy: operation !== null,
     error,
     handleConfirm,
     handleReject,
+    handleNonceChange,
     notice,
     operation,
     primaryActionKind: getSafeProposalDisplayActionKind(actionKind, operation),

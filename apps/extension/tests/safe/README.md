@@ -5,8 +5,10 @@
   signed-rejection policy, and EOA confirmation recovery.
 - `onchainState.test.ts`: canonical proxy/singleton verification, exact-block authority, contract-owner blocking, and EIP-7702 EOAs.
 - `accountRepository.test.ts`, `accountRefresh.test.ts`,
-  `proposalRepository.test.ts`: strict storage decoding, atomic import/removal,
-  chain-scoped direct-RPC refresh, idempotency, and first-action claims.
+  `proposalRepository.test.ts`, `proposalNonce.test.ts`: strict storage decoding,
+  atomic import/removal, chain-scoped direct-RPC refresh, sequential concurrent
+  nonce reservation, unsigned custom rebasing, queue activation, idempotency,
+  and first-action claims.
 - `serviceMerge.test.ts`, `executionPolicy.test.ts`, `executionReceipt.test.ts`,
   `executionReconciliation.test.ts`, `executorHistory.test.ts`: stale Transaction Service reads cannot
   erase local approvals or in-flight outer execution evidence, every durable

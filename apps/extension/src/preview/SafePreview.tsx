@@ -2,6 +2,7 @@ import { Alert, AlertIcon, Badge, Box, Button, HStack, Text, VStack } from "@cha
 import type { SafeChainSnapshot, SafeProposalRecord } from "@/chrome/safe/types";
 import type { SafeAccount } from "@/chrome/types";
 import { SafeProposalConfirmation } from "@/components/SafeApprovals/SafeProposalConfirmation";
+import { SafeSecurityScreen } from "@/components/SafeAccount/SafeSecurityScreen";
 import { SafeIcon } from "@/components/shared/AccountTypeIcons";
 import { AppHeader, AppScreen, ScreenBody, ScreenSection } from "@/components/ui";
 import { previewAccounts } from "./fixtures";
@@ -191,6 +192,16 @@ function ImportPreview({ scenario }: { scenario: string }) {
 
 export default function SafePreview({ scenario }: { scenario: string }) {
   if (scenario.startsWith("import-")) return <ImportPreview scenario={scenario} />;
+  if (scenario === "settings") {
+    return (
+      <SafeSecurityScreen
+        account={SAFE_ACCOUNT}
+        onBack={() => undefined}
+        onAccountUpdated={() => undefined}
+        onRemoved={() => undefined}
+      />
+    );
+  }
   const { proposal, snapshot } = scenarioFixture(scenario);
   return (
     <SafeProposalConfirmation

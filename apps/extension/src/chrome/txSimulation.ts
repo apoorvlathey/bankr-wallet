@@ -12,6 +12,7 @@ export { getNativeCurrency } from "./simulation/nativeCurrency";
 export { retryTokenMetadata } from "./simulation/metadataRetry";
 export { simulateBatchAssetChangesNonAtomic } from "./simulation/nonAtomicBatch";
 export { simulateAssetChanges } from "./simulation/singleSimulation";
+export { simulateSafeAssetChanges } from "./simulation/safeSimulation";
 export { SIMULATOR_BYTECODE } from "./simulation/simulatorContract";
 export type {
   AssetChange,

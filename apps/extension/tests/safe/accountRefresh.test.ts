@@ -50,6 +50,7 @@ const accounts: Account[] = [{
 test("proposal refresh verifies only its stored chain directly onchain", async () => {
   const verifiedChainIds: number[] = [];
   let importedSnapshots: SafeChainSnapshot[] = [];
+  const reconciledNonces: string[] = [];
 
   const result = await refreshSafeAccountState({
     accountId: "safe-account",
@@ -82,6 +83,9 @@ test("proposal refresh verifies only its stored chain directly onchain", async (
         created: false,
       };
     },
+    reconcileSafeProposalNonceQueue: async (input) => {
+      reconciledNonces.push(input.liveNonce);
+    },
   });
 
   assert.deepEqual(verifiedChainIds, [8453]);
@@ -90,6 +94,7 @@ test("proposal refresh verifies only its stored chain directly onchain", async (
   assert.equal(importedSnapshots[0].capability, "quorumAvailable");
   assert.equal(result.chains["1"].nonce, "4");
   assert.equal(result.chains["8453"].nonce, "5");
+  assert.deepEqual(reconciledNonces, ["5"]);
 });
 
 test("proposal refresh rejects a chain that was not imported", async () => {

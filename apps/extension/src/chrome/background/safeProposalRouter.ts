@@ -2,7 +2,7 @@ import { approveSafeProposalWithOwner } from "../safe/ownerAuthorization";
 import { estimateSafeExecution, executeSafeProposal, reconcileSafeExecution } from "../safe/execution";
 import { publishSafeProposalConfirmations, reconcileSafeProposal, retryAmbiguousSafePublication } from "../safe/publication";
 import { getSafeProposal, getSafeProposals } from "../safe/proposalRepository";
-import { authorizeSafeProposalRoute, cancelSafeProposal, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
+import { authorizeSafeProposalRoute, cancelSafeProposal, changeSafeProposalNonce, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
 import { startSafeProposalRejection } from "../safe/proposalRejection";
 import { requireSafeFeature } from "../safe/featurePolicy";
 import { syncSafeAccount } from "../safe/sync";
@@ -12,6 +12,7 @@ export const BACKGROUND_SAFE_PROPOSAL_MESSAGE_TYPES = [
   "approveSafeProposal", "publishSafeProposal", "cancelSafeProposal",
   "startSafeProposalRejection",
   "hideSafeProposal", "detachSafeProposalRoute", "reconcileSafeProposal",
+  "changeSafeProposalNonce",
   "retrySafePublication",
   "estimateSafeExecution", "executeSafeProposal", "reconcileSafeExecution",
 ] as const;
@@ -48,6 +49,7 @@ export function routeBackgroundSafeProposalMessage(
       return getSafeProposals();
     }); break;
     case "createSafeProposal": work = gated("sendProposal", () => createReviewedSafeProposal({ safeAccountId: message.safeAccountId, chainId: message.chainId, calls: message.calls, route: message.route })); break;
+    case "changeSafeProposalNonce": work = gated("sendProposal", () => changeSafeProposalNonce({ proposalId: message.proposalId, nonce: message.nonce })); break;
     case "approveSafeProposal": work = gated("sendProposal", async () => {
       const proposal = await approveSafeProposalWithOwner({
         proposalId: message.proposalId,
@@ -68,6 +70,7 @@ export function routeBackgroundSafeProposalMessage(
       proposalId: message.proposalId,
       executorAccountId: message.executorAccountId,
       gasOverrides: message.gasOverrides,
+      allowSimulationFailure: message.allowSimulationFailure,
     })); break;
     case "reconcileSafeExecution": work = gated("executeProposal", () => reconcileSafeExecution(message.proposalId)); break;
     default: return { handled: false };

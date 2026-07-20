@@ -200,6 +200,14 @@ WalletChan should therefore group proposals by nonce, mark conflicts clearly,
 show the canonical next nonce, and automatically mark losing same-nonce
 proposals as replaced after one executes.
 
+WalletChan-created requests refresh the Safe onchain, then allocate the lowest
+free nonce at or above that value while holding the proposal-storage lock. Every unresolved
+local or service proposal reserves its nonce, so simultaneous dapp requests
+cannot accidentally become replacements. Later nonces remain queued until the
+Safe reaches them. Advanced details may explicitly reassign an unsigned request
+to any nonce at or above the live nonce; reusing an occupied nonce is presented
+as an intentional competing replacement and is never the automatic default.
+
 ## Recommended WalletChan account model
 
 ### One Safe account, many linked owner capabilities
@@ -514,6 +522,12 @@ After approval       1 more approval will be needed
 Execution fee        Paid when the transaction executes
 Safe nonce           14
 ```
+
+Advanced details exposes the editable custom nonce only before any supported or
+unsupported signature, publication, or execution evidence exists. Saving it
+re-verifies the current Safe configuration and onchain nonce, keeps the calls
+and initiating-app route immutable, and recomputes the proposal hash. Signed
+proposals are never edited; they require the onchain rejection flow.
 
 Primary action by state:
 

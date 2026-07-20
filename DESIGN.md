@@ -225,6 +225,28 @@
 
 ## Slop audit
 
+- 2026-07-20 Safe account-settings audit: passes. The screen now shares the
+  ordinary account-settings identity, editable account-name field, and section
+  rhythm, with one per-chain graphite authority ledger instead of a loose
+  address plus nested generic card. The chain heading stays quiet rather than
+  repeating capability and verification metadata already represented by the
+  ledger. Threshold, service support, owner identity, singleton, nonce, and
+  extension state remain scannable at 320px; technical addresses
+  middle-truncate without overflow and retain accessible contrast. Refresh and
+  removal use the shared separator-list grammar, while removal escalates into a
+  focused dialog that explicitly preserves published proposals and onchain
+  data. Midnight popup and sidepanel previews pass the serious/critical axe
+  gate. Scoped score: 10/10.
+- 2026-07-20 Safe inline-nonce audit: passes. Advanced details preserves the
+  compact metadata ledger until the user invokes the pencil beside **Safe
+  nonce**. Edit mode replaces only the value with a bounded numeric field and
+  explicit cancel/confirm icons; validation remains directly below that field,
+  the compact 32px icon targets remain above the WCAG minimum, and the confirm
+  action is unavailable only while invalid. An unchanged valid nonce can still
+  be confirmed to exit edit mode. The disclosure scrolls its heading to the top
+  using the established reduced-motion-aware request pattern. This removes a
+  redundant nested section without weakening the deliberate same-nonce
+  replacement path. Scoped score: 10/10.
 - 2026-07-20 locked Safe-request visibility audit: passes. The established
   graphite unlock notice now includes every unresolved Safe proposal without
   adding a second banner or rendering request details before authentication.
@@ -667,6 +689,12 @@
 
 ## Changelog
 
+- 2026-07-20: rebuilt Safe account settings in the approved Warm Midnight
+  grammar: canonical account identity, shared account-name editing, compact
+  per-chain authority ledgers without redundant readiness/block labels,
+  accessible middle-truncated technical addresses, shared tool/destructive
+  rows, and an in-product removal confirmation. Added a deterministic Safe
+  settings preview for compact, popup, window, and sidepanel review.
 - 2026-07-20: included unresolved Safe proposals in the locked-wallet pending
   notice, with a Safe-specific label for Safe-only queues and live inbox
   updates while the unlock screen remains open.
@@ -1280,3 +1308,9 @@
   edge, and a faint amber wash. Inner horizontal padding tightens by 2px so the
   content alignment remains compact. Midnight Safe fallback marks now use a
   dark green-tinted chip; executed proposals retain the quiet green check treatment.
+- 2026-07-20: collapsed custom Safe nonce editing into the existing nonce row.
+  A pencil reveals a focused inline number field with cancel/confirm actions,
+  immediate lower-bound validation, compact 32px icon targets, and a disabled
+  confirmation only for invalid input. Unchanged valid values remain
+  confirmable. The disclosure now scrolls to its heading on open, matching
+  other transaction request surfaces while respecting reduced motion.

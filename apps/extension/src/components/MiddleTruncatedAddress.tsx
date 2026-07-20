@@ -198,15 +198,15 @@ export default function MiddleTruncatedAddress({
               {display.leftEmphasis}
             </Box>
             {display.leftMuted ? (
-              <Box as="span" fontWeight="300" opacity={0.5}>
+              <Box as="span" fontWeight="300" opacity={0.75}>
                 {display.leftMuted}
               </Box>
             ) : null}
-            <Box as="span" fontWeight="400" opacity={0.5}>
+            <Box as="span" fontWeight="400" opacity={0.75}>
               {ELLIPSIS}
             </Box>
             {display.rightMuted ? (
-              <Box as="span" fontWeight="300" opacity={0.5}>
+              <Box as="span" fontWeight="300" opacity={0.75}>
                 {display.rightMuted}
               </Box>
             ) : null}

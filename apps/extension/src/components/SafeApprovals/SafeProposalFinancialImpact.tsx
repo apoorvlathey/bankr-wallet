@@ -6,11 +6,13 @@ import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 export function SafeProposalFinancialImpact({
   proposal,
   reviewRequest,
+  executionRequest,
   onRevertedChange,
   onUnavailableChange,
 }: {
   proposal: SafeProposalRecord;
   reviewRequest: PendingTxRequest;
+  executionRequest: PendingTxRequest | null;
   onRevertedChange: (reverted: boolean) => void;
   onUnavailableChange: (unavailable: boolean) => void;
 }) {
@@ -43,6 +45,7 @@ export function SafeProposalFinancialImpact({
       <AssetChangesDisplay
         txRequest={reviewRequest}
         batchCalls={proposal.calls}
+        safeExecutionRequest={executionRequest ?? undefined}
         embedded
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}

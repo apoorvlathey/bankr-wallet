@@ -32,8 +32,11 @@ export function isCanonicalSafeRejection(
 export function canStartSafeProposalRejection(
   proposal: SafeProposalRecord,
 ): boolean {
+  const hasSignatures = hasSafeProposalSignatures(proposal);
+  const locallyCancellableBlockedRequest =
+    proposal.state === "blocked" && !hasSignatures;
   return proposal.purpose !== "rejection" &&
     !proposal.effectClaim &&
     !hasUnresolvedSafeExecution(proposal) &&
-    REJECTABLE_STATES.has(proposal.state);
+    (REJECTABLE_STATES.has(proposal.state) || locallyCancellableBlockedRequest);
 }

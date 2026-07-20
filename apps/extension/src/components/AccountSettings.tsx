@@ -582,7 +582,7 @@ function AccountSettings({
   };
 
   if (!account) return null;
-  if (account.type === "safe") return <SafeSecurityScreen account={account} onBack={onClose} onRemoved={async () => { await onAccountUpdated(); onClose(); }} />;
+  if (account.type === "safe") return <SafeSecurityScreen account={account} onBack={onClose} onAccountUpdated={async () => { await onAccountUpdated(); }} onRemoved={async () => { await onAccountUpdated(); onClose(); }} />;
   if (view === "revealPrivateKey") {
     return <RevealPrivateKey account={account} onBack={() => setView("settings")} />;
   }

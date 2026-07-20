@@ -43,6 +43,7 @@ import {
   simulateAssetChanges,
   simulateBatchAssetChanges,
   simulateBatchAssetChangesNonAtomic,
+  simulateSafeAssetChanges,
 } from "../../txSimulation";
 import { writeResultToStorage } from "../../txHandlers";
 import { authorizeConnectedDappRequest } from "../../dapp/requestPolicy";
@@ -123,6 +124,7 @@ export function composeAdvancedRoutes(
       simulateAssetChanges,
       simulateBatchAssetChanges,
       simulateBatchAssetChangesNonAtomic,
+      simulateSafeAssetChanges,
       retryTokenMetadata,
     });
 

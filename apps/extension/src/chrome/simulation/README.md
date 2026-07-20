@@ -35,6 +35,10 @@ simulation modules:
   cache.
 - `nonAtomicBatch.ts` starts both non-atomic paths together and applies their
   established result precedence.
+- `safeSimulation.ts` combines Safe-address asset-delta capture with an exact
+  signed `execTransaction` simulation. The exact outer envelope owns the
+  revert verdict because simulator injection at a Safe address replaces its
+  proxy runtime and cannot faithfully execute Safe self-calls.
 
 Dependency direction is `types/constants/pure normalization -> metadata and
 state-override helpers -> execution paths -> txSimulation facade`. These
