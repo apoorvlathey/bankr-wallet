@@ -78,6 +78,25 @@ test("Swap uses a compact amber wallet-sized intent form", async () => {
   assert.doesNotMatch(multiGas, /import \{ GasFeeTrigger \}/u);
 });
 
+test("view-only Swap stages review and gates execution on the selected developer RPC", async () => {
+  const [view, preparation, confirmation, policy] = await Promise.all([
+    readSwapSource("SwapView.tsx"),
+    readSwapSource("usePreparedSwap.ts"),
+    readSwapSource("SwapConfirmation.tsx"),
+    readSwapSource("useImpersonatedSwapPolicy.ts"),
+  ]);
+
+  assert.doesNotMatch(view, /accountType !== "impersonator"/u);
+  assert.doesNotMatch(preparation, /accountType === "impersonator"/u);
+  assert.match(view, /useImpersonatedSwapPolicy/u);
+  assert.match(
+    view,
+    /accountType === "impersonator"[\s\S]*?!canSendImpersonatedTransaction/u,
+  );
+  assert.match(confirmation, /isDisabled=\{isConfirmDisabled\}/u);
+  assert.match(policy, /allowsImpersonatedTransactions\(chainId, rpcUrl\)/u);
+});
+
 test("Swap keeps custom slippage behind a compact settings control", async () => {
   const [section, settings, sameChainQuote, bridgeQuote] = await Promise.all([
     readSwapSource("SwapQuoteSection.tsx"),
@@ -132,17 +151,21 @@ test("Swap separates the shared searchable network browser from token discovery"
 });
 
 test("Swap initializes a generic entry from the cached top portfolio token", async () => {
-  const [view, data] = await Promise.all([
+  const [view, data, utils] = await Promise.all([
     readSwapSource("SwapView.tsx"),
     readSwapSource("useSellTokenData.ts"),
+    readSwapSource("swapViewUtils.ts"),
   ]);
 
-  assert.match(data, /setHoldingsAllChains\(catalog\.tokens\)/u);
+  assert.match(data, /selectPortfolioTokensForInteraction\(/u);
+  assert.match(data, /setHoldingsAllChains\(interactiveTokens\)/u);
+  assert.match(data, /enrich: false/u);
   assert.match(view, /pickDefaultSwapSellToken\(holdingsAllChains\)/u);
   assert.match(view, /setSellChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /setBuyChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /initialSellToken && SWAP_SUPPORTED_CHAIN_IDS\.has\(initialSellToken\.chainId\)/u);
   assert.doesNotMatch(view, /if \(!buyToken\.buyTokenInfo \|\| !buyToken\.buyTokenAddress\) return/u);
-  assert.match(view, /const nextSellToken: PortfolioToken \| null/u);
-  assert.match(view, /: null;[\s\S]*?setSellChainId\(buyChainId\)[\s\S]*?setBuyChainId\(previousSellChainId\)/u);
+  assert.match(view, /buildFlippedSellToken\(\{/u);
+  assert.match(utils, /if \(!args\.buyTokenInfo \|\| !address\) return null/u);
+  assert.match(view, /setSellChainId\(buyChainId\)[\s\S]*?setBuyChainId\(previousSellChainId\)/u);
 });

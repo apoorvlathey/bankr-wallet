@@ -57,12 +57,13 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
   const stagePlan = async () => {
     const { sellToken, buyTokenInfo } = options;
     if (!sellToken || !buyTokenInfo) return;
-    if (options.accountType === "impersonator") {
+    if (options.accountType === "ledger") {
       toast({
-        title: "View-only account",
-        description: "Impersonator accounts cannot send transactions",
-        status: "error",
-        duration: 3000,
+        title: "Ledger swap not available",
+        description:
+          "Use a swap dapp; WalletChan will show the normal Ledger confirmation.",
+        status: "info",
+        duration: 4000,
       });
       return;
     }

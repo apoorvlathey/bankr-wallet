@@ -60,13 +60,43 @@ function hasChecksumWarning(address: string): boolean {
   }
 }
 
+function estimatedShannonBits(value: string): number {
+  const counts = new Map<string, number>();
+  for (const character of value) {
+    counts.set(character, (counts.get(character) ?? 0) + 1);
+  }
+
+  let bitsPerCharacter = 0;
+  for (const count of counts.values()) {
+    const probability = count / value.length;
+    bitsPerCharacter -= probability * Math.log2(probability);
+  }
+  return bitsPerCharacter * value.length;
+}
+
+function hasRepeatedPattern(value: string): boolean {
+  const maxPatternLength = Math.min(32, Math.floor(value.length / 2));
+  for (let patternLength = 1; patternLength <= maxPatternLength; patternLength += 1) {
+    if (value.length % patternLength !== 0) continue;
+    let repeats = true;
+    for (let index = patternLength; index < value.length; index += 1) {
+      if (value[index] !== value[index % patternLength]) {
+        repeats = false;
+        break;
+      }
+    }
+    if (repeats) return true;
+  }
+  return false;
+}
+
 function isWeakNonce(nonce: string): boolean {
-  const uniqueRatio = new Set(nonce).size / nonce.length;
   return (
-    uniqueRatio < 0.45 ||
-    /^(test|demo|example)/i.test(nonce) ||
-    /^(0123456789|12345678|abcdefgh)/i.test(nonce) ||
-    /^(.)\1{4,}$/.test(nonce)
+    estimatedShannonBits(nonce) < 32 ||
+    /^(test|demo|example)/iu.test(nonce) ||
+    /^(0123456789|12345678|abcdefgh)/iu.test(nonce) ||
+    /(.)\1{4,}/u.test(nonce) ||
+    hasRepeatedPattern(nonce)
   );
 }
 

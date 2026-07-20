@@ -4,7 +4,9 @@ import { MidnightDotPulseLoader } from "@/components/MidnightDotPulseLoader";
 import { isDarkThemeId, useTheme } from "@/theme";
 
 interface ShapesLoaderProps {
+  color?: string;
   size?: string;
+  variant?: "adaptive" | "dots";
 }
 
 /**
@@ -68,10 +70,22 @@ function BauhausShapesLoader({
   );
 }
 
-export function ShapesLoader({ size = "10px" }: ShapesLoaderProps) {
+export function ShapesLoader({
+  color,
+  size = "10px",
+  variant = "adaptive",
+}: ShapesLoaderProps) {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const prefersReducedMotion = usePrefersReducedMotion();
+
+  if (variant === "dots") {
+    return (
+      <Box color={color ?? "currentColor"} display="flex">
+        <MidnightDotPulseLoader size={size} />
+      </Box>
+    );
+  }
 
   return isDarkTheme ? (
     <Box color="accent.primary" display="flex">

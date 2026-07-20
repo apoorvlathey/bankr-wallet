@@ -42,16 +42,8 @@ import {
   ScreenBody,
   ScreenSection,
 } from "@/components/ui";
-
-interface Account {
-  id: string;
-  type: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
-  address: string;
-  displayName?: string;
-  seedGroupId?: string;
-  derivationIndex?: number;
-}
-
+import type { Account } from "@/chrome/types";
+import { openLedgerSetupTab } from "@/app/ledgerSetupRoute";
 interface SeedGroup {
   id: string;
   name: string;
@@ -67,6 +59,7 @@ interface AddAccountProps {
 const accountTypeTitles: Record<AccountType, string> = {
   privateKey: "Private key",
   seedPhrase: "Seed phrase",
+  ledger: "Ledger",
   bankr: "Bankr API",
   impersonator: "View-only account",
 };
@@ -170,6 +163,10 @@ function AddAccount({
 
   const handleAccountTypeSelect = useCallback(
     async (type: AccountType) => {
+      if (type === "ledger") {
+        await openLedgerSetupTab();
+        return;
+      }
       if (type === "seedPhrase") {
         const access = await ensureMnemonicAccess();
         if (!access.ready && access.reason !== "legacy-upgrade-required") {
@@ -431,7 +428,6 @@ function AddAccount({
       />
     );
   }
-
   // Render the multi-select picker when the user opens an existing seed
   // group to derive more addresses.
   if (pickingGroupId && needsBiometricUpgrade === false) {

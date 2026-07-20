@@ -36,7 +36,6 @@ import {
   type EnsBrowsingSettings as Settings,
 } from "@/chrome/ensBrowsing/settingsStorage";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
-
 interface EnsBrowsingSettingsProps {
   onBack: () => void;
 }

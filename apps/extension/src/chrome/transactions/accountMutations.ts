@@ -23,6 +23,7 @@ import {
 } from "../storageLock";
 import type { Account } from "../types";
 import { addKeyToVault, removeKeyFromVault } from "../vaultCrypto";
+import { removeLedgerDeviceIfUnused } from "../ledger/storage";
 
 /** Adds one locally encrypted private-key account. */
 export async function handleAddPrivateKeyAccount(
@@ -142,6 +143,13 @@ export async function handleRemoveAccount(
             cachedVaultEntries.filter((entry) => entry.id !== accountId),
           );
         }
+      }
+      if (account.type === "ledger") {
+        clearNoncesForAddress(account.address);
+        await removeLedgerDeviceIfUnused(
+          account.deviceId,
+          expectedAuthEpoch,
+        );
       }
 
       if (seedGroupId) {

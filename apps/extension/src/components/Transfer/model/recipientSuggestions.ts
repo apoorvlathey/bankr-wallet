@@ -18,19 +18,20 @@ export function buildRecipientSuggestions(
   getPublicName: (address: string) => string | null = () => null,
 ): RecipientSuggestion[] {
   const query = queryValue.trim().toLowerCase();
-  if (!query) return [];
   const candidates: Array<RecipientSuggestion & { rank: number; order: number }> = [];
   const add = (candidate: RecipientSuggestion, order: number) => {
     const label = candidate.label.toLowerCase();
     const publicName = candidate.publicName?.toLowerCase() || "";
     const address = candidate.address.toLowerCase();
-    const rank = label.startsWith(query) || publicName.startsWith(query)
+    const rank = !query
       ? 0
-      : label.includes(query) || publicName.includes(query)
-        ? 1
-        : address.includes(query)
-          ? 2
-          : -1;
+      : label.startsWith(query) || publicName.startsWith(query)
+        ? 0
+        : label.includes(query) || publicName.includes(query)
+          ? 1
+          : address.includes(query)
+            ? 2
+            : -1;
     if (rank >= 0) candidates.push({ ...candidate, rank, order });
   };
   accounts.forEach((account, order) => add({
@@ -47,8 +48,8 @@ export function buildRecipientSuggestions(
     label: contact.label,
     publicName: getPublicName(contact.address),
   }, order));
-  return candidates
-    .sort((a, b) => a.rank - b.rank || (a.kind === b.kind ? a.order - b.order : a.kind === "wallet" ? -1 : 1))
-    .slice(0, limit)
+  const ranked = candidates
+    .sort((a, b) => a.rank - b.rank || (a.kind === b.kind ? a.order - b.order : a.kind === "wallet" ? -1 : 1));
+  return (query ? ranked.slice(0, limit) : ranked)
     .map(({ address, key, kind, label, publicName }) => ({ address, key, kind, label, publicName }));
 }

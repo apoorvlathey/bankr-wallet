@@ -12,6 +12,11 @@ This directory owns the extracted, audit-sized transaction concerns:
   authorization capture, and master/agent/Never-session key recovery.
 - `localExecution.ts` owns nonce/gas preparation, sign-once execution, the
   final pre-RPC account/transport/authority check, and receipt publication.
+- `impersonatedExecution.ts` owns the explicit per-RPC developer exception for
+  view-only accounts: pinned confirmation policy, standard unsigned
+  `eth_sendTransaction` projection, final endpoint/account/authority checks,
+  and ambiguity-aware result publication. It never calls provider admin or
+  signing methods.
 - `failure.ts`, `displayMetadata.ts`, and `notification.ts` isolate durable
   failure effects from best-effort enrichment and Chrome notifications.
 - `bankrPolicy.ts`, `bankrSession.ts`, `bankrConfirmation.ts`, and
@@ -22,7 +27,9 @@ This directory owns the extracted, audit-sized transaction concerns:
   address, wallet type, and chain before credentials are resolved.
 - `swaps/direct.ts` owns ordered multi-leg orchestration;
   `swaps/bankrLeg.ts` owns one ambiguity-aware remote leg and
-  `swaps/localBroadcast.ts` owns one final-account-checked local broadcast.
+  `swaps/localBroadcast.ts` owns one final-account-checked local broadcast;
+  `swaps/impersonated.ts` owns exact-endpoint-checked sequential
+  `eth_sendTransaction` submission for reviewed view-only swaps.
 - `swaps/batch.ts` owns Bankr ERC-7821 submission while `swaps/atomic.ts` owns
   PK/seed EIP-7702 + ERC-7821 submission. Shared public shapes are in
   `swaps/types.ts`.

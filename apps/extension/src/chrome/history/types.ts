@@ -1,15 +1,14 @@
 import type { TransactionParams } from "../bankr/submission";
 import type { Erc7715PermissionRevokeMeta } from "../requests/pendingTxStorage";
-
+import type { ForceInclusionMeta } from "./forceInclusionTypes";
+export type { ForceInclusionMeta } from "./forceInclusionTypes";
 export type TxStatus = "processing" | "pending" | "success" | "failed";
-
 export interface SwapMeta {
   sellTokenSymbol: string;
   sellTokenLogo: string | null;
   buyTokenSymbol: string;
   buyTokenLogo: string | null;
 }
-
 export interface TransferMeta {
   recipient: string;
   amount: string;
@@ -17,11 +16,9 @@ export interface TransferMeta {
   tokenLogo: string | null;
 }
 
-/**
- * Submission-time clear-signing snapshot. Activity can render the reviewed
- * intent without re-running decoders or remote name lookups. Keeping the
- * whole snapshot optional preserves entries released before clear signing.
- */
+/** Submission-time clear-signing snapshot. Activity can render the reviewed
+ * intent without re-running decoders or remote name lookups. Keeping the whole
+ * snapshot optional preserves entries released before clear signing. */
 export interface ClearSignedMeta {
   kind: "approve" | "transfer" | "nativeSend" | "erc7730";
   /** Formatted decimal amount; omitted for descriptor-only ERC-7730 calls. */
@@ -46,34 +43,8 @@ export interface ClearSignedMeta {
   contractName?: string;
 }
 
-/** Metadata for OP Stack deposits and Arbitrum delayed-inbox transactions. */
-export interface ForceInclusionMeta {
-  l1TxHash: string;
-  l1ChainId: number;
-  l2ChainId: number;
-  l2Confirmed?: boolean;
-  /** Missing on records released before protocol tagging; those are OP Stack. */
-  protocol?: "op-stack" | "arbitrum";
-  l2TxHash?: string;
-  inbox?: `0x${string}`;
-  bridge?: `0x${string}`;
-  sequencerInbox?: `0x${string}`;
-  messageIndex?: string;
-  messageBlockNumber?: string;
-  messageBlockHash?: `0x${string}`;
-  messageTimestamp?: string;
-  kind?: number;
-  sender?: `0x${string}`;
-  baseFeeL1?: string;
-  messageDataHash?: `0x${string}`;
-  forceDeadlineBlock?: string;
-  forceTransactionHash?: `0x${string}`;
-}
-
-/**
- * One ERC-20 transfer involving the observed account. Internal pool routing
- * is excluded by the parser before this public snapshot is persisted.
- */
+/** One ERC-20 transfer involving the observed account. Internal pool routing
+ * is excluded by the parser before this public snapshot is persisted. */
 export interface AssetTransferRecord {
   /** Lowercased token contract. */
   token: string;
@@ -88,8 +59,32 @@ export interface AssetTransferRecord {
   logoUrl?: string;
 }
 
+/** One confirmed ERC-721 or ERC-1155 transfer involving the observed account. */
+export interface NftTransferRecord {
+  /** Lowercased NFT contract. */
+  token: string;
+  direction: "in" | "out";
+  /** Lowercased other side of the transfer. */
+  counterparty: string;
+  standard: "erc721" | "erc1155";
+  tokenId: string;
+  /** ERC-721 is always 1; ERC-1155 preserves the emitted quantity. */
+  amount: string;
+  /** Resolved only in renderer memory; never persisted in transaction history. */
+  collectionName?: string;
+  symbol?: string;
+  metadata?: {
+    name?: string;
+    image?: string;
+  };
+  /** Renderer-only lazy metadata state; stripped by durable history compaction. */
+  metadataLoading?: boolean;
+}
+
 /** Post-confirm asset-change snapshot for one chain leg. */
 export interface AssetChangeRecord {
+  /** Additive receipt parser version; missing means the legacy ERC-20-only parser. */
+  version?: 2;
   /** Mined block number as a decimal string. */
   blockNumber: string;
   /**
@@ -98,6 +93,7 @@ export interface AssetChangeRecord {
    */
   nativeDelta?: string;
   erc20Transfers: AssetTransferRecord[];
+  nftTransfers?: NftTransferRecord[];
 }
 
 /** Source-chain bridge metadata with an optional settled destination leg. */
@@ -148,6 +144,8 @@ export interface CompletedTransaction {
   createdAt: number;
   completedAt?: number;
   txHash?: string;
+  calldataSelector?: string;
+  detailsIncomplete?: boolean;
   /** ERC-4337 operation hash while a token-funded transaction is pending. */
   userOperationHash?: string;
   /** Token used to settle gas through an ERC-4337 paymaster. */
@@ -156,7 +154,7 @@ export interface CompletedTransaction {
   broadcastUncertain?: boolean;
   error?: string;
   jobId?: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   functionName?: string;
   gasData?: GasData;
   swapMeta?: SwapMeta;
@@ -181,6 +179,5 @@ export interface CompletedTransaction {
   };
   /** Disable-delegation display snapshot committed only after receipt success. */
   erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
-  /** Stable account identity captured before any post-confirm side effects. */
   accountId?: string;
 }

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { fetchBridgeQuote } from "../../src/chrome/bridgeApi";
-import { fetchPortfolio } from "../../src/chrome/portfolio/api";
+import {
+  fetchPortfolio,
+  fetchPortfolioSummary,
+} from "../../src/chrome/portfolio/api";
 import { fetchSwapQuote } from "../../src/chrome/swapApi";
 
 test("wallet API egress is bounded, redirect-safe, and strips unsafe navigation metadata", async () => {
@@ -18,9 +21,9 @@ test("wallet API egress is bounded, redirect-safe, and strips unsafe navigation 
           tokens: [],
           totalValueUsd: 0,
           defiPositions: [
-            { protocol: "Safe", siteUrl: "https://safe.example/app" },
-            { protocol: "Bad", siteUrl: "javascript:alert(1)" },
-            { protocol: "Private", siteUrl: "https://127.0.0.1/admin" },
+            { protocol: "Safe", chainId: 8453, type: "app", name: "Safe", valueUsd: 0, assets: [], rewardAssets: [], siteUrl: "https://safe.example/app" },
+            { protocol: "Bad", chainId: 8453, type: "app", name: "Bad", valueUsd: 0, assets: [], rewardAssets: [], siteUrl: "javascript:alert(1)" },
+            { protocol: "Private", chainId: 8453, type: "app", name: "Private", valueUsd: 0, assets: [], rewardAssets: [], siteUrl: "https://127.0.0.1/admin" },
           ],
         }),
         { status: 200 },
@@ -48,6 +51,9 @@ test("wallet API egress is bounded, redirect-safe, and strips unsafe navigation 
     const portfolio = await fetchPortfolio(
       "0x0000000000000000000000000000000000000003",
     );
+    const summary = await fetchPortfolioSummary(
+      "0x0000000000000000000000000000000000000003",
+    );
 
     for (const request of requests) {
       assert.equal(request.init?.redirect, "error", request.url);
@@ -58,6 +64,8 @@ test("wallet API egress is bounded, redirect-safe, and strips unsafe navigation 
     assert.equal(portfolio.defiPositions[0].siteUrl, "https://safe.example/app");
     assert.equal(portfolio.defiPositions[1].siteUrl, undefined);
     assert.equal(portfolio.defiPositions[2].siteUrl, undefined);
+    assert.equal(summary.totalValueUsd, 0);
+    assert.ok(requests.some((request) => request.url.includes("summary=1")));
   } finally {
     globalThis.fetch = originalFetch;
   }

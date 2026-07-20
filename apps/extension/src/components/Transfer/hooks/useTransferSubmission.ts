@@ -22,7 +22,6 @@ interface UseTransferSubmissionOptions {
 export function useTransferSubmission({
   token,
   fromAddress,
-  accountType,
   resolvedAddress,
   tokenAmount,
   chainName,
@@ -83,16 +82,6 @@ export function useTransferSubmission({
 
   const submit = async (canSubmit: boolean) => {
     if (!canSubmit || !token) return;
-    if (accountType === "impersonator") {
-      toast({
-        title: "View-only account",
-        description: "Impersonator accounts cannot send transactions",
-        status: "error",
-        duration: 3000,
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       if (sponsored.isSponsoredFlow) {

@@ -9,11 +9,13 @@ import {
 } from "@/constants/chainRegistry";
 import { resolveChainIconMeta } from "@/lib/chainIcons";
 import { sanitizeCustomExplorerUrl } from "@/lib/externalNavigation";
+import { classifyPrivateNetworkHostname } from "@/lib/privateNetworkPolicy";
 
 export type ChainAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
+  | "ledger"
   | "impersonator";
 
 export interface ResolvedChain {
@@ -44,6 +46,7 @@ export const NETWORK_RPC_URLS_STORAGE_KEY = "networkRpcUrls";
 export interface SavedRpcEndpoint {
   url: string;
   name?: string;
+  allowImpersonatedTransactions?: true;
 }
 const CHAIN_BY_ID = new Map<number, ChainEntry>(
   CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]),
@@ -55,7 +58,16 @@ export function normalizeRpcUrl(value: unknown): string | null {
   if (!trimmed || trimmed.length > 2_048) return null;
 
   try {
-    const parsed = new URL(trimmed);
+    let parsed: URL | null = null;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      // Local node tools commonly print host:port without a URL scheme.
+    }
+    if (!parsed || (parsed.protocol !== "https:" && parsed.protocol !== "http:")) {
+      parsed = new URL(`http://${trimmed}`);
+      if (classifyPrivateNetworkHostname(parsed.hostname) === null) return null;
+    }
     if (
       (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
       parsed.username ||
@@ -63,7 +75,7 @@ export function normalizeRpcUrl(value: unknown): string | null {
     ) {
       return null;
     }
-    return trimmed.replace(/\/+$/, "");
+    return parsed.href.replace(/\/+$/, "");
   } catch {
     return null;
   }
@@ -94,13 +106,27 @@ export function normalizeSavedRpcEndpoints(
     if (!url) continue;
 
     const name = normalizeRpcEndpointName(endpoint.name) ?? undefined;
+    const allowImpersonatedTransactions =
+      (endpoint as { allowImpersonatedTransactions?: unknown })
+        .allowImpersonatedTransactions === true
+        ? true
+        : undefined;
     const existing = normalized.find((saved) => saved.url === url);
     if (existing) {
       if (!existing.name && name) existing.name = name;
+      if (allowImpersonatedTransactions) {
+        existing.allowImpersonatedTransactions = true;
+      }
       continue;
     }
 
-    normalized.push({ url, ...(name ? { name } : {}) });
+    normalized.push({
+      url,
+      ...(name ? { name } : {}),
+      ...(allowImpersonatedTransactions
+        ? { allowImpersonatedTransactions }
+        : {}),
+    });
     if (normalized.length === MAX_SAVED_RPC_URLS) break;
   }
 

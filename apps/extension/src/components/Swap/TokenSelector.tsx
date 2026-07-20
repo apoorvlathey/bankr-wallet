@@ -1,10 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import {
-  HStack,
-  Text,
-  Image,
-  Button,
-} from "@chakra-ui/react";
+import { HStack, Text, Image, Button } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenListEntry } from "@/chrome/swapApi";
@@ -15,9 +10,8 @@ import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import { TokenPickerContent } from "@/components/Swap/TokenPickerContent";
-
+import { TOKEN_PICKER_PAGE_SIZE } from "@/chrome/portfolio/consumerPolicy";
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-
 /** Popular token symbols per chain — same list as BuyTokenSelector so the
  *  buy/sell dropdowns offer parity. */
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
@@ -28,10 +22,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   137: ["POL", "USDC", "WETH"],
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
-
-/** Convert a static token-list entry into the PortfolioToken shape parents
- *  consume for the sell side. Tokens not in the user's holdings get a zero
- *  balance — the swap quote will still load against onchain balance. */
 function entryToPortfolioToken(
   t: TokenListEntry,
   chainId: number,
@@ -51,7 +41,6 @@ function entryToPortfolioToken(
     chainId,
   };
 }
-
 interface TokenSelectorProps {
   holdings: PortfolioToken[];
   tokenList: TokenListEntry[];
@@ -73,8 +62,6 @@ interface TokenSelectorProps {
   chainName?: string;
   /** Alignment of the token identity inside the trigger button. */
   triggerContentAlign?: "left" | "right";
-  /** @deprecated Kept for caller compatibility. The selector is now a
-   *  full-screen mobile destination, so trigger alignment no longer applies. */
   dropdownAlign?: "left" | "right";
   /** Holdings are still being fetched (portfolio API + onchain balances).
    *  When true and no holdings are present yet, the dropdown shows a spinner
@@ -84,7 +71,6 @@ interface TokenSelectorProps {
   isLoadingHoldings?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
 }
-
 export default function TokenSelector({
   holdings,
   tokenList,
@@ -105,14 +91,12 @@ export default function TokenSelector({
   const { networksInfo } = useNetworks();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [visibleCount, setVisibleCount] = useState(60);
+  const [visibleCount, setVisibleCount] = useState(TOKEN_PICKER_PAGE_SIZE);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const lastSubmittedRef = useRef("");
-
   const searchTerm = search.trim().toLowerCase();
   const excludeLower = excludeAddress?.toLowerCase();
-
   const closeDropdown = useCallback((restoreFocus = true) => {
     setIsOpen(false);
     setSearch("");
@@ -121,21 +105,18 @@ export default function TokenSelector({
       requestAnimationFrame(() => triggerRef.current?.focus());
     }
   }, [onOpenChange]);
-
   const handleTriggerClick = () => {
     setIsOpen(true);
     onOpenChange?.(true);
   };
-
   useEffect(() => {
     if (isOpen) {
-      setVisibleCount(60);
+      setVisibleCount(TOKEN_PICKER_PAGE_SIZE);
       lastSubmittedRef.current = "";
       const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
       return () => window.clearTimeout(focusTimer);
     }
   }, [isOpen]);
-
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -149,7 +130,7 @@ export default function TokenSelector({
   }, [closeDropdown, isOpen]);
 
   useEffect(() => {
-    setVisibleCount(60);
+    setVisibleCount(TOKEN_PICKER_PAGE_SIZE);
   }, [searchTerm]);
 
   // Auto-resolve when a valid address is typed/pasted
@@ -222,6 +203,10 @@ export default function TokenSelector({
     () => filteredRest.slice(0, visibleCount),
     [filteredRest, visibleCount],
   );
+  const visibleHoldings = useMemo(
+    () => filteredHoldings.slice(0, visibleCount),
+    [filteredHoldings, visibleCount],
+  );
 
   // Popular tokens: ordered per-chain list, matched against holdings + token
   // list, with native token pinned to our canonical icon.
@@ -279,17 +264,14 @@ export default function TokenSelector({
     return result;
   }, [tokenList, holdings, excludeLower, searchTerm, chainId, networksInfo]);
 
-  // Batched logo cache — drops a single hook call instead of one per row, and
-  // gives visible rows the same data-URL cache used by the rest of the UI.
-  // Keep the closed trigger cheap: cache only the selected-token chip until
-  // the dropdown opens, then warm logos for the rows actually rendered.
+  // Keep the closed trigger cheap, then warm only currently rendered rows.
   const cachedLogoMap = useCachedAvatarMap(
     useMemo(() => {
       const urls: Array<string | null | undefined> = [];
       if (selectedToken?.logoUrl) urls.push(selectedToken.logoUrl);
       if (!isOpen) return urls;
 
-      for (const h of filteredHoldings) urls.push(h.logoUrl);
+      for (const h of visibleHoldings) urls.push(h.logoUrl);
       for (const t of popularTokens) urls.push(t.logoUrl);
       for (const t of visibleRest) urls.push(t.logoURI);
       if (resolvedCustomToken?.logoUrl) urls.push(resolvedCustomToken.logoUrl);
@@ -297,7 +279,7 @@ export default function TokenSelector({
     }, [
       selectedToken?.logoUrl,
       isOpen,
-      filteredHoldings,
+      visibleHoldings,
       popularTokens,
       visibleRest,
       resolvedCustomToken?.logoUrl,
@@ -384,10 +366,15 @@ export default function TokenSelector({
             onSearchChange={setSearch}
             onBack={() => closeDropdown()}
             popularTokens={popularTokens}
-            filteredHoldings={filteredHoldings}
+            visibleHoldings={visibleHoldings}
             visibleRest={visibleRest}
-            remainingRestCount={Math.max(0, filteredRest.length - visibleRest.length)}
-            onShowMore={() => setVisibleCount((count) => count + 60)}
+            remainingTokenCount={
+              Math.max(0, filteredHoldings.length - visibleHoldings.length) +
+              Math.max(0, filteredRest.length - visibleRest.length)
+            }
+            onShowMore={() =>
+              setVisibleCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
+            }
             onSelectHolding={handleSelectHolding}
             onSelectListEntry={handleSelectListEntry}
             onSelectPortfolio={handleSelectPortfolio}

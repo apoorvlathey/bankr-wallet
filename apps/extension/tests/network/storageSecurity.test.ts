@@ -37,6 +37,9 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
     const { addNetworkIfMissing, updateNetworkEntry } = await import(
       "../../src/chrome/network/networkMutations"
     );
+    const { allowsImpersonatedTransactions } = await import(
+      "../../src/chrome/network/impersonatedRpcPolicy"
+    );
     const base = {
       chainId: 12345,
       rpcUrl: "https://rpc.example/",
@@ -62,6 +65,9 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
     const valid = await addNetworkIfMissing({
       chainName: "Safe custom chain",
       entry: base,
+      rpcEndpoints: [
+        { url: base.rpcUrl, allowImpersonatedTransactions: true },
+      ],
     });
     assert.equal(valid.success, true);
     if (valid.success) {
@@ -94,7 +100,13 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
         ...base,
         rpcUrl: "https://backup-rpc.example",
       },
-      rpcUrls: ["https://rpc.example", "https://backup-rpc.example"],
+      rpcEndpoints: [
+        {
+          url: "https://rpc.example",
+          allowImpersonatedTransactions: true,
+        },
+        { url: "https://backup-rpc.example" },
+      ],
     });
     assert.equal(switched.success, true);
     if (switched.success) {
@@ -108,13 +120,46 @@ test("custom network storage rejects unsafe or malformed metadata", async () => 
       (
         local.networkRpcUrls as Record<
           string,
-          Array<{ url: string; name?: string }>
+          Array<{
+            url: string;
+            name?: string;
+            allowImpersonatedTransactions?: true;
+          }>
         >
       )["12345"],
       [
         { url: "https://backup-rpc.example" },
-        { url: "https://rpc.example" },
+        {
+          url: "https://rpc.example",
+          allowImpersonatedTransactions: true,
+        },
       ],
+    );
+    assert.equal(
+      await allowsImpersonatedTransactions(
+        12345,
+        "https://backup-rpc.example",
+      ),
+      false,
+      "an inactive endpoint flag cannot authorize the selected RPC",
+    );
+
+    const selectedDevelopmentRpc = await updateNetworkEntry({
+      chainName: "Safe custom chain",
+      nextChainName: "Safe custom chain",
+      entry: base,
+      rpcEndpoints: [
+        {
+          url: "https://rpc.example",
+          allowImpersonatedTransactions: true,
+        },
+        { url: "https://backup-rpc.example" },
+      ],
+    });
+    assert.equal(selectedDevelopmentRpc.success, true);
+    assert.equal(
+      await allowsImpersonatedTransactions(12345, "https://rpc.example"),
+      true,
     );
 
     const remotePrivate = await addNetworkIfMissing({

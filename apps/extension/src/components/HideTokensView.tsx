@@ -16,6 +16,11 @@ import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { recordSnapshot } from "@/chrome/portfolio/snapshotStorage";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import {
+  MANAGE_PORTFOLIO_TOKEN_LIMIT,
+  TOKEN_PICKER_PAGE_SIZE,
+  selectPortfolioTokensForInteraction,
+} from "@/chrome/portfolio/consumerPolicy";
+import {
   getHiddenPortfolioTokens,
   getPortfolioTokenKey,
   hidePortfolioTokens,
@@ -68,23 +73,23 @@ function isHideableToken(token: PortfolioToken): boolean {
 
 async function loadHideTokenData(address: string) {
   const [catalog, hiddenTokens] = await Promise.all([
-    loadPortfolioTokenCatalog(address),
+    loadPortfolioTokenCatalog(address, { enrich: false }),
     getHiddenPortfolioTokens(),
   ]);
 
-  let displayTokens = catalog.tokens.filter((token) => {
+  const manageableTokens = selectPortfolioTokensForInteraction(
+    catalog.tokens,
+    new Set([...catalog.customTokenKeys, ...catalog.recentReceivedTokenKeys]),
+    MANAGE_PORTFOLIO_TOKEN_LIMIT,
+  );
+  let displayTokens = manageableTokens.filter((token) => {
     return parseFloat(token.balance || "0") > 0;
   });
-  let totalValueUsd = catalog.totalValueUsd;
+  const totalValueUsd = catalog.totalValueUsd;
 
   try {
-    const onchain = await fetchOnchainBalances(address, catalog.tokens);
-    const defiTotal = (catalog.defiPositions || []).reduce(
-      (sum, position) => sum + position.valueUsd,
-      0,
-    );
+    const onchain = await fetchOnchainBalances(address, manageableTokens);
     displayTokens = onchain.tokens;
-    totalValueUsd = onchain.totalValueUsd + defiTotal;
   } catch {
     displayTokens.sort((a, b) => b.valueUsd - a.valueUsd);
   }
@@ -109,6 +114,7 @@ export default function HideTokensView({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(TOKEN_PICKER_PAGE_SIZE);
 
   const loadData = useCallback(
     async (options: { showLoading?: boolean; forceSnapshot?: boolean } = {}) => {
@@ -120,6 +126,7 @@ export default function HideTokensView({
       try {
         const data = await loadHideTokenData(address);
         setTokens(data.tokens);
+        setVisibleCount(TOKEN_PICKER_PAGE_SIZE);
         setHiddenCount(data.hiddenCount);
         setSelectedKeys((prev) => {
           const available = new Set(
@@ -150,12 +157,16 @@ export default function HideTokensView({
     void loadData();
   }, [loadData]);
 
+  const visibleTokens = useMemo(
+    () => tokens.slice(0, visibleCount),
+    [tokens, visibleCount],
+  );
   const tokenKeys = useMemo(
     () =>
-      tokens.map((token) =>
+      visibleTokens.map((token) =>
         getPortfolioTokenKey(token.chainId, token.contractAddress),
       ),
-    [tokens],
+    [visibleTokens],
   );
   const selectedTokens = useMemo(
     () =>
@@ -166,10 +177,11 @@ export default function HideTokensView({
       ),
     [selectedKeys, tokens],
   );
-  const allSelected = tokens.length > 0 && selectedKeys.size === tokens.length;
+  const selectedVisibleCount = tokenKeys.filter((key) => selectedKeys.has(key)).length;
+  const allSelected = tokenKeys.length > 0 && selectedVisibleCount === tokenKeys.length;
   const someSelected = selectedKeys.size > 0 && !allSelected;
 
-  const logoMap = useCachedAvatarMap(tokens.map((token) => token.logoUrl));
+  const logoMap = useCachedAvatarMap(visibleTokens.map((token) => token.logoUrl));
 
   const toggleToken = (key: string) => {
     setSelectedKeys((prev) => {
@@ -181,7 +193,14 @@ export default function HideTokensView({
   };
 
   const toggleAll = () => {
-    setSelectedKeys(allSelected ? new Set() : new Set(tokenKeys));
+    setSelectedKeys((previous) => {
+      const next = new Set(previous);
+      for (const key of tokenKeys) {
+        if (allSelected) next.delete(key);
+        else next.add(key);
+      }
+      return next;
+    });
   };
 
   const handleHideSelected = async () => {
@@ -307,11 +326,11 @@ export default function HideTokensView({
                   </ListItemDescription>
                 </ListItemContent>
                 <ListItemMeta whiteSpace="nowrap">
-                  {selectedKeys.size}/{tokens.length}
+                  {selectedVisibleCount}/{visibleTokens.length}
                 </ListItemMeta>
               </ListItem>
 
-              {tokens.map((token) => {
+              {visibleTokens.map((token) => {
                 const key = getPortfolioTokenKey(
                   token.chainId,
                   token.contractAddress,
@@ -332,6 +351,21 @@ export default function HideTokensView({
                   />
                 );
               })}
+
+              {visibleTokens.length < tokens.length && (
+                <Box as="li" listStyleType="none" py={2} textAlign="center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setVisibleCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
+                    }
+                  >
+                    Show more tokens
+                  </Button>
+                </Box>
+              )}
             </ListSurface>
           )}
         </ScreenSection>

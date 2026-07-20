@@ -2,12 +2,15 @@
 
 ## Overview
 
-WalletChan is a browser extension that supports four account types:
+WalletChan is a browser extension that supports five account types:
 
 1. **Bankr API Accounts** - AI-powered wallets that execute transactions through the Bankr API
 2. **Private Key Accounts** - Standard wallets with local key storage for transaction signing
 3. **Seed Phrase Accounts** - BIP39/BIP44 groups whose derived keys sign locally
-4. **Impersonator Accounts** - View-only addresses that cannot sign or send
+4. **Ledger Accounts** - Hardware-backed accounts that sign on a connected Ledger in Chromium
+5. **Impersonator Accounts** - View-only addresses that cannot sign; a
+   per-RPC developer opt-in may submit their reviewed transactions to a fork
+   node with `eth_sendTransaction`
 
 This document describes the core architecture and transaction handling implementation.
 
@@ -16,6 +19,7 @@ This document describes the core architecture and transaction handling implement
 - [SECURITY.md](./SECURITY.md) - Security audit guide, threat model, and pre-commit checklists
 - [SECURITY_ARCHITECTURE.md](./SECURITY_ARCHITECTURE.md) - Audit map, critical module boundaries, and safe refactor sequence
 - [PK_ACCOUNTS.md](./PK_ACCOUNTS.md) - Private key accounts implementation (security, signing, storage)
+- [LEDGER.md](./LEDGER.md) - Ledger WebHID/offscreen architecture, storage, signing, and support boundaries
 - [CHAT.md](./CHAT.md) - Chat feature implementation (AI conversations with Bankr agent)
 - [CALLDATA.md](./CALLDATA.md) - Calldata decoder UI (rich param components, type routing, unit conversion)
 - [STYLING.md](./STYLING.md) - Token vocabulary, theme authoring rules, design system
@@ -193,15 +197,76 @@ the restraint rules in `_docs/WARM_MIDNIGHT.md`.
   estimate refreshes for the resolved recipient or calldata; ERC-20 MAX remains
   the full token balance.
 
-The extension supports four distinct account types that can be used simultaneously:
+The extension supports five distinct account types that can be used simultaneously:
 
-| Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Impersonator Account    |
-| --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | ----------------------- |
-| Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | ❌ Disabled (view-only) |
-| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ❌ Disabled (view-only) |
-| Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | No secrets stored       |
-| Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Address only            |
-| Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Viewing portfolio/dApps |
+| Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Ledger Account                         | Impersonator Account    |
+| --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | -------------------------------------- | ----------------------- |
+| Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | Device signing + RPC broadcast         | Fork RPC only, per-endpoint opt-in |
+| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ✅ Personal sign + EIP-712             | ❌ Disabled (view-only) |
+| Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | Keys remain on device; public metadata only | No secrets stored       |
+| Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only            |
+| Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps |
+
+### Ledger Architecture
+
+- **Browser boundary:** Ledger setup and signing require Chromium with WebHID
+  and `chrome.offscreen` (Chrome 124+). Firefox keeps all non-Ledger wallet
+  behavior but does not advertise Ledger setup.
+- **Setup surface:** selecting Ledger from a popup or side panel opens the
+  dedicated `index.html?route=add-ledger` full-tab route. A side-panel launcher
+  closes through the shared side-panel control after the tab opens. The route
+  persists across unlock and takes priority over normal pending-request startup
+  routing.
+- **First-account onboarding:** Chromium onboarding already runs in a full
+  extension tab, so Ledger appears after View-only in the initial account list.
+  The shared Ledger flow pairs and scans there, retains only selected public
+  device/path metadata in renderer state, then defers `addLedgerAccounts` until
+  the master credential has been initialized inside the rollback-safe
+  onboarding transaction. Unsupported browsers do not advertise the option.
+- **Permission gesture:** the full-tab `components/Ledger/AddLedgerFlow.tsx`
+  calls `navigator.hid.requestDevice()` only from the Connect button's user
+  gesture. Popup and side-panel contexts never request WebHID permission.
+- **Transport isolation:** `chrome/ledger/offscreenBridge.ts` lazily creates
+  `offscreen.html`; `src/offscreen/ledgerSigner.ts` owns the Ledger SDK and
+  WebHID session. Its message listener authorizes the exact extension ID and
+  service-worker script URL before dispatch, rejecting UI/content-script and
+  URL-lookalike senders. The document closes after 30 seconds idle.
+- **Device binding:** the stable device identity is the lowercase address at
+  `m/44'/60'/0'/0/0`. Every scan/sign session re-derives and checks it before
+  using the connected device.
+- **Persistence:** Ledger accounts extend public `accounts` metadata with
+  `deviceId`, `hdPath`, and `hdIndex`. `ledgerDevices` stores only public label,
+  model, and creation metadata; no hardware secret enters extension storage.
+  Account/device persistence is the import commit boundary; active-account
+  selection is best-effort after commit and cannot turn a successful import
+  into a false failure.
+- **Authority:** adding Ledger accounts requires a live master session. Signing
+  works under master or agent sessions and retains the normal pinned-account,
+  origin/WalletConnect, reset lease, signer-recovery, history, and receipt gates.
+- **Hardware-wait boundary:** transaction and signature rows remain pending
+  while the Ledger device is waiting for approval, so the request review stays
+  mounted. The UI shows a Ledger action banner with the branded black logo tile
+  and dark trailing spinner, changes the primary action to a dark three-dot `Waiting`
+  state, and keeps the broadcast-only submitting banner hidden. Approval, gas,
+  queue, rejection, and warning-override controls are locked, while Back remains
+  available and only navigates away from the still-active request. The background
+  first-action claim independently rejects competing edits or terminal actions.
+  A transaction moves into processing history only
+  after the recovered hardware signature reaches the final pre-broadcast
+  callback; a message request is removed only after final authorization passes.
+  Safe device/preparation failures therefore leave the request available for a
+  deliberate retry instead of creating a failed Activity row.
+- **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches,
+  EIP-7702/ERC-7715 authority, ERC-4337 token-funded gas (including addresses
+  already delegated to WalletChan), force inclusion, sponsored transfers, and
+  the direct in-extension swap shortcut. A dapp swap that submits one normal
+  transaction uses the supported single-transaction path.
+
+Wallet-UI messages `ledgerConnect`, `ledgerScan`, `ledgerCancel`,
+`addLedgerAccounts`, and `getLedgerDevices` are handled by
+`background/ledgerRouter.ts`. A pinned Ledger transaction confirms through
+`confirmTransactionAsyncLedger`; Ledger signatures branch inside the existing
+trusted `confirmSignatureRequest` route.
 
 ### Seed Phrase Architecture
 
@@ -233,7 +298,8 @@ When importing a seed phrase whose derived address matches an existing private k
 
 ### Account Selection
 
-- Users can configure one or both account types during onboarding
+- Users can configure supported account types during onboarding and add Ledger
+  or view-only accounts later from Account Settings
 - When both accounts are set up, the first account added becomes the default active account
 - Only tabs whose current origin has an approved dapp connection (or an active
   connection prompt) maintain an account selection in `tabAccounts`. Their
@@ -301,6 +367,11 @@ The extension maintains address consistency between storage and the active accou
   invalidating the request
   refreshes the badge.
 - Account switches remain visible to an approved origin through `accountsChanged`; unapproved origins receive no account-change event. Revocation sends `accountsChanged([])` to matching open tabs.
+- The page-world provider exposes a getter-only MetaMask-compatible
+  `selectedAddress` for legacy dapps that do not re-read `eth_accounts`. It is
+  derived from the same origin-scoped provider state: `null` before approval
+  and after an empty account result or revocation, otherwise the currently
+  authorized account. The synced/global wallet fallback is never projected.
 - Account removal uses the same exact-origin revocation path before deleting a
   mapped account, so it disconnects affected sites instead of exposing the next
   global account as an implicit replacement.
@@ -491,11 +562,12 @@ Built-in chain metadata and user-customized chain state are intentionally split:
 
 - `src/constants/chainRegistry.ts` defines the canonical built-in chains and all derived static maps. Each entry also owns an ID-only `testnetChainIds` array; custom-added networks matching one of those IDs reuse the mainnet entry's local icon/colors while retaining the testnet overlay, without bundling duplicate testnet RPC/explorer/currency metadata.
 - `chrome.storage.sync.networksInfo` stores runtime overrides only: the active `rpcUrl`, hidden flags, and user-added custom chains. Every runtime RPC consumer continues to resolve only `rpcUrl`. Built-in-chain RPC selection/add/edit/remove actions autosave through the validated `updateNetwork` route, while custom-chain name, chain ID, endpoint, explorer, and currency changes remain staged until Save changes. Changing a custom chain ID re-keys its `networkRpcUrls` history in the service-worker mutation so saved endpoints remain attached to that network.
-- `chrome.storage.local.networkRpcUrls` stores the optional Settings-only endpoint history as a decimal-chain-ID keyed record of `{ url, name? }` objects. Each list is deduplicated by URL and limited to ten endpoints; names are display-only and bounded to 64 characters. The repository still decodes the released `string[]` shape, so metadata is upgraded lazily on the next successful save. Keeping this auxiliary data local avoids expanding the quota-constrained synced `networksInfo` item.
+- `chrome.storage.local.networkRpcUrls` stores the optional Settings-only endpoint history as a decimal-chain-ID keyed record of `{ url, name?, allowImpersonatedTransactions? }` objects. Each list is deduplicated by URL and limited to ten endpoints; names are display-only and bounded to 64 characters. The boolean developer flag is opt-in and belongs to that exact endpoint, not the chain. The repository still decodes the released `string[]` shape, so metadata is upgraded lazily on the next successful save. Keeping this auxiliary data local avoids expanding the quota-constrained synced `networksInfo` item.
 - `src/lib/chains.ts` is the required merge layer for runtime code. It normalizes `networksInfo`, keeps built-in chains keyed by their registry name, and exposes helpers like `getVisibleChains`, `getResolvedChainById`, and `getStoredRpcUrl`
 - `src/chrome/network/networkRepository.ts` alone reads and writes `networksInfo`/`chainName`; `rpcHistoryRepository.ts` owns `networkRpcUrls`; and `networkMutations.ts` owns locked service-worker mutations and composes pure `customNetworkValidation.ts` and `networkPolicy.ts`. Every saved endpoint URL and optional name is validated before persistence. Missing history is the normal legacy shape and Edit Network resolves it as a one-item list containing the active `rpcUrl`, so no eager migration is required. Settings UI and dapp `wallet_addEthereumChain` confirmations call extension-only background messages (`addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain`) instead of writing a full popup snapshot back to storage.
 - `src/chrome/network/rpcClient.ts` is the final configured-RPC egress boundary. Direct JSON-RPC calls and every viem HTTP transport are request/streamed-response/timeout/concurrency bounded; the viem adapter also pins the validated URL against request-hook retargeting. All paths reject redirects and omit ambient credentials/referrers. New public RPC writes require HTTPS, while existing synced public-HTTP entries remain readable for upgrade compatibility and local/private Settings RPCs may use HTTP. URL userinfo and non-HTTP(S) schemes fail closed even when malformed legacy sync state reaches a read path.
-- Remote dapps cannot propose or proxy a private-network RPC unless the dapp is itself local: loopback dapps may use loopback RPCs, while LAN dapps are restricted to another port on the exact same hostname. Settings remains the explicit escape hatch for user-owned localhost/LAN RPC development.
+- Remote dapps cannot propose or proxy a private-network RPC unless the dapp is itself local: loopback dapps may use loopback RPCs, while LAN dapps are restricted to another port on the exact same hostname. Settings remains the explicit escape hatch for user-owned localhost/LAN RPC development and accepts local host-and-port shorthand such as `localhost:8545`, canonicalizing it to HTTP before probing and storage.
+- Edit Network exposes `This RPC allows sending txs from impersonated accounts` inside each endpoint's Add/Edit form, and manual Add Network exposes the same developer option under Advanced details. Send and Swap remain visible for impersonator accounts and stage their normal review screens. Without the selected endpoint's opt-in, confirmation stays disabled/reject-only. When enabled, a pinned single transaction or each reviewed sequential built-in-swap leg uses the standard `eth_sendTransaction` object (`from`, optional `to`, `data`, `value`, and reviewed gas fields) without a signature. The same exact selected-endpoint opt-in admits the existing bounded read-only provider proxy methods against that private RPC so dapp gas estimation and other transaction preflight can complete; it does not expand the proxy method allowlist. The fork RPC must already unlock or impersonate that address (for example Anvil auto/manual impersonation or a Tenderly Virtual TestNet admin RPC). The background rechecks the pinned account, active RPC, exact endpoint flag, provider authorization when applicable, and reset/effect lease at the irreversible boundary; endpoint changes are serialized against submission. Signatures, ERC-5792/cross-dapp batches, fee-token gas, EIP-7702/ERC-7715 authority, and normal public-RPC impersonator sends remain blocked.
 - Custom explorer navigation is normalized separately from RPC configuration. Dapp proposals require public HTTPS. Settings may additionally retain explicit loopback HTTP(S) for local development; unsafe legacy explorer values are ignored rather than rendered.
 - `src/contexts/NetworksContext.tsx` is a read-through mirror: it initializes via `ensureNetworksInfo` and subscribes to `chrome.storage.onChanged` for `networksInfo`, so long-lived sidepanels pick up chains added by other extension flows.
 - Registry entries may set `hiddenByDefault: true`. The default is applied only when that built-in chain has no stored `networksInfo` entry, so newly introduced low-usage chains do not trigger homepage balance RPC calls until enabled, while an existing user visibility choice remains authoritative. Blast, Mantle, Mode, Scroll, and Sonic currently use this default.
@@ -562,7 +634,7 @@ bounded candidates when Multicall3 is unavailable.
 
 ### Per-Account-Type Chain Restrictions
 
-Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Robinhood Chain, and Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). The remaining built-ins are available for PK, Seed Phrase, and Impersonator accounts only. PK / Seed / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains.
+Not all chains are supported by all account types. The Bankr API only supports a subset of built-in chains (currently Ethereum, Arbitrum, Base, BNB Chain, Polygon, Robinhood Chain, and Unichain — see `isBankrSupported: true` in `chainRegistry.ts`). The remaining built-ins are available for PK, Seed Phrase, Ledger, and Impersonator accounts. PK / Seed / Ledger / Impersonator accounts can additionally add arbitrary custom EVM chains via Settings → Chains; Bankr accounts cannot use custom chains. Ledger still applies the execution exclusions documented above.
 
 **Constants** (derived from `src/constants/chainRegistry.ts`, re-exported via `src/constants/networks.ts`):
 
@@ -1041,12 +1113,14 @@ src/
 │   │   └── erc20CandidatePreflight.ts # Multicall3 filter and metadata cache
 │   ├── portfolio/           # Portfolio display-state audit domain (see README.md)
 │   │   ├── api.ts           # Bounded provider-agnostic portfolio client
+│   │   ├── responsePolicy.ts # Runtime schema and portfolio working-set ceilings
 │   │   ├── tokenCatalog.ts  # Shared API/custom/recent/native merge coordinator
 │   │   ├── catalogTransforms.ts # Pure metadata and visibility transforms
 │   │   ├── onchainBalances.ts # Onchain balance verification via Multicall3
 │   │   ├── hiddenTokens.ts  # Global hidden-token storage for Holdings
 │   │   ├── recentTokens.ts  # Short-lived received-token overlay
 │   │   ├── holdingsCache.ts # Best-effort Holdings first-paint cache
+│   │   ├── holdingsCachePolicy.ts # Pure cache validation/LRU/byte policy
 │   │   ├── snapshotStorage.ts # Per-address portfolio value snapshots
 │   │   ├── snapshotRefresh.ts # Catalog → onchain → forced snapshot refresh
 │   │   ├── coingeckoState.ts # Shared price cache and rate-limit state
@@ -1091,6 +1165,7 @@ src/
 │   │   └── status.ts       # Trusted-UI recovery and acknowledgment
 │   ├── txHistoryStorage.ts  # Stable transaction-history compatibility facade
 │   ├── assetChangesExtractor.ts # Stable post-confirm enrichment facade
+│   ├── history/nftTransferMetadata.ts # Confirmed NFT collection/token metadata enrichment
 │   ├── receiptEnrichment.ts # Stable receipt retry/backfill facade
 │   ├── history/             # Transaction history and receipt enrichment audit domain
 │   │   ├── types.ts         # Released additive txHistory record shape
@@ -1255,16 +1330,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 The onboarding flow varies based on account type selection:
 
-**Step 0: Welcome Screen**
-
-- Bankr logo + branding
-- "Welcome to Bankr Wallet" heading
-- "Get Started" button
-
 **Step 1: Account Type Selection**
 
-- Choose: Bankr Wallet, Private Key, Seed Phrase, or Impersonator
-- Can select multiple account types to set up
+- Choose one initial account in this order: Seed Phrase, Private Key,
+  View-only, or Bankr API
+- Additional account types can be added later from Settings
+- The full-page layout keeps Choose account, Add details, and Secure wallet
+  visible in a persistent desktop progress rail
 
 **Step 2a: Bankr Setup** (if Bankr or both selected)
 
@@ -1285,14 +1357,17 @@ The onboarding flow varies based on account type selection:
 - Uses `SeedPhraseSetup` component (import existing or generate new 12-word mnemonic)
 - Display name (optional) for the first derived account
 
-**Step 2d: Impersonator Setup** (if Impersonator selected)
+**Step 2d: View-only Setup** (if View-only selected)
 
-- Address input (view-only, no secrets stored)
+- Address or supported name input (view-only, no signing key stored)
 - Display name (optional)
+- The same master-password vault is initialized with the non-Bankr sentinel so
+  the account-management authorization model remains consistent
 
 **Step 3: Create Password**
 
-- Password + Confirm password fields (min 6 chars)
+- Password + Confirm password fields (shared 8-character minimum,
+  256-character maximum, and common-password rejection policy)
 - Security warning about password recovery
 
 **Step 4: Success**
@@ -1829,8 +1904,9 @@ TTLs, pinned-token precedence, and approval calldata. See
 Price and firm quote reads use the fixed WalletChan swap proxy through
 `network/boundedHttp.ts`: GET only, redirects rejected, ambient credentials and
 referrers omitted, a 15-second deadline, and a 2 MiB response ceiling. Token
-catalog responses use the same deadline with an 8 MiB ceiling; token-price
-responses use 10 seconds and 64 KiB. Invalid JSON and non-object top-level
+catalog responses use the same deadline with a 2 MiB ceiling and a strict
+2,000-entry runtime codec before cache or UI release; token-price responses use
+10 seconds and 64 KiB. Invalid JSON and non-object top-level
 responses retain distinct released errors, and remote error/reason strings are
 truncated to 1,000 characters.
 
@@ -2173,6 +2249,10 @@ raw-message block.
 
 1. EIP-4361 required structure and field ordering
 2. Domain, address, URI, version, chain ID, nonce, and RFC 3339 timestamps
+   - Nonce warnings use a 32-bit estimated-entropy floor plus explicit common,
+     sequential, repeated-run, and repeated-pattern checks. Long random hex
+     values are evaluated by their distribution rather than a length-dependent
+     unique-character ratio.
 3. Expiration / not-before timing
 4. Message domain ↔ URI host consistency
 5. Connected site origin, connected chain, and signing account match. For
@@ -2339,13 +2419,21 @@ The same path covers ERC-5792 batched txs because the ERC-7821 wrapper is itself
 
 ### Post-confirm Asset Changes Extraction
 
-After a tx confirms successfully, the receipt path fires-and-forgets `extractAndStoreAssetChanges` through the stable `chrome/assetChangesExtractor.ts` facade. The implementation is split under `chrome/history/`: pure Transfer-log parsing, bounded receipt/balance RPC helpers, asset-change assembly, recent-token/history persistence, and delayed receipt/backfill policy are independently auditable (see `chrome/history/README.md`). Most txs flow through `applyReceiptToHistory` (in `forceInclusion/receiptPoller.ts`). Bankr direct-success paths (`transactions/bankrProcessing.ts`, `transactions/swaps/bankrLeg.ts`, `batch/batchBankrExecution.ts`, and `crossDappBatch/completion.ts`) use the stable `receiptEnrichment.ts` facade to retry `eth_getTransactionReceipt` asynchronously, because Bankr can return `success` before the user's configured RPC has indexed the receipt. For ERC-5792 responses, an immediately available raw receipt is converted to the sanitized `BundleReceipt` shape before storing it for `wallet_getCallsStatus`, while the raw receipt is kept for internal extraction. `TxDetailModal` also sends the extension-only `backfillAssetChanges` message when a confirmed history entry has a `txHash` but no `assetChanges`, so old entries and service-worker-interrupted retries can repair themselves on open. The extractor:
+After a tx confirms successfully, the receipt path fires-and-forgets `extractAndStoreAssetChanges` through the stable `chrome/assetChangesExtractor.ts` facade. The implementation is split under `chrome/history/`: pure ERC-20/ERC-721/ERC-1155 Transfer-log parsing, bounded receipt/balance RPC helpers, asset-change assembly, recent-token/history persistence, and delayed receipt/backfill policy are independently auditable (see `chrome/history/README.md`). Most txs flow through `applyReceiptToHistory` (in `forceInclusion/receiptPoller.ts`). Bankr direct-success paths (`transactions/bankrProcessing.ts`, `transactions/swaps/bankrLeg.ts`, `batch/batchBankrExecution.ts`, and `crossDappBatch/completion.ts`) use the stable `receiptEnrichment.ts` facade to retry `eth_getTransactionReceipt` asynchronously, because Bankr can return `success` before the user's configured RPC has indexed the receipt. For ERC-5792 responses, an immediately available raw receipt is converted to the sanitized `BundleReceipt` shape before storing it for `wallet_getCallsStatus`, while the raw receipt is kept for internal extraction. `TxDetailModal` also sends the extension-only `backfillAssetChanges` message when a confirmed history entry has a `txHash` but no current-version `assetChanges`, so old entries, legacy ERC-20-only snapshots, and service-worker-interrupted retries can repair themselves on open. The extractor:
 
 1. Decodes the receipt's `logs[]` for ERC-20 `Transfer(from, to, amount)` events (topic0 = `0xddf252ad…`, exactly 3 topics — ERC-721 logs have 4 and are skipped naturally) where the lowercased `from` OR `to` matches the sender. Internal pool routing is filtered out.
 2. Resolves `symbol/decimals/logoUrl` per unique token via `tokenMetadata.ts`, which shares swap-list, Bungee-list, watched-asset, and hardcoded-logo fallbacks.
 3. Computes the sender's pure native-value flow as `balance(blockNumber) - balance(blockNumber-1) + gasCost`, where `gasCost = gasUsed * effectiveGasPrice + (l1Fee || 0)`. The historical-balance call retries up to 3× with 2s backoff to absorb load-balanced RPCs that briefly don't yet know about `blockNumber-1`; if it never resolves, `nativeDelta` is left undefined and the modal silently hides the row. For chains marked `supportsFlashblocks`, receipt-derived history first waits for one following block and verifies that a refreshed receipt's `blockHash` matches the canonical block before using its fee fields. This prevents a preconfirmed L1-fee estimate from surviving as a false native transfer. Opening Transaction details queues one reconciliation per mounted Flashblocks entry, including already-enriched history, so older gas/native snapshots are repaired from the same settled receipt; ordinary-chain snapshots remain immutable.
 4. Attempts to seed `recentlyReceivedTokens` (5-minute TTL cache) for every inbound ERC-20 so `loadPortfolioTokenCatalog` (`chrome/portfolio/tokenCatalog.ts`) can inject a synthetic stub into the portfolio before the upstream portfolio API has re-indexed. This happens before the tx-history broadcast when storage succeeds, so Holdings can merge the stub immediately. A seed failure is logged but must not block writing `assetChanges`. The on-chain balance multicall in `TokenHoldings` overwrites balance with the live value; CoinGecko/GeckoTerminal backfills price while `tokenMetadata.ts` backfills any missing symbol/logo.
-5. Writes the resulting `AssetChangeRecord` onto the existing tx-history entry via `updateTxInHistory({ assetChanges })` — purely additive, no migration required.
+5. Decodes ERC-721 `Transfer` plus ERC-1155 `TransferSingle`/`TransferBatch` and persists only immutable transfer identity: contract, token ID, standard, amount, direction, and counterparty. NFT token URI, image, and display metadata are never durable history.
+6. Writes the versioned `AssetChangeRecord` onto the existing history entry. Missing versions remain readable and are lazily re-enriched. If detailed transfer persistence fails, a best-effort `detailsIncomplete` marker preserves the settled summary without changing transaction success.
+
+For native-flow reconciliation, direct transactions add the sender's outer
+transaction gas back to the block-to-block balance delta. USDC-funded ERC-4337
+history rows do not: the Pimlico bundler paid that outer gas, so adding its
+receipt gas to the wallet's unchanged ETH balance would fabricate an inbound
+ETH transfer. Initial extraction, receipt retries, and Activity backfill all
+derive this distinction from `feePaymentToken`.
 
 For native-flow reconciliation, direct transactions add the sender's outer
 transaction gas back to the block-to-block balance delta. USDC-funded ERC-4337
@@ -2356,7 +2444,9 @@ derive this distinction from `feePaymentToken`.
 
 **Bridge destination leg.** When `bridgeStatusPoller.checkAndApplyStatus` sees a destination `txHash` arrive for the first time (`!priorEntry?.bridge?.destinationTxHash`), it fires `extractAndStoreDestinationAssetChanges` against the destination chain's RPC (resolved via `getRpcUrl`). Same decoder, `payerForGas: false` (the receiver didn't pay gas on the dest chain), written to `destAssetChanges`. The modal renders a second `AssetChangesCard` titled "On {destChainName}".
 
-**Refresh wiring.** `updateTxInHistory()` broadcasts `txHistoryUpdated` with `updatedTx` and `changedKeys` (top-level fields from the update object). `TokenHoldings.tsx` listens for entries whose `from` or `bridge.receiverAddress` matches the displayed wallet AND that carry `assetChanges` or `destAssetChanges`, then force-reloads. ERC-20s from the receipt are passed through as forced refresh keys/stubs so they bypass the collapsed low-value-token RPC deferral and get immediate onchain balances even when the "Under $0.10" group is closed. `PortfolioTabs.tsx` keeps a delayed generic fallback for matching-account confirmation updates (`status`, `txHash`, or `completedAt`), but cancels that timer once `assetChanges`/`destAssetChanges` arrives because `TokenHoldings` owns the immediate targeted refresh. This prevents a delayed API-first load from cancelling the authoritative receipt-token RPC pass. Bridge-only progress updates (`changedKeys: ["bridge"]`) must not trigger portfolio RPC sweeps across every visible chain.
+**Refresh wiring.** `updateTxInHistory()` broadcasts only `{ txId, ownerAddress, chainId, changedKeys }`; it never copies the history record or transfer arrays through runtime messaging. Activity refreshes the changed row with `getTxHistoryItem`. Holdings uses the compact identity/change fields for its delayed refresh policy.
+
+**Durable history and lazy details.** IndexedDB database `walletchan-history` stores compact transaction summaries separately from ERC-20/NFT transfer rows. The first history access idempotently imports the released `chrome.storage.local.txHistory` array, then removes that legacy key only after all valid records commit. Settled rows omit full calldata and retain only the selector; NFT rows omit token URI, image, collection, symbol, and token name. Activity uses 30-row indexed cursor pages and an intersection sentinel for automatic loading. Retention keeps at most 1,000 settled entries per account/network and 50 MiB overall, without evicting processing/pending recovery rows. Transaction Details fetches calldata by stored transaction hash through the configured RPC and validates hash/from/to before using it. NFT display metadata is resolved through the configured RPC at the receipt block with latest-state fallback and a 24-hour, 500-entry, 10 MiB best-effort display cache; raw token URI is never sent to the renderer or stored.
 
 Holdings keeps successful RPC balance reads (including zero-balance tombstones) authoritative across subsequent API revalidations. A lagging portfolio response may update token metadata and price, but it cannot overwrite a verified balance or resurrect a token that RPC already reported as zero. Failed per-token RPC reads are never marked authoritative, so a transient RPC error cannot freeze an API fallback as an onchain value. The same overlay is applied to the fast API paint and the detached enrichment pass, preventing either async stage from causing post-confirm balance flicker.
 
@@ -2468,22 +2558,25 @@ Gas data is not available at confirmation time (tx hasn't been mined). It's fetc
 
 ### Storage Functions
 
-`history/repository.ts` owns reads, adds, updates, newest-first ordering, the
-50-entry cap, and the shared mutation lock. `history/maintenance.ts` owns stale
+`history/repository.ts` owns reads, adds, updates, and the shared mutation lock.
+`history/database.ts` owns IndexedDB migration, paging, and retention. `history/maintenance.ts` owns stale
 processing cleanup and full/per-address deletion. The root facade re-exports
 their functions without wrappers so existing callers retain export identity.
 
 | Function                           | Description                               |
 | ---------------------------------- | ----------------------------------------- |
-| `getTxHistory()`                   | Get all history (newest first, max 50)    |
+| `getTxHistory()`                   | Compatibility/recovery compact read       |
+| `getTxHistoryPage(options)`        | Get a 30-row indexed cursor page           |
+| `getTxById(txId)`                  | Hydrate one row with its transfer records  |
 | `addTxToHistory(tx)`               | Add new entry with "processing" status    |
 | `updateTxInHistory(txId, updates)` | Update status, txHash, error, completedAt |
 | `clearTxHistory()`                 | Remove all history entries                |
 
 ### Storage Details
 
-- **Key**: `txHistory` in `chrome.storage.local`
-- **Max entries**: 50 (oldest entries removed when limit exceeded)
+- **Database**: IndexedDB `walletchan-history`
+- **Stores**: `transactions`, `assetTransfers`
+- **Retention**: 1,000 settled entries per account/network; 50 MiB overall
 - **Sort order**: Newest first (by `createdAt`)
 
 ### Chrome Storage RMW Locks
@@ -2630,7 +2723,10 @@ Token holdings are fetched via a provider-agnostic website API route:
 
 - **Website route**: `apps/website/app/api/portfolio/route.ts` (GET `/api/portfolio?address=0x...`)
 - **Extension client**: `portfolio/api.ts` fetches from `https://walletchan.eth.sh/api/portfolio`
-- **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]`, `defiPositions[]`, and `totalValueUsd`
+- **Response format**: Provider-agnostic `PortfolioResponse` with bounded
+  `tokens[]`/`defiPositions[]`, complete `totalValueUsd`, and truncation metadata
+  (`tokenCount`, `omittedTokenCount`, `omittedTokenValueUsd`, and per-chain
+  omitted value)
 - **Provider order**: Zerion primary, Dune SIM temporary fallback, Alchemy final token-only fallback
 
 Zerion is queried without `filter[chain_ids]` so balances and DeFi positions on
@@ -2640,19 +2736,41 @@ Zerion `/v1/chains/` endpoint plus static fallbacks for known slugs; positions
 that cannot be represented as a numeric EVM `chainId` are skipped because the
 public `PortfolioResponse` contract uses numeric chain IDs.
 
+The website sorts provider wallet tokens by value and returns at most 1,000
+tokens, 100 DeFi positions, and 50 assets/rewards per position. The complete
+provider total and omitted token value remain in the response, so limiting dust
+does not understate the portfolio header or per-chain totals. The extension
+independently enforces a 4 MiB transport ceiling, validates/caps strings, URLs,
+numbers, addresses, token/position arrays, and rejects more than 20,000 raw
+token candidates before any response can enter React state. Legacy uncapped
+responses are reduced to the same 1,000-token value-ranked working set; native
+assets receive a bounded preservation pass. This resource policy remains
+internal; portfolio screens do not describe response truncation to users.
+
+Screens that need only an aggregate use the `summary=1` response projection.
+Send and Swap keep at most 200 ranked portfolio assets in React/RPC working
+state, while pinning native assets, custom assets, recent receipts, and an
+explicitly selected asset. Token-management screens use a 300-asset working
+set. Shared token pickers and hidden-token management mount/cache logos for 60
+rows at a time and advance with normal pagination. Swap and bridge remote token
+catalogs are independently validated and capped at 2,000 entries with 2 MiB
+transport ceilings.
+
 ### Onchain Balance Verification
 
 API portfolio data is shown immediately, while onchain balances are verified in the background via `portfolio/onchainBalances.ts`:
 
 - **Multicall3** (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on all chains) batches native `getEthBalance` and ERC20 `balanceOf` calls into a single multicall per chain. Registry entries with `hasNativeToken: false` are excluded before RPC work; Tempo uses this policy because its `eth_getBalance` response is a compatibility sentinel, not a user-owned asset. Tempo's USD/6 EVM currency metadata remains available to fee and transaction renderers; only balance-bearing/selectable native-token paths are disabled.
 - Calls are chunked into batches of 100 to avoid oversized RPC requests
-- Parallel execution across all chains with 8s timeout and no retries
+- Execution is capped at four chains concurrently, with an 8s timeout and no
+  retries, so an all-network whale portfolio cannot create an RPC burst across
+  every configured chain
 - Cached viem clients per chainId for performance
 - Falls back to API values on any error (per-token or per-batch)
 - A failed token read does not by itself label the chain RPC unhealthy. The
   home warning is eligible only when every attempted balance read for a chain
   fails and a final `eth_blockNumber` health probe also fails.
-- `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries when selector UIs need the full token catalog instead of a non-zero-only holdings list
+- `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries within a selector's bounded working projection instead of dropping them after verification
 
 ### Shared Portfolio Token Catalog
 
@@ -2666,8 +2784,29 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - CoinGecko USD price fallback for custom-chain native tokens when the portfolio API has no price (for example `MON` on Monad)
 - ERC-20 metadata fallback via `tokenMetadata.ts` so recently received/custom tokens can reuse the same logo/name source as Swap/Bridge selectors
 - The CoinGecko fallback runs through the background `portfolio/coingecko.ts` facade, which shares rate-limit/cache state across focused native and ERC-20 services and persists market/search caches in `chrome.storage.local` so reopening the popup doesn't cold-start CoinGecko traffic each time
-- `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio API data renders immediately, then runs metadata/native-price enrichment and onchain balance refresh in detached background work. Holdings deliberately skips ERC-20 price fallback during enrichment to avoid fan-out/rate limits from token-price APIs; it keeps Portfolio API prices until the portfolio backend indexes newer values.
-- Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts. The cache is keyed by address plus the visible-chain reload key, capped to 12 entries, TTL-pruned after 24 hours, and treated as optional display data. Older `walletchan:portfolioHoldingsCache:v1` renderer-localStorage mirrors are purged and never read, preventing a replacement wallet from inheriting prior addresses/balances/token imagery. Missing/invalid entries fall back to the normal live portfolio load.
+- `TokenHoldings` first calls the catalog with enrichment disabled so Portfolio
+  API data and the complete provider total render immediately. Expensive work is
+  progressive and bounded to 24 rows: the initial page prioritizes explicitly
+  refreshed/recent assets and native assets, while later pages run live balance
+  verification, missing metadata/native-price enrichment, and safe image-cache
+  requests only as the list approaches them during scrolling. Page enrichment
+  operates on the existing catalog slice and never refetches the complete
+  portfolio response. Holdings deliberately skips ERC-20 price fallback during
+  enrichment to avoid fan-out/rate limits from token-price APIs; it keeps
+  Portfolio API prices until the portfolio backend indexes newer values.
+- Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware
+  `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts.
+  Cache V3 is keyed by address plus the visible-chain reload key, capped to four
+  entries, limited to 4 MiB total and 1,000 tokens per entry, TTL-pruned after
+  24 hours, and treated as optional display data. V3 invalidates older unbounded
+  snapshots. The renderer mirror uses the same four-entry LRU boundary. Older
+  `walletchan:portfolioHoldingsCache:v1` DOM-localStorage mirrors are purged and
+  never read, preventing a replacement wallet from inheriting prior
+  addresses/balances/token imagery. Missing/invalid entries fall back to the
+  normal live portfolio load.
+- Account/network reloads abort the previous portfolio HTTP request. Aborted
+  provider work is not converted into the native-only API fallback and cannot
+  publish stale state after account selection changes.
 - Cached RPC issue IDs are display metadata only and are not replayed into the
   home warning. Live issue reports wait three seconds before rendering, so a
   normal cache-to-live refresh or short-lived RPC failure clears without a
@@ -2675,6 +2814,11 @@ API portfolio data is shown immediately, while onchain balances are verified in 
   original reveal deadline and an in-renderer dismissal.
 
 After the merged catalog is built, `portfolio/tokenCatalog.ts` filters global hidden tokens from `chrome.storage.local.hiddenPortfolioTokens` before calculating `totalValueUsd`. This keeps Holdings, Send, Swap holdings, current totals, and newly-written balance snapshots aligned across every wallet address. Recently received token keys are returned alongside the catalog so Holdings can still RPC-refresh those tokens immediately even if their current USD value would normally place them in the collapsed low-value group. `AddTokenModal` removes a matching hidden entry before adding a token; if the Portfolio API already returned that token, no custom token record is created.
+
+Send, Swap, Hide Tokens, ERC-7715 asset lookup, and snapshot refresh request the
+catalog without whole-list enrichment. Exact selected-token balance/price
+fallbacks remain available, while broad metadata, pricing, and onchain balance
+fan-out is reserved for Holdings' visible-page refresh.
 
 Users can hide tokens from the Holdings row overflow menu or from More → Hide Tokens. The More screen reuses the shared portfolio catalog and onchain balance verification, lets users select multiple visible ERC-20 tokens, and writes them to the global hidden-token list in one batch. Its Currently Hidden sub-screen lists hidden tokens across all accounts and can show a token again globally. Bulk hide/show paths force-record a visibility-adjusted current snapshot without deleting existing chart history, then refresh the Holdings tab/chart.
 
@@ -2712,12 +2856,21 @@ Important constraints:
   preference is persisted in `chrome.storage.sync.unifyPortfolioBalances`, and
   missing or malformed values resolve to `true` for released installs.
 - 60-second client-side cache plus a best-effort local `portfolioHoldingsCache` for first paint after popup/sidepanel reopen
+- Large asset/position collections mount in 24-row pages. An
+  `IntersectionObserver` rooted at the WalletChan screen scroll owner advances
+  the page with a 240px look-ahead; its visible load-more control remains a
+  keyboard-accessible fallback. Search, chain, account, tab, balance-unification,
+  and low-value disclosure changes reset the page boundary. Only rendered token
+  rows participate in RPC verification and remote-logo raster caching.
+  Scroll-driven cache persistence is coalesced for 750ms and chart snapshot
+  recording for one second so rapid page advances do not serialize the complete
+  catalog or touch extension storage once per page.
 - Refresh button, loading skeletons, empty state
 - Click token → opens TokenTransfer view
 
 ### Portfolio Snapshot Storage
 
-`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshotsV2`. The legacy `portfolioSnapshots` key is removed on read/write because its aggregate-only records cannot be repaired after the Tempo native-balance sentinel bug. Forced refreshes preserve the explicit `tokenCatalog` → `onchainBalances` → `snapshotStorage` sequence in `portfolio/snapshotRefresh.ts`.
+`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshotsV2`. The legacy `portfolioSnapshots` key is removed on read/write because its aggregate-only records cannot be repaired after the Tempo native-balance sentinel bug. Forced visibility refreshes use the catalog's complete aggregate directly and do not re-query every token balance before `snapshotStorage`.
 
 **How it works:**
 
@@ -3672,6 +3825,9 @@ adapter. Lower layers never import the facade or authentication handlers.
 
 Users can optionally configure an **agent password** that allows AI agents to unlock the wallet for normal operations while protecting private key reveal:
 
+New agent passwords use the same shared 8-to-256-character and
+common-password rejection policy as new master passwords.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         Agent Password Architecture                          │
@@ -4128,6 +4284,9 @@ When changing the wallet password (Settings → Change Password):
 - **Agent sessions are blocked in the background**: The guard restores a persisted
   "Never" session first, so a service-worker restart cannot turn an agent session
   into an untyped session that bypasses the restriction.
+- **Shared new-password policy**: The replacement must be 8 to 256 characters
+  and must not match the common-password denylist. Existing shorter passwords
+  remain valid only as the current-password proof so legacy wallets stay accessible.
 - **Cache cleared**: After password change, user must unlock with new password
 - Password handling stays entirely in background worker (never exposed to UI)
 
@@ -4695,7 +4854,7 @@ notification clicks. The focused callback implementations remain under
 
 | Type                         | Description                                     |
 | ---------------------------- | ----------------------------------------------- |
-| `txHistoryUpdated`           | Notifies views that transaction history changed. `updateTxInHistory()` includes `updatedTx` and `changedKeys`; add/history-clear broadcasts may omit `changedKeys`. |
+| `txHistoryUpdated`           | Notifies views with compact `txId`, `ownerAddress`, `chainId`, and optional `changedKeys`; no transaction or transfer payload is broadcast. |
 | `newPendingTxRequest`        | Notifies views of new pending transaction       |
 | `newPendingSignatureRequest` | Notifies views of new pending signature request |
 | `accountsUpdated`            | Notifies views that accounts list changed       |

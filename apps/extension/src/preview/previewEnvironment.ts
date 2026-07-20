@@ -27,7 +27,6 @@ import type { PreviewWalletType } from "./types";
 import { getPreviewActivityTransactions } from "./completedTransactionFixture";
 export type PreviewStorageAreaName = "local" | "sync" | "session";
 export type PreviewStorageRecord = Record<string, unknown>;
-
 export interface PreviewEnvironment {
   parsed: ParsedPreviewState;
   accounts: Account[];
@@ -54,7 +53,6 @@ function accountForWallet(
   }
   return account;
 }
-
 export function createPreviewEnvironment(href: string): PreviewEnvironment {
   const parsed = parsePreviewState(href);
   const accounts = previewAccounts.map((account) => ({ ...account }));
@@ -81,7 +79,6 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
     route === "cross-batch"
       ? createPreviewCrossDappBatchScenario(scenarioWallet, scenario)
       : null;
-
   const local: PreviewStorageRecord = {
     [SELECTED_THEME_STORAGE_KEY]: parsed.state.theme,
     networkRpcUrls: previewNetworkRpcUrls,
@@ -184,7 +181,6 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
     delete local.encryptedApiKey;
   }
   if (crossDappBatch) local.crossDappBatch = crossDappBatch;
-
   return {
     parsed,
     accounts,
@@ -237,7 +233,6 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
         : [],
   };
 }
-
 export const previewPortfolioResponse: PortfolioResponse = {
   tokens: [
     {
@@ -268,12 +263,10 @@ export const previewPortfolioResponse: PortfolioResponse = {
   defiPositions: [],
   totalValueUsd: 5241.703,
 };
-
 export function getPreviewPortfolioResponse(scenario: string): PortfolioResponse {
   if (scenario === "portfolio-empty" || scenario === "empty") {
     return { tokens: [], defiPositions: [], totalValueUsd: 0 };
   }
-
   if (scenario === "stress") {
     const stressTokens = Array.from({ length: 16 }, (_, index) => ({
       symbol: `ASSET${index + 1}`,

@@ -6,7 +6,7 @@ import { playInteractionSound } from "@/sounds/soundManager";
 
 interface UseBatchActionsOptions {
   batchRequest: PendingBatchTxRequest;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   isInSidePanel: boolean;
   isLocalSigningAccount: boolean;
   cachedGasEstimates: GasEstimate[] | null;

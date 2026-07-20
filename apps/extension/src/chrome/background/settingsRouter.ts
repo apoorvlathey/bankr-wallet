@@ -109,6 +109,9 @@ export function createBackgroundSettingsMessageRouter(
           .addNetworkIfMissing({
             chainName: message.chainName,
             entry: message.entry,
+            ...(message.rpcEndpoints !== undefined
+              ? { rpcEndpoints: message.rpcEndpoints }
+              : {}),
           })
           .then(sendResponse);
         return HANDLED_ASYNC;
@@ -120,8 +123,12 @@ export function createBackgroundSettingsMessageRouter(
             chainName: message.chainName,
             nextChainName: message.nextChainName,
             entry: message.entry,
-            rpcEndpoints: message.rpcEndpoints,
-            rpcUrls: message.rpcUrls,
+            ...(message.rpcEndpoints !== undefined
+              ? { rpcEndpoints: message.rpcEndpoints }
+              : {}),
+            ...(message.rpcUrls !== undefined
+              ? { rpcUrls: message.rpcUrls }
+              : {}),
           })
           .then(sendResponse);
         return HANDLED_ASYNC;

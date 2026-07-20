@@ -51,6 +51,9 @@ export interface HoldingsSnapshot {
   tokens: PortfolioToken[];
   defiPositions: DefiPosition[];
   totalValueUsd: number;
+  omittedTokenCount: number;
+  omittedTokenValueUsd: number;
+  omittedTokenValueUsdByChain: Record<string, number>;
   customTokenKeys: Set<string>;
   allTokenKeys: Set<string>;
   hiddenTokenKeys: Set<string>;

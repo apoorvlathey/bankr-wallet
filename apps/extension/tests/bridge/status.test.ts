@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import "fake-indexeddb/auto";
 import { BungeeStatusCode } from "@walletchan/shared/bungee";
 import type { CompletedTransaction } from "../../src/chrome/history/types";
 import type { PendingBridge } from "../../src/chrome/requests/pendingBridgeStorage";
@@ -134,6 +135,7 @@ test("history mapping and status application preserve durable transition semanti
     const { applyBridgeStatusEntry } = await import(
       "../../src/chrome/bridge/statusApplication"
     );
+    const { getTxById } = await import("../../src/chrome/history/repository");
     assert.equal(
       await applyBridgeStatusEntry(SOURCE_HASH, pending, {
         bungeeStatusCode: BungeeStatusCode.EXTRACTED,
@@ -142,7 +144,7 @@ test("history mapping and status application preserve durable transition semanti
       }),
       false,
     );
-    let storedHistory = (harness.stores.local.txHistory as CompletedTransaction[])[0];
+    let storedHistory = await getTxById(entry.id);
     assert.equal(storedHistory.bridge?.bungeeStatusCode, BungeeStatusCode.EXTRACTED);
     assert.equal(storedHistory.bridge?.requestHash, "quote-new");
     assert.equal(storedHistory.bridge?.routeName, "Across");
@@ -159,7 +161,7 @@ test("history mapping and status application preserve durable transition semanti
       true,
     );
     assert.deepEqual(harness.stores.local.pendingBridges, {});
-    storedHistory = (harness.stores.local.txHistory as CompletedTransaction[])[0];
+    storedHistory = await getTxById(entry.id);
     assert.equal(storedHistory.bridge?.bungeeStatusCode, BungeeStatusCode.EXPIRED);
     assert.equal(notifications.at(-1)?.id, "bridge-failed-history-1");
     assert.equal(notifications.at(-1)?.options.title, "Bridge Expired");

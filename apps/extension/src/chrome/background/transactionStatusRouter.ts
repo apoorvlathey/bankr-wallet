@@ -5,6 +5,10 @@ export const BACKGROUND_TRANSACTION_STATUS_MESSAGE_TYPES = [
   "getFailedTxResult",
   "clearFailedTxResult",
   "getTxHistory",
+  "getTxHistoryPage",
+  "getTxHistoryItem",
+  "getTransactionCalldata",
+  "resolveHistoryNftMetadata",
   "backfillAssetChanges",
   "getProcessingTxs",
   "clearTxHistory",
@@ -24,6 +28,10 @@ type Dependencies = {
   failedTxResults: Map<string, any>;
   removeLocalStorage: (key: string) => void;
   getTxHistory: () => Promise<any>;
+  getTxHistoryPage: (options: any) => Promise<any>;
+  getTxHistoryItem: (txId: string) => Promise<any>;
+  getTransactionCalldata: (txId: string) => Promise<any>;
+  resolveHistoryNftMetadata: (options: any) => Promise<any>;
   queueAssetChangesBackfill: (txId: string) => Promise<any>;
   getProcessingTxs: () => Promise<any>;
   clearTxHistory: () => Promise<void>;
@@ -81,6 +89,36 @@ export function createBackgroundTransactionStatusMessageRouter(
 
       case "getTxHistory": {
         dependencies.getTxHistory().then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "getTxHistoryPage": {
+        dependencies.getTxHistoryPage({
+          ownerAddress:
+            typeof message.ownerAddress === "string" ? message.ownerAddress : undefined,
+          chainId: Number.isSafeInteger(message.chainId) ? message.chainId : null,
+          cursor: message.cursor ?? null,
+          limit: Number.isSafeInteger(message.limit) ? message.limit : undefined,
+        }).then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "getTxHistoryItem": {
+        dependencies.getTxHistoryItem(String(message.txId || "")).then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "getTransactionCalldata": {
+        dependencies.getTransactionCalldata(String(message.txId || "")).then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "resolveHistoryNftMetadata": {
+        dependencies.resolveHistoryNftMetadata({
+          txId: String(message.txId || ""),
+          leg: message.leg === "destination" ? "destination" : "source",
+          nftIndex: Number.isSafeInteger(message.nftIndex) ? message.nftIndex : -1,
+        }).then(sendResponse);
         return HANDLED_ASYNC;
       }
 

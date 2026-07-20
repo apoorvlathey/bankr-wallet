@@ -25,7 +25,8 @@ integration boundary, not the default home for new implementations.
   wallet feature modules or call Chrome, storage, signing, or network APIs.
 - `shared/` contains reusable wallet-aware presentation that is genuinely used
   by multiple features. `shared/NetworkSelector/` owns the single searchable,
-  balance-ordered network browser reused by Swap, Send, and portfolio filters.
+  balance-ordered network browser reused by Swap, Send, and portfolio filters,
+  plus the funded-first ordering model used by the dapp dock chain drawer.
 - `theme/primitives/` contains token-driven visual atoms. It is separate from
   application and wallet feature behavior.
 
@@ -38,6 +39,7 @@ integration boundary, not the default home for new implementations.
 - `Chat/` owns the Bankr conversation screens and message presentation.
 - `ClearSigning/` owns descriptor loading and clear-signing renderers.
 - `Erc7715PermissionConfirmation/` owns delegated-execution permission review and decisions.
+- `Ledger/` owns hardware pairing/address selection and live device-signing status.
 - `Portfolio/Holdings/` owns portfolio hydration, display transforms, and asset rows.
 - `Settings/` owns settings navigation and configuration screens.
 - `SignatureConfirmation/` owns signature-decision screen composition.

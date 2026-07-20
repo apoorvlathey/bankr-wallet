@@ -4,12 +4,13 @@ import { getLatestPortfolioHoldingsSnapshotForAddress } from "../portfolio/holdi
 const PORTFOLIO_CACHE_TTL = 30_000;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-/** In-memory mirror of the latest reset-aware holdings snapshot. */
-let portfolioCache: {
-  address: string;
-  tokens: PortfolioToken[];
+/** In-memory mirrors of reset-aware price projections, never complete rows. */
+const portfolioCache = new Map<string, {
+  prices: Map<string, number>;
   timestamp: number;
-} | null = null;
+}>();
+const portfolioInflight = new Map<string, Promise<Map<string, number>>>();
+const MAX_CACHED_ACCOUNTS = 4;
 
 export function buildPortfolioPriceMap(
   tokens: readonly PortfolioToken[],
@@ -36,23 +37,28 @@ export async function getPortfolioPriceMap(
 ): Promise<Map<string, number>> {
   try {
     const normalizedAddress = accountAddress.toLowerCase();
-    if (
-      portfolioCache &&
-      portfolioCache.address === normalizedAddress &&
-      Date.now() - portfolioCache.timestamp < PORTFOLIO_CACHE_TTL
-    ) {
-      return buildPortfolioPriceMap(portfolioCache.tokens);
+    const cached = portfolioCache.get(normalizedAddress);
+    if (cached && Date.now() - cached.timestamp < PORTFOLIO_CACHE_TTL) {
+      return cached.prices;
     }
 
-    const snapshot =
-      await getLatestPortfolioHoldingsSnapshotForAddress(accountAddress);
-    if (!snapshot) return new Map();
-    portfolioCache = {
-      address: normalizedAddress,
-      tokens: snapshot.tokens,
-      timestamp: Date.now(),
-    };
-    return buildPortfolioPriceMap(snapshot.tokens);
+    const existing = portfolioInflight.get(normalizedAddress);
+    if (existing) return existing;
+    const pending = (async () => {
+      const snapshot =
+        await getLatestPortfolioHoldingsSnapshotForAddress(accountAddress);
+      const prices = buildPortfolioPriceMap(snapshot?.tokens ?? []);
+      portfolioCache.delete(normalizedAddress);
+      portfolioCache.set(normalizedAddress, { prices, timestamp: Date.now() });
+      while (portfolioCache.size > MAX_CACHED_ACCOUNTS) {
+        const oldest = portfolioCache.keys().next().value as string | undefined;
+        if (!oldest) break;
+        portfolioCache.delete(oldest);
+      }
+      return prices;
+    })().finally(() => portfolioInflight.delete(normalizedAddress));
+    portfolioInflight.set(normalizedAddress, pending);
+    return pending;
   } catch {
     // Portfolio lookup is an optional pricing source.
     return new Map();

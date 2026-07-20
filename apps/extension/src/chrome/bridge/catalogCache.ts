@@ -11,6 +11,7 @@ import {
   BRIDGE_CATALOG_RESPONSE_MAX_BYTES,
   fetchBridgeJson,
 } from "./client";
+import { decodeBridgeTokenList } from "./catalogPolicy";
 
 const CATALOG_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const BUNGEE_CHAINS_CACHE_KEY = "bungeeChains";
@@ -86,14 +87,15 @@ export function mergePinnedBridgeTokens(
   chainId: number,
   apiTokens: BungeeToken[],
 ): BungeeToken[] {
+  const boundedTokens = decodeBridgeTokenList(apiTokens);
   const pinned = EXTRA_TOKENS_PER_CHAIN[chainId];
-  if (!pinned || pinned.length === 0) return apiTokens;
+  if (!pinned || pinned.length === 0) return boundedTokens;
   const pinnedAddresses = new Set(
     pinned.map((token) => token.address.toLowerCase()),
   );
   return [
     ...pinned,
-    ...apiTokens.filter(
+    ...boundedTokens.filter(
       (token) => !pinnedAddresses.has(token.address.toLowerCase()),
     ),
   ];
@@ -121,7 +123,9 @@ export async function getCachedBungeeTokens(
       if (!response.ok) {
         return mergePinnedBridgeTokens(chainId, cached?.tokens ?? []);
       }
-      const tokens = (data.result ?? {})[String(chainId)] ?? [];
+      const tokens = decodeBridgeTokenList(
+        (data.result ?? {})[String(chainId)],
+      );
       await chrome.storage.local.set({
         [key]: { tokens, fetchedAt: Date.now() } satisfies CachedBungeeTokens,
       });

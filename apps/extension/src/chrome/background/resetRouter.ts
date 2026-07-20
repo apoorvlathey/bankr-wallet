@@ -18,6 +18,7 @@ export type BackgroundResetDependencies = {
   invalidateAuthCeremonies: () => void;
   invalidateAvatarImageCacheForWalletReset: () => void;
   clearAllAuthState: () => Promise<void>;
+  clearHistoryState: () => Promise<void>;
   resetWalletConnectForWalletReset: () => Promise<void>;
   withWalletSecretLock: <T>(work: () => Promise<T>) => Promise<T>;
   performSecurityReset: () => Promise<void>;
@@ -70,6 +71,7 @@ async function resetWallet(
 
     await dependencies.withWalletSecretLock(async () => {
       await dependencies.performSecurityReset();
+      await dependencies.clearHistoryState();
       const allLocalStorage = await dependencies.getAllLocalStorage();
       const localKeys =
         dependencies.getWalletLocalStorageKeysToRemove(allLocalStorage);

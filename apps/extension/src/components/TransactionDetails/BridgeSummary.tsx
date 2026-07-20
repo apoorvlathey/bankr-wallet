@@ -26,17 +26,14 @@ import {
 } from "@/lib/chains";
 import type { NetworksInfo } from "@/types";
 import { pickAssetChangeAmount } from "./formatting";
-
 type FormatUsd = (
   amountWei: string,
   decimals: number,
   chainId: number,
   addressOrNative: string | "native",
 ) => string | null;
-
 type BridgeAmount = ReturnType<typeof pickAssetChangeAmount>;
 type BridgeDirection = "source" | "destination";
-
 const BRIDGE_STATUS_LABELS = [
   "Pending",
   "Assigned",
@@ -47,13 +44,11 @@ const BRIDGE_STATUS_LABELS = [
   "Cancelled",
   "Refunded",
 ] as const;
-
 function explorerTxUrl(explorer: string | undefined, hash: string | undefined) {
   if (!explorer || !hash) return null;
   const normalizedHash = hash.match(/0x[a-fA-F0-9]{64}/)?.[0];
   return normalizedHash ? `${explorer}/tx/${normalizedHash}` : null;
 }
-
 function ExplorerAction({ label, url }: { label: string; url: string }) {
   return (
     <IconButton
@@ -72,7 +67,6 @@ function ExplorerAction({ label, url }: { label: string; url: string }) {
     />
   );
 }
-
 function DirectionLabel({ direction }: { direction: BridgeDirection }) {
   const isSource = direction === "source";
   const color = isSource ? "chart.negative" : "chart.positive";
@@ -96,7 +90,6 @@ function DirectionLabel({ direction }: { direction: BridgeDirection }) {
     </HStack>
   );
 }
-
 function BridgeLeg({
   direction,
   chainId,
@@ -127,7 +120,6 @@ function BridgeLeg({
   const isSource = direction === "source";
   const sign = isSource ? "−" : "+";
   const amountColor = isSource ? "chart.negative" : "chart.positive";
-
   return (
     <Box py={2.5}>
       <HStack justify="space-between" spacing={3} mb={2} minW={0}>
@@ -157,7 +149,6 @@ function BridgeLeg({
           ) : null}
         </HStack>
       </HStack>
-
       <HStack justify="space-between" align="center" spacing={3} minW={0}>
         <HStack spacing={2.5} minW={0} flex="1">
           <Box position="relative" boxSize="28px" flexShrink={0}>
@@ -205,7 +196,6 @@ function BridgeLeg({
             )}
           </VStack>
         </HStack>
-
         <VStack spacing={0} align="flex-end" minW={0} maxW="58%">
           {amount && (
             <Text

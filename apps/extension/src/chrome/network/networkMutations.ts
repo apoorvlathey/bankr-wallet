@@ -9,13 +9,9 @@ import { withStorageLock } from "../storageLock";
 import {
   cleanChainName,
   cleanNetworkEntry,
-  cleanSavedRpcEndpoints,
 } from "./customNetworkValidation";
-import {
-  getNetworkRpcEndpoints,
-  moveNetworkRpcEndpoints,
-  removeNetworkRpcUrls,
-} from "./rpcHistoryRepository";
+import { removeNetworkRpcUrls } from "./rpcHistoryRepository";
+import { reconcileNetworkRpcEndpoints } from "./networkRpcMutation";
 import {
   failure,
   findChainNameById,
@@ -63,11 +59,13 @@ export async function ensureNetworksInfo(): Promise<NetworkMutationResult> {
 export async function addNetworkIfMissing({
   chainName,
   entry,
+  rpcEndpoints,
   switchIfSupportedForAccountType,
   requestOrigin,
 }: {
   chainName: unknown;
   entry: unknown;
+  rpcEndpoints?: unknown;
   switchIfSupportedForAccountType?: ChainAccountType | null;
   /** Trusted sender origin for a dapp-proposed network. */
   requestOrigin?: string;
@@ -102,6 +100,15 @@ export async function addNetworkIfMissing({
         switchIfSupportedForAccountType !== undefined &&
         (switchIfSupportedForAccountType !== "bankr" ||
           resolvedChain?.isBankrSupported === true);
+
+      if (!existingName && rpcEndpoints !== undefined) {
+        await reconcileNetworkRpcEndpoints({
+          current: cleanedEntry,
+          savedChainId: cleanedEntry.chainId,
+          savedRpcUrl: cleanedEntry.rpcUrl,
+          requestedRpcEndpoints: rpcEndpoints,
+        });
+      }
 
       const normalized = existingName
         ? nextNetworksInfo
@@ -169,32 +176,12 @@ export async function updateNetworkEntry({
       }
 
       const requestedRpcEndpoints = rpcEndpoints ?? rpcUrls;
-      if (requestedRpcEndpoints !== undefined) {
-        const cleanedRpcEndpoints = cleanSavedRpcEndpoints(
-          requestedRpcEndpoints,
-          cleanedEntry.rpcUrl,
-        );
-        await moveNetworkRpcEndpoints(
-          current.chainId,
-          savedChainId,
-          cleanedEntry.rpcUrl,
-          cleanedRpcEndpoints,
-        );
-      } else if (
-        cleanedEntry.rpcUrl !== current.rpcUrl ||
-        savedChainId !== current.chainId
-      ) {
-        const existingRpcEndpoints = await getNetworkRpcEndpoints(
-          current.chainId,
-          current.rpcUrl,
-        );
-        await moveNetworkRpcEndpoints(
-          current.chainId,
-          savedChainId,
-          cleanedEntry.rpcUrl,
-          [...existingRpcEndpoints, { url: current.rpcUrl }],
-        );
-      }
+      await reconcileNetworkRpcEndpoints({
+        current,
+        savedChainId,
+        savedRpcUrl: cleanedEntry.rpcUrl,
+        requestedRpcEndpoints,
+      });
 
       const savedEntry: NetworkEntry = isCustom
         ? {

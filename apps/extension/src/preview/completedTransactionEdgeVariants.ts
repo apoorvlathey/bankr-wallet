@@ -18,10 +18,11 @@ const previewAtomicBatchTx = encodeBatchCalls(
     {
       to: previewUsdcAddress,
       value: "0x0",
-      data:
+      data: (
         "0x095ea7b3" +
         previewRouterAddress.slice(2).padStart(64, "0") +
-        BigInt(1_000_000).toString(16).padStart(64, "0"),
+        BigInt(1_000_000).toString(16).padStart(64, "0")
+      ) as `0x${string}`,
     },
     { to: previewRouterAddress, value: "0x0", data: "0x12345678" },
   ],
@@ -145,7 +146,7 @@ export const previewDeploymentTransaction: CompletedTransaction = {
   id: "preview-contract-deployment",
   tx: {
     ...previewCompletedTransaction.tx,
-    to: undefined,
+    to: null,
     data: "0x6080604052348015600f57600080fd5b506001600055",
     value: "0x0",
   },

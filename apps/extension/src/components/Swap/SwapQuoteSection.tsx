@@ -200,7 +200,23 @@ export function SwapQuoteSection({
           p={3}
         >
           <Text fontSize="sm" fontWeight="700">
-            View-only account — swaps are disabled.
+            View-only account — you can review this swap. Sending is only
+            available when developer mode is enabled for the selected RPC.
+          </Text>
+        </Box>
+      )}
+      {accountType === "ledger" && (
+        <Box
+          bg="status.info.bg"
+          color="status.info.fg"
+          border="1px solid"
+          borderColor="status.info.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text fontSize="sm" fontWeight="600">
+            WalletChan&apos;s built-in swap does not yet support Ledger. Use a
+            swap dapp and approve it through the normal Ledger confirmation.
           </Text>
         </Box>
       )}

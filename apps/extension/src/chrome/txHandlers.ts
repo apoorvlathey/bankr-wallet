@@ -29,6 +29,7 @@ export { getRpcUrl } from "./transactions/rpcConfig";
 export { showNotification } from "./transactions/notification";
 export type { GasOverrides } from "./transactions/localExecution";
 export { handleConfirmTransactionAsyncPK } from "./transactions/localConfirmation";
+export { handleConfirmImpersonatedTransaction } from "./transactions/impersonatedExecution";
 export {
   handleConfirmTransaction,
   handleConfirmTransactionAsync,

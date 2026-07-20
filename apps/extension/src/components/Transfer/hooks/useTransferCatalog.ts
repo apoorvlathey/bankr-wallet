@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
+import { selectPortfolioTokensForInteraction } from "@/chrome/portfolio/consumerPolicy";
 import { secureHttpTransport } from "@/chrome/network/rpcClient";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { NATIVE_TOKEN_ADDRESS, type TokenListEntry } from "@/chrome/swapApi";
@@ -40,18 +41,35 @@ export function useTransferCatalog({
     useState<PortfolioToken | null>(null);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
   const [customTokenLoading, setCustomTokenLoading] = useState(false);
+  const initialTokenRef = useRef(initialToken);
 
   useEffect(() => {
     let cancelled = false;
     setHoldingsLoading(true);
     void (async () => {
       try {
-        const catalog = await loadPortfolioTokenCatalog(fromAddress);
+        const catalog = await loadPortfolioTokenCatalog(fromAddress, {
+          enrich: false,
+        });
         if (cancelled) return;
 
-        let tokens = catalog.tokens;
+        const priorityKeys = new Set([
+          ...catalog.customTokenKeys,
+          ...catalog.recentReceivedTokenKeys,
+        ]);
+        const pinnedInitialToken = initialTokenRef.current;
+        if (pinnedInitialToken) {
+          priorityKeys.add(
+            `${pinnedInitialToken.chainId}-${pinnedInitialToken.contractAddress.toLowerCase()}`,
+          );
+        }
+        const interactiveTokens = selectPortfolioTokensForInteraction(
+          catalog.tokens,
+          priorityKeys,
+        );
+        let tokens = interactiveTokens;
         try {
-          const onchain = await fetchOnchainBalances(fromAddress, catalog.tokens, {
+          const onchain = await fetchOnchainBalances(fromAddress, interactiveTokens, {
             preserveZeroBalanceTokens: true,
           });
           if (!cancelled) tokens = onchain.tokens;

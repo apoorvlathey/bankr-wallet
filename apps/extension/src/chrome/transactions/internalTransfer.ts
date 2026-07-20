@@ -25,13 +25,6 @@ export async function handleInitiateTransfer(message: {
   if (!activeAccount) {
     return { success: false, error: "No active account" };
   }
-  if (activeAccount.type === "impersonator") {
-    return {
-      success: false,
-      error: "View-only accounts cannot send transactions",
-    };
-  }
-
   const txId = crypto.randomUUID();
   const pendingRequest = pinnedTxRequest(activeAccount, {
     id: txId,

@@ -170,7 +170,7 @@ export default function BridgeQuoteDisplay({
             fontSize="sm"
             fontWeight="700"
             whiteSpace="nowrap"
-            fontVariantNumeric="tabular-nums"
+            sx={{ fontVariantNumeric: "tabular-nums" }}
             title={`${minBuyAmount} ${buyTokenSymbol}`}
           >
             {displayMinBuyAmount} {buyTokenSymbol}

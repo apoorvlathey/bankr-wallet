@@ -15,6 +15,8 @@
   `networkRpcUrls` local-storage record of named endpoint objects keyed by
   decimal chain ID, migrates a custom network's history when its chain ID
   changes, and decodes the released string-array shape.
+- `impersonatedRpcPolicy.ts` resolves the exact selected endpoint's developer
+  opt-in without broadening runtime RPC selection.
 - `networkPolicy.ts` owns pure chain-ID lookup, visibility fallback, and typed
   mutation results.
 - `networkMutations.ts` serializes ensure/add/update/hide/delete operations and

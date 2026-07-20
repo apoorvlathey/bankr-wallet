@@ -59,6 +59,7 @@
     "storage",
     "sidePanel",
     "notifications",
+    "offscreen",
     "tabs",
     "declarativeNetRequestWithHostAccess",
     "unlimitedStorage"

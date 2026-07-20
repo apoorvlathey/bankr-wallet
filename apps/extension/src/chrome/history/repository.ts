@@ -1,44 +1,54 @@
 import { withStorageLock } from "../storageLock";
+import {
+  putHistoryTransaction,
+  queryHistoryPage,
+  readAllHistoryTransactions,
+  readHistoryTransaction,
+  updateHistoryTransaction,
+} from "./database";
 import { selectHistoryGasData } from "./gasDataPolicy";
-import type { CompletedTransaction } from "./types";
+import type {
+  CompletedTransaction,
+} from "./types";
+import type { TxHistoryCursor, TxHistoryPage } from "./queryTypes";
 
-/** Released storage key. Changing it requires an explicit migration. */
+/** Legacy key retained only as the idempotent IndexedDB migration source. */
 export const TX_HISTORY_KEY = "txHistory";
-
-/**
- * Every writer uses one in-process storage lock. Without it, two receipt or
- * status handlers can read the same prior array and the later whole-array
- * write silently loses the earlier update.
- */
-export const TX_HISTORY_LOCK_KEY = `local:${TX_HISTORY_KEY}`;
-export const MAX_HISTORY_SIZE = 50;
+export const TX_HISTORY_LOCK_KEY = `history:indexeddb`;
 
 export function notifyTxHistoryUpdated(
   updatedTx?: CompletedTransaction,
   changedKeys?: string[],
 ): void {
   const message: Record<string, unknown> = { type: "txHistoryUpdated" };
-  if (updatedTx) message.updatedTx = updatedTx;
+  if (updatedTx) {
+    message.txId = updatedTx.id;
+    message.ownerAddress = updatedTx.tx.from.toLowerCase();
+    message.chainId = updatedTx.chainId;
+  }
   if (changedKeys) message.changedKeys = changedKeys;
   chrome.runtime.sendMessage(message).catch(() => {
     // Open extension views are optional.
   });
 }
 
-/** Returns the released newest-first array without schema rewriting. */
+/** Compatibility read for recovery and settings; Activity uses cursor pages. */
 export async function getTxHistory(): Promise<CompletedTransaction[]> {
-  const data = await chrome.storage.local.get(TX_HISTORY_KEY);
-  return data[TX_HISTORY_KEY] || [];
+  return readAllHistoryTransactions();
 }
 
-export async function addTxToHistory(
-  tx: CompletedTransaction,
-): Promise<void> {
+export async function getTxHistoryPage(options: {
+  ownerAddress?: string;
+  chainId?: number | null;
+  cursor?: TxHistoryCursor | null;
+  limit?: number;
+}): Promise<TxHistoryPage> {
+  return queryHistoryPage(options);
+}
+
+export async function addTxToHistory(tx: CompletedTransaction): Promise<void> {
   return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
-    const history = await getTxHistory();
-    history.unshift(tx);
-    const trimmed = history.slice(0, MAX_HISTORY_SIZE);
-    await chrome.storage.local.set({ [TX_HISTORY_KEY]: trimmed });
+    await putHistoryTransaction(tx);
     notifyTxHistoryUpdated(tx);
   });
 }
@@ -48,30 +58,23 @@ export async function updateTxInHistory(
   updates: Partial<CompletedTransaction>,
 ): Promise<void> {
   return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
-    const history = await getTxHistory();
-    const index = history.findIndex((tx) => tx.id === txId);
-    if (index === -1) return;
-
-    const protectedUpdates = Object.prototype.hasOwnProperty.call(
-      updates,
-      "gasData",
-    )
+    const current = await readHistoryTransaction(txId, true);
+    if (!current) return;
+    const protectedUpdates = Object.prototype.hasOwnProperty.call(updates, "gasData")
       ? {
           ...updates,
-          gasData: selectHistoryGasData(history[index], updates.gasData),
+          gasData: selectHistoryGasData(current, updates.gasData),
         }
       : updates;
-    history[index] = { ...history[index], ...protectedUpdates };
-    await chrome.storage.local.set({ [TX_HISTORY_KEY]: history });
-    notifyTxHistoryUpdated(history[index], Object.keys(updates));
+    const updated = await updateHistoryTransaction(txId, protectedUpdates);
+    if (updated) notifyTxHistoryUpdated(updated, Object.keys(updates));
   });
 }
 
 export async function getTxById(
   txId: string,
 ): Promise<CompletedTransaction | null> {
-  const history = await getTxHistory();
-  return history.find((tx) => tx.id === txId) || null;
+  return readHistoryTransaction(txId, true);
 }
 
 export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
@@ -79,9 +82,7 @@ export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
   return history.filter((tx) => tx.status === "processing");
 }
 
-export async function getPendingConfirmationTxs(): Promise<
-  CompletedTransaction[]
-> {
+export async function getPendingConfirmationTxs(): Promise<CompletedTransaction[]> {
   const history = await getTxHistory();
   return history.filter((tx) => tx.status === "pending" && tx.txHash);
 }

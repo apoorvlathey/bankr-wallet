@@ -327,7 +327,10 @@ test("Bankr batch execution preserves facade identity and credential boundary", 
 });
 
 test("local batch confirmation isolates key restoration and path selection", async () => {
-  const source = await readFile(new URL("../../src/chrome/batch/batchLocalConfirmation.ts", import.meta.url), "utf8");
+  const [source, forcePolicy] = await Promise.all([
+    readFile(new URL("../../src/chrome/batch/batchLocalConfirmation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../src/chrome/batch/batchForceInclusionPolicy.ts", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /getPrivateKeyFromCache/);
   assert.match(source, /tryRestoreSession/);
   assert.match(source, /decryptAllKeys/);
@@ -336,6 +339,8 @@ test("local batch confirmation isolates key restoration and path selection", asy
   assert.match(source, /executors\.processAtomic7702/);
   assert.match(source, /executors\.processNonAtomic/);
   assert.doesNotMatch(source, /signAndBroadcastTransaction|submitTransactionDirect/);
+  assert.match(forcePolicy, /protocol !== ["']op-stack["']/);
+  assert.match(forcePolicy, /processForceInclusionBatchLocal/);
 });
 
 test("sequential local execution keeps ambiguity and authorization in one boundary", async () => {

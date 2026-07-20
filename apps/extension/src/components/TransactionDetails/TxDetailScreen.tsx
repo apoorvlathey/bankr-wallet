@@ -16,9 +16,8 @@ function TxDetailScreen({ tx, onBack }: TxDetailScreenProps) {
   useEffect(() => {
     const refresh = () => {
       chrome.runtime.sendMessage(
-        { type: "getTxHistory" },
-        (history: CompletedTransaction[] | undefined) => {
-          const fresh = history?.find((entry) => entry.id === tx.id);
+        { type: "getTxHistoryItem", txId: tx.id },
+        (fresh: CompletedTransaction | null | undefined) => {
           if (fresh) setCurrentTx(fresh);
         },
       );

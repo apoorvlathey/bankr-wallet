@@ -27,50 +27,14 @@ import {
   parseDapp3Target,
 } from "@/components/Dapp3Browser/dapp3BrowserModel";
 import { useDappDirectorySearch } from "@/components/Dapp3Browser/useDappDirectorySearch";
-import { googleFaviconUrl } from "@/constants/externalUrls";
-import { buildBrowserFaviconUrl } from "@/lib/browserFavicon";
+import {
+  buildInterstitialUrl,
+  cachedFaviconFallbackUrl,
+  cachedFaviconUrl,
+  DAPP3_EXAMPLES as EXAMPLES,
+  formatCachedDappKind as formatKind,
+} from "./dapp3BrowserPresentation";
 import "./Dapp3Browser.css";
-
-const EXAMPLES = [
-  { label: "vitalik.eth", value: "vitalik.eth" },
-  { label: "apoorv.gwei", value: "apoorv.gwei" },
-  { label: "zrouter.eth", value: "zrouter.eth" },
-  {
-    label: "OFTScan (0x…9e32)",
-    value: "0x000000f7f90708c034c854efd1d5bfe8e9079e32",
-  },
-];
-
-function buildInterstitialUrl(targetUrl: string): string {
-  return `${chrome.runtime.getURL("interstitial.html")}#${targetUrl}`;
-}
-
-function formatKind(kind: CachedResolve["kind"]): string {
-  if (kind === "web3") return "HTML";
-  return kind.toUpperCase();
-}
-
-function cachedFaviconUrl(site: CachedResolve): string {
-  if (site.kind === "web3" || /^0x[a-f0-9]{40}$/.test(site.ensName)) {
-    const label = site.ensName.endsWith(".eth")
-      ? site.ensName.slice(0, -4)
-      : site.ensName;
-    return `https://${label}.w3eth.io/favicon.ico`;
-  }
-  if (site.ensName.endsWith(".gwei")) {
-    return `https://${site.ensName}.domains/favicon.ico`;
-  }
-  return `https://${site.ensName}.limo/favicon.ico`;
-}
-
-function cachedFaviconFallbackUrl(site: CachedResolve): string {
-  const gatewayUrl = cachedFaviconUrl(site).replace(/\/favicon\.ico$/, "/");
-  return (
-    buildBrowserFaviconUrl(gatewayUrl) ||
-    googleFaviconUrl(new URL(gatewayUrl).hostname, 64)
-  );
-}
-
 export default function Dapp3Browser() {
   const inputRef = useRef<HTMLInputElement>(null);
   const clearInvalidRef = useRef<number | null>(null);
@@ -99,7 +63,6 @@ export default function Dapp3Browser() {
     !suggestionsDismissed &&
     targetInput.trim().length >= 2 &&
     (suggestionCount > 0 || directorySearch.loading || directorySearch.failed);
-
   useEffect(() => {
     document.title = "WalletChan Browser";
     const frame = requestAnimationFrame(() => {
@@ -112,7 +75,6 @@ export default function Dapp3Browser() {
       }
     };
   }, []);
-
   useEffect(() => {
     let active = true;
 

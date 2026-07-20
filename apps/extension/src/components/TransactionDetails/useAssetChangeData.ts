@@ -10,6 +10,36 @@ import {
   type TokenDisplayMetadata,
 } from "./tokenMetadata";
 
+interface NftDisplayMetadata {
+  name?: string;
+  collectionName?: string;
+  symbol?: string;
+  image?: string;
+}
+
+function applyNftDisplayMetadata(
+  record: AssetChangeRecord | undefined,
+  leg: "source" | "destination",
+  metadata: Record<string, NftDisplayMetadata | null>,
+): AssetChangeRecord | undefined {
+  if (!record?.nftTransfers?.length) return record;
+  return {
+    ...record,
+    nftTransfers: record.nftTransfers.map((transfer, index) => {
+      const resolved = metadata[`${leg}:${index}`];
+      return resolved
+        ? {
+            ...transfer,
+            collectionName: resolved.collectionName,
+            symbol: resolved.symbol,
+            metadata: { name: resolved.name, image: resolved.image },
+            metadataLoading: false,
+          }
+        : { ...transfer, metadataLoading: metadata[`${leg}:${index}`] === undefined };
+    }),
+  };
+}
+
 export function useAssetChangeData({
   isOpen,
   tx,
@@ -40,6 +70,56 @@ export function useAssetChangeData({
     const [assetTokenMetadata, setAssetTokenMetadata] = useState<
       Record<string, TokenDisplayMetadata>
     >({});
+    const [nftMetadata, setNftMetadata] = useState<
+      Record<string, NftDisplayMetadata | null>
+    >({});
+    const nftMetadataRef = useRef(nftMetadata);
+    useEffect(() => {
+      nftMetadataRef.current = nftMetadata;
+    }, [nftMetadata]);
+    useEffect(() => {
+      nftMetadataRef.current = {};
+      setNftMetadata({});
+    }, [tx.id]);
+
+    useEffect(() => {
+      if (!isOpen) return;
+      const requests: Array<{ leg: "source" | "destination"; index: number }> = [];
+      for (let index = 0; index < (tx.assetChanges?.nftTransfers?.length ?? 0); index += 1) {
+        requests.push({ leg: "source", index });
+      }
+      for (let index = 0; index < (tx.destAssetChanges?.nftTransfers?.length ?? 0); index += 1) {
+        requests.push({ leg: "destination", index });
+      }
+      const pending = requests.filter(
+        ({ leg, index }) => !(`${leg}:${index}` in nftMetadataRef.current),
+      );
+      if (pending.length === 0) return;
+      let cancelled = false;
+      let next = 0;
+      const worker = async () => {
+        while (!cancelled && next < pending.length) {
+          const request = pending[next++];
+          const key = `${request.leg}:${request.index}`;
+          const response = await new Promise<{ success?: boolean; data?: NftDisplayMetadata }>(
+            (resolve) => chrome.runtime.sendMessage({
+              type: "resolveHistoryNftMetadata",
+              txId: tx.id,
+              leg: request.leg,
+              nftIndex: request.index,
+            }, resolve),
+          );
+          if (!cancelled) {
+            setNftMetadata((current) => ({
+              ...current,
+              [key]: response?.success ? response.data ?? null : null,
+            }));
+          }
+        }
+      };
+      void Promise.all(Array.from({ length: Math.min(4, pending.length) }, worker));
+      return () => { cancelled = true; };
+    }, [isOpen, tx.assetChanges, tx.destAssetChanges, tx.id]);
 
     useEffect(() => {
       if (!isOpen) return;
@@ -119,23 +199,30 @@ export function useAssetChangeData({
     ]);
 
     const sourceAssetChanges = useMemo(
-      () =>
+      () => applyNftDisplayMetadata(
         applyTokenDisplayMetadata(
           tx.assetChanges,
           tx.chainId,
           assetTokenMetadata,
         ),
-      [assetTokenMetadata, tx.assetChanges, tx.chainId],
+        "source",
+        nftMetadata,
+      ),
+      [assetTokenMetadata, nftMetadata, tx.assetChanges, tx.chainId],
     );
     const destinationAssetChanges = useMemo(
-      () =>
+      () => applyNftDisplayMetadata(
         applyTokenDisplayMetadata(
           tx.destAssetChanges,
           bridgeDestinationChainId ?? tx.chainId,
           assetTokenMetadata,
         ),
+        "destination",
+        nftMetadata,
+      ),
       [
         assetTokenMetadata,
+        nftMetadata,
         bridgeDestinationChainId,
         tx.chainId,
         tx.destAssetChanges,
@@ -145,7 +232,12 @@ export function useAssetChangeData({
     useEffect(() => {
       if (!isOpen) return;
       if (tx.status !== "success" || !tx.txHash) return;
-      if (tx.assetChanges && !FLASHBLOCKS_CHAIN_IDS.has(tx.chainId)) return;
+      if (
+        tx.assetChanges?.version === 2 &&
+        !FLASHBLOCKS_CHAIN_IDS.has(tx.chainId)
+      ) {
+        return;
+      }
       const receiptKey = `${tx.id}:${tx.txHash}`;
       if (reconciledReceiptRef.current === receiptKey) return;
       reconciledReceiptRef.current = receiptKey;

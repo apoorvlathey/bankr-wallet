@@ -14,6 +14,7 @@ import {
   type WalletKitLike,
 } from "./protocol";
 import { forwardSafeRpcRequestToTrustedUrl } from "../network/safeRpcForwarding";
+import { allowsImpersonatedTransactions } from "../network/impersonatedRpcPolicy";
 
 export async function handleSwitchEthereumChain(
   kit: WalletKitLike,
@@ -73,5 +74,13 @@ export async function forwardSafeRpcRequest(
   // A remote relay peer must never gain a less-bounded network proxy than a
   // connected webpage. The RPC target is trusted only because it was resolved
   // from WalletChan's stored chain configuration above.
-  return forwardSafeRpcRequestToTrustedUrl(rpcUrl, method, params);
+  const allowConfiguredPrivateRpc =
+    await allowsImpersonatedTransactions(chainId, rpcUrl);
+  return forwardSafeRpcRequestToTrustedUrl(
+    rpcUrl,
+    method,
+    params,
+    undefined,
+    { allowConfiguredPrivateRpc },
+  );
 }

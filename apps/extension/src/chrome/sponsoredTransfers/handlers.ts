@@ -33,6 +33,12 @@ export async function handleSponsoredTransfer(message: {
         error: "View-only accounts cannot send transactions",
       };
     }
+    if (account.type === "ledger") {
+      return {
+        success: false,
+        error: "Sponsored transfers are not supported for Ledger accounts",
+      };
+    }
     const intent = validateSponsoredTransferIntent(account.address, {
       fromAddress,
       to,

@@ -42,6 +42,9 @@ export function useHoldingsLifecycle({
     setLoading,
     setLowValueLoading,
     setOnchainFetchedTokenKeys,
+    setOmittedTokenCount,
+    setOmittedTokenValueUsd,
+    setOmittedTokenValueUsdByChain,
     setPortfolioBalanceRefreshing,
     setTokens,
     setTotalValueUsd,
@@ -66,6 +69,9 @@ export function useHoldingsLifecycle({
     setTokens([]);
     setDefiPositions([]);
     setTotalValueUsd(0);
+    setOmittedTokenCount(0);
+    setOmittedTokenValueUsd(0);
+    setOmittedTokenValueUsdByChain({});
     setCustomTokenKeys(new Set());
     setAllTokenKeys(new Set());
     setHiddenTokenKeys(new Set());
@@ -104,21 +110,21 @@ export function useHoldingsLifecycle({
     if (!address) return;
     const listener = (message: any) => {
       if (message?.type !== "txHistoryUpdated") return;
-      const updated = message.updatedTx;
-      if (!updated) return;
-      if (
-        updated.tx?.from?.toLowerCase?.() !== address.toLowerCase() &&
-        updated.bridge?.receiverAddress?.toLowerCase?.() !==
-          address.toLowerCase()
-      ) {
-        return;
-      }
-      if (!updated.assetChanges && !updated.destAssetChanges) return;
-      const receiptRefresh = getReceiptTokenRefresh(updated);
-      void loadPortfolio(true, {
-        forceRefreshTokenKeys: receiptRefresh.tokenKeys,
-        forceRefreshTokens: receiptRefresh.tokenStubs,
-      });
+      if (!message.changedKeys?.some((key: string) =>
+        key === "assetChanges" || key === "destAssetChanges")) return;
+      if (message.ownerAddress && message.ownerAddress !== address.toLowerCase()) return;
+      if (!message.txId) return;
+      chrome.runtime.sendMessage(
+        { type: "getTxHistoryItem", txId: message.txId },
+        (updated) => {
+          if (!updated) return;
+          const receiptRefresh = getReceiptTokenRefresh(updated);
+          void loadPortfolio(true, {
+            forceRefreshTokenKeys: receiptRefresh.tokenKeys,
+            forceRefreshTokens: receiptRefresh.tokenStubs,
+          });
+        },
+      );
     };
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);

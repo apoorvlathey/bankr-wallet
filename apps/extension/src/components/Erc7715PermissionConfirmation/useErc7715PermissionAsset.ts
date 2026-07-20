@@ -179,7 +179,7 @@ export function useErc7715PermissionAsset({
     }
     setPortfolioToken(undefined);
 
-    loadPortfolioTokenCatalog(editedRequest.from)
+    loadPortfolioTokenCatalog(editedRequest.from, { enrich: false })
       .then(async (catalog) => {
         if (cancelled) return;
         const catalogToken = findPortfolioToken({

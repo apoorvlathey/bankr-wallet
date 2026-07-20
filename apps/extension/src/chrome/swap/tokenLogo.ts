@@ -7,7 +7,6 @@ import { fetchFallbackTokenLogo } from "./tokenLogoFallback";
 
 const TOKEN_LOGO_CACHE_PREFIX = "tokenLogo:";
 const TOKEN_LOGO_FALLBACK_VERSION = 1;
-
 interface CachedTokenLogo {
   logoUrl: string;
   fetchedAt: number;

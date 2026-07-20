@@ -3,6 +3,7 @@ import type { BungeeToken, BungeeTokenListResponse } from "@walletchan/shared/bu
 
 const cache = new Map<number, BungeeToken[]>();
 const inFlight = new Map<number, Promise<BungeeToken[]>>();
+const TOKEN_LIST_LIMIT = 2_000;
 
 async function fetchTokens(chainId: number): Promise<BungeeToken[]> {
   const cached = cache.get(chainId);
@@ -19,7 +20,7 @@ async function fetchTokens(chainId: number): Promise<BungeeToken[]> {
     }
     // Socket returns { result: { "<chainId>": Token[] } }
     const byChain = data.result ?? {};
-    const tokens = byChain[String(chainId)] ?? [];
+    const tokens = (byChain[String(chainId)] ?? []).slice(0, TOKEN_LIST_LIMIT);
     cache.set(chainId, tokens);
     return tokens;
   })().finally(() => {

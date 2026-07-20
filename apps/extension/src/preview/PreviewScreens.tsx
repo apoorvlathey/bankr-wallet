@@ -59,7 +59,6 @@ import type {
   PreviewRoute,
   PreviewWalletType,
 } from "./types";
-
 function PreviewShell({ children }: { children: ReactNode }) {
   return (
     <Box h="100%" minH={0} overflow="hidden" bg="surface.base" color="fg.primary">
@@ -67,7 +66,6 @@ function PreviewShell({ children }: { children: ReactNode }) {
     </Box>
   );
 }
-
 function PortfolioPreview({
   wallet,
   scenario,
@@ -78,7 +76,6 @@ function PortfolioPreview({
   const txRequest = createPreviewTxScenario(wallet, scenario);
   const [selectedTransaction, setSelectedTransaction] =
     useState<ReturnType<typeof getPreviewCompletedTransaction> | null>(null);
-
   return (
     <PreviewShell>
       <ScreenStack view={selectedTransaction ? "txDetail" : "main"}>
@@ -101,7 +98,6 @@ function PortfolioPreview({
     </PreviewShell>
   );
 }
-
 function SettingsPreview({ scenario }: { scenario: string }) {
   const settingsScenarioTabs: Partial<Record<string, SettingsTab>> = {
     security: "security",
@@ -142,7 +138,6 @@ function SettingsPreview({ scenario }: { scenario: string }) {
     </PreviewShell>
   );
 }
-
 function AutoActivateButton({ label }: { label: string }) {
   const activated = useRef(false);
 

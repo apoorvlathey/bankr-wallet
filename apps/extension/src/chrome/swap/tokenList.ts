@@ -5,11 +5,12 @@ import {
   TOKEN_LIST_CACHE_TTL_MS,
 } from "./constants";
 import { mergePinnedTokens } from "./tokenListPolicy";
+import { decodeSwapTokenList } from "./tokenListCodec";
 import { fetchSwapJson } from "./transport";
 import type { TokenListEntry } from "./types";
 
 interface CachedTokenList {
-  tokens: TokenListEntry[];
+  tokens: unknown;
   fetchedAt: number;
 }
 
@@ -24,18 +25,20 @@ export async function getCachedTokenList(
   const stored = await chrome.storage.local.get(key);
   const cached = stored[key] as CachedTokenList | undefined;
   if (cached && Date.now() - cached.fetchedAt < TOKEN_LIST_CACHE_TTL_MS) {
-    return mergePinnedTokens(chainId, cached.tokens);
+    return mergePinnedTokens(chainId, decodeSwapTokenList(cached.tokens));
   }
 
   try {
     const { response, data } = await fetchSwapJson<{
-      tokens?: TokenListEntry[];
+      tokens?: unknown;
     }>(`${SWAP_API_BASE}/token-list?chainId=${chainId}`, {
       timeoutMs: SWAP_REQUEST_TIMEOUT_MS,
       maxBytes: SWAP_CATALOG_RESPONSE_MAX_BYTES,
     });
-    if (!response.ok) return mergePinnedTokens(chainId, cached?.tokens ?? []);
-    const tokens: TokenListEntry[] = data.tokens ?? [];
+    if (!response.ok) {
+      return mergePinnedTokens(chainId, decodeSwapTokenList(cached?.tokens));
+    }
+    const tokens = decodeSwapTokenList(data.tokens);
     try {
       await chrome.storage.local.set({
         [key]: { tokens, fetchedAt: Date.now() } satisfies CachedTokenList,
@@ -45,6 +48,6 @@ export async function getCachedTokenList(
     }
     return mergePinnedTokens(chainId, tokens);
   } catch {
-    return mergePinnedTokens(chainId, cached?.tokens ?? []);
+    return mergePinnedTokens(chainId, decodeSwapTokenList(cached?.tokens));
   }
 }

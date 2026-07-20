@@ -26,9 +26,12 @@ import type { LoadPortfolioOptions, TokenHoldingsProps } from "./types";
 import { useHoldingsLifecycle } from "./useHoldingsLifecycle";
 import { useHoldingsState } from "./useHoldingsState";
 import { useHoldingsViewModel } from "./useHoldingsViewModel";
-import { useLowValueBalanceRefresh } from "./useLowValueBalanceRefresh";
 import { usePortfolioLoader } from "./usePortfolioLoader";
+import { useProgressiveBalanceRefresh } from "./useProgressiveBalanceRefresh";
+import { useProgressiveHoldingsRows } from "./useProgressiveHoldingsRows";
 import { useTokenManagement } from "./useTokenManagement";
+import { useVisibleHoldingLogos } from "./useVisibleHoldingLogos";
+import { getTokensFromRows } from "./transforms";
 
 function TokenHoldings({
   address,
@@ -67,7 +70,6 @@ function TokenHoldings({
   const loadPortfolio = usePortfolioLoader({
     address,
     chainReloadKey,
-    showLowValueTokens,
     state,
     onRpcIssuesChange,
     onSnapshotsChanged,
@@ -76,15 +78,50 @@ function TokenHoldings({
   const viewModel = useHoldingsViewModel({
     filterChainId,
     searchQuery,
-    showLowValueTokens,
     unifyBalances,
     state,
   });
-  useLowValueBalanceRefresh({
+  const progressiveRows = useProgressiveHoldingsRows({
+    primaryRows: viewModel.primaryAssetRows,
+    lowValueRows: viewModel.lowValueAssetRows,
+    positions: viewModel.filteredDefiPositions,
+    includeLowValueRows: showLowValueTokens,
+    resetKey: [
+      address.toLowerCase(),
+      filterChainId ?? "all",
+      searchQuery.trim().toLocaleLowerCase(),
+      unifyBalances,
+      view,
+      showLowValueTokens,
+    ].join("|"),
+  });
+  const visibleAssetRows = useMemo(
+    () => [
+      ...progressiveRows.visiblePrimaryRows,
+      ...progressiveRows.visibleLowValueRows,
+    ],
+    [
+      progressiveRows.visibleLowValueRows,
+      progressiveRows.visiblePrimaryRows,
+    ],
+  );
+  const visibleTokens = useMemo(
+    () => getTokensFromRows(visibleAssetRows),
+    [visibleAssetRows],
+  );
+  const visibleLowValueTokens = useMemo(
+    () => getTokensFromRows(progressiveRows.visibleLowValueRows),
+    [progressiveRows.visibleLowValueRows],
+  );
+  const resolveLogo = useVisibleHoldingLogos(
+    visibleAssetRows,
+    progressiveRows.visiblePositions,
+  );
+  const progressiveLowValueLoading = useProgressiveBalanceRefresh({
     address,
     chainReloadKey,
-    lowValueTokens: viewModel.lowValueTokens,
-    showLowValueTokens,
+    visibleTokens,
+    visibleLowValueTokens,
     state,
     onRpcIssuesChange,
     onSnapshotsChanged,
@@ -157,10 +194,13 @@ function TokenHoldings({
 
   const tokenList = (
     <HoldingsList
-      primaryAssetRows={viewModel.primaryAssetRows}
-      lowValueAssetRows={viewModel.lowValueAssetRows}
+      primaryAssetRows={progressiveRows.visiblePrimaryRows}
+      primaryAssetRowCount={viewModel.primaryAssetRows.length}
+      lowValueAssetRows={progressiveRows.visibleLowValueRows}
+      lowValueAssetRowCount={viewModel.lowValueAssetRows.length}
       lowValueTotalUsd={viewModel.lowValueTotalUsd}
-      filteredDefiPositions={viewModel.filteredDefiPositions}
+      filteredDefiPositions={progressiveRows.visiblePositions}
+      defiPositionCount={viewModel.filteredDefiPositions.length}
       loading={state.loading}
       tokenCount={state.tokens.length}
       hideCard={hideCard}
@@ -169,19 +209,22 @@ function TokenHoldings({
       searchQuery={searchQuery}
       view={view}
       showLowValueTokens={showLowValueTokens}
-      lowValueLoading={state.lowValueLoading}
+      lowValueLoading={progressiveLowValueLoading}
       lowValueDisclosureRef={lowValueDisclosureRef}
       onToggleLowValueTokens={() =>
         setShowLowValueTokens((expanded) => !expanded)
       }
       onLowValueAnimationComplete={scrollLowValueDisclosureIntoView}
+      hasMore={progressiveRows.hasMore}
+      remainingCount={progressiveRows.remainingCount}
+      onLoadMore={progressiveRows.loadNextPage}
       customTokenKeys={state.customTokenKeys}
       networksInfo={networksInfo ?? {}}
       onTokenClick={onTokenClick}
       onSwapClick={onSwapClick}
       onEditToken={management.openEditTokenModal}
       onHideToken={management.openHideTokenModal}
-      resolveLogo={viewModel.resolveLogo}
+      resolveLogo={resolveLogo}
       hideValue={state.hideValue}
       formatUsd={formatUsd}
     />

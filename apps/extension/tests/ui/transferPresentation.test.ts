@@ -15,6 +15,47 @@ test("Send keeps one amber commitment path without a Swap detour", async () => {
   );
 });
 
+test("view-only Send reaches normal pinned review intake", async () => {
+  const [screen, submission, intake] = await Promise.all([
+    readFile(
+      new URL("../../src/components/Transfer/TokenTransfer.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/Transfer/hooks/useTransferSubmission.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/chrome/transactions/internalTransfer.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.doesNotMatch(screen, /isDisabled=\{!canSubmit \|\| accountType === "impersonator"\}/u);
+  assert.doesNotMatch(submission, /accountType === "impersonator"/u);
+  assert.doesNotMatch(intake, /activeAccount\.type === "impersonator"/u);
+  assert.match(intake, /pinnedTxRequest\(activeAccount/u);
+});
+
+test("home quick actions remain visible for view-only accounts", async () => {
+  const source = await readFile(
+    new URL("../../src/App.tsx", import.meta.url),
+    "utf8",
+  );
+  const quickActions = source.match(
+    /quickActions=\{[\s\S]*?<HomeQuickActions[\s\S]*?\/>\s*\}/u,
+  )?.[0];
+
+  assert.ok(quickActions);
+  assert.doesNotMatch(quickActions, /impersonator/u);
+});
+
 test("Send balance slider uses a compact amber rounded-square visual thumb", async () => {
   const source = await readFile(
     new URL("../../src/components/Transfer/AmountSection.tsx", import.meta.url),

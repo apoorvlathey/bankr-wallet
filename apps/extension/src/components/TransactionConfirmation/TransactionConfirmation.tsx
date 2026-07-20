@@ -28,6 +28,8 @@ import { useTransactionActions } from "./useTransactionActions";
 import { useTransactionBatchEligibility } from "./useTransactionBatchEligibility";
 import { useTransactionMetadata } from "./useTransactionMetadata";
 import { useTransactionReviewState } from "./useTransactionReviewState";
+import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
+import { allowsImpersonatedTransactions } from "@/chrome/network/impersonatedRpcPolicy";
 
 function TransactionConfirmation({
   txRequest,
@@ -65,6 +67,26 @@ function TransactionConfirmation({
   );
   const [feePaymentQuote, setFeePaymentQuote] =
     useState<FeePaymentQuoteSummary | null>(null);
+  const [canSendImpersonatedTransaction, setCanSendImpersonatedTransaction] =
+    useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCanSendImpersonatedTransaction(false);
+    if (accountType !== "impersonator" || !resolvedChain?.rpcUrl) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    void allowsImpersonatedTransactions(tx.chainId, resolvedChain.rpcUrl)
+      .then((allowed) => {
+        if (!cancelled) setCanSendImpersonatedTransaction(allowed);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [accountType, resolvedChain?.rpcUrl, tx.chainId, txRequest.id]);
 
   const metadata = useTransactionMetadata(
     txRequest,
@@ -93,6 +115,7 @@ function TransactionConfirmation({
   const actions = useTransactionActions({
     txRequest,
     accountType,
+    canSendImpersonatedTransaction,
     isInSidePanel,
     isErc7715PermissionRevoke,
     is7702Revoke,
@@ -107,6 +130,8 @@ function TransactionConfirmation({
     onBeforeReject,
     onAddedToBatch,
   });
+  const isLedgerWaiting =
+    accountType === "ledger" && actions.state === "submitting";
 
   if (actions.state === "forceInclusion" && review.forceInclusionInfo) {
     return (
@@ -130,7 +155,7 @@ function TransactionConfirmation({
         : "Transaction request";
   const confirmDisabledReason = actions.isRejecting
     ? "Reject in progress"
-    : actions.state === "error"
+    : actions.state === "error" && accountType !== "ledger"
       ? "Fix the error above before retrying"
       : review.isCalldataMalformed
         ? "Calldata is malformed — signing blocked"
@@ -187,6 +212,7 @@ function TransactionConfirmation({
             stripFg={stripFg}
             onNavigate={onNavigate}
             onRejectAll={onRejectAll}
+            isDisabled={isLedgerWaiting}
           />
         ) : undefined
       }
@@ -235,13 +261,14 @@ function TransactionConfirmation({
           clearSigningEligible={review.clearSigningEligible}
           simulationReverted={review.simulationReverted}
           simulationUnavailable={review.simulationUnavailable}
-          requestState={actions.state}
+          requestState={isLedgerWaiting ? "ready" : actions.state}
           requestError={actions.error}
           gasValid={review.gasValid}
           splitState={review.splitState}
           onClearSigningResolved={(matched) =>
             review.setClearSigningStatus(matched ? "matched" : "absent")
           }
+          isReadOnly={isLedgerWaiting}
         />
       }
       advancedDetails={
@@ -260,6 +287,7 @@ function TransactionConfirmation({
           onFunctionName={setDecodedFunctionName}
           onAddToBatch={actions.handleAddToBatch}
           onForceInclusionChange={review.setForceInclusion}
+          isReadOnly={isLedgerWaiting}
           feePaymentToken={feePaymentToken}
           feePaymentQuote={feePaymentQuote}
         />
@@ -275,6 +303,7 @@ function TransactionConfirmation({
           isValueMalformed={review.isValueMalformed}
           onGasOverrides={review.setGasOverrides}
           onGasValidityChange={review.setGasValid}
+          isReadOnly={isLedgerWaiting}
           feePaymentToken={feePaymentToken}
           feePaymentQuote={feePaymentQuote}
           onFeePaymentTokenChange={setFeePaymentToken}
@@ -282,10 +311,20 @@ function TransactionConfirmation({
         />
       }
       actionNotice={
-        accountType === "impersonator" ? <ViewOnlySigningNotice /> : undefined
+        accountType === "impersonator" ? (
+          <ViewOnlySigningNotice
+            message={
+              canSendImpersonatedTransaction
+                ? "Developer RPC will send this transaction without a signature"
+                : undefined
+            }
+          />
+        ) : accountType === "ledger" ? (
+          <LedgerSigningStatus active={isLedgerWaiting} />
+        ) : undefined
       }
       confirmAction={
-        accountType === "impersonator" ? (
+        accountType === "impersonator" && !canSendImpersonatedTransaction ? (
           rejectButton
         ) : (
           <ConfirmActionButton
@@ -294,11 +333,16 @@ function TransactionConfirmation({
             simulationFailed={shouldConfirmSimulationFailure({
               simulationReverted: review.simulationReverted,
             })}
+            waitingForLedger={isLedgerWaiting}
             onConfirm={actions.handleConfirm}
           />
         )
       }
-      rejectAction={accountType === "impersonator" ? undefined : rejectButton}
+      rejectAction={
+        accountType === "impersonator" && !canSendImpersonatedTransaction
+          ? undefined
+          : rejectButton
+      }
     />
   );
 }

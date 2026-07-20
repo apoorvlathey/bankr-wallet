@@ -21,7 +21,8 @@ export function SponsorshipEligibilityNotice({
     premiumLoading ||
     !premiumStatus ||
     premiumStatus.isPremium ||
-    accountType === "impersonator"
+    accountType === "impersonator" ||
+    accountType === "ledger"
   ) {
     return null;
   }
@@ -80,7 +81,8 @@ export function TransferNotices({
       {isUsdcOnBase &&
         !premiumLoading &&
         premiumStatus?.isPremium &&
-        accountType !== "impersonator" && (
+        accountType !== "impersonator" &&
+        accountType !== "ledger" && (
           <Box
             bg="status.success.bg"
             borderWidth="1px"
@@ -139,7 +141,8 @@ export function TransferNotices({
           p={3}
         >
           <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
-            View-only account — transfers are disabled.
+            View-only account — you can review this transfer. Sending is only
+            available when developer mode is enabled for the selected RPC.
           </Text>
         </Box>
       )}

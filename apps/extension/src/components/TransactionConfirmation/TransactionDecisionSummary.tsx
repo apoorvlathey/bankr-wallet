@@ -20,6 +20,7 @@ interface TransactionDecisionSummaryProps {
   forceInclusionInfo: ForceInclusionInfo | null;
   destinationChainName: string;
   isValueMalformed: boolean;
+  isReadOnly?: boolean;
   onGasOverrides: (overrides: GasOverrides | null) => void;
   onGasValidityChange: (valid: boolean) => void;
   feePaymentToken: "native" | `0x${string}`;
@@ -37,6 +38,7 @@ export function TransactionDecisionSummary({
   forceInclusionInfo,
   destinationChainName,
   isValueMalformed,
+  isReadOnly = false,
   onGasOverrides,
   onGasValidityChange,
   feePaymentToken,
@@ -108,6 +110,7 @@ export function TransactionDecisionSummary({
           onGasOverrides={onGasOverrides}
           onValidityChange={onGasValidityChange}
           forceInclusion={forceInclusion}
+          isReadOnly={isReadOnly}
           onFeeSummaryChange={setNativeFeeSummary}
         />
       )}

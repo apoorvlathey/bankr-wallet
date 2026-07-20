@@ -264,7 +264,7 @@ function TokenTransfer({
             variant="brand"
             onClick={() => submission.submit(canSubmit)}
             isLoading={isBusy}
-            isDisabled={!canSubmit || accountType === "impersonator"}
+            isDisabled={!canSubmit}
             fontSize={sponsored.isSponsoredFlow ? "sm" : undefined}
           >
             {sponsored.isSponsoredFlow

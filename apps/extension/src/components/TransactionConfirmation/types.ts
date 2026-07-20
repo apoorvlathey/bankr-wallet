@@ -5,6 +5,7 @@ export type TransactionAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
+  | "ledger"
   | "impersonator";
 
 export interface TransactionConfirmationProps {

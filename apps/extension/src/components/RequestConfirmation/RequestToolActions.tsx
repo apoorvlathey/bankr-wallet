@@ -11,6 +11,7 @@ interface RequestToolActionsProps {
   isAddingToBatch: boolean;
   batchedCount: number;
   onAddToBatch: () => void;
+  isInteractionDisabled?: boolean;
 }
 
 /** Shared developer simulation and cross-request batching action rows. */
@@ -22,6 +23,7 @@ export function RequestToolActions({
   isAddingToBatch,
   batchedCount,
   onAddToBatch,
+  isInteractionDisabled = false,
 }: RequestToolActionsProps) {
   return (
     <VStack spacing={0} align="stretch" w="full">
@@ -75,7 +77,11 @@ export function RequestToolActions({
               textTransform="none"
               letterSpacing="normal"
               onClick={onAddToBatch}
-              isDisabled={!!addToBatchDisabledReason || isAddingToBatch}
+              isDisabled={
+                isInteractionDisabled ||
+                !!addToBatchDisabledReason ||
+                isAddingToBatch
+              }
               isLoading={isAddingToBatch}
               aria-label={
                 addToBatchDisabledReason

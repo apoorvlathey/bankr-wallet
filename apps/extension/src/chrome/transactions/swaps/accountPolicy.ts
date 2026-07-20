@@ -24,9 +24,6 @@ export async function resolveLockedSwapAccount(
       error: "Prepared swap account does not match the locked from address",
     };
   }
-  if (account.type === "impersonator") {
-    return { ok: false, error: "View-only accounts cannot execute swaps" };
-  }
   return { ok: true, account };
 }
 

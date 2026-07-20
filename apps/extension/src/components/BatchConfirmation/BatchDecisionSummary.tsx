@@ -23,7 +23,7 @@ interface BatchDecisionSummaryProps {
   fromAddress: string;
   chainId: number;
   chainName: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   decodedFunctionNames: Record<number, string>;
   isNonAtomic: boolean;
   isLocalSigningAccount: boolean;

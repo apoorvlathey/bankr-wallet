@@ -7,6 +7,10 @@ import { isExecutionPermissionRequestInProgress } from "./pendingRequests";
 import { requestRpcThroughContentScript } from "./rpcBridge";
 import { routeProviderRequest } from "./requestRouter";
 
+export const UNCONNECTED_PROVIDER_ADDRESS =
+  "0x0000000000000000000000000000000000000000";
+const EXPOSED_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
+
 export class ImpersonatorProvider extends EventEmitter {
   isImpersonator = true;
   isMetaMask = true;
@@ -19,6 +23,17 @@ export class ImpersonatorProvider extends EventEmitter {
     super();
     this.chainId = chainId;
     this.#address = address;
+  }
+
+  /** MetaMask-compatible legacy view of the origin-authorized account. */
+  get selectedAddress(): string | null {
+    if (
+      !EXPOSED_ADDRESS_PATTERN.test(this.#address) ||
+      this.#address.toLowerCase() === UNCONNECTED_PROVIDER_ADDRESS
+    ) {
+      return null;
+    }
+    return this.#address;
   }
 
   setAddress = (address: string, emitAccountsChanged = true) => {

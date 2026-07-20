@@ -65,7 +65,7 @@ test("resolved requests crossfade quickly from the mounted skeleton", () => {
 });
 
 test("matching approval requests paint before secondary app hydration", () => {
-  const hintedRouteIndex = appSource.indexOf("if (hintedApprovalRoute)");
+  const hintedRouteIndex = appSource.search(/if \(hintedApprovalRoute(?: &&[^)]*)?\)/);
   const releaseIndex = appSource.indexOf(
     "setIsLoading(false);",
     hintedRouteIndex,

@@ -14,6 +14,10 @@ export const SIMULATION_GAS_LIMIT = 10_000_000n;
  */
 export const BATCH_SIMULATION_GAS_LIMIT = 50_000_000n;
 
+/** Bound RPC-derived contracts before balance probes, pricing, and rendering. */
+export const MAX_SIMULATION_ASSET_CHANGES = 128;
+export const MAX_SIMULATION_NFT_CHANGES = 64;
+
 /** Multicall3 is deployed at the same address on all supported chains. */
 export const MULTICALL3_ADDRESS: Address =
   "0xcA11bde05977b3631167028862bE2a173976CA11";

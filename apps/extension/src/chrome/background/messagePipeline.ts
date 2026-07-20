@@ -175,6 +175,12 @@ export function createBackgroundMessagePipeline(
       return accountManagementRoute.keepChannelOpen;
     }
 
+    const ledgerRoute = routes.routeBackgroundLedgerMessage(
+      message,
+      sendResponse,
+    );
+    if (ledgerRoute.handled) return ledgerRoute.keepChannelOpen;
+
     const secretManagementRoute =
       routes.routeBackgroundSecretManagementMessage(
         message,

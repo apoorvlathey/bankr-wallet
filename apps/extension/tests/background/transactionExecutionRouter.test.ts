@@ -15,6 +15,8 @@ function dependencies(
     handleConfirmTransaction: async () => ({ success: true }),
     handleConfirmTransactionAsync: async () => ({ success: true }),
     handleConfirmTransactionAsyncPK: async () => ({ success: true }),
+    handleConfirmTransactionAsyncLedger: async () => ({ success: true }),
+    handleConfirmImpersonatedTransaction: async () => ({ success: true }),
     handleInitiateTransfer: async () => ({ success: true, txId: "tx-new" }),
     runPendingRequestResolution: async (options: any) => options.resolve(),
     pendingResolutionConflict: (action: string) => ({
@@ -51,7 +53,7 @@ test("transaction execution declares one unique confirmation route set", () => {
   );
 });
 
-test("Bankr, private-key, and seed confirmations share the exact transaction claim", async () => {
+test("all transaction execution paths share the exact transaction claim", async () => {
   const claims: Array<Record<string, unknown>> = [];
   const calls: unknown[][] = [];
   const deps = dependencies({
@@ -74,6 +76,14 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
     },
     handleConfirmTransactionAsyncPK: async (...args) => {
       calls.push(["local", ...args]);
+      return { success: true };
+    },
+    handleConfirmTransactionAsyncLedger: async (...args) => {
+      calls.push(["ledger", ...args]);
+      return { success: true };
+    },
+    handleConfirmImpersonatedTransaction: async (...args) => {
+      calls.push(["impersonated", ...args]);
       return { success: true };
     },
   });
@@ -106,8 +116,26 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
     },
     { tab: { id: 17 } } as chrome.runtime.MessageSender,
   );
+  const ledger = await dispatch(
+    deps,
+    {
+      type: "confirmTransactionAsyncLedger",
+      txId: "ledger-1",
+      password: "agent",
+      functionName: "approve",
+      gasOverrides: { gasLimit: "0x5208" },
+      forceInclusion: false,
+    },
+    { tab: { id: 18 } } as chrome.runtime.MessageSender,
+  );
+  const impersonated = await dispatch(deps, {
+    type: "confirmImpersonatedTransaction",
+    txId: "impersonated-1",
+    functionName: "transfer",
+    gasOverrides: { gasLimit: "0x5208" },
+  });
 
-  for (const result of [immediate, background, local]) {
+  for (const result of [immediate, background, local, ledger, impersonated]) {
     assert.deepEqual(result.response, { success: true });
     assert.deepEqual(result.route, { handled: true, keepChannelOpen: true });
   }
@@ -121,6 +149,8 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
       { family: "transaction", requestId: "bankr-1", action: "confirm" },
       { family: "transaction", requestId: "bankr-2", action: "confirm" },
       { family: "transaction", requestId: "local-1", action: "confirm" },
+      { family: "transaction", requestId: "ledger-1", action: "confirm" },
+      { family: "transaction", requestId: "impersonated-1", action: "confirm" },
     ],
   );
   assert.ok(claims.every((claim) => claim.conflictResult === deps.pendingResolutionConflict));
@@ -137,6 +167,21 @@ test("Bankr, private-key, and seed confirmations share the exact transaction cla
       false,
       "token",
       "local-quote",
+    ],
+    [
+      "ledger",
+      "ledger-1",
+      "agent",
+      18,
+      "approve",
+      { gasLimit: "0x5208" },
+      false,
+    ],
+    [
+      "impersonated",
+      "impersonated-1",
+      "transfer",
+      { gasLimit: "0x5208" },
     ],
   ]);
 });

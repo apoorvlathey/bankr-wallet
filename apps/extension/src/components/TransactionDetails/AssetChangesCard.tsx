@@ -1,6 +1,8 @@
 import { Box, Flex, HStack, Text, VStack } from "@chakra-ui/react";
 import { ArrowDownIcon, ArrowUpIcon } from "@chakra-ui/icons";
 import type { AssetChangeRecord } from "@/chrome/txHistoryStorage";
+import type { AssetChange } from "@/chrome/txSimulation";
+import { AssetRow } from "@/components/AssetChanges/AssetRow";
 import TokenLogo from "@/components/TokenLogo";
 import { getChainConfig } from "@/constants/chainConfig";
 import { appendTokenSymbol } from "@/lib/tokenAmountFormat";
@@ -110,9 +112,41 @@ export default function AssetChangesCard({
 
   const outGroups = getErc20TransferGroups(record, "out");
   const inGroups = getErc20TransferGroups(record, "in");
+  const toAssetChange = (
+    transfer: NonNullable<AssetChangeRecord["nftTransfers"]>[number],
+  ): AssetChange => ({
+    address: transfer.token,
+    symbol:
+      transfer.symbol ||
+      `${transfer.token.slice(0, 6)}...${transfer.token.slice(-4)}`,
+    name: transfer.collectionName || "",
+    decimals: 0,
+    logoUrl: undefined,
+    rawDelta: transfer.amount,
+    formattedAmount: transfer.amount,
+    valueUsd: null,
+    direction: transfer.direction,
+    nft: {
+      standard: transfer.standard,
+      tokenId: transfer.tokenId,
+      amount: transfer.amount,
+      metadata: transfer.metadata,
+      metadataLoading: transfer.metadataLoading ?? false,
+    },
+  });
+  const outNfts = (record.nftTransfers ?? [])
+    .filter((transfer) => transfer.direction === "out")
+    .map(toAssetChange);
+  const inNfts = (record.nftTransfers ?? [])
+    .filter((transfer) => transfer.direction === "in")
+    .map(toAssetChange);
   const nativeIsOut = !!nativeData?.isNegative;
-  const hasOutflows = Boolean((nativeRow && nativeIsOut) || outGroups.length);
-  const hasInflows = Boolean((nativeRow && !nativeIsOut) || inGroups.length);
+  const hasOutflows = Boolean(
+    (nativeRow && nativeIsOut) || outGroups.length || outNfts.length,
+  );
+  const hasInflows = Boolean(
+    (nativeRow && !nativeIsOut) || inGroups.length || inNfts.length,
+  );
   if (!hasOutflows && !hasInflows) return null;
 
   const renderGroup = (group: (typeof outGroups)[number]) => (
@@ -146,6 +180,13 @@ export default function AssetChangesCard({
             <DirectionHeader direction="send" />
             {nativeRow && nativeIsOut && nativeRow}
             {outGroups.map(renderGroup)}
+            {outNfts.map((change, index) => (
+              <AssetRow
+                key={`out-${change.address}-${change.nft?.tokenId}-${index}`}
+                change={change}
+                explorerUrl={explorer}
+              />
+            ))}
           </Box>
         )}
         {hasInflows && (
@@ -153,6 +194,13 @@ export default function AssetChangesCard({
             <DirectionHeader direction="receive" />
             {nativeRow && !nativeIsOut && nativeRow}
             {inGroups.map(renderGroup)}
+            {inNfts.map((change, index) => (
+              <AssetRow
+                key={`in-${change.address}-${change.nft?.tokenId}-${index}`}
+                change={change}
+                explorerUrl={explorer}
+              />
+            ))}
           </Box>
         )}
       </VStack>

@@ -5,6 +5,7 @@ export type TransferAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
+  | "ledger"
   | "impersonator";
 
 export interface TokenTransferProps {

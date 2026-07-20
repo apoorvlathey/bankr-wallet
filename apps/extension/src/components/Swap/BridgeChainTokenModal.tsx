@@ -22,6 +22,7 @@ import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { BridgeChainTokenPickerScreen } from "./BridgeChainTokenPickerScreen";
 import { pickDefaultSwapSellToken } from "./swapViewUtils";
+import { TOKEN_PICKER_PAGE_SIZE } from "@/chrome/portfolio/consumerPolicy";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -163,6 +164,9 @@ export default function BridgeChainTokenModal({
   const [tokensChainId, setTokensChainId] = useState<number | null>(null);
   const [tokensLoading, setTokensLoading] = useState(false);
   const [tokenSearch, setTokenSearch] = useState("");
+  const [visibleTokenCount, setVisibleTokenCount] = useState(
+    TOKEN_PICKER_PAGE_SIZE,
+  );
 
   const [resolvedCustom, setResolvedCustom] = useState<ResolvedCustomToken | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
@@ -170,13 +174,6 @@ export default function BridgeChainTokenModal({
   const lastResolvedAddrRef = useRef<string>("");
 
   const tokenSearchRef = useRef<HTMLInputElement>(null);
-
-  // Spam-suppression: holdings worth less than $0.10 USD collapse into a
-  // disclosure row at the bottom of "Your Tokens". Default closed because
-  // every Base wallet that's ever touched a memecoin/airdrop has 30+ of
-  // these and they'd otherwise dominate the section.
-  const LOW_VALUE_USD_THRESHOLD = 0.1;
-  const [showLowValue, setShowLowValue] = useState(false);
 
   // Reset state every time the dropdown opens. Honours the parent's
   // `initialChainId` so reopening from a different side picks up.
@@ -188,7 +185,7 @@ export default function BridgeChainTokenModal({
     setResolvedCustom(null);
     setCustomError(null);
     setCustomLoading(false);
-    setShowLowValue(false);
+    setVisibleTokenCount(TOKEN_PICKER_PAGE_SIZE);
     lastResolvedAddrRef.current = "";
     // Defer focus past the dropdown's mount animation.
     const id = window.setTimeout(() => {
@@ -197,11 +194,9 @@ export default function BridgeChainTokenModal({
     return () => window.clearTimeout(id);
   }, [isOpen, initialChainId, initialPanel, initialTokenSearch]);
 
-  // Reset the low-value disclosure when the user switches chain — each
-  // chain's "Your Tokens" set should start collapsed.
   useEffect(() => {
-    setShowLowValue(false);
-  }, [currentChainId]);
+    setVisibleTokenCount(TOKEN_PICKER_PAGE_SIZE);
+  }, [currentChainId, tokenSearch]);
 
   // Load chain list once per open + mode flip.
   useEffect(() => {
@@ -405,22 +400,6 @@ export default function BridgeChainTokenModal({
     });
   }, [holdingsOnChain, term, excludeLower]);
 
-  // Split holdings into "funded" (>= threshold) and "low value" (< threshold).
-  // When the user is searching, skip the split — they're explicitly looking
-  // for something and folding it behind a disclosure would be hostile.
-  const { fundedHoldings, lowValueHoldings } = useMemo(() => {
-    if (term) {
-      return { fundedHoldings: filteredHoldings, lowValueHoldings: [] };
-    }
-    const funded: PortfolioToken[] = [];
-    const lowValue: PortfolioToken[] = [];
-    for (const h of filteredHoldings) {
-      if (h.valueUsd >= LOW_VALUE_USD_THRESHOLD) funded.push(h);
-      else lowValue.push(h);
-    }
-    return { fundedHoldings: funded, lowValueHoldings: lowValue };
-  }, [filteredHoldings, term]);
-
   const filteredRest = useMemo(() => {
     if (!term) return restTokens;
     return restTokens.filter(
@@ -433,6 +412,17 @@ export default function BridgeChainTokenModal({
         ).includes(term),
     );
   }, [restTokens, term]);
+  const visibleHoldings = useMemo(
+    () => filteredHoldings.slice(0, visibleTokenCount),
+    [filteredHoldings, visibleTokenCount],
+  );
+  const visibleRest = useMemo(
+    () => filteredRest.slice(0, visibleTokenCount),
+    [filteredRest, visibleTokenCount],
+  );
+  const remainingTokenCount =
+    Math.max(0, filteredHoldings.length - visibleHoldings.length) +
+    Math.max(0, filteredRest.length - visibleRest.length);
 
   // Popular / trending chips — same dataset as the legacy selectors so the
   // user sees a consistent quick-pick set. Drops the last entry from each
@@ -587,12 +577,12 @@ export default function BridgeChainTokenModal({
   // ---- Logo cache (chain icons + token logos) ----
   const tokenLogoUrls = useMemo(() => {
     const urls: Array<string | null | undefined> = [];
-    for (const h of holdingsOnChain) urls.push(h.logoUrl);
-    for (const t of tokensAsPortfolio) urls.push(t.logoUrl);
+    for (const h of visibleHoldings) urls.push(h.logoUrl);
+    for (const t of visibleRest) urls.push(t.logoUrl);
     for (const t of popularTokens) urls.push(t.logoUrl);
     if (resolvedCustom) urls.push(resolvedCustom.token.logoUrl);
     return urls;
-  }, [holdingsOnChain, tokensAsPortfolio, popularTokens, resolvedCustom]);
+  }, [visibleHoldings, visibleRest, popularTokens, resolvedCustom]);
   const logoCache = useCachedAvatarMap(tokenLogoUrls);
   const resolveLogo = (url: string | undefined): string | undefined =>
     (url && logoCache.get(url)) || url;
@@ -683,11 +673,12 @@ export default function BridgeChainTokenModal({
       customLoading={customLoading}
       customError={customError ?? undefined}
       isAddressSearch={isAddressSearch}
-      fundedHoldings={fundedHoldings}
-      lowValueHoldings={lowValueHoldings}
-      showLowValue={showLowValue}
-      onToggleLowValue={() => setShowLowValue((visible) => !visible)}
-      remainingTokens={filteredRest}
+      visibleHoldings={visibleHoldings}
+      remainingTokens={visibleRest}
+      remainingTokenCount={remainingTokenCount}
+      onShowMore={() =>
+        setVisibleTokenCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
+      }
       tokensLoading={tokensLoading}
       tokensStale={tokensStale}
       isSelectedToken={isSelectedToken}

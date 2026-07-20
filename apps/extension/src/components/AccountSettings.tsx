@@ -60,7 +60,7 @@ import {
   StickyActionBar,
 } from "@/components/ui";
 import { BrainIcon, ShieldIcon } from "./Settings/icons";
-import { fetchPortfolio } from "@/chrome/portfolio/api";
+import { fetchPortfolioSummary } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { getAccountRemovalCopy } from "./accountRemovalModel";
@@ -180,7 +180,7 @@ function AccountSettings({
     const controller = new AbortController();
     setDeletePortfolio({ status: "loading", totalValueUsd: null });
 
-    void fetchPortfolio(account.address, controller.signal)
+    void fetchPortfolioSummary(account.address, controller.signal)
       .then((portfolio) => {
         if (controller.signal.aborted) return;
         setDeletePortfolio({

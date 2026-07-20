@@ -30,6 +30,7 @@ import TransactionImpact from "./TransactionImpact";
 import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
 import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
+import { useResolvedCalldata } from "./useResolvedCalldata";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -64,6 +65,11 @@ export function TxDetailController({
       ],
     ),
   );
+  const calldata = useResolvedCalldata(isOpen, tx);
+  const detailTx = useMemo(
+    () => ({ ...tx, tx: { ...tx.tx, data: calldata.data } }),
+    [calldata.data, tx],
+  );
   const resolveLogo = useCallback(
     (url: string | null | undefined): string | undefined =>
       (url && cachedLogoMap.get(url)) || url || undefined,
@@ -75,9 +81,9 @@ export function TxDetailController({
   // surface uses — instead of FROM=EOA / TO=EOA + an opaque blob. Returns null
   // for non-batch txs so this is a no-op for the rest of history.
   const batchCalls = useMemo(() => {
-    if (!looksLikeErc7821SelfBatch(tx.tx)) return null;
-    return decodeErc7821Batch(tx.tx.data);
-  }, [tx.tx]);
+    if (!looksLikeErc7821SelfBatch(detailTx.tx)) return null;
+    return decodeErc7821Batch(detailTx.tx.data);
+  }, [detailTx.tx]);
   const hasBatchCalls = !!batchCalls && batchCalls.length > 0;
   const delegationMeta = tx.delegation7702Meta;
   const hasDelegation = !!delegationMeta;
@@ -148,7 +154,7 @@ export function TxDetailController({
     tx.status === "failed" &&
     !!tx.error &&
     tx.error.toLowerCase().includes("dropped from the mempool") &&
-    !!tx.tx.to;
+    !!tx.tx.to && (!tx.calldataSelector || !!calldata.data);
 
   const handleRebroadcast = async () => {
     if (!tx.tx.to) return;
@@ -162,7 +168,7 @@ export function TxDetailController({
               tx: {
                 from: tx.tx.from,
                 to: tx.tx.to,
-                data: tx.tx.data,
+                data: calldata.data,
                 value: tx.tx.value,
                 chainId: tx.tx.chainId,
               },
@@ -239,9 +245,9 @@ export function TxDetailController({
   );
   const hasSwapSummary = Boolean(tx.swapMeta && !tx.bridge && !hasBatchCalls);
   const hasGenericSummary = !hasStructuredSummary && !hasSwapSummary;
-  const genericAction = !tx.tx.to
+  const genericAction = !detailTx.tx.to
     ? "Deploy contract"
-    : tx.tx.data && tx.tx.data !== "0x"
+    : (detailTx.tx.data && detailTx.tx.data !== "0x") || tx.calldataSelector
       ? "Contract interaction"
       : "Transaction";
   const chainName = resolvedChain?.name ?? tx.chainName;
@@ -337,7 +343,7 @@ export function TxDetailController({
         />
 
         <AdvancedDetails
-          tx={tx}
+          tx={detailTx}
           resolveLogo={resolveLogo}
           nativeSym={nativeSym}
           gasData={gasData}
@@ -353,6 +359,9 @@ export function TxDetailController({
           defaultOpen={!hasHero && !decodedFunctionName}
           formatWeiUsd={formatWeiUsd}
           onFunctionName={handleDecodedFunctionName}
+          calldataLoading={calldata.loading}
+          calldataError={calldata.error}
+          onRetryCalldata={calldata.retry}
         />
       </VStack>
     </TxDetailView>

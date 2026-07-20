@@ -7,6 +7,8 @@ import {
   WALLET_SYNC_STORAGE_KEYS,
 } from "../walletResetStorage";
 import { withStorageLock } from "../storageLock";
+import { clearHistoryDatabase } from "../history/database";
+import { clearHistoryNftMetadataCache } from "../history/nftMetadataCache";
 
 export const ONBOARDING_INITIALIZATION_KEY = "onboardingInitialization";
 export const ONBOARDING_LOCK_KEY = `local:${ONBOARDING_INITIALIZATION_KEY}`;
@@ -82,6 +84,8 @@ export async function clearNonAuthoritativeWalletResidue(
     (key) => key !== ONBOARDING_INITIALIZATION_KEY,
   );
   await Promise.all([
+    clearHistoryDatabase(),
+    clearHistoryNftMetadataCache(),
     chrome.storage.local.remove(localKeys),
     chrome.storage.sync.remove([...ONBOARDING_IDENTITY_SYNC_KEYS]),
   ]);
@@ -174,6 +178,8 @@ export async function rollbackMarkedInitialization(
 
     await clearAllAuthState();
     await Promise.all([
+      clearHistoryDatabase(),
+      clearHistoryNftMetadataCache(),
       chrome.storage.local.remove(getWalletLocalStorageKeysToRemove(allLocal)),
       chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
     ]);

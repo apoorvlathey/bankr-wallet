@@ -52,6 +52,7 @@ function createDependencies(
     getAccounts: async () => [{ id: "account-1" }, { id: "account-2" }],
     handleRevokeDappPermission: async () => ({ success: true }),
     handleRemoveAccount: async () => ({ success: true }),
+    clearTxHistoryForAddresses: async () => {},
     sendRuntimeMessage: async () => undefined,
     ...overrides,
   };
@@ -299,6 +300,9 @@ test("account removal validates sponsored state and revokes dapps before deletio
       events.push("account:remove");
       return { success: true };
     },
+    clearTxHistoryForAddresses: async (addresses) => {
+      events.push(`history:clear:${addresses.join(",")}`);
+    },
   });
 
   assert.deepEqual(
@@ -314,5 +318,6 @@ test("account removal validates sponsored state and revokes dapps before deletio
     "dapp:revoke",
     "account:remove",
     "sponsored:end",
+    "history:clear:0x1111111111111111111111111111111111111111",
   ]);
 });

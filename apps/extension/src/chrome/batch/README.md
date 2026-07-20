@@ -10,6 +10,8 @@ Focused boundaries in this directory are:
   retention, and bounded history.
 - `batchBankrExecution.ts`: pinned Bankr confirmation and terminalization.
 - `batchLocalConfirmation.ts`: PK/seed key restoration and path selection.
+- `batchForceInclusionPolicy.ts`: OP Stack-only local batch eligibility and
+  lazy processor selection; Arbitrum remains single-transaction-only.
 - `batchSequentialExecution.ts`: non-atomic nonce/broadcast state machine.
 - `batchAtomic7702Execution.ts`: atomic authorization and sign-once state machine.
 - `batchCapabilities.ts`: exact connected-account capability advertisement and

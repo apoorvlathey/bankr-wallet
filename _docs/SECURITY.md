@@ -68,6 +68,13 @@ which is insufficient without the browser-session ciphertext.
 | IV             | 12 bytes (random per encryption)                        |
 | Vault key      | 256-bit random (generated once, encrypted per-password) |
 
+New master and agent passwords are accepted only when they are 8 to 256
+characters and do not match the common-password denylist in
+`constants/securityPolicy.ts`. This creation policy is enforced in both the UI
+and the background onboarding, agent-factor, and master-rotation boundaries.
+Existing-password unlock and verification deliberately omit the minimum so a
+legacy wallet with a shorter password cannot be stranded.
+
 **Files**: the stable `crypto.ts` and `cryptoUtils.ts` facades cover the `cryptography/` audit domain (`types.ts` for the released envelope, `base64.ts` for bounded codecs, `passwordKey.ts` for fixed PBKDF2 policy, `passwordCipher.ts` for legacy AES-GCM records, `vaultKey.ts` for 32-byte vault-key wrapping/direct encryption, and `credentialStorage.ts` for vault-first legacy-compatible Bankr lookup). The policy-free `vaultCrypto.ts` facade covers the `vault/` audit domain (`entryCrypto.ts` for released password/vault-key transforms, `accountIntegrity.ts` for local key binding, `generalIntegrity.ts` for general-key recovery proof, `recordCodec.ts` for bounded released-V1 decoding and the unique-ID mutation gate, `repository.ts` for exact `pkVault` V1 storage, and `operations.ts` for serialized mutation/hydration/migration preparation). The stable `mnemonicStorage.ts` facade covers the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. Stable `secretRevealHandlers.ts` and `masterAuthorization.ts` facades cover `secrets/revealHandlers.ts` and `secrets/masterAuthorization.ts`, where plaintext release remains lock-held, epoch-bound, master-only, and revalidated after asynchronous reads.
 
 See [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) for the enforced
@@ -358,7 +365,7 @@ configured auto-lock boundary.
 | Handler Class | Examples | Why Extension-Only |
 | --- | --- | --- |
 | Account/session reads and ordering | `getAccounts`, `reorderAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state or allowing webpages to mutate wallet UI ordering. |
-| Transaction/history UI | `getTxHistory`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. |
+| Transaction/history UI | `getTxHistory`, `getTxHistoryPage`, `getTxHistoryItem`, `getTransactionCalldata`, `resolveHistoryNftMetadata`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. Lazy detail reads operate only on a trusted stored row and configured RPC. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
@@ -373,6 +380,8 @@ not forward an inpage message for it.
 | Handler | Effect | Guard |
 | --- | --- | --- |
 | `backfillAssetChanges` | Extension UI asks the service worker to re-fetch a confirmed tx receipt and populate missing `assetChanges` on an existing history entry. Does not expose secrets or create transactions. | `wallet-ui` audience policy |
+| `getTransactionCalldata` | Loads a trusted stored transaction, fetches its hash from the configured RPC, and returns calldata only after exact hash/from/to validation. | `wallet-ui` audience policy |
+| `resolveHistoryNftMetadata` | Resolves one trusted stored NFT contract/token ID at its receipt block (latest fallback). Raw token URI remains background-only; the renderer receives only bounded sanitized display fields. | `wallet-ui` audience policy |
 
 ### Authentication Handlers
 
@@ -521,7 +530,7 @@ Chainless `eip155` proposal namespaces are filled with that same visible chain s
 
 `walletConnect/keepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
 
-For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign.
+For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign; their only send path is the separately reviewed per-RPC developer opt-in described under Network Metadata Handlers.
 
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The pending request and bundle status pin exact `{ topic, requestId, method }` transport metadata, and the bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query, confirm, or open a bundle it did not create.
 
@@ -690,7 +699,10 @@ Each entry's required `rpcUrl` remains the only endpoint used at runtime.
 by decimal chain ID. The service worker validates every member with the same
 scheme, credential, private-network, length, and trusted-origin rules,
 deduplicates the list, rejects more than ten endpoints, and limits optional
-display names to 64 characters before storage. Released string-array records
+display names to 64 characters before storage. An optional exact-boolean
+`allowImpersonatedTransactions` flag grants only the selected endpoint the
+ability to receive reviewed view-only transactions through
+`eth_sendTransaction`; malformed/truthy non-booleans decode disabled. Released string-array records
 remain read-compatible and are converted to `{ url, name? }` objects only on a
 later successful save. Provider favicon lookup is derived only for public
 domain RPCs; private, loopback, literal-IP, and reserved hostnames are never
@@ -705,6 +717,26 @@ staged until the full form is saved. A custom chain-ID change is duplicate-check
 and re-keys its bounded RPC history inside the same locked service-worker
 mutation. Missing history resolves to the active endpoint and requires no eager
 migration.
+
+The impersonated-transaction path remains a trusted-UI confirmation route and
+never signs. Send and built-in Swap may stage the same review UI for a
+view-only account. Single requests remain reject-only and Swap confirmation
+remains disabled unless the exact selected endpoint is opted in. Before an
+irreversible RPC call, the background revalidates the pinned account
+ID/address/type, current chain RPC, and exact selected endpoint flag under the
+network mutation lock; dapp and WalletConnect requests additionally revalidate
+their request authorization. Built-in multi-leg swaps submit reviewed legs
+sequentially and stop the unsent tail after any definite or ambiguous failure.
+The flag does not authorize provider-specific admin methods, signature
+requests, ERC-5792/cross-dapp batches, fee-token gas, or delegated authority.
+RPCs must be configured separately to unlock/impersonate the `from` address. A
+missing RPC response is treated as ambiguous and prevents later swap legs from
+being sent.
+The same exact selected-endpoint opt-in permits connected sites and
+WalletConnect peers to use the existing bounded read-only RPC allowlist against
+that configured private endpoint, so transaction preflight such as
+`eth_estimateGas` works on a local fork. It does not admit another URL or enable
+submission, signing, debug/admin, or stateful filter methods through the proxy.
 
 ### Privileged Network and Remote-Image Boundaries
 
@@ -728,7 +760,9 @@ WalletConnect RPC forwarding:
   IPv4-mapped IPv6 (including WHATWG's canonical two-hextet form), localhost,
   link-local, private, carrier-grade NAT, IPv4 documentation/benchmark,
   multicast, and reserved local hostname suffixes are covered by the
-  classifier.
+  classifier. The only remote-site exception is an exact active private RPC
+  carrying the trusted Settings-only impersonated-transaction opt-in; it still
+  receives only the read/simulation allowlist above.
 - Redirects are rejected. Requests are capped at 524,288 serialized
   characters, responses are streamed under an 8,000,000-byte ceiling, at most
   16 forwarded calls run concurrently, and each call has a 15-second timeout.
@@ -755,9 +789,17 @@ deadline plus a caller-sized streaming byte cap. Signed sponsored-transfer
 authorizations and Bankr API keys therefore cannot follow a backend redirect
 to another origin.
 
+Portfolio egress has a 4 MiB byte ceiling plus a runtime codec that bounds raw
+candidate counts, accepted tokens/positions/assets, string and URL lengths,
+chain IDs, decimals, balances, and USD values before state or storage release.
+The website also caps its public response to 1,000 value-ranked tokens. Omitted
+value/count metadata preserves aggregate totals without retaining unbounded
+dust-token objects in the extension.
+
 Swap egress is isolated under `chrome/swap/`. `transport.ts` alone performs
-fixed-proxy HTTP reads and retains the 2 MiB quote / 8 MiB catalog / 64 KiB
-price ceilings plus bounded remote error text. `rpcClient.ts` alone resolves a
+fixed-proxy HTTP reads and retains the 2 MiB quote/catalog / 64 KiB price
+ceilings plus bounded remote error text. Token catalogs pass a strict
+2,000-entry codec before storage or caller release. `rpcClient.ts` alone resolves a
 configured chain RPC through the shared bounded transport. ERC-20 and Permit2
 read failures return zero as released UI fallback behavior; they cannot sign or
 broadcast. `erc20.ts` and `permit2.ts` contain the only approval calldata
@@ -765,6 +807,11 @@ builders, with Permit2 amount clamped to `uint160` and expiry fixed to 30 days.
 Token metadata/list/logo caches are non-secret, chain-and-address keyed, and
 best-effort on write. The root `swapApi.ts` is an export-only facade, enforced
 by architecture and behavior tests under `tests/swap/`.
+
+Transaction simulation caps access-list asset candidates and enriched asset
+changes at 128 and NFT change enrichment at 64. Portfolio-price projections
+cache only the derived price map with per-account single-flight reads, so a
+confirmation cannot repeatedly hydrate or scan complete holdings rows.
 
 Bankr remote authority is isolated under `chrome/bankr/`: `response.ts` is
 pure bounded validation, `transport.ts` owns only fixed-origin bounded HTTP,
@@ -872,7 +919,10 @@ reset/fresh onboarding abort plus epoch-invalidate old-wallet work. A storage
 write that crosses the reset epoch removes its stale entry before returning.
 NFT tokenURI metadata uses the same public-host/redirect rules, streams JSON
 under 256 KiB, bounds inline data and display strings, and rejects SVG/HTML
-image markup.
+image markup. Confirmed-history NFT display enrichment reads token metadata
+through the same bounded configured-RPC transport at the mined block. Durable
+history keeps only contract/token identity; the best-effort display cache never
+stores token URI and persists only bounded fields plus approved HTTPS image URLs.
 
 ---
 
@@ -956,6 +1006,10 @@ share that preflight rather than maintaining parallel security checks.
 Warnings such as missing expiration, weak nonce, old issued-at time, insecure
 HTTP URI, or non-checksummed address remain visible in the UI but do not block
 signing unless they become validation errors.
+Nonce weakness uses a 32-bit estimated Shannon-entropy floor together with
+explicit common-prefix, sequential-prefix, repeated-run, and repeated-pattern
+checks. It does not use a unique-character percentage, which would
+systematically misclassify long random hexadecimal nonces.
 
 Users can bypass SIWE validation errors only from the extension UI by opening
 the sticky decision-bar warning popover and explicitly checking its
@@ -993,6 +1047,10 @@ rejects subframe requests, and stores title/favicon only as hostile display
 metadata. Address updates always refresh the provider's private internal state,
 but `accountsChanged` is emitted only to approved origins. Revocation emits
 `accountsChanged([])` to matching open tabs.
+The getter-only legacy `window.ethereum.selectedAddress` compatibility field
+is derived from that same origin-scoped state and returns `null` for the
+unconnected sentinel, malformed values, empty account results, and revocation;
+it never reads or exposes the global active-account fallback directly.
 Account removal performs that exact-origin revocation before deleting any
 account mapped to a connected tab. Since the permission grant is origin-wide,
 all open tabs at the affected origin are disconnected; no connected tab is
@@ -1130,9 +1188,10 @@ accessible resources.
 | `mnemonicVault`            | Yes (encrypted)  | V2 dedicated-key-encrypted phrases + master wrapper, or V1 PBKDF2-encrypted phrases |
 | `seedGroups`               | No               | Seed group metadata (names, counts)                     |
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
+| `ledgerDevices`            | No               | Public Ledger label/model metadata keyed by the canonical public address at `m/44'/60'/0'/0/0`; no transport secret or private key |
 | `addressContacts`          | No               | Local-only user labels for public EVM addresses         |
 | `ensIdentityCache`         | No               | Six-hour public name/avatar cache; optional `needsAvatar` marks a forward-resolved name awaiting batched avatar lookup |
-| `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
+| `networkRpcUrls`           | No               | Bounded Settings-only RPC history keyed by chain ID, including optional display names and an exact per-endpoint `allowImpersonatedTransactions` developer flag. It never changes runtime routing until the selected endpoint is validated and promoted to `networksInfo[*].rpcUrl` through the service worker. |
 | `onboardingInitialization` | No               | Temporary `{ version, id, startedAt }` transaction marker for one fresh-wallet setup. Missing is normal; unmarked authoritative key/account state fails closed, disposable residue is cleared before begin, and complete wallets cannot be rolled back because marker cleanup failed. |
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
@@ -1151,11 +1210,12 @@ accessible resources.
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `erc7715PermissionResult:{id}` | No           | Transient ERC-7715 approval result, read+deleted by the waiting injected content script or used by the WalletConnect result bridge |
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |
-| `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata; no secrets. |
+| `txHistory`                | No               | Legacy completed transaction array, read only as an IndexedDB migration source and removed after successful compact import. |
+| `historyNftMetadataCache`  | No               | Best-effort 24-hour NFT display cache (500 entries/10 MiB). Never stores token URI; only public bounded fields and policy-approved HTTPS image URLs persist. |
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `portfolioSnapshotsV2`     | No               | Aggregate USD portfolio chart points keyed by public wallet address, with one-hour deduplication and eight-day retention. Legacy `portfolioSnapshots` data is purge-only because it may contain unrecoverable Tempo sentinel totals. |
-| `portfolioHoldingsCache`   | No               | Best-effort reset-aware Holdings display snapshot (`tokens`, DeFi rows, totals, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. V2 invalidates sentinel-era V1 entries; legacy DOM-localStorage mirrors are purged and never read. |
+| `portfolioHoldingsCache`   | No               | Best-effort reset-aware Holdings display snapshot (`tokens`, DeFi rows, totals, omitted-value metadata, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. V3 invalidates older unbounded entries and enforces four entries, 4 MiB total, and 1,000 tokens per snapshot; legacy DOM-localStorage mirrors are purged and never read. |
 | `ensAvatarImageCache`      | No               | Best-effort reset-aware cache containing only validated background-decoded/re-encoded raster data URLs plus timing/size metadata; original remote image bytes are not stored. Reset/onboarding invalidates in-flight old-wallet writes. |
 | `soundsEnabled`           | No               | Browser-local global interaction-sound preference. Missing values default to enabled; it does not affect authentication or signing behavior. |
 | `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |
@@ -1196,7 +1256,7 @@ accessible resources.
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
+| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `notifications`, `offscreen`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `offscreen` exists only in the Chromium manifest and isolates the Ledger WebHID SDK in `offscreen.html`; Firefox omits it. `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for content-script coverage and configured RPCs; egress is method/URL/origin/redirect/timeout/size/concurrency bounded |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
@@ -1220,6 +1280,37 @@ These must always hold true. Violations indicate a security bug.
 2. **No secrets in console logs** - Never `console.log` passwords, API keys, private keys, or vault keys. Grep for `console.log` near sensitive variables when reviewing changes.
 
 3. **Agent password blocks all account/secret modifications** - Every handler that modifies secrets or account structure checks `getPasswordType() === "agent"` and returns an error. The UI hides these options too, but backend enforcement is the true security boundary.
+
+3a. **Ledger keys never enter extension memory or storage** - The offscreen
+   Ledger SDK receives unsigned transaction/message/typed-data payloads and
+   returns only public addresses or signatures. Account persistence contains
+   public device/path metadata only. Every signing session re-identifies the
+   device, and the service worker locally recovers the returned signature before
+   broadcast/release. Adding Ledger accounts is master-only; normal signing may
+   use a live master or agent session. Ledger pairing/scan routes are exact
+   trusted-wallet-UI messages, not provider messages. Pending Ledger requests
+   reach the offscreen signer only from the exact extension service-worker
+   sender URL and extension ID; content scripts, renderer pages, foreign IDs,
+   query/hash variants, and path lookalikes are rejected before dispatch.
+   Ledger account/device persistence is the durable import commit, while the
+   subsequent active-account preference update is best-effort and cannot
+   produce a false failed-import response after data was committed.
+   During fresh-wallet onboarding, WebHID discovery occurs before credential
+   creation but retains public selection metadata only. The account/device
+   write is deferred until the master credential is initialized under the
+   active onboarding marker, so the existing rollback removes any partial
+   credential and Ledger metadata together.
+   Fee-payment capability discovery rejects Ledger before inspecting any
+   onchain delegate, so even a pre-delegated address cannot enter the ERC-4337
+   token-funded gas path that has no hardware signing implementation.
+   Pending Ledger requests
+   remain durable during the hardware prompt, but the existing synchronous
+   first-action claim blocks confirm/edit/reject races across popup, side panel,
+   and full-page renderers. Transaction removal and Activity creation occur
+   only after recovered-signer and final-authorization checks in the
+   pre-broadcast callback; signature removal occurs only after those same final
+   release checks. Renderer-side edit locks are UX defense-in-depth, not the
+   concurrency boundary.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
@@ -1490,7 +1581,7 @@ These must always hold true. Violations indicate a security bug.
 
 17. **Input length validation on user-facing strings** - Display names and group names are capped at 100 characters to prevent storage bloat from malformed inputs. Unknown message types are logged with `console.warn` for debuggability.
 
-18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and expired entries are pruned by `storage/cachePruner.ts` through the stable root facade.
+18. **Non-critical caches are fail-open** - Metadata/image caches (`tokenInfo:*`, `tokenLogo:*`, `ethShLabels:*`, `swapTokenList:*`, `cs:desc:*`, CoinGecko caches, `portfolioHoldingsCache`, `historyNftMetadataCache`, and `ensAvatarImageCache`) must never block wallet-critical storage writes. Cache writes are best-effort and bounded/expired entries are pruned by their owning cache or `storage/cachePruner.ts` through the stable root facade.
 
 ---
 
@@ -1560,6 +1651,18 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Is sensitive data encrypted before storage?
 - [ ] Is the key documented in the Storage Keys Reference above?
 - [ ] Is `chrome.storage.sync` only used for non-sensitive data?
+
+### If you modified Ledger support:
+
+- [ ] Does WebHID permission still originate from an explicit trusted-UI user gesture?
+- [ ] Does the offscreen document receive no password, vault key, private key, seed phrase, or API key?
+- [ ] Does the offscreen listener authorize the exact extension service-worker sender before dispatch?
+- [ ] Is the connected device re-bound through the canonical public identity before every scan/sign?
+- [ ] Is the recovered transaction/message/EIP-712 signer checked against the pinned account?
+- [ ] Do account mutations remain master-only while agent sessions can sign but cannot reveal/add/remove?
+- [ ] Does first-account onboarding defer Ledger persistence until after master credential initialization and retain the rollback marker through the write?
+- [ ] Do Firefox builds omit the `offscreen` permission and offscreen JavaScript target?
+- [ ] Were normal Bankr, private-key, seed-phrase, and view-only paths regression-tested?
 
 ### General checks:
 
@@ -1650,7 +1753,7 @@ Quick reference for which files to examine based on what area of security you're
 - `background/watchAssetRouter.ts` - Mixed-audience EIP-747 intake/read/confirm/reject transport with durable result and token-storage ordering
 - `background/chainPromptRouter.ts` - Mixed-audience EIP-3085 intake/read/confirm/reject and connected-site chain-notice transport
 - `background/signingRequestRouter.ts` - Post-gate provider tx/signature intake and trusted-UI pending-request reads/decisions; domain handlers retain authorization, signing, and durable publication
-- `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr and local PK/seed confirmations plus non-signing internal transfer prompt intake
+- `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr, local PK/seed, Ledger, and per-RPC-opted-in impersonated confirmations plus non-signing internal transfer prompt intake
 - `background/swapExecutionRouter.ts` - Reset-barrier-protected account-bound direct, Bankr-batch, and local-atomic swap execution transport
 - `background/sponsoredTransferRouter.ts` - Reset-barrier-protected submission plus fail-closed unresolved status and retryable acknowledgement transport
 - `background/internalOperationBarrier.ts` - Unique `internalOperation` confirmation claims that expose independent swap/relayer effects to the global reset barrier
@@ -1671,6 +1774,9 @@ Quick reference for which files to examine based on what area of security you're
   PK/seed atomic-7702 swap orchestration with ordered ambiguity stops
 - `transactions/localConfirmation.ts` and `localExecution.ts` - pinned local
   confirmation, key recovery, sign-once execution, and final authority gate
+- `transactions/impersonatedExecution.ts` - pinned view-only confirmation,
+  exact selected-endpoint opt-in, unsigned RPC submission, and ambiguity-safe
+  history/result publication
 - `localSigner.ts` - Private key signing (viem)
 - `bankr/transport.ts`, `bankr/signing.ts`, `bankr/submission.ts`, and
   `bankr/jobs.ts` - API key sent only to fixed Bankr backend endpoints
@@ -1712,9 +1818,10 @@ These are security characteristics that have been reviewed and accepted:
 2. **No rate limiting on local unlock attempts.** PBKDF2-SHA256 with 600,000
    iterations slows each guess but does not make a weak password safe against
    an attacker who copies the encrypted profile and guesses offline. New
-   passwords use the current minimum-length/common-password policy; existing
-   shorter legacy passwords remain accepted for unlock so an upgrade cannot
-   strand users. Users with legacy weak passwords should rotate them.
+   passwords require 8 to 256 characters and reject the common-password
+   denylist; existing shorter legacy passwords remain accepted for unlock so
+   an upgrade cannot strand users. Users with legacy weak passwords should
+   rotate them.
 
 3. **`getCachedApiKey` returns plaintext API key** to the extension UI. This is necessary for displaying it in settings and for the UI to function. The UI is same-origin with the background worker.
 
@@ -1725,8 +1832,11 @@ These are security characteristics that have been reviewed and accepted:
    page CSP for legitimate reads. The boundary rejects redirects and
    literal/reserved private-network targets according to caller origin, and
    enforces request/response/concurrency/15-second limits. Loopback requires a
-   loopback caller and LAN targets require the caller's exact hostname. The
-   background worker explicitly omits credentials and referrers.
+   loopback caller and LAN targets require the caller's exact hostname unless
+   the exact active endpoint carries the trusted Settings-only impersonated-
+   transaction opt-in. That explicit exception retains the read/simulation
+   allowlist and does not expose submission, signing, debug/admin, or filters.
+   The background worker explicitly omits credentials and referrers.
 
 6. **Console logging of migration events and decryption operations** in `auth/legacyVaultKeyMigration.ts`, `auth/sessionHydration.ts`, and `session/restoration.ts`. Logs include timing information ("API key migration completed", "Private key migration completed", "Session restored after service worker restart") but never log the actual secrets (keys, passwords). Acceptable because: (a) Chrome DevTools requires explicit user action to open, (b) logs provide critical debugging information for migration and session restore flows, and (c) no secrets are exposed in log messages.
 

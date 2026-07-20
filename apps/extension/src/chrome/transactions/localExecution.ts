@@ -53,6 +53,7 @@ export async function processLocalTransactionInBackground(
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
+  let broadcastTxHash: string | undefined;
 
   try {
     const txForHistory = gasOverrides
@@ -190,6 +191,7 @@ export async function processLocalTransactionInBackground(
     effectGuard.settleEffect();
 
     const txHash = result.txHash;
+    broadcastTxHash = txHash;
     if (txHash && result.receipt) {
       await applyReceiptToHistory(
         txId,
@@ -210,8 +212,16 @@ export async function processLocalTransactionInBackground(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    resetNonce(pending.tx.from, pending.tx.chainId);
-    await handleTransactionFailure(txId, pending, errorMessage);
+    if (broadcastTxHash) {
+      console.error("[local-transaction] Post-broadcast history update failed", error);
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: true,
+        txHash: broadcastTxHash,
+      });
+    } else {
+      resetNonce(pending.tx.from, pending.tx.chainId);
+      await handleTransactionFailure(txId, pending, errorMessage);
+    }
   } finally {
     effectGuard.releaseIfSafe();
     activeAbortControllers.delete(txId);

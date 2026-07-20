@@ -13,13 +13,17 @@ import {
 } from "@/components/ui";
 import { AssetRow } from "./AssetRow";
 import { LowValueAssetsSection } from "./LowValueAssetsSection";
+import { ProgressiveListSentinel } from "./ProgressiveListSentinel";
 import type { AssetDisplayRow, AssetRowPresentationProps } from "./types";
 
 interface HoldingsListProps extends AssetRowPresentationProps {
   primaryAssetRows: AssetDisplayRow[];
+  primaryAssetRowCount: number;
   lowValueAssetRows: AssetDisplayRow[];
+  lowValueAssetRowCount: number;
   lowValueTotalUsd: number;
   filteredDefiPositions: DefiPosition[];
+  defiPositionCount: number;
   loading: boolean;
   tokenCount: number;
   hideCard?: boolean;
@@ -32,13 +36,19 @@ interface HoldingsListProps extends AssetRowPresentationProps {
   lowValueDisclosureRef: RefObject<HTMLDivElement>;
   onToggleLowValueTokens: () => void;
   onLowValueAnimationComplete: () => void;
+  hasMore: boolean;
+  remainingCount: number;
+  onLoadMore: () => void;
 }
 
 export function HoldingsList({
   primaryAssetRows,
+  primaryAssetRowCount,
   lowValueAssetRows,
+  lowValueAssetRowCount,
   lowValueTotalUsd,
   filteredDefiPositions,
+  defiPositionCount,
   loading,
   tokenCount,
   hideCard,
@@ -51,15 +61,19 @@ export function HoldingsList({
   lowValueDisclosureRef,
   onToggleLowValueTokens,
   onLowValueAnimationComplete,
+  hasMore,
+  remainingCount,
+  onLoadMore,
   ...rowPresentation
 }: HoldingsListProps) {
   const showAssets = view !== "positions";
   const showPositions = view !== "assets";
   const hasVisibleAssets =
-    showAssets && (primaryAssetRows.length > 0 || lowValueAssetRows.length > 0);
-  const hasVisiblePositions =
-    showPositions && filteredDefiPositions.length > 0;
-  const hasVisibleRows = hasVisibleAssets || hasVisiblePositions;
+    showAssets && (primaryAssetRowCount > 0 || lowValueAssetRowCount > 0);
+  const hasAnyPositions = showPositions && defiPositionCount > 0;
+  const hasRenderedPositions =
+    hasAnyPositions && filteredDefiPositions.length > 0;
+  const hasVisibleRows = hasVisibleAssets || hasAnyPositions;
 
   return (
     <ListSurface
@@ -116,13 +130,14 @@ export function HoldingsList({
               />
             ))}
 
-          {showAssets && lowValueAssetRows.length > 0 && (
+          {showAssets && lowValueAssetRowCount > 0 && (
             <LowValueAssetsSection
               rows={lowValueAssetRows}
+              rowCount={lowValueAssetRowCount}
               totalValueUsd={lowValueTotalUsd}
               isExpanded={showLowValueTokens}
               isLoading={lowValueLoading}
-              hasVisiblePositions={hasVisiblePositions}
+              hasVisiblePositions={hasAnyPositions}
               disclosureRef={lowValueDisclosureRef}
               onToggle={onToggleLowValueTokens}
               onAnimationComplete={onLowValueAnimationComplete}
@@ -130,7 +145,7 @@ export function HoldingsList({
             />
           )}
 
-          {hasVisiblePositions && view === "all" && (
+          {hasRenderedPositions && view === "all" && (
             <Box
               as="li"
               px={4}
@@ -146,7 +161,7 @@ export function HoldingsList({
             </Box>
           )}
 
-          {hasVisiblePositions &&
+          {hasRenderedPositions &&
             filteredDefiPositions.map((position, index) => (
               <DefiPositionRow
                 key={`defi-${position.protocol}-${position.name}-${index}`}
@@ -156,6 +171,13 @@ export function HoldingsList({
                 resolveLogo={rowPresentation.resolveLogo}
               />
             ))}
+
+          {hasMore && (
+            <ProgressiveListSentinel
+              remainingCount={remainingCount}
+              onLoadMore={onLoadMore}
+            />
+          )}
         </>
       )}
     </ListSurface>

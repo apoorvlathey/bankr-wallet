@@ -10,6 +10,7 @@ import type {
 interface UseTransactionActionsOptions {
   txRequest: PendingTxRequest;
   accountType?: TransactionAccountType;
+  canSendImpersonatedTransaction: boolean;
   isInSidePanel: boolean;
   isErc7715PermissionRevoke: boolean;
   is7702Revoke: boolean;
@@ -28,6 +29,7 @@ interface UseTransactionActionsOptions {
 export function useTransactionActions({
   txRequest,
   accountType,
+  canSendImpersonatedTransaction,
   isInSidePanel,
   isErc7715PermissionRevoke,
   is7702Revoke,
@@ -71,9 +73,13 @@ export function useTransactionActions({
     setState("submitting");
     setError("");
     const messageType =
-      accountType === "privateKey" || accountType === "seedPhrase"
-        ? "confirmTransactionAsyncPK"
-        : "confirmTransactionAsync";
+      accountType === "impersonator" && canSendImpersonatedTransaction
+        ? "confirmImpersonatedTransaction"
+        : accountType === "ledger"
+        ? "confirmTransactionAsyncLedger"
+        : accountType === "privateKey" || accountType === "seedPhrase"
+          ? "confirmTransactionAsyncPK"
+          : "confirmTransactionAsync";
     const functionName = isErc7715PermissionRevoke
       ? "Revoke delegated permission"
       : is7702Revoke

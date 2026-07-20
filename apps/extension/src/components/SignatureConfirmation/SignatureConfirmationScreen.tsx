@@ -45,6 +45,7 @@ export interface SignatureConfirmationScreenProps {
   actionNotice?: ReactNode;
   confirmAction: ReactNode;
   rejectAction?: ReactNode;
+  isInteractionLocked?: boolean;
 }
 
 function SignatureSummary({
@@ -137,6 +138,7 @@ export function SignatureConfirmationScreen({
   actionNotice,
   confirmAction,
   rejectAction,
+  isInteractionLocked = false,
 }: SignatureConfirmationScreenProps) {
   const disclosureRef = useRef<HTMLDetailsElement>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -180,6 +182,7 @@ export function SignatureConfirmationScreen({
             stripFg={stripFg}
             onNavigate={onNavigate}
             onRejectAll={onRejectAll}
+            isDisabled={isInteractionLocked}
           />
         ) : undefined
       }

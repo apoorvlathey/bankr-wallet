@@ -1,14 +1,10 @@
 import { isSidePanelSupported } from "./browserCapabilities";
 
-export const FULLSCREEN_REQUEST_NOTIFICATION_PREFIX =
-  "walletchan-fullscreen-request-";
+export const FULLSCREEN_REQUEST_NOTIFICATION_PREFIX = "walletchan-fullscreen-request-";
 
 export type ProviderRequestSurfaceType =
-  | "i_dappAccounts"
-  | "i_sendTransaction"
-  | "i_signatureRequest"
-  | "i_walletSendCalls"
-  | "i_walletExecutionPermissions";
+  | "i_dappAccounts" | "i_sendTransaction" | "i_signatureRequest"
+  | "i_walletSendCalls" | "i_walletExecutionPermissions";
 
 export type ProviderRequestSurfaceHint = {
   requestType: ProviderRequestSurfaceType;
@@ -16,10 +12,7 @@ export type ProviderRequestSurfaceHint = {
 };
 
 const PROVIDER_REQUEST_SURFACE_HINT_TTL_MS = 10_000;
-const providerRequestSurfaceHints = new Map<
-  number,
-  ProviderRequestSurfaceHint
->();
+const providerRequestSurfaceHints = new Map<number, ProviderRequestSurfaceHint>();
 
 export function recordProviderRequestSurfaceHint(
   windowId: number,

@@ -32,13 +32,17 @@ existing direct and lazy imports retain the same default-export contract.
   clicked token and chain.
 - `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
   cached-public-name matching, relevance ranking, and stored-order tie breaking
-  for the recipient combobox. Suggestion rows reuse the shared safe avatar and
+  for the recipient combobox. Focusing an empty recipient input exposes every
+  eligible wallet and contact in group order; typed queries keep the bounded
+  relevance-ranked results. Suggestion rows reuse the shared safe avatar and
   blockie fallback used by the full contact picker.
 
 ## Hooks and effects
 
 - `hooks/useTransferCatalog.ts` owns portfolio/catalog loading, selected-token
   balance and price fallbacks, custom-token lookup, and chain/token selection.
+  It retains a 200-asset interaction projection, pins
+  native/custom/recent/selected assets, and verifies only that bounded set.
 - `hooks/useTransferRecipient.ts` owns recipient resolution, contract detection,
   and recipient search. Public contact name/avatar projection is delegated to
   shared `useAddressContactIdentities` so Send and Address Book stay identical.
@@ -61,7 +65,8 @@ existing direct and lazy imports retain the same default-export contract.
 - `hooks/useTransferSubmission.ts` owns the normal pending-transaction message
   and selects between Bankr-sponsored and normal confirmation intake. Signing
   remains in the background transaction domains for Bankr, private-key, and
-  seed-phrase accounts.
+  seed-phrase accounts; impersonators use the same review intake and can only
+  submit through the selected RPC's explicit developer opt-in.
 
 ## Dependency direction
 

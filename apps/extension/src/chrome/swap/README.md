@@ -15,8 +15,9 @@ Focused ownership:
 - `erc20.ts` owns balance/allowance reads and standard approval calldata.
 - `permit2.ts` owns canonical Permit2 allowance reads and approval calldata.
 - `tokenInfo.ts` owns native/onchain metadata resolution and its 30-day cache.
-- `tokenListPolicy.ts` is the pure pinned-token merge rule; `tokenList.ts` owns
-  the raw upstream 24-hour list cache.
+- `tokenListCodec.ts` validates and caps token catalogs at 2,000 entries;
+  `tokenListPolicy.ts` is the pure pinned-token merge rule; `tokenList.ts` owns
+  the upstream 24-hour list cache.
 - `tokenLogo.ts` owns the per-address logo-result cache. Positive results retain
   the 30-day TTL; misses use a six-hour TTL and fall back through the
   WalletChan API to a verified MetaMask token-icon asset.

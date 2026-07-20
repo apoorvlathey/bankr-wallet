@@ -36,9 +36,9 @@ interface TokenPickerContentProps {
   onSearchChange: (value: string) => void;
   onBack: () => void;
   popularTokens: PortfolioToken[];
-  filteredHoldings: PortfolioToken[];
+  visibleHoldings: PortfolioToken[];
   visibleRest: TokenListEntry[];
-  remainingRestCount: number;
+  remainingTokenCount: number;
   onShowMore: () => void;
   onSelectHolding: (token: PortfolioToken) => void;
   onSelectListEntry: (token: TokenListEntry) => void;
@@ -128,9 +128,9 @@ export function TokenPickerContent({
   onSearchChange,
   onBack,
   popularTokens,
-  filteredHoldings,
+  visibleHoldings,
   visibleRest,
-  remainingRestCount,
+  remainingTokenCount,
   onShowMore,
   onSelectHolding,
   onSelectListEntry,
@@ -254,12 +254,9 @@ export function TokenPickerContent({
           </FullScreenPickerGroup>
         )}
 
-      {filteredHoldings.length > 0 && (
-        <FullScreenPickerGroup
-          label="Your tokens"
-          description={`${filteredHoldings.length} in this wallet`}
-        >
-          {filteredHoldings.map((token) => {
+      {visibleHoldings.length > 0 && (
+        <FullScreenPickerGroup label="Your tokens">
+          {visibleHoldings.map((token) => {
             const address =
               token.contractAddress === "native"
                 ? NATIVE_TOKEN_ADDRESS
@@ -309,10 +306,10 @@ export function TokenPickerContent({
         </FullScreenPickerGroup>
       )}
 
-      {remainingRestCount > 0 && (
+      {remainingTokenCount > 0 && (
         <Flex mt={3} justify="center">
           <Button type="button" variant="ghost" size="sm" onClick={onShowMore}>
-            Show {Math.min(60, remainingRestCount)} more tokens
+            Show more tokens
           </Button>
         </Flex>
       )}

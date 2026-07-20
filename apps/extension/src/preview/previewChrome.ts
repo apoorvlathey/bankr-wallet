@@ -1,6 +1,5 @@
 import { DEFAULT_NETWORKS } from "@/constants/networks";
-import type { GasEstimate } from "@/chrome/gasEstimation";
-import type { SimulationResult } from "@/chrome/txSimulation";
+import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import extensionPackage from "../../package.json";
@@ -10,220 +9,19 @@ import {
   createPreviewEnvironment,
   createPreviewFetch,
   type PreviewEnvironment,
-  type PreviewStorageAreaName,
-  type PreviewStorageRecord,
 } from "./previewEnvironment";
+import { makeStorageArea, type StorageListener } from "./previewChromeStorage";
+import {
+  activePreviewAccount,
+  previewChainIdForName,
+  previewCustomTokens,
+  previewGasEstimate,
+  previewSimulationResult,
+  unknownPreviewMessage,
+  type PreviewChromeLogger,
+} from "./previewChromeSupport";
 
-type StorageListener = (
-  changes: Record<string, chrome.storage.StorageChange>,
-  areaName: PreviewStorageAreaName,
-) => void;
-
-export interface PreviewChromeLogger {
-  warn: (message: string, detail?: unknown) => void;
-  error: (message: string, detail?: unknown) => void;
-}
-
-const gasEstimate: GasEstimate = {
-  gasLimit: "138000",
-  maxFeePerGas: "125000000",
-  maxPriorityFeePerGas: "25000000",
-  baseFee: "100000000",
-  estimatedCostWei: "17250000000000",
-  nativePriceUsd: 3600,
-  nativeCurrencySymbol: "ETH",
-  accountBalance: "3000000000000000000",
-  insufficientBalance: false,
-  estimationFailed: false,
-  dappProvidedGas: false,
-  tiers: {
-    slow: {
-      maxFeePerGas: "115000000",
-      maxPriorityFeePerGas: "15000000",
-    },
-    standard: {
-      maxFeePerGas: "125000000",
-      maxPriorityFeePerGas: "25000000",
-    },
-    fast: {
-      maxFeePerGas: "145000000",
-      maxPriorityFeePerGas: "45000000",
-    },
-  },
-};
-
-const simulationResult: SimulationResult = {
-  txSuccess: true,
-  simulationFailed: false,
-  metadataComplete: true,
-  nativeChange: {
-    address: "native",
-    symbol: "ETH",
-    name: "Ether",
-    decimals: 18,
-    rawDelta: "-42000000000000000",
-    formattedAmount: "0.042",
-    valueUsd: 151.2,
-    direction: "out",
-  },
-  tokenChanges: [
-    {
-      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      symbol: "USDC",
-      name: "USD Coin",
-      decimals: 6,
-      rawDelta: "148620000",
-      formattedAmount: "148.62",
-      valueUsd: 148.62,
-      direction: "in",
-    },
-  ],
-};
-
-function normalizeStorageKeys(
-  keys?: string | string[] | PreviewStorageRecord | null,
-): string[] | null {
-  if (!keys) return null;
-  if (typeof keys === "string") return [keys];
-  if (Array.isArray(keys)) return keys;
-  return Object.keys(keys);
-}
-
-function getStorage(
-  environment: PreviewEnvironment,
-  area: PreviewStorageAreaName,
-  keys?: string | string[] | PreviewStorageRecord | null,
-) {
-  const source = environment.storage[area];
-  const normalized = normalizeStorageKeys(keys);
-  if (!normalized) return { ...source };
-
-  const result: PreviewStorageRecord = {};
-  for (const key of normalized) {
-    if (key in source) result[key] = source[key];
-    else if (keys && typeof keys === "object" && !Array.isArray(keys)) {
-      result[key] = keys[key];
-    }
-  }
-  return result;
-}
-
-function setStorage(
-  environment: PreviewEnvironment,
-  listeners: Set<StorageListener>,
-  area: PreviewStorageAreaName,
-  values: PreviewStorageRecord,
-  onThemeChange?: (theme: string) => void,
-) {
-  const changes: Record<string, chrome.storage.StorageChange> = {};
-  for (const [key, value] of Object.entries(values)) {
-    const oldValue = environment.storage[area][key];
-    environment.storage[area][key] = value;
-    changes[key] = { oldValue, newValue: value };
-    if (area === "local" && key === SELECTED_THEME_STORAGE_KEY && typeof value === "string") {
-      onThemeChange?.(value);
-    }
-  }
-  for (const listener of listeners) listener(changes, area);
-}
-
-function makeStorageArea(
-  environment: PreviewEnvironment,
-  listeners: Set<StorageListener>,
-  area: PreviewStorageAreaName,
-  schedule: (callback: () => void) => void,
-  onThemeChange?: (theme: string) => void,
-) {
-  return {
-    get: (
-      keys?: string | string[] | PreviewStorageRecord | null,
-      callback?: (items: PreviewStorageRecord) => void,
-    ) => {
-      const scenario = environment.parsed.state.scenario;
-      const route = environment.parsed.state.route;
-      const requestedKeys = normalizeStorageKeys(keys) ?? [];
-      if (
-        route === "swap-picker" &&
-        scenario === "loading" &&
-        area === "local" &&
-        requestedKeys.some(
-          (key) => key === "bungeeChains" || key.startsWith("bungeeTokens:"),
-        )
-      ) {
-        return new Promise<PreviewStorageRecord>(() => {});
-      }
-      const result = getStorage(environment, area, keys);
-      if (callback) schedule(() => callback(result));
-      return Promise.resolve(result);
-    },
-    set: (values: PreviewStorageRecord, callback?: () => void) => {
-      setStorage(environment, listeners, area, values, onThemeChange);
-      if (callback) schedule(callback);
-      return Promise.resolve();
-    },
-    remove: (keys: string | string[], callback?: () => void) => {
-      const keyList = Array.isArray(keys) ? keys : [keys];
-      const changes: Record<string, chrome.storage.StorageChange> = {};
-      for (const key of keyList) {
-        const oldValue = environment.storage[area][key];
-        delete environment.storage[area][key];
-        changes[key] = { oldValue, newValue: undefined };
-      }
-      for (const listener of listeners) listener(changes, area);
-      if (callback) schedule(callback);
-      return Promise.resolve();
-    },
-    clear: (callback?: () => void) => {
-      const keys = Object.keys(environment.storage[area]);
-      const changes: Record<string, chrome.storage.StorageChange> = {};
-      for (const key of keys) {
-        changes[key] = {
-          oldValue: environment.storage[area][key],
-          newValue: undefined,
-        };
-        delete environment.storage[area][key];
-      }
-      for (const listener of listeners) listener(changes, area);
-      if (callback) schedule(callback);
-      return Promise.resolve();
-    },
-  };
-}
-
-function chainIdForName(chainName: unknown): number {
-  if (typeof chainName !== "string") return 8453;
-  return DEFAULT_NETWORKS[chainName]?.chainId ?? 8453;
-}
-
-function activeAccount(environment: PreviewEnvironment) {
-  const activeAccountId = environment.storage.sync.activeAccountId;
-  return (
-    environment.accounts.find((account) => account.id === activeAccountId) ??
-    environment.activeAccount
-  );
-}
-
-function previewCustomTokens(environment: PreviewEnvironment): any[] {
-  const tokens = environment.storage.local.customTokens;
-  return Array.isArray(tokens) ? tokens : [];
-}
-
-function unknownMessage(
-  message: unknown,
-  logger: PreviewChromeLogger,
-): { success: false; error: string } {
-  const type =
-    message && typeof message === "object" && "type" in message
-      ? String((message as { type?: unknown }).type ?? "<missing>")
-      : "<missing>";
-  const error = `[PreviewChrome] Unhandled runtime message "${type}"; live extension runtime is disabled`;
-  const looksLikeRead = /^(get|is|can|fetch|resolve|estimate|simulate|retry|check|ensure|walletConnectGet|ens-probe)/.test(
-    type,
-  );
-  if (looksLikeRead) logger.error(error, message);
-  else logger.warn(error, message);
-  return { success: false, error };
-}
+export type { PreviewChromeLogger } from "./previewChromeSupport";
 
 export function responseForPreviewMessage(
   environment: PreviewEnvironment,
@@ -311,9 +109,9 @@ export function responseForPreviewMessage(
       return { success: true, accounts: environment.accounts };
     }
     case "getActiveAccount":
-      return { ...activeAccount(environment) };
+      return { ...activePreviewAccount(environment) };
     case "getTabAccount":
-      return { ...activeAccount(environment) };
+      return { ...activePreviewAccount(environment) };
     case "getPendingDappConnectionRequests":
       return [];
     case "getDappConnectionContext":
@@ -331,6 +129,57 @@ export function responseForPreviewMessage(
       return [];
     case "getTxHistory":
       return environment.txHistory;
+    case "getTxHistoryPage": {
+      const history = environment.txHistory as CompletedTransaction[];
+      const filtered = history.filter((tx) =>
+        (!message.ownerAddress || tx.tx.from.toLowerCase() === String(message.ownerAddress).toLowerCase()) &&
+        (message.chainId == null || tx.chainId === message.chainId),
+      );
+      const start = message.cursor
+        ? Math.max(0, filtered.findIndex((tx) => tx.id === message.cursor.id) + 1)
+        : 0;
+      const limit = typeof message.limit === "number" ? message.limit : 30;
+      const items = filtered.slice(start, start + limit);
+      const hasMore = start + items.length < filtered.length;
+      const last = items.at(-1);
+      return {
+        items,
+        hasMore,
+        nextCursor: hasMore && last
+          ? { createdAt: last.createdAt, id: last.id }
+          : null,
+      };
+    }
+    case "getTxHistoryItem":
+      return (environment.txHistory as CompletedTransaction[])
+        .find((tx) => tx.id === message.txId) ?? null;
+    case "getTransactionCalldata": {
+      const tx = (environment.txHistory as CompletedTransaction[])
+        .find((candidate) => candidate.id === message.txId);
+      return tx?.tx.data
+        ? { success: true, data: tx.tx.data }
+        : { success: false, error: "Calldata unavailable in preview" };
+    }
+    case "resolveHistoryNftMetadata": {
+      const tx = (environment.txHistory as CompletedTransaction[])
+        .find((candidate) => candidate.id === message.txId);
+      const record = message.leg === "destination"
+        ? tx?.destAssetChanges
+        : tx?.assetChanges;
+      const transfer = record?.nftTransfers?.[message.nftIndex];
+      return transfer
+        ? {
+            success: true,
+            data: {
+              name: transfer.metadata?.name,
+              collectionName: transfer.collectionName,
+              symbol: transfer.symbol,
+              image: transfer.metadata?.image,
+              historical: true,
+            },
+          }
+        : { success: false, error: "NFT unavailable in preview" };
+    }
     case "getFailedTxResult":
       return null;
     case "checkPendingTxReceipt":
@@ -340,7 +189,7 @@ export function responseForPreviewMessage(
     case "walletConnectSwitchChain":
       return {
         success: true,
-        chainId: chainIdForName(message?.chainName),
+        chainId: previewChainIdForName(message?.chainName),
       };
     case "isWalletUnlocked":
       return environment.unlocked;
@@ -352,6 +201,24 @@ export function responseForPreviewMessage(
       return { enabled: true };
     case "getPasswordType":
       return { passwordType: "master" };
+    case "getOnboardingInitializationStatus":
+      return {
+        configured: false,
+        setupInProgress: false,
+        recoveryRequired: false,
+      };
+    case "beginOnboardingInitialization":
+      return {
+        success: true,
+        initializationId:
+          message?.initializationId ?? "preview-onboarding-initialization",
+      };
+    case "initializeOnboardingCredential":
+      return { success: true, passwordType: "master" };
+    case "completeOnboardingInitialization":
+    case "rollbackOnboardingInitialization":
+    case "onboardingComplete":
+      return { success: true };
     case "getCachedPassword":
       return { hasCachedPassword: environment.unlocked };
     case "getCachedApiKey":
@@ -399,16 +266,27 @@ export function responseForPreviewMessage(
         }),
       };
     }
-    case "addSeedPhraseGroup":
+    case "addSeedPhraseGroup": {
+      const account =
+        environment.accounts.find((candidate) => candidate.type === "seedPhrase") ??
+        {
+          id: "preview-seed-0",
+          type: "seedPhrase",
+          address: "0x0000000000000000000000000000000000000001",
+          displayName: message?.accountDisplayName || "Seed #1 · #0",
+          seedGroupId: "preview-seed",
+          derivationIndex: 0,
+          createdAt: PREVIEW_EPOCH_MS,
+        };
       return {
         success: true,
         mnemonic:
           "test test test test test test test test test test test junk",
         group: environment.seedGroups[0],
-        accounts: [
-          environment.accounts.find((account) => account.type === "seedPhrase"),
-        ].filter(Boolean),
+        account,
+        accounts: [account],
       };
+    }
     case "deriveSeedAccount":
       return {
         success: true,
@@ -499,14 +377,14 @@ export function responseForPreviewMessage(
       return { success: true };
     case "estimateGas":
     case "estimateForceInclusionGas":
-      return gasEstimate;
+      return previewGasEstimate;
     case "estimateBatchGasSequential":
       return (message?.calls ?? []).map((_: unknown, index: number) => ({
-        ...gasEstimate,
-        gasLimit: String(Number(gasEstimate.gasLimit) + index * 24_000),
+        ...previewGasEstimate,
+        gasLimit: String(Number(previewGasEstimate.gasLimit) + index * 24_000),
         estimatedCostWei: String(
-          BigInt(Number(gasEstimate.gasLimit) + index * 24_000) *
-            BigInt(gasEstimate.maxFeePerGas),
+          BigInt(Number(previewGasEstimate.gasLimit) + index * 24_000) *
+            BigInt(previewGasEstimate.maxFeePerGas),
         ),
       }));
     case "simulateAssetChanges":
@@ -517,7 +395,7 @@ export function responseForPreviewMessage(
         (route === "cross-batch" && scenario === "error")
       ) {
         return {
-          ...simulationResult,
+          ...previewSimulationResult,
           txSuccess: true,
           simulationFailed: true,
           simulationError: "Deterministic preview simulation unavailable",
@@ -525,9 +403,9 @@ export function responseForPreviewMessage(
           tokenChanges: [],
         };
       }
-      return simulationResult;
+      return previewSimulationResult;
     case "retryTokenMetadata":
-      return { tokenChanges: simulationResult.tokenChanges };
+      return { tokenChanges: previewSimulationResult.tokenChanges };
     case "fetchTokenInfo":
       return {
         success: true,
@@ -832,7 +710,7 @@ export function responseForPreviewMessage(
         probe: { ok: false, kind: { kind: "unreachable" } },
       };
     default:
-      return unknownMessage(message, logger);
+      return unknownPreviewMessage(message, logger);
   }
 }
 
@@ -1000,7 +878,7 @@ export function createPreviewChrome(
         message: { type?: string },
         callback?: (response: unknown) => void,
       ) => {
-        const current = activeAccount(environment);
+        const current = activePreviewAccount(environment);
         const response =
           message?.type === "getInfo"
             ? {
@@ -1010,7 +888,7 @@ export function createPreviewChrome(
               }
             : message?.type === "setAccount" || message?.type === "setChainId"
               ? { success: true }
-              : unknownMessage(message, logger);
+              : unknownPreviewMessage(message, logger);
         if (callback) schedule(() => callback(response));
         return Promise.resolve(response);
       },

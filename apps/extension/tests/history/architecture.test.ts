@@ -130,6 +130,7 @@ test("history facades and implementations stay audit-sized", async () => {
     "assetChangesExtractor.ts": 15,
     "receiptEnrichment.ts": 20,
     "history/types.ts": 190,
+    "history/forceInclusionTypes.ts": 30,
     "history/gasDataPolicy.ts": 35,
     "history/assetTransferParser.ts": 80,
     "history/repository.ts": 90,

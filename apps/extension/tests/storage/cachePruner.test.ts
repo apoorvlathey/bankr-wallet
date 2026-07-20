@@ -155,21 +155,26 @@ test("avatar cache keeps the 200 most recently accessed valid entries", async ()
 });
 
 test("portfolio cache pruning stays delegated and reset-aware", async () => {
+  const snapshot = (totalValueUsd: number, timestamp: number) => ({
+    tokens: [],
+    defiPositions: [],
+    totalValueUsd,
+    omittedTokenCount: 0,
+    omittedTokenValueUsd: 0,
+    omittedTokenValueUsdByChain: {},
+    customTokenKeys: [],
+    allTokenKeys: [],
+    hiddenTokenKeys: [],
+    onchainFetchedTokenKeys: [],
+    rpcIssueChainIds: [],
+    apiUnavailable: false,
+    timestamp,
+  });
   values.portfolioHoldingsCache = {
-    version: 2,
+    version: 3,
     entries: {
-      fresh: {
-        tokens: [{}],
-        defiPositions: [],
-        totalValueUsd: 1,
-        timestamp: NOW,
-      },
-      stale: {
-        tokens: [{}],
-        defiPositions: [],
-        totalValueUsd: 2,
-        timestamp: NOW - DAY - 1,
-      },
+      fresh: snapshot(1, NOW),
+      stale: snapshot(2, NOW - DAY - 1),
     },
   };
 

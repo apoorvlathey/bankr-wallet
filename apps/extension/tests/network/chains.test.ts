@@ -13,6 +13,8 @@ import {
   getResolvedChainById,
   MAX_SAVED_RPC_URLS,
   normalizeNetworksInfo,
+  normalizeRpcUrl,
+  normalizeSavedRpcEndpoints,
   normalizeSavedRpcUrls,
 } from "../../src/lib/chains";
 import { KNOWN_CHAINS } from "../../src/constants/knownChains.generated";
@@ -86,6 +88,39 @@ test("saved RPC URLs keep the active endpoint first and remain bounded", () => {
     ]),
     [],
   );
+});
+
+test("saved RPC endpoints retain the impersonated-transaction opt-in per URL", () => {
+  assert.deepEqual(
+    normalizeSavedRpcEndpoints("https://rpc.example", [
+      {
+        url: "https://rpc.example/",
+        name: "Development fork",
+        allowImpersonatedTransactions: true,
+      },
+      {
+        url: "https://other.example",
+        allowImpersonatedTransactions: "yes",
+      },
+    ]),
+    [
+      {
+        url: "https://rpc.example",
+        name: "Development fork",
+        allowImpersonatedTransactions: true,
+      },
+      { url: "https://other.example" },
+    ],
+  );
+});
+
+test("manual RPC normalization accepts local development shorthand only", () => {
+  assert.equal(normalizeRpcUrl("localhost:8545"), "http://localhost:8545");
+  assert.equal(normalizeRpcUrl("127.0.0.1:8545"), "http://127.0.0.1:8545");
+  assert.equal(normalizeRpcUrl("0.0.0.0:8545"), "http://0.0.0.0:8545");
+  assert.equal(normalizeRpcUrl("192.168.1.20:8545"), "http://192.168.1.20:8545");
+  assert.equal(normalizeRpcUrl("rpc.example:8545"), null);
+  assert.equal(normalizeRpcUrl("user:secret@localhost:8545"), null);
 });
 
 test("registered testnets reuse their mainnet chain identity", () => {

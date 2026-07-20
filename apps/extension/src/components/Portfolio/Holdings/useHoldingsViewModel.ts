@@ -1,19 +1,15 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { getPortfolioTokenKey } from "@/chrome/portfolio/hiddenTokens";
-import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import type { HoldingsState } from "./useHoldingsState";
 import {
   buildAssetDisplayRows,
-  collectTokenLogoUrls,
   filterPortfolioTokens,
   getChainTotals,
-  getTokensFromRows,
 } from "./transforms";
 
 interface UseHoldingsViewModelOptions {
   filterChainId?: number | null;
   searchQuery: string;
-  showLowValueTokens: boolean;
   unifyBalances: boolean;
   state: HoldingsState;
 }
@@ -21,7 +17,6 @@ interface UseHoldingsViewModelOptions {
 export function useHoldingsViewModel({
   filterChainId,
   searchQuery,
-  showLowValueTokens,
   unifyBalances,
   state,
 }: UseHoldingsViewModelOptions) {
@@ -43,14 +38,6 @@ export function useHoldingsViewModel({
     () => buildAssetDisplayRows(filteredTokens, filterChainId, unifyBalances),
     [filterChainId, filteredTokens, unifyBalances],
   );
-  const primaryTokens = useMemo(
-    () => getTokensFromRows(primaryAssetRows),
-    [primaryAssetRows],
-  );
-  const lowValueTokens = useMemo(
-    () => getTokensFromRows(lowValueAssetRows),
-    [lowValueAssetRows],
-  );
   const filteredDefiPositions = useMemo(
     () =>
       filterChainId != null
@@ -58,28 +45,14 @@ export function useHoldingsViewModel({
         : defiPositions,
     [defiPositions, filterChainId],
   );
-  const visibleLogoUrls = useMemo(() => {
-    const urls: Array<string | null | undefined> = [];
-    for (const token of primaryTokens) collectTokenLogoUrls(token, urls);
-    if (showLowValueTokens) {
-      for (const token of lowValueTokens) collectTokenLogoUrls(token, urls);
-    }
-    for (const position of filteredDefiPositions) {
-      urls.push(position.protocolLogo);
-      for (const asset of position.assets ?? []) urls.push(asset.logoUrl);
-      for (const asset of position.rewardAssets ?? []) urls.push(asset.logoUrl);
-    }
-    return urls;
-  }, [filteredDefiPositions, lowValueTokens, primaryTokens, showLowValueTokens]);
-  const cachedLogoMap = useCachedAvatarMap(visibleLogoUrls);
-  const resolveLogo = useCallback(
-    (url: string | undefined): string | undefined =>
-      (url && cachedLogoMap.get(url)) || url,
-    [cachedLogoMap],
-  );
   const chainTotals = useMemo(
-    () => getChainTotals(tokens, defiPositions),
-    [defiPositions, tokens],
+    () =>
+      getChainTotals(
+        tokens,
+        defiPositions,
+        state.omittedTokenValueUsdByChain,
+      ),
+    [defiPositions, state.omittedTokenValueUsdByChain, tokens],
   );
 
   return {
@@ -87,9 +60,7 @@ export function useHoldingsViewModel({
     primaryAssetRows,
     lowValueAssetRows,
     lowValueTotalUsd,
-    lowValueTokens,
     filteredDefiPositions,
-    resolveLogo,
     chainTotals,
   };
 }

@@ -1,81 +1,15 @@
 /** Trusted-UI transport for single-transaction confirmation and transfer intake. */
 
-import type * as PendingRequestResolutionModule from "../requests/pendingRequestResolution";
-
+import {
+  HANDLED_TRANSACTION_EXECUTION_ASYNC as HANDLED_ASYNC,
+  transactionExecutionError as errorMessage,
+  validatedFeePaymentToken,
+  type BackgroundTransactionExecutionDependencies, type BackgroundTransactionExecutionRouteResult,
+} from "./transactionExecutionRouterSupport";
+export type { BackgroundTransactionExecutionDependencies, BackgroundTransactionExecutionRouteResult } from "./transactionExecutionRouterSupport";
 export const BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES = [
-  "confirmTransaction",
-  "confirmTransactionAsync",
-  "confirmTransactionAsyncPK",
-  "getFeePaymentOptions",
-  "prepareFeePaymentQuote",
-  "initiateTransfer",
+  "confirmTransaction", "confirmTransactionAsync", "confirmTransactionAsyncPK", "confirmTransactionAsyncLedger", "confirmImpersonatedTransaction", "getFeePaymentOptions", "prepareFeePaymentQuote", "initiateTransfer",
 ] as const;
-
-export type BackgroundTransactionExecutionRouteResult =
-  | { handled: false }
-  | { handled: true; keepChannelOpen: boolean };
-
-export type BackgroundTransactionExecutionDependencies = {
-  getPendingTxRequestById: (txId: string) => Promise<any>;
-  handleConfirmTransaction: (txId: string, password: string) => Promise<any>;
-  handleConfirmTransactionAsync: (
-    txId: string,
-    password: string,
-    functionName?: string,
-    forceInclusion?: boolean,
-    feePaymentToken?: "native" | "token",
-    feePaymentQuoteId?: string,
-  ) => Promise<any>;
-  handleConfirmTransactionAsyncPK: (
-    txId: string,
-    password: string,
-    tabId?: number,
-    functionName?: string,
-    gasOverrides?: any,
-    forceInclusion?: boolean,
-    feePaymentToken?: "native" | "token",
-    feePaymentQuoteId?: string,
-  ) => Promise<any>;
-  handleInitiateTransfer: (message: any) => Promise<any>;
-  runPendingRequestResolution: typeof PendingRequestResolutionModule.runPendingRequestResolution;
-  pendingResolutionConflict: (action: any) => any;
-  writeResultToStorage: (key: string, result: any) => Promise<void>;
-  readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
-  getFeePaymentOptions: (txId: string) => Promise<any>;
-  getBatchFeePaymentOptions: (bundleId: string) => Promise<any>;
-  prepareFeePaymentQuote: (
-    family: "transaction" | "batchTransaction",
-    requestId: string,
-    tokenId: unknown,
-  ) => Promise<any>;
-};
-
-const HANDLED_ASYNC: BackgroundTransactionExecutionRouteResult = {
-  handled: true,
-  keepChannelOpen: true,
-};
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function feePaymentToken(value: unknown): "native" | "token" {
-  if (value === undefined || value === "native") return "native";
-  if (value === "token") return "token";
-  throw new Error("Invalid gas-payment token");
-}
-
-function validatedFeePaymentToken(
-  value: unknown,
-  forceInclusion: unknown,
-): "native" | "token" {
-  const token = feePaymentToken(value);
-  if (token === "token" && forceInclusion === true) {
-    throw new Error("Force inclusion requires native gas payment");
-  }
-  return token;
-}
-
 export function createBackgroundTransactionExecutionMessageRouter(
   dependencies: BackgroundTransactionExecutionDependencies,
 ): (
@@ -113,7 +47,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           }));
         return HANDLED_ASYNC;
       }
-
       case "confirmTransaction": {
         const txId = typeof message.txId === "string" ? message.txId : "";
         dependencies
@@ -154,7 +87,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           );
         return HANDLED_ASYNC;
       }
-
       case "confirmTransactionAsync": {
         const txId = typeof message.txId === "string" ? message.txId : "";
         dependencies
@@ -185,7 +117,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           );
         return HANDLED_ASYNC;
       }
-
       case "confirmTransactionAsyncPK": {
         const tabId = message.tabId || sender.tab?.id;
         const txId = typeof message.txId === "string" ? message.txId : "";
@@ -215,6 +146,60 @@ export function createBackgroundTransactionExecutionMessageRouter(
             sendResponse({
               success: false,
               error: errorMessage(error, "Failed to confirm transaction"),
+            }),
+          );
+        return HANDLED_ASYNC;
+      }
+
+      case "confirmTransactionAsyncLedger": {
+        const tabId = message.tabId || sender.tab?.id;
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        dependencies
+          .runPendingRequestResolution({
+            family: "transaction",
+            requestId: txId,
+            action: "confirm",
+            resolve: () =>
+              dependencies.handleConfirmTransactionAsyncLedger(
+                txId,
+                message.password,
+                tabId,
+                message.functionName,
+                message.gasOverrides,
+                message.forceInclusion,
+              ),
+            conflictResult: dependencies.pendingResolutionConflict,
+          })
+          .then(sendResponse)
+          .catch((error) =>
+            sendResponse({
+              success: false,
+              error: errorMessage(error, "Failed to confirm Ledger transaction"),
+            }),
+          );
+        return HANDLED_ASYNC;
+      }
+
+      case "confirmImpersonatedTransaction": {
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        dependencies
+          .runPendingRequestResolution({
+            family: "transaction",
+            requestId: txId,
+            action: "confirm",
+            resolve: () =>
+              dependencies.handleConfirmImpersonatedTransaction(
+                txId,
+                message.functionName,
+                message.gasOverrides,
+              ),
+            conflictResult: dependencies.pendingResolutionConflict,
+          })
+          .then(sendResponse)
+          .catch((error) =>
+            sendResponse({
+              success: false,
+              error: errorMessage(error, "Failed to submit transaction"),
             }),
           );
         return HANDLED_ASYNC;

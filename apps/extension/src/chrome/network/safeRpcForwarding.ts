@@ -4,6 +4,7 @@
  * and stateful filter methods must use their dedicated wallet paths or fail.
  */
 import { assertRpcEndpointAllowedForOrigin } from "./rpcClient";
+import { allowsImpersonatedTransactions } from "./impersonatedRpcPolicy";
 
 const SAFE_RPC_FORWARDING_METHODS = new Set([
   "web3_clientVersion",
@@ -49,7 +50,17 @@ const MAX_RPC_RESPONSE_BYTES = 8_000_000;
 const MAX_CONCURRENT_RPC_REQUESTS = 16;
 let activeRpcRequests = 0;
 
-function validateRpcNetworkBoundary(rpcUrl: string, requestOrigin?: string): void {
+function validateRpcNetworkBoundary(
+  rpcUrl: string,
+  requestOrigin?: string,
+  allowConfiguredPrivateRpc = false,
+): void {
+  if (allowConfiguredPrivateRpc) {
+    assertRpcEndpointAllowedForOrigin(rpcUrl, undefined, {
+      allowPrivateWithoutOrigin: true,
+    });
+    return;
+  }
   assertRpcEndpointAllowedForOrigin(rpcUrl, requestOrigin);
 }
 
@@ -106,22 +117,25 @@ export async function handleSafeRpcRequest(
   // The target is selected by the extension content script, then checked again
   // against extension-owned network configuration in the service worker.
   const { networksInfo } = (await chrome.storage.sync.get("networksInfo")) as {
-    networksInfo: Record<string, { rpcUrl?: unknown }> | undefined;
+    networksInfo:
+      | Record<string, { chainId?: unknown; rpcUrl?: unknown }>
+      | undefined;
   };
-  const allowedUrls = new Set(
-    Object.values(networksInfo || {})
-      .map((network) => network.rpcUrl)
-      .filter((value): value is string => typeof value === "string"),
+  const configuredNetwork = Object.values(networksInfo || {}).find(
+    (network) => network.rpcUrl === rpcUrl,
   );
-  if (!allowedUrls.has(rpcUrl)) {
+  if (!configuredNetwork) {
     throw new Error("RPC URL not in allowed list");
   }
+  const allowConfiguredPrivateRpc =
+    await allowsImpersonatedTransactions(configuredNetwork.chainId, rpcUrl);
 
   return forwardSafeRpcRequestToTrustedUrl(
     rpcUrl,
     method,
     params,
     requestOrigin,
+    { allowConfiguredPrivateRpc },
   );
 }
 
@@ -136,11 +150,16 @@ export async function forwardSafeRpcRequestToTrustedUrl(
   method: string,
   params: unknown[],
   requestOrigin?: string,
+  options: { allowConfiguredPrivateRpc?: boolean } = {},
 ): Promise<unknown> {
   if (!isSafeRpcForwardingMethod(method) || !Array.isArray(params)) {
     throw new Error("Invalid or disallowed RPC request");
   }
-  validateRpcNetworkBoundary(rpcUrl, requestOrigin);
+  validateRpcNetworkBoundary(
+    rpcUrl,
+    requestOrigin,
+    options.allowConfiguredPrivateRpc === true,
+  );
 
   let requestBody: string;
   try {

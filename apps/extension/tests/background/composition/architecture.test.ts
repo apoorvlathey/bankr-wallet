@@ -23,6 +23,7 @@ const ROUTER_MESSAGE_MANIFESTS = {
   "erc7715PermissionRouter.ts":
     "BACKGROUND_ERC7715_PERMISSION_MESSAGE_TYPES",
   "gasSimulationRouter.ts": "BACKGROUND_GAS_SIMULATION_MESSAGE_TYPES",
+  "ledgerRouter.ts": "BACKGROUND_LEDGER_MESSAGE_TYPES",
   "onboardingRouter.ts": "BACKGROUND_ONBOARDING_MESSAGE_TYPES",
   "providerRpcRouter.ts": "BACKGROUND_PROVIDER_RPC_MESSAGE_TYPES",
   "resetRouter.ts": "BACKGROUND_RESET_MESSAGE_TYPES",
@@ -101,6 +102,7 @@ test("message pipeline freezes every gate and route in released order", async ()
     "routeBackgroundSponsoredTransferMessage",
     "routeBackgroundTransactionStatusMessage",
     "routeBackgroundAccountManagementMessage",
+    "routeBackgroundLedgerMessage",
     "routeBackgroundSecretManagementMessage",
     "routeBackgroundBatchRequestMessage",
     "routeBackgroundDelegationMessage",

@@ -1,7 +1,5 @@
 /** Native browser-session persistence for a passkey-unwrapped vault capability. */
-
 import { arrayBufferToBase64, decodeBase64Exact } from "../cryptoUtils";
-import { isValidAutoLockTimeout } from "./timeoutValues";
 import {
   decodePasskeySessionCredential,
   PASSKEY_SESSION_BINDING_BYTES,
@@ -11,6 +9,16 @@ import {
   type DecodedPasskeySessionCredential,
   type EncryptedPasskeySessionCredentialV2,
 } from "./passkeyCredentialRecord";
+import {
+  passkeySessionAdditionalData,
+  resolvePasskeySessionTiming,
+  type PasskeySessionTiming,
+  type PersistedPasskeySessionCredential,
+} from "./passkeyPersistencePolicy";
+export type {
+  PasskeySessionTiming,
+  PersistedPasskeySessionCredential,
+} from "./passkeyPersistencePolicy";
 import {
   clearPersistedSessionSecret,
   importSessionEncryptionKey,
@@ -26,79 +34,6 @@ import {
   removeSessionItems,
   setSessionItems,
 } from "./storage";
-
-export interface PersistedPasskeySessionCredential {
-  kind: "passkey-vault";
-  vaultKeyBytes: Uint8Array;
-  passkeyBinding: string;
-  startedAt: number | null;
-  autoLockTimeout: number;
-  expiresAt: number | null;
-}
-
-export interface PasskeySessionTiming {
-  autoLockTimeout: number;
-  startedAt?: number;
-  expiresAt?: number | null;
-}
-
-function passkeySessionAdditionalData(
-  sessionId: string,
-  record: Pick<
-    DecodedPasskeySessionCredential,
-    | "version"
-    | "passkeyBinding"
-    | "startedAt"
-    | "autoLockTimeout"
-    | "expiresAt"
-  >,
-): Uint8Array {
-  if (record.version === 1) {
-    return new TextEncoder().encode(
-      JSON.stringify([
-        "walletchan/passkey-session/v1",
-        sessionId,
-        "master",
-        record.passkeyBinding,
-      ]),
-    );
-  }
-  return new TextEncoder().encode(
-    JSON.stringify([
-      "walletchan/passkey-session/v2",
-      sessionId,
-      "master",
-      record.passkeyBinding,
-      record.startedAt,
-      record.autoLockTimeout,
-      record.expiresAt,
-    ]),
-  );
-}
-
-function resolvePasskeySessionTiming(
-  timing: PasskeySessionTiming,
-): { startedAt: number; autoLockTimeout: number; expiresAt: number | null } | null {
-  if (!isValidAutoLockTimeout(timing.autoLockTimeout)) return null;
-  const startedAt = timing.startedAt ?? Date.now();
-  const expiresAt =
-    timing.expiresAt ??
-    (timing.autoLockTimeout === 0
-      ? null
-      : startedAt + timing.autoLockTimeout);
-  if (
-    !Number.isSafeInteger(startedAt) ||
-    startedAt <= 0 ||
-    (timing.autoLockTimeout === 0
-      ? expiresAt !== null
-      : !Number.isSafeInteger(expiresAt) ||
-        expiresAt !== startedAt + timing.autoLockTimeout)
-  ) {
-    return null;
-  }
-  return { startedAt, autoLockTimeout: timing.autoLockTimeout, expiresAt };
-}
-
 export async function getSessionPasskeyCredential(
   sessionId: string,
 ): Promise<PersistedPasskeySessionCredential | null> {
@@ -117,13 +52,11 @@ export async function getSessionPasskeyCredential(
   ) {
     return null;
   }
-
   const record = decodePasskeySessionCredential(
     session.encryptedSessionVaultKey,
   );
   const key = await importSessionEncryptionKey(local[SESSION_KEY_LOCAL]);
   if (!record || !key) return null;
-
   try {
     const plaintext = await crypto.subtle.decrypt(
       {
@@ -154,7 +87,6 @@ export async function getSessionPasskeyCredential(
     return null;
   }
 }
-
 export async function storePasskeySessionAtomic(
   sessionId: string,
   vaultKeyBytes: Uint8Array,

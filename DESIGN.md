@@ -96,6 +96,10 @@
   and short browser-window side panels are first-class viewports. Surface
   identity is independent of height; the shell fills the available viewport
   and one inner region owns vertical scrolling.
+- Full-page onboarding uses a persistent 280px progress rail at desktop widths
+  with three stages: Choose account, Add details, and Secure wallet. It starts
+  directly at account choice; compact widths collapse the rail into the shared
+  horizontal progress treatment while preserving the same step model.
 
 ## Components and states
 
@@ -112,12 +116,22 @@
   require a separate reveal or copy action. Generated recovery phrases begin
   concealed so revealing the secret remains deliberate. Backup action regions
   use a compact 32px acknowledgment row and an 8px relationship gap.
+- Checkboxes that enable a durable capability or developer-only RPC behavior
+  use the shared `commitment` variant: WalletChan amber for the checked state,
+  never the ordinary blue interaction color. Their complete explanatory row
+  is the native checkbox label and hit target; do not make users aim only at
+  the checkbox glyph.
 - Generated recovery-phrase setup follows the trust sequence: show and save the
   secret first, then collect optional group and first-account labels. Helper
   copy beneath generated and imported account labels explains their
   relationship to derivation #0.
 - Lists and financial data: light row separators, aligned columns, tabular numerals, no heavy cell grid.
 - Overlays: popovers for small contextual choices; action sheets for 2 to 6 choices; full screens for search, selection, configuration, and transaction detail; dialogs only for blocking decisions.
+- Progressive disclosures that reveal content below the current viewport use
+  `InlineDisclosure autoScrollOnOpen`. On expansion, the disclosure scrolls to
+  the top of its scroll owner after layout settles, uses smooth movement by
+  default, respects reduced-motion preferences, and never scrolls on collapse.
+  Nested disclosures follow the same rule independently.
 - Empty/loading/error: actionable empty copy, geometry-matching skeletons, recoverable errors with a next step.
 - Focus ring: blue 3px outer ring with sufficient contrast and no layout shift.
 - Architecture: renderer implementations are organized by feature domain with
@@ -228,6 +242,42 @@
 
 ## Slop audit
 
+- 2026-07-20 Send recipient-discovery audit: opening or clicking the recipient
+  input now reveals its wallet and contact suggestions immediately. An empty
+  query shows the complete ordered set in a bounded scrollable combobox, while
+  typing keeps the existing relevance-ranked search and concise placeholder.
+- 2026-07-20 home RPC-alert audit: collapsed the warning into a compact
+  two-row status surface. The title and quiet compact dismissal action share
+  the header; the affected-chain control and intentional two-line recovery
+  guidance form one grouped context row beneath it. Multi-chain warnings show
+  one chain plus a compact count so narrow popup layouts remain stable without
+  stranding the chain pill or breaking guidance mid-sentence.
+- 2026-07-20 manual add-token audit: the final Add token/Add back action now
+  uses WalletChan amber in both enabled and disabled states, matching the
+  screen's saved-state commitment while leaving blue reserved for focus and
+  ordinary selection.
+- 2026-07-20 add-network request audit: replaced the verbose generic action
+  banner with the shared dapp favicon/domain identity followed by one compact
+  proposed-network surface. The chain mark, name, and ID now establish the
+  decision at a glance; RPC risk detail remains in the existing progressive
+  disclosure, which scrolls into view when opened, and the final Add network
+  commitment uses WalletChan amber. The disclosure stops after the editable
+  technical fields instead of repeating the raw provider payload and origin.
+- 2026-07-20 manual add-network audit: the settings entry now starts keyboard
+  focus in the RPC URL field, matching the endpoint-first task sequence, and
+  uses the same amber final commitment treatment as the dapp-request flow.
+- 2026-07-19 Ledger onboarding audit: added the official monochrome Ledger
+  lettermark directly after View-only in the existing first-account decision
+  list, then reused the established device, derivation, and address-selection
+  flow inside the three-stage onboarding shell. Hardware discovery remains a
+  full-tab user gesture; the final account write stays behind the master-password
+  commitment rather than introducing a competing setup pattern.
+- 2026-07-19 Ledger setup identity audit: replaced the invented hardware glyph
+  with Ledger's official press-kit wordmark and lettermark. The connected
+  device now owns one quiet surface with one name and one text-plus-dot status,
+  eliminating repeated identity and nested icon chrome. Derivation choices
+  separate human labels from monospace paths for faster scanning, retain native
+  radio semantics and focus behavior, and consume existing theme tokens only.
 - 2026-07-19 fee-token confirmation audit: single and ERC-5792 confirmation
   reuse one compact `Pay gas with` decision row and the existing bottom action
   sheet for the native/USDC choice. Selection stays financial blue, final
@@ -304,6 +354,15 @@
   ERC-7715 prompts share one compact amber warning in the sticky decision bar,
   immediately above the reject-only action; the scrollable request content no
   longer repeats account capability state.
+- 2026-07-19 Ledger signing-wait audit: hardware approval remains on the full
+  request review instead of jumping early to Activity. The shared sticky amber
+  notice now carries the official Ledger mark on its black brand tile, one
+  direct instruction, and a dark circular progress cue. The commitment action
+  uses the shared dark-to-muted three-dot loader with `Waiting`, the
+  broadcast-only submitting banner stays hidden, and request-mutating controls
+  retain their layout while becoming unavailable until the device resolves.
+  Back remains active because it navigates without mutating or cancelling the
+  hardware request.
 - 2026-07-18 Swap/Bridge audit: rebuilt the wallet-sized form around one compact
   pay/receive intent module; combined token and network identity instead of
   exposing separate selectors; reused Send's 24px-target amber rounded-square
@@ -514,6 +573,13 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-20: aligned the manual add-token screen's final save action with the
+  shared amber commitment treatment.
+- 2026-07-19: moved Ledger setup into a dedicated full extension tab, closes
+  an originating side panel after launch, and replaced the generic hardware
+  glyph with official local Ledger SVG assets plus a compact connected-device
+  and derivation-path presentation.
 
 - 2026-07-19: added a quiet, theme-token-driven contenthash provenance pill to
   ENS/IPFS connection requests. It appears only for exact hosted or configured
@@ -1042,6 +1108,14 @@
   signing, activity, and detail surfaces. Local IPFS/onchain marks now reuse
   the browser launcher's safe raster/remap/Chrome-processed fallback order and
   existing light contrast canvas instead of collapsing to a CID letter tile.
+- 2026-07-19: moved Ledger to the final Add Account position after View-only
+  and replaced the remaining invented hardware glyph with Ledger's official
+  monochrome lettermark.
+- 2026-07-19: kept Ledger transaction and signature reviews mounted through
+  hardware approval, added the shared branded signing prompt with black logo
+  tile and dark trailing spinner, moved `Waiting` to a dark-to-muted three-dot
+  loader, reserved the submitting banner for broadcast, locked request edits
+  until the device resolves, and kept Back available as non-mutating navigation.
 - 2026-07-19: made fee-asset selection visually scannable with native-token and
   USDC marks in both the compact pill and action sheet. USDC preparation now
   reuses the established transaction-fee progress pulse and concise

@@ -1,13 +1,21 @@
 /** Security defaults for newly-created authentication material. */
-export const MIN_NEW_PASSWORD_LENGTH = 12;
+export const MIN_NEW_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 256;
 export const MAX_EXISTING_PASSWORD_BYTES = 1024 * 1024;
 
 const OBVIOUS_PASSWORDS = new Set([
+  "password",
+  "password1",
   "password1234",
+  "qwerty12",
+  "qwerty123",
   "qwertyuiop12",
+  "12345678",
+  "123456789",
   "123456789012",
+  "letmein1",
   "letmeinplease",
+  "walletchan",
   "walletchan123",
 ]);
 

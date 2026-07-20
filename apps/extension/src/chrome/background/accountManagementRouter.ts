@@ -50,6 +50,7 @@ export type BackgroundAccountManagementDependencies = {
   getAccounts: () => Promise<any[]>;
   handleRevokeDappPermission: (origin: string) => Promise<any>;
   handleRemoveAccount: (accountId: string, expectedEpoch: string) => Promise<any>;
+  clearTxHistoryForAddresses: (addresses: string[]) => Promise<void>;
   sendRuntimeMessage: (message: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -231,13 +232,15 @@ async function removeAccount(
     };
   }
   const operationAuthEpoch = dependencies.getAuthCeremonyEpoch();
+  let removedAddress: string | null = null;
   try {
-    return await dependencies.withSponsoredTransferOperation(() =>
+    const result = await dependencies.withSponsoredTransferOperation(() =>
       dependencies.removeAccountWithDappPrivacyBoundary({
         accountId: message.accountId,
         validateRemoval: async () => {
           const account = await dependencies.getAccountById(message.accountId);
           if (!account) throw new Error("Account not found");
+          removedAddress = account.address;
           if (
             await dependencies.hasUnresolvedSponsoredTransferIntent(
               account.address,
@@ -260,6 +263,10 @@ async function removeAccount(
           ),
       }),
     );
+    if (result?.success && removedAddress) {
+      await dependencies.clearTxHistoryForAddresses([removedAddress]).catch(() => undefined);
+    }
+    return result;
   } catch (error) {
     return {
       success: false,

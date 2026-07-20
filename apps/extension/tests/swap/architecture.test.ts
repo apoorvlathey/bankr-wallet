@@ -57,6 +57,11 @@ test("swap dependency direction isolates transport, cache policy, and RPC", asyn
     listPolicy,
     /\b(?:chrome\.|fetch|createPublicClient|readContract|txHandlers)\b/,
   );
+  const listCodec = await source("swap/tokenListCodec.ts");
+  assert.doesNotMatch(
+    listCodec,
+    /\b(?:chrome\.|fetch|createPublicClient|readContract|txHandlers)\b/,
+  );
 
   const rpcClient = await source("swap/rpcClient.ts");
   assert.match(rpcClient, /from ["']\.\.\/network\/rpcClient["']/);
@@ -79,6 +84,7 @@ test("swap modules remain independently auditable", async () => {
     "swap/permit2.ts": 85,
     "swap/tokenInfo.ts": 120,
     "swap/tokenListPolicy.ts": 45,
+    "swap/tokenListCodec.ts": 45,
     "swap/tokenList.ts": 65,
     "swap/tokenLogo.ts": 70,
     "swap/tokenPrice.ts": 40,

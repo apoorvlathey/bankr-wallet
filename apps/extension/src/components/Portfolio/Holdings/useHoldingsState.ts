@@ -30,6 +30,15 @@ export function useHoldingsState({
   const [totalValueUsd, setTotalValueUsd] = useState(
     () => initialSnapshot?.totalValueUsd ?? 0,
   );
+  const [omittedTokenCount, setOmittedTokenCount] = useState(
+    () => initialSnapshot?.omittedTokenCount ?? 0,
+  );
+  const [omittedTokenValueUsd, setOmittedTokenValueUsd] = useState(
+    () => initialSnapshot?.omittedTokenValueUsd ?? 0,
+  );
+  const [omittedTokenValueUsdByChain, setOmittedTokenValueUsdByChain] = useState<
+    Record<string, number>
+  >(() => initialSnapshot?.omittedTokenValueUsdByChain ?? {});
   const [loading, setLoading] = useState(() => !initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [hideValue, setHideValue] = useState(false);
@@ -55,14 +64,22 @@ export function useHoldingsState({
     useState(false);
   const [lowValueLoading, setLowValueLoading] = useState(false);
   const loadVersionRef = useRef(0);
+  const portfolioAbortControllerRef = useRef<AbortController | null>(null);
   const verifiedBalanceTokensRef = useRef(new Map<string, PortfolioToken>());
   const verifiedBalanceKeysRef = useRef(new Set<string>());
+  const tokensRef = useRef(tokens);
+  tokensRef.current = tokens;
+  const abortPortfolioLoad = useCallback(
+    () => portfolioAbortControllerRef.current?.abort(),
+    [],
+  );
 
   useEffect(() => {
     chrome.storage.sync.get("hidePortfolioValue", (result) => {
       if (result.hidePortfolioValue) setHideValue(true);
     });
-  }, []);
+    return abortPortfolioLoad;
+  }, [abortPortfolioLoad]);
 
   const toggleHideValue = useCallback(() => {
     const newValue = !hideValue;
@@ -90,6 +107,9 @@ export function useHoldingsState({
       setTokens(snapshot.tokens);
       setDefiPositions(snapshot.defiPositions);
       setTotalValueUsd(snapshot.totalValueUsd);
+      setOmittedTokenCount(snapshot.omittedTokenCount);
+      setOmittedTokenValueUsd(snapshot.omittedTokenValueUsd);
+      setOmittedTokenValueUsdByChain(snapshot.omittedTokenValueUsdByChain);
       setCustomTokenKeys(snapshot.customTokenKeys);
       setAllTokenKeys(snapshot.allTokenKeys);
       setHiddenTokenKeys(snapshot.hiddenTokenKeys);
@@ -112,6 +132,12 @@ export function useHoldingsState({
     setDefiPositions,
     totalValueUsd,
     setTotalValueUsd,
+    omittedTokenCount,
+    setOmittedTokenCount,
+    omittedTokenValueUsd,
+    setOmittedTokenValueUsd,
+    omittedTokenValueUsdByChain,
+    setOmittedTokenValueUsdByChain,
     loading,
     setLoading,
     error,
@@ -134,8 +160,10 @@ export function useHoldingsState({
     lowValueLoading,
     setLowValueLoading,
     loadVersionRef,
+    portfolioAbortControllerRef,
     verifiedBalanceTokensRef,
     verifiedBalanceKeysRef,
+    tokensRef,
     toggleHideValue,
     applyHoldingsSnapshot,
   };

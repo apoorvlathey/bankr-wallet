@@ -1,27 +1,76 @@
-import { Box, Button, HStack, Link, Spinner, Text, VStack } from "@chakra-ui/react";
-import { CheckIcon, LockIcon, WarningIcon } from "@chakra-ui/icons";
-import { TWITTER_URL } from "@/constants/externalUrls";
-import { OnboardingCanvas, OnboardingFooter, OnboardingHeader } from "./OnboardingShell";
+import { useEffect } from "react";
+import { Box, HStack, Image, Spinner, Text, VStack } from "@chakra-ui/react";
+import { WarningIcon } from "@chakra-ui/icons";
+import { keyframes } from "@emotion/react";
+import BrandWordmark from "@/components/BrandWordmark";
+import UnlockMascot from "@/components/UnlockMascot";
+import { playInteractionSound } from "@/sounds/soundManager";
+import { OnboardingCanvas, OnboardingHeader } from "./OnboardingShell";
 
-function TrustRow({ children }: { children: string }) {
+const floatPinPrompt = keyframes`
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(0, -5px); }
+`;
+
+function PinExtensionPrompt() {
   return (
-    <HStack spacing={3} align="start">
+    <Box
+      position="fixed"
+      top={{ md: "88px", lg: "80px" }}
+      right={{ md: 5, lg: 8 }}
+      zIndex={20}
+      display={{ base: "none", md: "block" }}
+      pointerEvents="none"
+      role="note"
+      aria-label="Pin WalletChan from your browser extensions menu"
+      sx={{
+        "@media (prefers-reduced-motion: no-preference)": {
+          animation: `${floatPinPrompt} 2.2s ease-in-out infinite`,
+        },
+      }}
+    >
       <Box
-        w="24px"
-        h="24px"
-        borderRadius="full"
-        bg="surface.raisedHover"
-        color="accent.secondary"
-        display="grid"
-        placeItems="center"
-        flexShrink={0}
+        position="absolute"
+        right={3}
+        top="-40px"
+        color="accent.highlight"
       >
-        <CheckIcon boxSize={3} />
+        <Box
+          as="svg"
+          viewBox="0 0 24 24"
+          boxSize="38px"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 19V5" />
+          <path d="m5 12 7-7 7 7" />
+        </Box>
       </Box>
-      <Text color="fg.secondary" fontSize="sm" lineHeight="1.5">
-        {children}
-      </Text>
-    </HStack>
+
+      <Box
+        minW="220px"
+        px={3.5}
+        py={3}
+        bg="surface.raised"
+        border="1px solid"
+        borderColor="accent.highlight"
+        borderRadius="lg"
+      >
+        <HStack spacing={2.5} align="center">
+          <Image src="/walletchan-icon.png" alt="" boxSize="32px" />
+          <VStack spacing={0.5} align="stretch">
+            <BrandWordmark fontSize="md" />
+            <Text color="fg.secondary" fontSize="xs" lineHeight="1.35">
+              Pin the extension for quick access
+            </Text>
+          </VStack>
+        </HStack>
+      </Box>
+    </Box>
   );
 }
 
@@ -74,100 +123,44 @@ export function OnboardingRecoveryError({ message }: { message: string }) {
   );
 }
 
-export function WelcomeStep({ onContinue }: { onContinue: () => void }) {
-  return (
-    <OnboardingCanvas
-      header={<OnboardingHeader />}
-      footer={
-        <OnboardingFooter>
-          <Button variant="primary" size="lg" w="full" onClick={onContinue}>
-            Set up WalletChan
-          </Button>
-        </OnboardingFooter>
-      }
-    >
-      <VStack align="stretch" spacing={8} pt={{ base: 4, sm: 10 }}>
-        <VStack align="start" spacing={3}>
-          <Box
-            w="56px"
-            h="56px"
-            bg="surface.raised"
-            border="1px solid"
-            borderColor="border.default"
-            borderRadius="xl"
-            display="grid"
-            placeItems="center"
-          >
-            <Box as="img" src="/walletchan-icon.png" alt="WalletChan" w="42px" h="42px" />
-          </Box>
-          <Text as="h1" fontSize={{ base: "2xl", sm: "3xl" }} fontWeight="700" lineHeight="1.18" letterSpacing="-0.025em">
-            A wallet that explains every action.
-          </Text>
-          <Text color="fg.secondary" fontSize="md" lineHeight="1.55">
-            Bring your Bankr account, private key, or seed phrase. WalletChan keeps the important details clear before you sign.
-          </Text>
-        </VStack>
-
-        <VStack align="stretch" spacing={4}>
-          <TrustRow>Credentials are encrypted and stored on this device.</TrustRow>
-          <TrustRow>Transactions show human-readable outcomes before approval.</TrustRow>
-          <TrustRow>You can add more account types later.</TrustRow>
-        </VStack>
-
-        <HStack spacing={2} color="fg.muted" pt={2}>
-          <LockIcon boxSize={3.5} />
-          <Text fontSize="xs">Self-custody by default</Text>
-          <Text aria-hidden="true">·</Text>
-          <Link href={TWITTER_URL} isExternal fontSize="xs" color="accent.secondary">
-            Built by @apoorveth
-          </Link>
-        </HStack>
-      </VStack>
-    </OnboardingCanvas>
-  );
-}
-
 export function SuccessStep() {
+  useEffect(() => {
+    void playInteractionSound("unlockSuccess");
+  }, []);
+
   return (
-    <OnboardingCanvas header={<OnboardingHeader />}>
-      <VStack minH={{ base: "420px", sm: "520px" }} justify="center" spacing={6} textAlign="center">
-        <Box
-          w="64px"
-          h="64px"
-          borderRadius="full"
-          bg="status.success.bg"
-          color="status.success.fg"
-          border="1px solid"
-          borderColor="status.success.border"
-          display="grid"
-          placeItems="center"
-        >
-          <CheckIcon boxSize={6} />
-        </Box>
-        <VStack spacing={2} maxW="320px">
+    <>
+      <PinExtensionPrompt />
+      <OnboardingCanvas currentStep={3} header={<OnboardingHeader />}>
+        <VStack minH={{ base: "420px", sm: "520px" }} justify="center" spacing={5} textAlign="center">
+          <Box
+            w="140px"
+            h="140px"
+            role="img"
+            aria-label="Wallet ready"
+          >
+            <UnlockMascot state="success" />
+          </Box>
           <Text as="h1" fontSize="2xl" fontWeight="700" letterSpacing="-0.02em">
             Your wallet is ready
           </Text>
-          <Text color="fg.secondary" fontSize="sm" lineHeight="1.55">
-            Pin WalletChan in your browser toolbar for quick access, then open the extension to unlock your wallet.
-          </Text>
+          <Box
+            w="full"
+            maxW="320px"
+            p={4}
+            bg="surface.raised"
+            border="1px solid"
+            borderColor="border.default"
+            borderRadius="lg"
+            textAlign="left"
+          >
+            <Text fontWeight="600" fontSize="sm">Next step</Text>
+            <Text color="fg.secondary" fontSize="sm" mt={1}>
+              Open your browser’s extension menu, pin WalletChan, and click its icon.
+            </Text>
+          </Box>
         </VStack>
-        <Box
-          w="full"
-          maxW="320px"
-          p={4}
-          bg="surface.raised"
-          border="1px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          textAlign="left"
-        >
-          <Text fontWeight="600" fontSize="sm">Next step</Text>
-          <Text color="fg.secondary" fontSize="sm" mt={1}>
-            Open your browser’s extension menu, pin WalletChan, and select its icon.
-          </Text>
-        </Box>
-      </VStack>
-    </OnboardingCanvas>
+      </OnboardingCanvas>
+    </>
   );
 }

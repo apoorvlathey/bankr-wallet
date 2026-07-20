@@ -85,6 +85,8 @@ interface ERC20ApproveDisplayProps {
   onSaveCalldata?: (
     newData: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Prevent request mutation after hardware signing has started. */
+  isReadOnly?: boolean;
 }
 
 /**
@@ -158,6 +160,7 @@ export default function ERC20ApproveDisplay({
   embedded = false,
   txId,
   onSaveCalldata,
+  isReadOnly = false,
 }: ERC20ApproveDisplayProps) {
   const { tokens, themeId } = useTheme();
   const { networksInfo } = useNetworks();
@@ -273,10 +276,16 @@ export default function ERC20ApproveDisplay({
     : null;
 
   const handleStartEdit = useCallback(() => {
-    if (!token) return;
+    if (!token || isReadOnly) return;
     setEditValue(formatUnits(currentAmount, token.decimals));
     setEditing(true);
-  }, [token, currentAmount]);
+  }, [token, currentAmount, isReadOnly]);
+
+  useEffect(() => {
+    if (!isReadOnly) return;
+    setEditing(false);
+    setEditValue("");
+  }, [isReadOnly]);
 
   const handleCancelEdit = useCallback(() => {
     setEditing(false);
@@ -284,7 +293,7 @@ export default function ERC20ApproveDisplay({
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
-    if (!token) return;
+    if (!token || isReadOnly) return;
 
     let newAmount: bigint;
     try {
@@ -321,7 +330,7 @@ export default function ERC20ApproveDisplay({
     setIsInfinite(newAmount >= INFINITE_THRESHOLD);
     setIsRevoke(newAmount === 0n);
     setEditing(false);
-  }, [token, editValue, approval.spender, txId, onSaveCalldata]);
+  }, [token, editValue, approval.spender, txId, onSaveCalldata, isReadOnly]);
 
   // Cached logo data URL — shares the avatar/token-logo image cache so the
   // approve card paints synchronously on reopen. Must run before any
@@ -666,6 +675,7 @@ export default function ERC20ApproveDisplay({
                   borderRadius={isDarkTheme ? "md" : "none"}
                   boxShadow={isDarkTheme ? "button" : undefined}
                   onClick={handleStartEdit}
+                  isDisabled={isReadOnly}
                   _hover={
                     isDarkTheme
                       ? { opacity: 0.9, transform: "translateY(-1px)" }

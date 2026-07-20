@@ -256,7 +256,7 @@ export default function AddTokenScreen({
           <Button
             type="submit"
             form="add-token-form"
-            variant="primary"
+            variant="brand"
             isDisabled={!canSave}
             isLoading={saving}
           >

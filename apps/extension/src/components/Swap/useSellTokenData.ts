@@ -3,6 +3,7 @@ import { formatUnits } from "viem";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { fetchOnchainBalances } from "@/chrome/portfolio/onchainBalances";
 import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
+import { selectPortfolioTokensForInteraction } from "@/chrome/portfolio/consumerPolicy";
 import { secureHttpTransport } from "@/chrome/network/rpcClient";
 import { getStoredRpcUrl } from "@/lib/chains";
 
@@ -31,12 +32,28 @@ export function useSellTokenData({
     let cancelled = false;
     (async () => {
       try {
-        const catalog = await loadPortfolioTokenCatalog(fromAddress);
+        const catalog = await loadPortfolioTokenCatalog(fromAddress, {
+          enrich: false,
+        });
         if (cancelled) return;
 
-        setHoldingsAllChains(catalog.tokens);
+        const priorityKeys = new Set([
+          ...catalog.customTokenKeys,
+          ...catalog.recentReceivedTokenKeys,
+        ]);
         if (initialSellToken) {
-          const cachedMatch = catalog.tokens.find(
+          priorityKeys.add(
+            `${initialSellToken.chainId}-${initialSellToken.contractAddress.toLowerCase()}`,
+          );
+        }
+        const interactiveTokens = selectPortfolioTokensForInteraction(
+          catalog.tokens,
+          priorityKeys,
+        );
+
+        setHoldingsAllChains(interactiveTokens);
+        if (initialSellToken) {
+          const cachedMatch = interactiveTokens.find(
             (token) =>
               token.chainId === initialSellToken.chainId &&
               token.contractAddress.toLowerCase() ===
@@ -45,9 +62,9 @@ export function useSellTokenData({
           setSellToken(cachedMatch ?? initialSellToken);
         }
 
-        let tokens = catalog.tokens;
+        let tokens = interactiveTokens;
         try {
-          const onchain = await fetchOnchainBalances(fromAddress, catalog.tokens, {
+          const onchain = await fetchOnchainBalances(fromAddress, interactiveTokens, {
             preserveZeroBalanceTokens: true,
           });
           if (!cancelled) tokens = onchain.tokens;

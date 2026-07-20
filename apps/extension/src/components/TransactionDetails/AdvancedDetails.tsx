@@ -25,6 +25,9 @@ export default function AdvancedDetails({
   defaultOpen,
   formatWeiUsd,
   onFunctionName,
+  calldataLoading,
+  calldataError,
+  onRetryCalldata,
 }: {
   tx: CompletedTransaction;
   resolveLogo: (url: string | null | undefined) => string | undefined;
@@ -42,6 +45,9 @@ export default function AdvancedDetails({
   defaultOpen: boolean;
   formatWeiUsd: (raw: string | undefined | null) => string | null;
   onFunctionName: (name: string) => void;
+  calldataLoading: boolean;
+  calldataError: string | null;
+  onRetryCalldata: () => void;
 }) {
   const disclosureRef = useRef<HTMLDetailsElement>(null);
   const wasOpenRef = useRef(defaultOpen);
@@ -102,6 +108,9 @@ export default function AdvancedDetails({
           nativeSym={nativeSym}
           formatWeiUsd={formatWeiUsd}
           onFunctionName={onFunctionName}
+          calldataLoading={calldataLoading}
+          calldataError={calldataError}
+          onRetryCalldata={onRetryCalldata}
         />
         <GasDetails
           gasData={gasData}

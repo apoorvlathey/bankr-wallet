@@ -79,6 +79,7 @@ test("ENS browsing dependencies flow inward without policy cycles", async () => 
   const routes = await source("messageRoutes.ts");
   assert.match(routes, /from ["']\.\/senderAuthorization["']/);
   assert.match(routes, /from ["']\.\/navigation["']/);
+  assert.match(routes, /from ["']\.\/browserMessageRoutes["']/);
   assert.ok(
     routes.indexOf("isAuthorizedEnsBrowsingSender(type, sender)") <
       routes.indexOf('message.type === "ens-cache-metadata"'),
@@ -90,6 +91,7 @@ test("extracted ENS browsing modules remain independently auditable", async () =
   const budgets: Record<string, number> = {
     "senderAuthorization.ts": 140,
     "messageRoutes.ts": 340,
+    "browserMessageRoutes.ts": 120,
     "navigation.ts": 240,
     "resolverSupport.ts": 120,
     "nameResolvers.ts": 240,

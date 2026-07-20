@@ -5,7 +5,10 @@ import {
   announceProvider,
   setWindowEthereum,
 } from "../../src/chrome/provider/inpage/announcement";
-import { ImpersonatorProvider } from "../../src/chrome/provider/inpage/provider";
+import {
+  ImpersonatorProvider,
+  UNCONNECTED_PROVIDER_ADDRESS,
+} from "../../src/chrome/provider/inpage/provider";
 import { setProviderInstance } from "../../src/chrome/provider/inpage/providerRegistry";
 import { installContentResultRouter } from "../../src/chrome/provider/inpage/resultRouter";
 
@@ -59,11 +62,16 @@ test("inpage provider preserves request/result correlation and discovery", async
     installContentResultRouter();
     const provider = new ImpersonatorProvider(
       8453,
-      "0x0000000000000000000000000000000000000001",
+      UNCONNECTED_PROVIDER_ADDRESS,
     );
     setProviderInstance(provider);
+    assert.equal(provider.selectedAddress, null);
+    assert.throws(() => {
+      (provider as { selectedAddress: string | null }).selectedAddress =
+        "0x0000000000000000000000000000000000000009";
+    }, TypeError);
 
-    const accountsPromise = provider.send("eth_accounts");
+    const accountsPromise = provider.send("eth_requestAccounts");
     const accountsRequest = messages.at(-1);
     assert.deepEqual(accountsRequest.type, "i_dappAccounts");
     deliver({
@@ -77,6 +85,34 @@ test("inpage provider preserves request/result correlation and discovery", async
     assert.deepEqual(await accountsPromise, [
       "0x0000000000000000000000000000000000000002",
     ]);
+    assert.equal(
+      provider.selectedAddress,
+      "0x0000000000000000000000000000000000000002",
+    );
+
+    const disconnectedAccountsPromise = provider.send("eth_accounts");
+    const disconnectedAccountsRequest = messages.at(-1);
+    deliver({
+      type: "dappAccountsResult",
+      msg: {
+        id: disconnectedAccountsRequest.msg.id,
+        success: true,
+        accounts: [],
+      },
+    });
+    assert.deepEqual(await disconnectedAccountsPromise, []);
+    assert.equal(provider.selectedAddress, null);
+
+    deliver({
+      type: "accountsChanged",
+      msg: {
+        accounts: ["0x0000000000000000000000000000000000000002"],
+      },
+    });
+    assert.equal(
+      provider.selectedAddress,
+      "0x0000000000000000000000000000000000000002",
+    );
 
     const txPromise = provider.send("eth_sendTransaction", [
       { to: "0x0000000000000000000000000000000000000003" },
@@ -118,6 +154,9 @@ test("inpage provider preserves request/result correlation and discovery", async
     );
     assert.equal(announcement.detail.provider, provider);
     assert.equal(announcement.detail.info.rdns, "com.walletchan");
+
+    deliver({ type: "accountsChanged", msg: { accounts: [] } });
+    assert.equal(provider.selectedAddress, null);
   } finally {
     if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
     else Reflect.deleteProperty(globalThis, "window");

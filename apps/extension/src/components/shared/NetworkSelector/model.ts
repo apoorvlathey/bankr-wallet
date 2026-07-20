@@ -8,9 +8,9 @@ export interface NetworkSelectorOption {
   iconBg?: string;
 }
 
-export function sortNetworkSelectorOptions(
-  networks: readonly NetworkSelectorOption[],
-): NetworkSelectorOption[] {
+export function sortNetworkSelectorOptions<T extends NetworkSelectorOption>(
+  networks: readonly T[],
+): T[] {
   return [...networks].sort((a, b) => {
     const aFunded = a.isFunded ?? (a.balanceUsd ?? 0) > 0;
     const bFunded = b.isFunded ?? (b.balanceUsd ?? 0) > 0;

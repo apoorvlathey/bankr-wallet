@@ -17,7 +17,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 ### Changed
 
 - Security settings now place Auto-Lock immediately after Change Password and Agent Password at the bottom.
-- New and changed passwords now require at least 12 characters and reject a
+- New and changed passwords now require at least 8 characters and reject a
   small set of obviously guessable values; existing legacy passwords remain
   unlockable.
 - Missing or invalid auto-lock settings now use a finite 15-minute default.

@@ -22,7 +22,7 @@ Every preview state is URL-addressable. The canonical query parameters are:
 ```
 
 - `theme`: `midnight` or `bauhaus`
-- `frame`: `compact`, `popup`, `window`, or `sidepanel`
+- `frame`: `compact`, `popup`, `window`, `sidepanel`, or `fullscreen`
 - `scenario`: validated per route
 - `wallet`: `bankr`, `privateKey`, or `seedPhrase`; signing routes also accept
   `viewOnly` as a separate negative-path fixture
@@ -63,9 +63,11 @@ Useful direct routes:
 
 The top toolbar switches between the registered production themes, Bauhaus and
 Midnight, and between compact reflow `320x568`, popup `360x600`, popup-window
-`480x720`, and sidepanel `420x760` frames. The compact frame is the mandatory
-small-viewport gate; it is not a separate production mode. The Vite server
-hot-reloads token/component edits immediately.
+`480x720`, sidepanel `420x760`, and responsive full-screen frames. Onboarding
+uses full screen by default because it ships as a browser page rather than an
+extension popup. The compact frame is the mandatory small-viewport gate; it is
+not a separate production mode. The Vite server hot-reloads token/component
+edits immediately.
 
 ## Architecture
 
@@ -86,6 +88,8 @@ Files:
   portfolio, RPC, and route environment.
 - `apps/extension/src/preview/previewChrome.ts` — fail-closed preview-only
   Chrome API shim.
+- `apps/extension/src/preview/previewChromeSupport.ts` — deterministic shim
+  response fixtures and shared fail-closed helpers.
 - `apps/extension/src/preview/previewAssets.ts` — semantic manifest for local,
   deterministic preview assets.
 

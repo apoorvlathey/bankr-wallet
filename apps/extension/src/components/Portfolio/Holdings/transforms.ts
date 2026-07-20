@@ -8,7 +8,6 @@ import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import {
   LOW_VALUE_TOKEN_THRESHOLD_USD,
   getPortfolioTokenBalance,
-  getTokenKeySet,
   hasPositiveBalance,
   isNativePortfolioToken,
   sortTokensByValue,
@@ -24,25 +23,6 @@ const BUILT_IN_ETH_MAINNET_CHAIN_IDS = new Set(
 
 export function hasRenderablePortfolioToken(token: PortfolioToken): boolean {
   return hasPositiveBalance(token) || Number(token.valueUsd || 0) > 0;
-}
-
-function isVisibleTokenRow(
-  token: PortfolioToken,
-  includeLowValueTokens: boolean,
-): boolean {
-  return (
-    includeLowValueTokens ||
-    Number(token.valueUsd || 0) >= LOW_VALUE_TOKEN_THRESHOLD_USD
-  );
-}
-
-export function getVisibleTokenKeySet(
-  tokens: PortfolioToken[],
-  includeLowValueTokens: boolean,
-): Set<string> {
-  return getTokenKeySet(
-    tokens.filter((token) => isVisibleTokenRow(token, includeLowValueTokens)),
-  );
 }
 
 export function collectTokenLogoUrls(
@@ -209,6 +189,7 @@ export function getTokensFromRows(rows: AssetDisplayRow[]): PortfolioToken[] {
 export function getChainTotals(
   tokens: PortfolioToken[],
   defiPositions: DefiPosition[],
+  omittedTokenValueUsdByChain: Readonly<Record<string, number>> = {},
 ): ReadonlyMap<number, number> {
   const totals = new Map<number, number>();
   for (const token of tokens) {
@@ -223,6 +204,13 @@ export function getChainTotals(
       (totals.get(position.chainId) ?? 0) +
         Math.max(0, position.valueUsd || 0),
     );
+  }
+  for (const [chainKey, valueUsd] of Object.entries(
+    omittedTokenValueUsdByChain,
+  )) {
+    const chainId = Number(chainKey);
+    if (!Number.isSafeInteger(chainId) || chainId <= 0) continue;
+    totals.set(chainId, (totals.get(chainId) ?? 0) + Math.max(0, valueUsd));
   }
   return totals;
 }

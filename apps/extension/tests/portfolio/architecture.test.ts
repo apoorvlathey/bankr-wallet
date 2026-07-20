@@ -62,7 +62,7 @@ test("portfolio pure policy and cache state stay separate from network effects",
   assert.doesNotMatch(state, /constants\/externalUrls/);
 });
 
-test("portfolio composition preserves catalog, onchain, and snapshot direction", async () => {
+test("portfolio composition preserves catalog and lightweight snapshot direction", async () => {
   const [catalog, refresh, dataComposition, providerComposition] = await Promise.all([
     readPortfolioModule("tokenCatalog.ts"),
     readPortfolioModule("snapshotRefresh.ts"),
@@ -80,11 +80,10 @@ test("portfolio composition preserves catalog, onchain, and snapshot direction",
   assert.match(catalog, /from ["'].\/catalogTransforms["']/);
   assert.match(catalog, /from ["'].\/catalogTypes["']/);
 
-  const catalogLoad = refresh.indexOf("loadPortfolioTokenCatalog(address)");
-  const onchainRefresh = refresh.indexOf("fetchOnchainBalances(address");
+  const catalogLoad = refresh.indexOf("loadPortfolioTokenCatalog(address, { enrich: false })");
   const snapshotWrite = refresh.indexOf("recordSnapshot(address");
-  assert.ok(catalogLoad >= 0 && catalogLoad < onchainRefresh);
-  assert.ok(onchainRefresh < snapshotWrite);
+  assert.ok(catalogLoad >= 0 && catalogLoad < snapshotWrite);
+  assert.doesNotMatch(refresh, /fetchOnchainBalances/);
 
   assert.match(dataComposition, /from ["']\.\.\/\.\.\/portfolio\/coingecko["']/);
   assert.match(providerComposition, /from ["']\.\.\/\.\.\/portfolio\/hiddenTokens["']/);

@@ -12,6 +12,7 @@ import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { CopyButton } from "@/components/CopyButton";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { getAccountSettingsTypeLabel } from "@/components/accountIdentityLabels";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useAddressContact } from "@/hooks/useAddressContacts";
 import { truncateAddress } from "@/lib/addressUtils";
@@ -21,13 +22,6 @@ interface AccountSettingsIdentityProps {
   resolvedName: string | null;
   resolvedAvatar: string | null;
   explorerUrl: string;
-}
-
-function accountTypeLabel(account: Account): string {
-  if (account.type === "privateKey") return "Private Key";
-  if (account.type === "seedPhrase") return `Seed · #${account.derivationIndex}`;
-  if (account.type === "impersonator") return "View-Only";
-  return "Bankr";
 }
 
 function AccountIdentityAvatar({
@@ -104,7 +98,7 @@ export default function AccountSettingsIdentity({
             {title}
           </Text>
           <Badge variant="subtle" fontSize="xs" flexShrink={0}>
-            {accountTypeLabel(account)}
+            {getAccountSettingsTypeLabel(account)}
           </Badge>
         </HStack>
         <HStack spacing={1} minW={0} color="fg.secondary">

@@ -45,7 +45,7 @@ test("account reordering persists only exact permutations", async (t) => {
     const accounts = [
       {
         id: "bankr",
-        type: "impersonator",
+        type: "bankr",
         address: `0x${"11".repeat(20)}`,
         displayName: "Bankr",
         createdAt: 1,
@@ -66,6 +66,23 @@ test("account reordering persists only exact permutations", async (t) => {
         seedGroupId: "seed-group",
         derivationIndex: 0,
       },
+      {
+        id: "ledger",
+        type: "ledger",
+        address: `0x${"44".repeat(20)}`,
+        displayName: "Ledger",
+        createdAt: 4,
+        deviceId: `0x${"55".repeat(20)}`,
+        hdPath: "m/44'/60'/0'/0/0",
+        hdIndex: 0,
+      },
+      {
+        id: "view-only",
+        type: "impersonator",
+        address: `0x${"66".repeat(20)}`,
+        displayName: "View only",
+        createdAt: 5,
+      },
     ];
 
     const reset = () => {
@@ -75,25 +92,27 @@ test("account reordering persists only exact permutations", async (t) => {
     await t.test("supports every wallet type and preserves metadata", async () => {
       reset();
       const reordered = await reorderAccounts([
+        "ledger",
         "seed-phrase",
         "bankr",
         "private-key",
+        "view-only",
       ]);
 
       assert.deepEqual(
         reordered.map(({ id }) => id),
-        ["seed-phrase", "bankr", "private-key"],
+        ["ledger", "seed-phrase", "bankr", "private-key", "view-only"],
       );
       assert.deepEqual(local.accounts, reordered);
-      assert.deepEqual(reordered[0], accounts[2]);
+      assert.deepEqual(reordered[0], accounts[3]);
     });
 
     await t.test("rejects missing, duplicate, unknown, and malformed IDs", async () => {
       for (const invalidOrder of [
-        ["bankr", "private-key"],
-        ["bankr", "bankr", "seed-phrase"],
-        ["bankr", "private-key", "unknown"],
-        "bankr,private-key,seed-phrase",
+        ["bankr", "private-key", "seed-phrase", "ledger"],
+        ["bankr", "bankr", "seed-phrase", "ledger", "view-only"],
+        ["bankr", "private-key", "seed-phrase", "ledger", "unknown"],
+        "bankr,private-key,seed-phrase,ledger,view-only",
       ]) {
         reset();
         await assert.rejects(reorderAccounts(invalidOrder), /account order/i);

@@ -39,6 +39,20 @@ test("Bankr is enabled only after the official delegation already exists", () =>
   );
 });
 
+for (const onchainDelegate of [null, WALLETCHAN_OFFICIAL_DELEGATE] as const) {
+  test(`Ledger fails closed with ${onchainDelegate ? "the official delegate" : "no delegate"}`, () => {
+    const eligibility = evaluateUsdcFeePaymentEligibility({
+      accountType: "ledger",
+      chainId: 8453,
+      hasDeployment: false,
+      onchainDelegate,
+    });
+    assert.equal(eligibility.available, false);
+    assert.match(eligibility.unavailableReason ?? "", /Ledger accounts/);
+    assert.equal(eligibility.oneTimeUpgrade, undefined);
+  });
+}
+
 test("view-only, deployment, and foreign-delegate requests fail closed", () => {
   assert.equal(
     evaluateUsdcFeePaymentEligibility({

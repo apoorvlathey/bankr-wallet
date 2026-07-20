@@ -4,12 +4,13 @@ import {
   OnboardingLoading,
   OnboardingRecoveryError,
   SuccessStep,
-  WelcomeStep,
 } from "./onboarding/OnboardingIntroSteps";
 import { PasswordStep } from "./onboarding/PasswordStep";
 import { PrivateKeySetupStep } from "./onboarding/PrivateKeySetupStep";
+import { LedgerOnboardingStep } from "./onboarding/LedgerOnboardingStep";
 import { SeedPhraseOnboardingStep } from "./onboarding/SeedPhraseOnboardingStep";
 import { useOnboardingController } from "./onboarding/useOnboardingController";
+import { ViewOnlySetupStep } from "./onboarding/ViewOnlySetupStep";
 
 function Onboarding() {
   const {
@@ -31,6 +32,10 @@ function Onboarding() {
     setWalletAddress,
     bankrDisplayName,
     setBankrDisplayName,
+    viewOnlyAddress,
+    setViewOnlyAddress,
+    viewOnlyDisplayName,
+    setViewOnlyDisplayName,
     password,
     setPassword,
     confirmPassword,
@@ -43,19 +48,18 @@ function Onboarding() {
     setCollectedSeedIndices,
     setSeedGroupName,
     setSeedAccountDisplayName,
+    setLedgerSelection,
     errors,
     setErrors,
     handleContinue,
     handleBack,
+    handleProgressStepClick,
     setupRecoveryError,
   } = useOnboardingController();
 
   if (isCheckingSetup) return <OnboardingLoading />;
   if (setupRecoveryError) {
     return <OnboardingRecoveryError message={setupRecoveryError} />;
-  }
-  if (step === "welcome") {
-    return <WelcomeStep onContinue={() => setStep("accountType")} />;
   }
   if (step === "success") return <SuccessStep />;
 
@@ -64,7 +68,6 @@ function Onboarding() {
       <AccountTypeStep
         choice={accountTypeChoice}
         onChoiceChange={setAccountTypeChoice}
-        onBack={handleBack}
         onContinue={handleContinue}
       />
     );
@@ -97,7 +100,45 @@ function Onboarding() {
         }}
         onDisplayNameChange={setBankrDisplayName}
         onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
         onContinue={handleContinue}
+      />
+    );
+  }
+
+  if (step === "viewOnly") {
+    return (
+      <ViewOnlySetupStep
+        address={viewOnlyAddress}
+        displayName={viewOnlyDisplayName}
+        error={errors.viewOnlyAddress}
+        isResolvingAddress={isResolvingAddress}
+        onAddressChange={(value) => {
+          setViewOnlyAddress(value);
+          if (errors.viewOnlyAddress) {
+            setErrors((previous) => ({
+              ...previous,
+              viewOnlyAddress: undefined,
+            }));
+          }
+        }}
+        onDisplayNameChange={setViewOnlyDisplayName}
+        onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
+        onContinue={handleContinue}
+      />
+    );
+  }
+
+  if (step === "ledger") {
+    return (
+      <LedgerOnboardingStep
+        onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
+        onCollect={async (selection) => {
+          setLedgerSelection(selection);
+          setStep("password");
+        }}
       />
     );
   }
@@ -113,6 +154,7 @@ function Onboarding() {
         onDisplayNameChange={setPkDisplayName}
         onClearError={() => setErrors({})}
         onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
         onContinue={handleContinue}
       />
     );
@@ -121,7 +163,8 @@ function Onboarding() {
   if (step === "seedPhrase") {
     return (
       <SeedPhraseOnboardingStep
-        onBack={() => setStep("accountType")}
+        onBack={handleBack}
+        onProgressStepClick={handleProgressStepClick}
         onCollect={(mnemonic, indices, groupName, accountDisplayName) => {
           setCollectedMnemonic(mnemonic);
           setCollectedSeedIndices(indices.length > 0 ? indices : [0]);
@@ -150,6 +193,7 @@ function Onboarding() {
       }}
       onTogglePassword={() => setShowPassword((visible) => !visible)}
       onBack={handleBack}
+      onProgressStepClick={handleProgressStepClick}
       onContinue={handleContinue}
     />
   );

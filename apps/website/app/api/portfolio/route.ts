@@ -3,6 +3,7 @@ import { SUPPORTED_CHAIN_IDS } from "./chains";
 import { alchemyProvider } from "./providers/alchemy";
 import { duneSimProvider } from "./providers/dune";
 import { zerionProvider } from "./providers/zerion";
+import { boundPortfolioResponse } from "./responsePolicy";
 // Octav is intentionally not in the active chain — re-enable by importing and
 // adding `octavProvider` to PROVIDERS below. See ./providers/octav.ts.
 // import { octavProvider } from "./providers/octav";
@@ -114,17 +115,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    tokens.sort((a, b) => b.valueUsd - a.valueUsd);
     defiPositions.sort((a, b) => b.valueUsd - a.valueUsd);
 
     const totalValueUsd =
       providerResult.totalValueUsd ??
       tokens.reduce((s, t) => s + t.valueUsd, 0) +
         defiPositions.reduce((s, p) => s + p.valueUsd, 0);
-
-    const result: PortfolioResponse = {
+    if (searchParams.get("summary") === "1") {
+      return NextResponse.json(
+        { totalValueUsd },
+        { headers: { "Cache-Control": "public, max-age=60" } },
+      );
+    }
+    const requestedTokenLimit = Number(searchParams.get("tokenLimit"));
+    const bounded = boundPortfolioResponse(
       tokens,
       defiPositions,
+      Number.isFinite(requestedTokenLimit) && requestedTokenLimit > 0
+        ? requestedTokenLimit
+        : undefined,
+    );
+
+    const result: PortfolioResponse = {
+      ...bounded,
       totalValueUsd,
       source,
     };

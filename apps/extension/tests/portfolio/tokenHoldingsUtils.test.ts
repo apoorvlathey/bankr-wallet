@@ -5,6 +5,8 @@ import { getPortfolioTokenKey } from "../../src/chrome/portfolio/hiddenTokens";
 import {
   getPortfolioTokenBalance,
   mergeVerifiedTokenBalances,
+  PORTFOLIO_DATA_PAGE_SIZE,
+  selectInitialBalanceRefreshTokens,
 } from "../../src/components/tokenHoldingsUtils";
 import {
   CANONICAL_USDC_BY_CHAIN_ID,
@@ -112,6 +114,41 @@ test("verified balances keep fresh API metadata and prices", () => {
     ),
     [{ ...apiToken, balance: "2", balanceFormatted: "2", valueUsd: 50 }],
   );
+});
+
+test("large portfolios bound initial RPC verification to one data page", () => {
+  const tokens = Array.from({ length: 1_000 }, (_, index) => ({
+    ...token("1", "1"),
+    symbol: `TOKEN${index}`,
+    contractAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+    valueUsd: 1_000 - index,
+  }));
+
+  const selected = selectInitialBalanceRefreshTokens(tokens, new Set(), false);
+  assert.equal(selected.length, PORTFOLIO_DATA_PAGE_SIZE);
+  assert.deepEqual(selected, tokens.slice(0, PORTFOLIO_DATA_PAGE_SIZE));
+});
+
+test("explicit token refreshes lead the bounded initial RPC page", () => {
+  const tokens = Array.from({ length: 40 }, (_, index) => ({
+    ...token("1", "1"),
+    symbol: `TOKEN${index}`,
+    contractAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+    valueUsd: 40 - index,
+  }));
+  const priority = tokens.at(-1)!;
+  const priorityKey = getPortfolioTokenKey(
+    priority.chainId,
+    priority.contractAddress,
+  );
+
+  const selected = selectInitialBalanceRefreshTokens(
+    tokens,
+    new Set([priorityKey]),
+    false,
+  );
+  assert.equal(selected.length, PORTFOLIO_DATA_PAGE_SIZE);
+  assert.equal(selected[0], priority);
 });
 
 test("new Zerion-backed ETH mainnets participate in ETH aggregation", () => {

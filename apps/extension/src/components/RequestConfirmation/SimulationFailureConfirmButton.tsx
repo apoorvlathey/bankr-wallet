@@ -13,13 +13,15 @@ import {
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
-import { useRef } from "react";
+import { useRef, type ReactElement } from "react";
 
 interface SimulationFailureConfirmButtonProps {
   disabledReason?: string | null;
   isDisabled: boolean;
   isLoading: boolean;
   label: string;
+  loadingSpinner?: ReactElement;
+  loadingText?: string;
   onConfirm: () => void;
   requestKind: "transaction" | "batch";
   simulationFailed: boolean;
@@ -34,6 +36,8 @@ export function SimulationFailureConfirmButton({
   isDisabled,
   isLoading,
   label,
+  loadingSpinner,
+  loadingText,
   onConfirm,
   requestKind,
   simulationFailed,
@@ -89,6 +93,8 @@ export function SimulationFailureConfirmButton({
             onClick={handlePrimaryClick}
             isDisabled={isDisabled || isLoading}
             isLoading={isLoading}
+            loadingText={loadingText}
+            spinner={loadingSpinner}
           >
             {label}
           </Button>

@@ -8,6 +8,8 @@ import {
   StackDivider,
   Text,
   VStack,
+  Button,
+  Spinner,
 } from "@chakra-ui/react";
 import type { ReactNode } from "react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
@@ -36,12 +38,18 @@ export default function RawTransactionDetails({
   nativeSym,
   formatWeiUsd,
   onFunctionName,
+  calldataLoading,
+  calldataError,
+  onRetryCalldata,
 }: {
   tx: CompletedTransaction;
   resolveLogo: (url: string | null | undefined) => string | undefined;
   nativeSym: string;
   formatWeiUsd: (raw: string | undefined | null) => string | null;
   onFunctionName: (name: string) => void;
+  calldataLoading: boolean;
+  calldataError: string | null;
+  onRetryCalldata: () => void;
 }) {
   const hasCalldata = Boolean(tx.tx.data && tx.tx.data !== "0x");
   const isContractDeploy = !tx.tx.to;
@@ -177,6 +185,31 @@ export default function RawTransactionDetails({
               {tx.tx.data}
             </Text>
           </Box>
+        </Box>
+      )}
+
+      {!hasCalldata && (calldataLoading || calldataError) && (
+        <Box px={3} py={2.5}>
+          <HStack justify="space-between">
+            <Text color="fg.secondary" fontSize="xs" fontWeight="600">
+              Calldata
+            </Text>
+            {calldataLoading ? (
+              <HStack spacing={2}>
+                <Spinner size="xs" />
+                <Text color="fg.secondary" fontSize="xs">Loading…</Text>
+              </HStack>
+            ) : (
+              <Button size="xs" variant="secondary" onClick={onRetryCalldata}>
+                Retry
+              </Button>
+            )}
+          </HStack>
+          {calldataError && (
+            <Text mt={1.5} color="fg.secondary" fontSize="xs">
+              {calldataError}
+            </Text>
+          )}
         </Box>
       )}
     </VStack>

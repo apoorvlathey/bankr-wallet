@@ -10,11 +10,12 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 
 ## Critical: Test ALL Wallet Types
 
-**IMPORTANT**: WalletChan supports THREE wallet types:
+**IMPORTANT**: WalletChan supports FOUR signing wallet types:
 
 1. **Bankr API accounts** (`type: "bankr"`) - Remote signing and transactions via the Bankr API
 2. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
 3. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
+4. **Ledger accounts** (`type: "ledger"`) - Hardware signing over Chrome WebHID; private keys never leave the device
 
 WalletChan also supports **view-only impersonator accounts**
 (`type: "impersonator"`). They may receive reject-only transaction/signature
@@ -22,12 +23,14 @@ prompts but must never reach a signing or submission path.
 
 **When implementing ANY feature that touches transactions, signatures, or authentication:**
 
-- **Test with ALL THREE wallet types** before considering it done
+- **Test with ALL FOUR signing wallet types** before considering it done. Ledger
+  requires real-device QA in addition to automated no-device coverage.
 - Different wallet types use different code paths (e.g., `confirmTransactionAsync` vs `confirmTransactionAsyncPK`)
 - Agent password must work for signing transactions/messages for ALL types (not just Bankr API accounts)
 - Private key reveal is blocked for agent password regardless of wallet type
 
-**Common mistake**: Fixing something only for Bankr API accounts and forgetting that private key/seed phrase accounts have separate handlers.
+**Common mistake**: Fixing something only for Bankr API accounts and forgetting
+that private key/seed phrase/Ledger accounts have separate handlers.
 
 ## AI Session Workflow
 
@@ -150,7 +153,7 @@ pnpm zip:cws            # Fresh Chrome Web Store zip + Firefox zip for store upl
 
 ## Extension Architecture
 
-The extension has 5 build targets (see `apps/extension/vite.config.*.ts`):
+The Chromium extension has 6 build targets (see `apps/extension/vite.config.*.ts`):
 
 | Script        | Purpose                                            |
 | ------------- | -------------------------------------------------- |
@@ -159,6 +162,7 @@ The extension has 5 build targets (see `apps/extension/vite.config.*.ts`):
 | inpage.js     | Injected provider (EIP-6963 + window.ethereum)     |
 | inject.js     | Content script (bridges inpage ↔ background)       |
 | background.js | Service worker (API calls, storage, notifications) |
+| offscreen.js  | Chrome-only Ledger WebHID transport/signing document |
 
 **Message flow**: Dapp → inpage.js → inject.js → background.js → Bankr API
 
@@ -180,6 +184,7 @@ apps/extension/src/
 │   │   ├── onboardingRouter.ts # Fresh-wallet lifecycle transport
 │   │   ├── accountStateRouter.ts # Non-secret account state/selection
 │   │   ├── accountManagementRouter.ts # Master-gated account/seed mutations
+│   │   ├── ledgerRouter.ts # Trusted-UI Ledger pairing/import transport
 │   │   ├── secretManagementRouter.ts # Reveal and signing confirmation transport
 │   │   ├── batchRequestRouter.ts # ERC-5792 intake/status/decisions
 │   │   ├── delegationRouter.ts # EIP-7702 status/probe/set/revoke transport
@@ -312,6 +317,7 @@ apps/extension/src/
 │   │   ├── transactionSigner.ts # Transaction and EIP-7702 preparation
 │   │   ├── transactionBroadcast.ts # Sign-once raw-RPC effect boundary
 │   │   └── client.ts       # Viem client and bounded RPC transport
+│   ├── ledger/              # Ledger public metadata, offscreen bridge, and guarded signing
 │   ├── ensBrowsing/        # Untrusted ENS/GNS browsing audit domain (see README.md)
 │   │   ├── handlers.ts     # Stable message-entry facade
 │   │   ├── senderAuthorization.ts # Exact page/message/top-frame allowlist
@@ -385,6 +391,8 @@ apps/extension/src/
 │   │   └── nonAtomicBatch.ts # Dual-path merge precedence
 │   ├── txHistoryStorage.ts  # Stable transaction-history compatibility facade
 │   ├── assetChangesExtractor.ts # Stable post-confirm enrichment facade
+│   ├── history/database.ts # IndexedDB transaction history, migration, paging, retention
+│   ├── history/detailResolution.ts # Trusted on-demand calldata/NFT detail resolution
 │   ├── receiptEnrichment.ts # Stable receipt retry/backfill facade
 │   ├── history/             # Transaction history/receipt audit domain (see README.md)
 │   │   ├── types.ts         # Released additive txHistory record shape
@@ -559,6 +567,7 @@ apps/extension/src/
 │   ├── Activity/              # Transaction-history UI domain
 │   ├── BatchConfirmation/     # ERC-5792 review/decision UI domain
 │   ├── ClearSigning/          # Clear-signing descriptor/rendering UI domain
+│   ├── Ledger/                # Hardware pairing/address selection/signing status
 │   ├── Portfolio/Holdings/    # Portfolio loading and holdings UI domain
 │   ├── TransactionConfirmation/ # Single-tx review/decision UI domain
 │   ├── TransactionDetails/    # Activity detail UI domain

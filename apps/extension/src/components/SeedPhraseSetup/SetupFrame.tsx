@@ -27,7 +27,7 @@ export function SetupFrame({
 }: SetupFrameProps) {
   if (isOnboarding) {
     return (
-      <VStack spacing={6} w="full" maxW="400px" align="stretch">
+      <VStack spacing={6} w="full" maxW="600px" align="stretch">
         <HStack w="full" justify="space-between" align="center">
           <IconButton
             aria-label="Back"

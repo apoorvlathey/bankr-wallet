@@ -12,15 +12,15 @@ import {
   pendingTxCallbacks,
   pendingWatchAssetCallbacks,
 } from "./pendingRequests";
-import { ImpersonatorProvider } from "./provider";
+import {
+  ImpersonatorProvider,
+  UNCONNECTED_PROVIDER_ADDRESS,
+} from "./provider";
 import {
   getProviderInstance,
   setProviderInstance,
 } from "./providerRegistry";
 import { acceptedContentMessageType } from "./resultPolicy";
-
-const UNCONNECTED_ADDRESS =
-  "0x0000000000000000000000000000000000000000";
 
 function handleAccountResult(message: any): void {
   const callbacks = pendingAccountCallbacks.get(message.id);
@@ -32,7 +32,10 @@ function handleAccountResult(message: any): void {
           (value: unknown): value is string => typeof value === "string",
         )
       : [];
-    if (accounts[0]) getProviderInstance()?.setAddress(accounts[0], false);
+    getProviderInstance()?.setAddress(
+      accounts[0] ?? UNCONNECTED_PROVIDER_ADDRESS,
+      false,
+    );
     if (callbacks.method === "eth_requestAccounts" && accounts.length > 0) {
       getProviderInstance()?.emitConnected();
     }
@@ -157,8 +160,9 @@ export function installContentResultRouter(): void {
           : message.address
             ? [message.address]
             : [];
-        if (accounts.length === 0) provider.setAddress(UNCONNECTED_ADDRESS, false);
-        else if (typeof accounts[0] === "string") {
+        if (accounts.length === 0) {
+          provider.setAddress(UNCONNECTED_PROVIDER_ADDRESS, false);
+        } else if (typeof accounts[0] === "string") {
           provider.setAddress(accounts[0], false);
         }
         provider.emit("accountsChanged", accounts);

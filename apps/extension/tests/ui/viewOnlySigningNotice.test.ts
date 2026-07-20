@@ -34,12 +34,17 @@ test("view-only signing prompts place one shared notice in the action bar", asyn
   assert.match(stickyActionBar, /\{notice &&[\s\S]*?\{notice\}[\s\S]*?<Grid/u);
   assert.match(confirmationScreen, /notice=\{actionNotice\}/u);
 
-  for (const prompt of [transaction, batch, signature, permission]) {
+  for (const prompt of [batch, signature, permission]) {
     assert.match(
       prompt,
       /accountType === "impersonator"[\s\S]*?<ViewOnlySigningNotice \/>/u,
     );
   }
+  assert.match(
+    transaction,
+    /actionNotice=\{[\s\S]*?accountType === "impersonator"[\s\S]*?<ViewOnlySigningNotice/u,
+  );
+  assert.match(transaction, /Developer RPC will send this transaction without a signature/u);
 
   assert.doesNotMatch(transactionStatus, /impersonated account|Signing is disabled/u);
   assert.doesNotMatch(batchContext, /impersonated account|Signing is disabled/u);

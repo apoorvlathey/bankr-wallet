@@ -10,5 +10,6 @@ export function getAccountTypeLabel(account: Account): string {
   if (account.type === "bankr") return "Bankr";
   if (account.type === "privateKey") return "Private Key";
   if (account.type === "seedPhrase") return "Seed Phrase";
+  if (account.type === "ledger") return "Ledger";
   return "View Only";
 }

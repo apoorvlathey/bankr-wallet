@@ -31,6 +31,7 @@ export async function extractAndStoreAssetChanges(
     await updateTxInHistory(args.txId, { assetChanges: record });
   } catch (error) {
     console.warn("[assetChanges] source extraction failed", error);
+    await updateTxInHistory(args.txId, { detailsIncomplete: true }).catch(() => undefined);
   }
 }
 
@@ -61,6 +62,7 @@ export async function extractAndStoreDestinationAssetChanges(
     await updateTxInHistory(args.txId, { destAssetChanges: record });
   } catch (error) {
     console.warn("[assetChanges] destination extraction failed", error);
+    await updateTxInHistory(args.txId, { detailsIncomplete: true }).catch(() => undefined);
   }
 }
 

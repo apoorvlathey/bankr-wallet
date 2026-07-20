@@ -1,5 +1,4 @@
 /** Serialized native session restoration and password-type recovery. */
-
 import {
   invalidateAuthCeremonies,
   isSessionRestorationBlockedByManualLock,
@@ -21,51 +20,27 @@ import {
   getSessionPasskeyCredential,
   storePasskeySessionAtomic,
 } from "./passkeyPersistence";
+import {
+  validateRestoredPasskeyTiming,
+  type RestoredPasskeyTiming,
+} from "./passkeyRestorationPolicy";
 import { clearAllAuthState, clearSessionStorage } from "./teardown";
-
-const RESTORED_PASSKEY_SESSION = Symbol("restored-passkey-session");
-
-export interface RestoredPasskeySessionCredential {
-  readonly [RESTORED_PASSKEY_SESSION]: true;
-  readonly vaultKeyBytes: Uint8Array;
-  readonly passkeyBinding: string;
-}
-
-export function isRestoredPasskeySessionCredential(
-  value: unknown,
-): value is RestoredPasskeySessionCredential {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as RestoredPasskeySessionCredential)[RESTORED_PASSKEY_SESSION] ===
-      true
-  );
-}
-
-function createRestoredPasskeySessionCredential(
-  vaultKeyBytes: Uint8Array,
-  passkeyBinding: string,
-): RestoredPasskeySessionCredential {
-  const credential = {} as RestoredPasskeySessionCredential;
-  Object.defineProperties(credential, {
-    [RESTORED_PASSKEY_SESSION]: { value: true },
-    vaultKeyBytes: { value: vaultKeyBytes },
-    passkeyBinding: { value: passkeyBinding },
-  });
-  return Object.freeze(credential);
-}
-
-export type UnlockFn = (
-  credential: string | RestoredPasskeySessionCredential,
-) => Promise<{ success: boolean; passwordType?: PasswordType }>;
-
+import {
+  createRestoredPasskeySessionCredential,
+  type RestoredPasskeySessionCredential,
+  type UnlockFn,
+} from "./restoredCredential";
+export {
+  isRestoredPasskeySessionCredential,
+  type RestoredPasskeySessionCredential,
+  type UnlockFn,
+} from "./restoredCredential";
 export async function resolvePasswordType(
   unlockFn: UnlockFn,
   authTransitionAlreadySerialized = false,
 ): Promise<PasswordType | null> {
   const cached = getPasswordType();
   if (cached !== null) return cached;
-
   if (authTransitionAlreadySerialized) {
     await tryRestoreSessionAlreadySerialized(unlockFn);
   } else {
@@ -73,12 +48,10 @@ export async function resolvePasswordType(
   }
   return getPasswordType();
 }
-
 async function restoreSessionWithinAuthTransition(
   unlockFn: UnlockFn,
 ): Promise<boolean> {
   if (isSessionRestorationBlockedByManualLock()) return false;
-
   // Re-read authoritative sync storage inside the serialized transition.
   const timeout = await readStoredAutoLockTimeout();
   setCachedAutoLockTimeout(timeout);
@@ -122,11 +95,7 @@ async function restoreSessionWithinAuthTransition(
 
   let restoredPassword: string | null = null;
   let restoredPasskeyCredential: RestoredPasskeySessionCredential | null = null;
-  let restoredPasskeyTiming: {
-    startedAt: number;
-    autoLockTimeout: number;
-    expiresAt: number | null;
-  } | null = null;
+  let restoredPasskeyTiming: RestoredPasskeyTiming | null = null;
   try {
     let unlockCredential: string | RestoredPasskeySessionCredential;
     if (credentialKind === "password") {
@@ -160,29 +129,17 @@ async function restoreSessionWithinAuthTransition(
         await clearSessionStorage();
         return false;
       }
-      const expectedNeverMarker = timeout === 0;
-      const hasAuthenticatedTiming = passkeyCredential.startedAt !== null;
-      if (
-        session.autoLockNever !== expectedNeverMarker ||
-        passkeyCredential.autoLockTimeout !== timeout ||
-        (!hasAuthenticatedTiming && timeout !== 0) ||
-        (hasAuthenticatedTiming &&
-          session.sessionStartedAt !== passkeyCredential.startedAt) ||
-        (timeout !== 0 &&
-          (passkeyCredential.expiresAt === null ||
-            Date.now() >= passkeyCredential.expiresAt))
-      ) {
+      const timing = validateRestoredPasskeyTiming(
+        session,
+        passkeyCredential,
+        timeout,
+      );
+      if (!timing.valid) {
         passkeyCredential.vaultKeyBytes.fill(0);
         await clearSessionStorage();
         return false;
       }
-      if (hasAuthenticatedTiming) {
-        restoredPasskeyTiming = {
-          startedAt: passkeyCredential.startedAt!,
-          autoLockTimeout: passkeyCredential.autoLockTimeout,
-          expiresAt: passkeyCredential.expiresAt,
-        };
-      }
+      restoredPasskeyTiming = timing.timing;
       restoredPasskeyCredential = createRestoredPasskeySessionCredential(
         passkeyCredential.vaultKeyBytes,
         passkeyCredential.passkeyBinding,

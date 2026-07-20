@@ -39,7 +39,6 @@ const transitionalBudgets: Record<string, number> = {
   "components/shared/PrivateKeyInput.tsx": 405,
   "hooks/useErc20InlineSummary.ts": 451,
   "pages/EnsSetupKubo.tsx": 468,
-  "pages/onboarding/useOnboardingController.ts": 468,
   "preview/PreviewScreens.tsx": 741,
   "preview/fixtures.ts": 731,
   "preview/previewChrome.ts": 987,

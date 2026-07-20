@@ -60,16 +60,20 @@ export function useSplitPriorTxState(
 
     const onMessage = (message: {
       type: string;
-      updatedTx?: { id: string; status: string; error?: string };
+      txId?: string;
     }) => {
       if (
         message.type !== "txHistoryUpdated" ||
-        !message.updatedTx ||
-        message.updatedTx.id !== priorTxId
+        message.txId !== priorTxId
       ) {
         return;
       }
-      apply(message.updatedTx);
+      chrome.runtime.sendMessage(
+        { type: "getTxHistoryItem", txId: priorTxId },
+        (updated) => {
+          if (!cancelled && updated) apply(updated);
+        },
+      );
     };
 
     chrome.runtime.onMessage.addListener(onMessage);

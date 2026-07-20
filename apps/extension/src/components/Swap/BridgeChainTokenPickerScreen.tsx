@@ -3,18 +3,14 @@ import {
   Box,
   Button,
   HStack,
-  Image,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-} from "@chakra-ui/icons";
+import { CheckIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
 import ChainIcon from "@/components/ChainIcon";
+import SafeImage from "@/components/SafeImage";
 import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
 import {
   FullScreenPicker,
@@ -55,11 +51,10 @@ interface BridgeChainTokenPickerScreenProps {
   customLoading: boolean;
   customError?: string;
   isAddressSearch: boolean;
-  fundedHoldings: readonly PortfolioToken[];
-  lowValueHoldings: readonly PortfolioToken[];
-  showLowValue: boolean;
-  onToggleLowValue: () => void;
+  visibleHoldings: readonly PortfolioToken[];
   remainingTokens: readonly PortfolioToken[];
+  remainingTokenCount: number;
+  onShowMore: () => void;
   tokensLoading: boolean;
   tokensStale: boolean;
   isSelectedToken: (token: PortfolioToken) => boolean;
@@ -97,7 +92,7 @@ function TokenLogo({
 
   if (!token.logoUrl) return fallback;
   return (
-    <Image
+    <SafeImage
       src={resolveLogo(token.logoUrl)}
       alt=""
       boxSize={size}
@@ -189,11 +184,10 @@ export function BridgeChainTokenPickerScreen({
   customLoading,
   customError,
   isAddressSearch,
-  fundedHoldings,
-  lowValueHoldings,
-  showLowValue,
-  onToggleLowValue,
+  visibleHoldings,
   remainingTokens,
+  remainingTokenCount,
+  onShowMore,
   tokensLoading,
   tokensStale,
   isSelectedToken,
@@ -229,8 +223,7 @@ export function BridgeChainTokenPickerScreen({
   const hasTokenResults =
     popularTokens.length > 0 ||
     !!customToken ||
-    fundedHoldings.length > 0 ||
-    lowValueHoldings.length > 0 ||
+    visibleHoldings.length > 0 ||
     remainingTokens.length > 0;
 
   const controls = (
@@ -340,9 +333,9 @@ export function BridgeChainTokenPickerScreen({
         </FullScreenPickerGroup>
       )}
 
-      {fundedHoldings.length + lowValueHoldings.length > 0 && (
+      {visibleHoldings.length > 0 && (
         <FullScreenPickerGroup label={`Your tokens on ${currentChainName}`}>
-          {fundedHoldings.map((token) => (
+          {visibleHoldings.map((token) => (
             <TokenRow
               key={`held-${token.chainId}-${token.contractAddress}`}
               token={token}
@@ -353,39 +346,6 @@ export function BridgeChainTokenPickerScreen({
               onSelect={() => onSelectToken(token)}
             />
           ))}
-          {lowValueHoldings.length > 0 && (
-            <ListItem
-              interactive
-              aria-expanded={showLowValue}
-              onClick={onToggleLowValue}
-            >
-              <ListItemContent>
-                <ListItemTitle>Low-value tokens</ListItemTitle>
-                <ListItemDescription>
-                  {lowValueHoldings.length} token{lowValueHoldings.length === 1 ? "" : "s"} under $0.10
-                </ListItemDescription>
-              </ListItemContent>
-              <ListItemActions>
-                {showLowValue ? (
-                  <ChevronDownIcon aria-hidden="true" />
-                ) : (
-                  <ChevronRightIcon aria-hidden="true" />
-                )}
-              </ListItemActions>
-            </ListItem>
-          )}
-          {showLowValue &&
-            lowValueHoldings.map((token) => (
-              <TokenRow
-                key={`low-${token.chainId}-${token.contractAddress}`}
-                token={token}
-                kind="holding"
-                currentChainName={currentChainName}
-                isSelected={isSelectedToken(token)}
-                resolveLogo={resolveLogo}
-                onSelect={() => onSelectToken(token)}
-              />
-            ))}
         </FullScreenPickerGroup>
       )}
 
@@ -410,6 +370,14 @@ export function BridgeChainTokenPickerScreen({
                 />
               ))}
         </FullScreenPickerGroup>
+      )}
+
+      {remainingTokenCount > 0 && !tokensLoading && !tokensStale && (
+        <Box py={3} textAlign="center">
+          <Button type="button" variant="ghost" size="sm" onClick={onShowMore}>
+            Show more tokens
+          </Button>
+        </Box>
       )}
 
       {!chainsLoading &&

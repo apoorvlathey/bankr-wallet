@@ -37,7 +37,7 @@ import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
 
 interface GasEstimateDisplayProps {
   txRequest: PendingTxRequest;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   onGasOverrides?: (overrides: GasOverrides | null) => void;
   /**
    * Reports whether the current gas params are valid for broadcast. Bubbled
@@ -46,6 +46,8 @@ interface GasEstimateDisplayProps {
    */
   onValidityChange?: (valid: boolean) => void;
   forceInclusion?: boolean;
+  /** Lock fee selection once a hardware-signing request is in flight. */
+  isReadOnly?: boolean;
   onFeeSummaryChange?: (summary: NativeFeePaymentSummary | null) => void;
 }
 
@@ -155,6 +157,7 @@ function GasEstimateDisplay({
   onGasOverrides,
   onValidityChange,
   forceInclusion,
+  isReadOnly = false,
   onFeeSummaryChange,
 }: GasEstimateDisplayProps) {
   const { tokens } = useTheme();
@@ -192,8 +195,14 @@ function GasEstimateDisplay({
   const [dappValuesPendingForCustom, setDappValuesPendingForCustom] =
     useState(false);
 
+  useEffect(() => {
+    if (!isReadOnly) return;
+    setExpanded(false);
+    setCustomEditorOpen(false);
+  }, [isReadOnly]);
+
   const isLocalAccount =
-    accountType === "privateKey" || accountType === "seedPhrase";
+    accountType === "privateKey" || accountType === "seedPhrase" || accountType === "ledger";
   // Picker is hidden only when we have no tier data (force inclusion /
   // non-1559 chain) or when the account type doesn't allow overrides. We
   // intentionally still show it when the dapp suggested gas — the user
@@ -744,6 +753,7 @@ function GasEstimateDisplay({
       )}
 
       <GasFeePopover
+        isDisabled={isReadOnly}
         expanded={expanded}
         fiatFee={usdDisplay}
         nativeFee={formatCompactFee(displayCostWei, sym)}

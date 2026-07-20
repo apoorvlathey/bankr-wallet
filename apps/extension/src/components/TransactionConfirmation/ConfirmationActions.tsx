@@ -1,4 +1,5 @@
 import { Button, Spinner } from "@chakra-ui/react";
+import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation/SimulationFailureConfirmButton";
 import type { ConfirmationState } from "./types";
 
@@ -31,6 +32,7 @@ interface ConfirmActionButtonProps {
   state: ConfirmationState;
   confirmDisabledReason: string | null;
   simulationFailed: boolean;
+  waitingForLedger?: boolean;
   onConfirm: () => void;
 }
 
@@ -38,6 +40,7 @@ export function ConfirmActionButton({
   state,
   confirmDisabledReason,
   simulationFailed,
+  waitingForLedger = false,
   onConfirm,
 }: ConfirmActionButtonProps) {
   return (
@@ -45,6 +48,16 @@ export function ConfirmActionButton({
       isDisabled={!!confirmDisabledReason}
       isLoading={state === "submitting"}
       label="Confirm"
+      loadingSpinner={
+        waitingForLedger ? (
+          <ShapesLoader
+            variant="dots"
+            size="6px"
+            color="accentFg.highlight"
+          />
+        ) : undefined
+      }
+      loadingText={waitingForLedger ? "Waiting" : undefined}
       onConfirm={onConfirm}
       requestKind="transaction"
       simulationFailed={simulationFailed}

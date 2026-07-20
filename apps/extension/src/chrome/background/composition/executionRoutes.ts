@@ -3,6 +3,10 @@
 import { clearAllNonces } from "../../forceInclusion/nonceManager";
 import { checkPendingTxReceipt as checkPendingTxReceiptFn } from "../../forceInclusion/receiptPoller";
 import { queueAssetChangesBackfill } from "../../receiptEnrichment";
+import {
+  getTransactionCalldata,
+  resolveHistoryNftMetadata,
+} from "../../history/detailResolution";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
 import {
   getBatchFeePaymentOptions,
@@ -19,7 +23,9 @@ import {
   clearTxHistory,
   clearTxHistoryForAddresses,
   getProcessingTxs,
+  getTxById,
   getTxHistory,
+  getTxHistoryPage,
 } from "../../txHistoryStorage";
 import {
   failedTxResults,
@@ -27,6 +33,7 @@ import {
   handleConfirmTransaction,
   handleConfirmTransactionAsync,
   handleConfirmTransactionAsyncPK,
+  handleConfirmImpersonatedTransaction,
   handleExecuteSwapAtomicPK,
   handleExecuteSwapBatch,
   handleExecuteSwapDirect,
@@ -39,10 +46,8 @@ import { createBackgroundSwapExecutionMessageRouter } from "../swapExecutionRout
 import { createBackgroundTransactionExecutionMessageRouter } from "../transactionExecutionRouter";
 import { createBackgroundTransactionStatusMessageRouter } from "../transactionStatusRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
-import {
-  getArbitrumForceInclusionStatus,
-  submitArbitrumForceInclusion,
-} from "../../arbitrumForceInclusion/status";
+import { getArbitrumForceInclusionStatus, submitArbitrumForceInclusion } from "../../arbitrumForceInclusion/status";
+import { handleConfirmTransactionAsyncLedger } from "../../ledger/transactionExecution";
 
 export function composeExecutionRoutes(
   pending: PendingResolutionComposition,
@@ -53,6 +58,8 @@ export function composeExecutionRoutes(
       handleConfirmTransaction,
       handleConfirmTransactionAsync,
       handleConfirmTransactionAsyncPK,
+      handleConfirmTransactionAsyncLedger,
+      handleConfirmImpersonatedTransaction,
       handleInitiateTransfer,
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,
@@ -95,6 +102,10 @@ export function composeExecutionRoutes(
         void chrome.storage.local.remove(key);
       },
       getTxHistory,
+      getTxHistoryPage,
+      getTxHistoryItem: getTxById,
+      getTransactionCalldata,
+      resolveHistoryNftMetadata,
       queueAssetChangesBackfill,
       getProcessingTxs,
       clearTxHistory,

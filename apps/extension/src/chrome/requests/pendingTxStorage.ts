@@ -34,7 +34,7 @@ export interface PendingTxRequest {
   // forces these to be set at creation time.
   accountId?: string;
   accountAddress?: string;
-  accountType?: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType?: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
   /** Non-secret ciphertext-generation binding for Bankr signer requests. */
   bankrCredentialTag?: string;
   tabId?: number;
@@ -86,9 +86,10 @@ export interface PendingTxRequest {
 /**
  * Creation-time shape: pinning fields are REQUIRED. Every new pending
  * request must be constructed with `pinnedTxRequest(account, base)` from
- * ../requests/pinnedRequest`, which guarantees these fields. Impersonator requests may
- * be persisted for Reject-only review; confirm-time account resolution still
- * refuses them before any signing path.
+ * ../requests/pinnedRequest`, which guarantees these fields. Impersonator
+ * requests may be persisted for review; they remain reject-only unless the
+ * exact selected RPC has the trusted-UI developer opt-in, and they never enter
+ * a signing path.
  */
 export type PinnedTxRequest = PendingTxRequest &
   Required<Pick<PendingTxRequest, "accountId" | "accountAddress" | "accountType">>;

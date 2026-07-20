@@ -21,9 +21,10 @@ import {
   setSessionItems,
 } from "./storage";
 import type { PasswordType } from "../types";
+import { importSessionEncryptionKey, SESSION_KEY_BYTES } from "./sessionEncryptionKey";
 
 export const SESSION_KEY_LOCAL = "sessionEncKey";
-export const SESSION_KEY_BYTES = 32;
+export { importSessionEncryptionKey, SESSION_KEY_BYTES } from "./sessionEncryptionKey";
 const SESSION_IV_BYTES = 12;
 const AES_GCM_TAG_BYTES = 16;
 const MAX_SESSION_PASSWORD_BYTES = 1024 * 1024;
@@ -99,26 +100,6 @@ export async function readPersistedSessionRecord(): Promise<
 
 export function isBoundedSessionId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128;
-}
-
-export async function importSessionEncryptionKey(
-  value: unknown,
-): Promise<CryptoKey | null> {
-  const sessionKey = decodeBase64Exact(value, SESSION_KEY_BYTES);
-  if (!sessionKey) return null;
-  try {
-    return await crypto.subtle.importKey(
-      "raw",
-      sessionKey.buffer as ArrayBuffer,
-      "AES-GCM",
-      false,
-      ["encrypt", "decrypt"],
-    );
-  } catch {
-    return null;
-  } finally {
-    sessionKey.fill(0);
-  }
 }
 
 export async function getSessionPassword(): Promise<string | null> {

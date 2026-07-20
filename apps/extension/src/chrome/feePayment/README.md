@@ -34,3 +34,7 @@ UserOperation signature must never be persisted. Recovery stores the
 deterministic UserOperation hash and public routing fields immediately before
 broadcast; a definite provider rejection removes it, while an ambiguous
 response retains it for receipt reconciliation without retrying.
+
+Ledger and impersonator accounts fail closed at capability discovery. Ledger
+remains native-gas-only even when its address already has WalletChan's official
+delegate onchain; this domain has no hardware UserOperation signing path.

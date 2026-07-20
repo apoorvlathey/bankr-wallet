@@ -13,6 +13,7 @@ import {
 import {
   resolveUnifyPortfolioBalances,
 } from "../../src/components/Portfolio/portfolioPreferences";
+import { getProgressiveHoldingsRows } from "../../src/components/Portfolio/Holdings/progressiveRowsModel";
 
 const token = (
   symbol: string,
@@ -105,8 +106,54 @@ test("chain totals include positive token and DeFi values without negatives", ()
       { chainId: 1, valueUsd: 7 },
       { chainId: 8453, valueUsd: 3 },
     ] as DefiPosition[],
+    { "1": 2, "8453": 1.5 },
   );
 
-  assert.equal(totals.get(1), 17);
-  assert.equal(totals.get(8453), 3);
+  assert.equal(totals.get(1), 19);
+  assert.equal(totals.get(8453), 4.5);
+});
+
+test("large holdings render one ordered page and defer later sections", () => {
+  const primaryRows = Array.from({ length: 1_000 }, (_, index) => ({
+    kind: "token" as const,
+    token: token(`TOKEN${index}`, 1),
+    valueUsd: 1_000 - index,
+  }));
+  const projection = getProgressiveHoldingsRows({
+    primaryRows,
+    lowValueRows: [],
+    positions: [{ protocol: "Later" }] as DefiPosition[],
+    includeLowValueRows: false,
+    visibleCount: 24,
+  });
+
+  assert.equal(projection.visiblePrimaryRows.length, 24);
+  assert.equal(projection.visiblePositions.length, 0);
+  assert.equal(projection.remainingCount, 977);
+  assert.equal(projection.hasMore, true);
+});
+
+test("collapsed low-value rows do not block progressively visible positions", () => {
+  const primaryRows = [{
+    kind: "token" as const,
+    token: token("ETH", 1),
+    valueUsd: 1,
+  }];
+  const lowValueRows = Array.from({ length: 50 }, (_, index) => ({
+    kind: "token" as const,
+    token: token(`LOW${index}`, 1),
+    valueUsd: 0,
+  }));
+  const positions = [{ protocol: "Visible" }] as DefiPosition[];
+
+  const projection = getProgressiveHoldingsRows({
+    primaryRows,
+    lowValueRows,
+    positions,
+    includeLowValueRows: false,
+    visibleCount: 24,
+  });
+  assert.equal(projection.visibleLowValueRows.length, 0);
+  assert.equal(projection.visiblePositions.length, 1);
+  assert.equal(projection.hasMore, false);
 });

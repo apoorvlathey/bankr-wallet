@@ -32,6 +32,7 @@ import { formatUsd } from "@/lib/currencyFormatUtils";
 import DappSiteIcon from "@/components/DappSiteIcon";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import { useSheetTransitionSound } from "@/sounds/useSheetTransitionSound";
+import { sortNetworkSelectorOptions } from "@/components/shared/NetworkSelector";
 
 export interface ActiveDappConnectionContext {
   tabId: number;
@@ -106,19 +107,12 @@ export default function HomeDappDock({
       )
       .map((chain) => ({
         chain,
+        chainId: chain.chainId,
+        name: chain.name,
         balanceUsd: chainBalances.get(chain.chainId) ?? 0,
       }));
 
-    chains.sort((a, b) => {
-      const aFunded = a.balanceUsd > 0;
-      const bFunded = b.balanceUsd > 0;
-      if (aFunded !== bFunded) return aFunded ? -1 : 1;
-      if (aFunded && bFunded && a.balanceUsd !== b.balanceUsd) {
-        return b.balanceUsd - a.balanceUsd;
-      }
-      return a.chain.name.localeCompare(b.chain.name);
-    });
-    return chains;
+    return sortNetworkSelectorOptions(chains);
   }, [chainBalances, chainSearch, visibleChains]);
 
   const closeSheet = () => {

@@ -37,9 +37,13 @@ test("network implementations remain audit-sized with one-way dependencies", asy
     "network/safeRpcForwarding.ts": 240,
     "network/proxyResolver.ts": 220,
     "network/customNetworkValidation.ts": 140,
+    "network/customNetworkRpcValidation.ts": 120,
+    "network/customNetworkUrlValidation.ts": 60,
     "network/networkRepository.ts": 70,
     "network/rpcHistoryRepository.ts": 110,
+    "network/impersonatedRpcPolicy.ts": 30,
     "network/networkPolicy.ts": 80,
+    "network/networkRpcMutation.ts": 60,
     "network/networkMutations.ts": 340,
   };
   for (const [path, maximum] of Object.entries(budgets)) {
@@ -65,6 +69,7 @@ test("network implementations remain audit-sized with one-way dependencies", asy
   assert.match(mutations, /from "\.\/customNetworkValidation"/);
   assert.match(mutations, /from "\.\/networkRepository"/);
   assert.match(mutations, /from "\.\/networkPolicy"/);
+  assert.match(mutations, /from "\.\/networkRpcMutation"/);
   assert.match(mutations, /from "\.\/rpcHistoryRepository"/);
   assert.match(mutations, /NETWORKS_INFO_LOCK_KEY/);
 });
@@ -99,10 +104,14 @@ test("network source freezes egress and storage security constants", async () =>
   assert.match(rpcHistory, /NETWORK_RPC_URLS_STORAGE_KEY/);
 
   const validation = await source("network/customNetworkValidation.ts");
-  assert.match(validation, /trimmed\.length > 2_048/);
+  const rpcValidation = await source("network/customNetworkRpcValidation.ts");
+  const urlValidation = await source("network/customNetworkUrlValidation.ts");
+  assert.match(urlValidation, /trimmed\.length > 2_048/);
   assert.match(validation, /Number\.isSafeInteger\(chainId\)/);
   assert.match(validation, /Number\(nativeDecimals\) > 255/);
-  assert.match(validation, /sanitizeCustomExplorerUrl/);
+  assert.match(urlValidation, /sanitizeCustomExplorerUrl/);
   assert.match(validation, /assertSecureRpcConfigurationUrl/);
   assert.match(validation, /assertRpcEndpointAllowedForOrigin/);
+  assert.match(rpcValidation, /assertSecureRpcConfigurationUrl/);
+  assert.match(rpcValidation, /assertRpcEndpointAllowedForOrigin/);
 });

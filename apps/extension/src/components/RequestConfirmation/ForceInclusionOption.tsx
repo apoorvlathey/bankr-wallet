@@ -5,6 +5,7 @@ interface ForceInclusionOptionProps {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
   ariaLabel?: string;
+  isDisabled?: boolean;
 }
 
 /** Shared last-row advanced option for OP Stack force inclusion. */
@@ -13,6 +14,7 @@ export function ForceInclusionOption({
   enabled,
   onChange,
   ariaLabel = "Force transaction inclusion",
+  isDisabled = false,
 }: ForceInclusionOptionProps) {
   return (
     <Box w="full" px={3} py={2.5}>
@@ -30,6 +32,7 @@ export function ForceInclusionOption({
           size="sm"
           flexShrink={0}
           isChecked={enabled}
+          isDisabled={isDisabled}
           onChange={(event) => onChange(event.target.checked)}
           aria-label={ariaLabel}
           colorScheme="blue"

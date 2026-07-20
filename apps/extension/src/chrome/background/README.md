@@ -13,8 +13,9 @@ Review order:
 5. `providerRequestRejection.ts` — pure durable rejection mapping.
 6. `authRouter.ts`, `bankrCredentialRouter.ts`, `onboardingRouter.ts` —
    trusted-UI auth transport and atomic Bankr credential/account binding.
-7. `accountStateRouter.ts`, `contactBookRouter.ts`, `accountManagementRouter.ts` — non-secret account/contact
-   state plus master-gated account/seed mutation orchestration.
+7. `accountStateRouter.ts`, `contactBookRouter.ts`, `accountManagementRouter.ts`,
+   `ledgerRouter.ts` — non-secret account/contact state plus master-gated
+   account/seed/Ledger mutation and hardware discovery transport.
 8. `secretManagementRouter.ts` — trusted-sender plaintext release and pinned
    signature/delegated-permission confirmation transport.
 9. `batchRequestRouter.ts`, `delegationRouter.ts`,
@@ -36,7 +37,7 @@ Review order:
 15. `walletConnectSessionRouter.ts` — trusted-UI session management.
 16. `signingRequestRouter.ts` — provider intake plus trusted-UI pending
    transaction/signature reads, rejection, and cancellation.
-17. `transactionExecutionRouter.ts`, `swapExecutionRouter.ts`,
+17. `transactionExecutionRouter.ts`, `transactionExecutionRouterSupport.ts`, `swapExecutionRouter.ts`,
    `sponsoredTransferRouter.ts`, `internalOperationBarrier.ts` — first-action
    transaction confirmation and reset-barrier-protected internal
    execution/recovery transport.

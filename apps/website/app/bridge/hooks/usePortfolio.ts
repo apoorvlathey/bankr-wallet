@@ -7,6 +7,8 @@ interface PortfolioResponse {
   error?: string;
 }
 
+const INTERACTIVE_TOKEN_LIMIT = 200;
+
 const cache = new Map<string, { data: PortfolioToken[]; fetchedAt: number }>();
 const inFlight = new Map<string, Promise<PortfolioToken[]>>();
 const CACHE_TTL = 60_000; // 60s — matches the route's Cache-Control
@@ -22,13 +24,13 @@ async function fetchPortfolio(address: string): Promise<PortfolioToken[]> {
 
   const promise = (async () => {
     const response = await fetch(
-      `/api/portfolio?address=${encodeURIComponent(address)}`,
+      `/api/portfolio?address=${encodeURIComponent(address)}&tokenLimit=${INTERACTIVE_TOKEN_LIMIT}`,
     );
     const data = (await response.json()) as PortfolioResponse;
     if (!response.ok) {
       throw new Error(data.error || `Portfolio fetch failed: ${response.status}`);
     }
-    const tokens = data.tokens ?? [];
+    const tokens = (data.tokens ?? []).slice(0, INTERACTIVE_TOKEN_LIMIT);
     cache.set(key, { data: tokens, fetchedAt: Date.now() });
     return tokens;
   })().finally(() => {
@@ -39,8 +41,7 @@ async function fetchPortfolio(address: string): Promise<PortfolioToken[]> {
   return promise;
 }
 
-/** Fetches the user's portfolio (multi-chain) via /api/portfolio.
- *  Returns the full token list — callers filter by chainId. */
+/** Fetches a bounded multi-chain token projection for the bridge picker. */
 export function usePortfolio(address: string | undefined) {
   const [tokens, setTokens] = useState<PortfolioToken[]>(
     address ? (cache.get(address.toLowerCase())?.data ?? []) : [],
