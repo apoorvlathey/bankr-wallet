@@ -31,6 +31,7 @@ export default function TransactionError({
   onToggle: () => void;
   onRebroadcast: () => void;
 }) {
+  const isDropped = tx.status === "dropped";
   return (
     <>
       {/* Error for failed txs. viem errors (e.g. HttpRequestError) render
@@ -40,7 +41,7 @@ export default function TransactionError({
           the line above it is the human-readable summary (viem's
           shortMessage), everything below goes behind a "Show details"
           collapse. Single-line errors render inline as before. */}
-      {tx.status === "failed" && tx.error && (() => {
+      {(tx.status === "failed" || isDropped) && tx.error && (() => {
         const errorText = tx.error;
         const newlineIdx = errorText.indexOf("\n");
         const hasDetail = newlineIdx !== -1;
@@ -66,14 +67,14 @@ export default function TransactionError({
                 align="center"
                 justify="center"
                 borderRadius="full"
-                bg="status.error.bg"
-                color="status.error.fg"
+                bg={isDropped ? "status.warning.bg" : "status.error.bg"}
+                color={isDropped ? "status.warning.fg" : "status.error.fg"}
               >
                 <WarningIcon boxSize="13px" aria-hidden />
               </Flex>
               <VStack spacing={0.5} align="stretch" minW={0} pt={0.5}>
                 <Text color="fg.primary" fontSize="sm" fontWeight="700">
-                  Transaction failed
+                  {isDropped ? "Transaction dropped" : "Transaction failed"}
                 </Text>
                 <Text
                   color="fg.secondary"

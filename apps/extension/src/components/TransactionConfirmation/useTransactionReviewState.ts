@@ -101,7 +101,7 @@ export function useTransactionReviewState(
   }, [splitState]);
 
   const forceInclusionInfo = useMemo<ForceInclusionInfo | null>(() => {
-    if (delegation7702) return null;
+    if (delegation7702 || txRequest.replacement) return null;
     if (!isForceInclusionSupportedForAccount(tx.chainId, accountType)) {
       return null;
     }
@@ -110,7 +110,7 @@ export function useTransactionReviewState(
       l1ChainId: entry.l1ChainId,
       l1ChainName: entry.l1ChainName,
     };
-  }, [accountType, delegation7702, tx.chainId]);
+  }, [accountType, delegation7702, tx.chainId, txRequest.replacement]);
 
   const calldataValidation = useMemo(
     () => detectAbiEncodingError(tx.data),

@@ -23,9 +23,10 @@ import {
   tryRestoreSession,
 } from "../sessionCache";
 import { decryptAllKeys } from "../vaultCrypto";
+import { validateTransactionNonceSelection } from "./noncePolicy";
+import { replacementGasSelectionError } from "@/lib/transactionReplacement";
 
 type ConfirmationResult = { success: boolean; error?: string };
-
 async function resolveLocalTransactionKey(
   account: LocalSigningAccount,
   password: string,
@@ -35,7 +36,6 @@ async function resolveLocalTransactionKey(
 > {
   let privateKey = getPrivateKeyFromCache(account.id);
   if (privateKey) return { ok: true, privateKey };
-
   if (!getCachedVaultKey()) {
     const { handleUnlockWallet } = await import("../authHandlers");
     if (await tryRestoreSession(handleUnlockWallet)) {
@@ -43,7 +43,6 @@ async function resolveLocalTransactionKey(
     }
   }
   if (privateKey) return { ok: true, privateKey };
-
   const cachedVaultKey = getCachedVaultKey();
   const vault = cachedVaultKey
     ? await (async () => {
@@ -52,7 +51,6 @@ async function resolveLocalTransactionKey(
       })()
     : await decryptAllKeys(password);
   if (!vault) return { ok: false, error: "Invalid password" };
-
   setCachedVault(vault);
   if (await hasEncryptedApiKey()) {
     const apiKey = await loadDecryptedApiKey(password);
@@ -63,7 +61,6 @@ async function resolveLocalTransactionKey(
     ? { ok: true, privateKey }
     : { ok: false, error: "Private key not found for account" };
 }
-
 /** Confirms a pinned private-key or seed-phrase transaction for background execution. */
 export async function handleConfirmTransactionAsyncPK(
   txId: string,
@@ -74,11 +71,11 @@ export async function handleConfirmTransactionAsyncPK(
   forceInclusion?: boolean,
   feePaymentToken?: "native" | "token",
   feePaymentQuoteId?: string,
+  nonce?: unknown,
 ): Promise<ConfirmationResult> {
   if (processingTxIds.has(txId)) {
     return { success: false, error: "Transaction already being processed" };
   }
-
   const pending = await getPendingTxRequestById(txId);
   if (!pending) return { success: false, error: "Transaction request not found" };
   processingTxIds.add(txId);
@@ -105,6 +102,28 @@ export async function handleConfirmTransactionAsyncPK(
     };
   }
 
+  const nonceSelection = validateTransactionNonceSelection(
+    nonce,
+    feePaymentToken === "token"
+      ? "feeToken"
+      : forceInclusion
+        ? "forceInclusion"
+        : "native",
+    pending.replacement?.nonce,
+  );
+  if (!nonceSelection.ok) {
+    processingTxIds.delete(txId);
+    return { success: false, error: nonceSelection.error };
+  }
+  const reviewedNonce = nonceSelection.nonce;
+  const replacementGasError = replacementGasSelectionError(
+    pending.replacement,
+    gasOverrides,
+  );
+  if (replacementGasError) {
+    processingTxIds.delete(txId);
+    return { success: false, error: replacementGasError };
+  }
   let expectedDelegatedAuthorityAuthEpoch: string | undefined;
   try {
     expectedDelegatedAuthorityAuthEpoch =
@@ -213,6 +232,7 @@ export async function handleConfirmTransactionAsyncPK(
       gasOverrides,
       effectLease,
       expectedDelegatedAuthorityAuthEpoch,
+      reviewedNonce,
     );
   }
   return { success: true };

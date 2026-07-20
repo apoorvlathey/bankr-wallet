@@ -207,6 +207,35 @@ The extension supports five distinct account types that can be used simultaneous
 | Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only            |
 | Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps |
 
+### Pending Transaction Replacement
+
+Ordinary pending transactions signed by Private Key, Seed Phrase, and Ledger
+accounts expose **Cancel** and **Speed Up** in Transaction details. Bankr,
+impersonator, fee-token/UserOperation, force-inclusion, already-superseded,
+access-list, type-3, and type-4 submissions do not enter this path.
+
+`prepareTransactionReplacement` is a trusted-wallet-UI route that accepts only
+the stored history ID and replacement kind. The service worker resolves the
+exact history-bound account and configured RPC, requires a still-unmined RPC
+transaction with the same hash/from/chain, and requires its nonce to equal the
+account's `latest` count so an older queued nonce is handled first. Speed Up
+copies the RPC transaction's to/value/calldata/gas; Cancel creates a zero-value,
+empty-calldata self-transfer. Both reuse the exact pending nonce.
+
+Replacement priority fee is rounded up by 12.5%, safely above geth's common
+10% price-bump threshold. Max fee is rounded up by 30%, then both suggestions
+are raised to the current Fast tier/base-fee headroom when that is higher. The
+background stores the minimum replacement fee floor in the pinned request.
+The normal transaction confirmation screen preselects those fees, keeps gas
+editable above the floor, locks the replacement nonce and transaction content,
+and revalidates the exact nonce plus fee floor in the PK/seed/Ledger confirmation
+handlers before any key or device signing begins.
+
+Back from pending transaction details, plus Back or Reject from either
+replacement review, returns to Home with Activity selected. Replacement Reject
+pre-navigates before durable prompt removal, and Home resolves its monotonic
+Activity/Holdings triggers by whichever counter is newer.
+
 ### Ledger Architecture
 
 - **Browser boundary:** Ledger setup and signing require Chromium with WebHID
@@ -875,6 +904,10 @@ src/
 │   │   ├── runtime.ts       # Results, pinned accounts, and process state
 │   │   ├── localConfirmation.ts # PK/seed preflight and key/session recovery
 │   │   ├── localExecution.ts # Sign-once preparation, final authority gate, and publication
+│   │   ├── noncePolicy.ts # Explicit nonce validation and unsupported-mode exclusions
+│   │   ├── nonceReview.ts # Pinned PK/seed/Ledger nonce preview for trusted transaction review
+│   │   ├── replacementPolicy.ts # Strict pending-RPC projection and fee bump policy
+│   │   ├── replacementPreparation.ts # History/account-bound cancel/speed-up review creation
 │   │   ├── bankrConfirmation.ts # Pinned Bankr confirmation and effect leasing
 │   │   ├── bankrProcessing.ts # Remote result/history publication
 │   │   ├── requestActions.ts # Reject and cancellation terminalization
@@ -1067,6 +1100,7 @@ src/
 │   │   ├── batchLocalReceipts.ts # Recoverable L1 receipt observation
 │   │   ├── batchCompletion.ts # Aggregate ERC-5792 terminal status
 │   │   ├── nonceManager.ts # Pending-nonce cache and explicit reset boundaries
+│   │   ├── nonceRpc.ts     # Bounded pending/latest nonce RPC lookup
 │   │   ├── receiptPoller.ts # Stable receipt export facade
 │   │   ├── receiptPolling.ts # Poller lifecycle, backoff, and restart resume
 │   │   ├── receiptFinalizer.ts # Receipt/ambiguity/drop classification
@@ -1801,6 +1835,16 @@ request is received:
 - Shows pending transaction banner if requests exist
 - Displays: origin (with favicon), network, to address (with labels), value, data
 - **Gas estimation** fetched on mount via `estimateGas` message to background (see Gas Estimation below)
+- **Address nonce** appears as an editable decimal field in Advanced details for
+  native-gas Private Key, Seed Phrase, and Ledger transactions. The initial
+  value is a read-only preview of the pending RPC nonce plus WalletChan's
+  rapid-send cache; opening the screen does not reserve it. Confirm sends the
+  reviewed value to the matching local/Ledger execution path, which validates
+  and reserves that exact nonce before signing. The signed nonce is persisted
+  into transaction history so Transaction details can show it at the bottom of
+  Advanced details after gas diagnostics. Bankr, impersonator,
+  force-inclusion, and fee-token UserOperation paths neither show nor accept
+  this transaction-nonce override.
 - User clicks Confirm or Reject
 - Closing popup does NOT cancel transaction (persisted)
 
@@ -2000,6 +2044,15 @@ GasEstimateDisplay → onGasOverrides(overrides) → TransactionConfirmation sta
   → confirmTransactionAsyncPK message includes gasOverrides
   → transactions/localExecution.ts merges into tx (clears legacy gasPrice to avoid EIP-1559 conflict)
   → signAndBroadcastTransaction(privateKey, txWithGas, rpcUrl)
+```
+
+**Editable transaction nonce flow (PK/Seed/Ledger native-gas only):**
+
+```
+TransactionConfirmation → getTransactionNonce(txId) reads the pinned account
+  → Advanced details edits a validated decimal nonce
+  → confirmTransactionAsyncPK / confirmTransactionAsyncLedger includes nonce
+  → localExecution / ledger transactionExecution reserves and signs that exact nonce
 ```
 
 **Shared utilities (`lib/gasFormatUtils.ts`):** `formatEth()`, `formatGwei()`, `formatNumber()` — extracted from `TxDetailModal.tsx` for reuse.
@@ -2384,6 +2437,16 @@ success, not a definite failure: history stores the deterministic hash plus
 classify that row as dropped until an RPC first observes the hash; a receipt or
 observed transaction clears the marker. This prevents a user retry from
 executing the same approved intent again at a different nonce.
+
+Ordinary PK/seed/Ledger history records persist the exact signed nonce. If both
+receipt and transaction lookup miss, a configured-RPC `latest` account nonce
+strictly greater than that stored nonce proves the transaction can no longer
+land and terminalizes it immediately as `dropped`. Otherwise the conservative
+60-second / three-observation fallback remains. A mined Cancel or Speed Up
+receipt also marks its exact still-pending replacement chain `dropped`
+immediately. Dropped
+is a distinct history status from `failed`, which remains reserved for signing,
+broadcast, or onchain execution failures.
 
 For dapp, WalletConnect, cross-dapp, and force-inclusion local paths,
 `prepareSignAndBroadcastTransaction` invokes an async `beforeBroadcast` hook
@@ -4730,14 +4793,17 @@ Single transaction and signature transport is delegated to
 tab, frame, window, and authorized origin supplied by the composition root;
 trusted-UI reads, rejection, and cancellation preserve the synchronous
 first-action claim and durable-result ordering of the underlying domain
-services. The three single-transaction confirmation paths move together through
+services. A read-only `getTransactionNonce` route resolves only the account
+pinned to a PK/seed/Ledger request and does not claim or advance it. The four
+single-transaction confirmation paths move together through
 `background/transactionExecutionRouter.ts`: immediate Bankr submission,
-background Bankr submission, and local private-key/seed-phrase execution all
-claim `transaction:<id>` with action `confirm` before invoking their injected
-domain handler. Immediate confirmation retains the existing terminal-result
-non-overwrite check, and local confirmation retains explicit-tab then sender-tab
-resolution plus function, gas, and force-inclusion arguments. Internal transfer
-intake forwards the complete message without creating a false signing claim.
+background Bankr submission, local private-key/seed-phrase execution, and
+Ledger execution all claim `transaction:<id>` with action `confirm` before
+invoking their injected domain handler. Immediate confirmation retains the
+existing terminal-result non-overwrite check, and local/Ledger confirmation
+retains explicit-tab then sender-tab resolution plus the applicable function,
+gas, force-inclusion, fee-token, and nonce arguments. Internal transfer intake
+forwards the complete message without creating a false signing claim.
 
 `background/swapExecutionRouter.ts` forwards exact account/address locks to the
 direct Bankr/local, Bankr batch, and local atomic paths. Every path first enters
@@ -4796,7 +4862,9 @@ notification clicks. The focused callback implementations remain under
 | `resetExtension`                   | Reset wallet identity state using the exact `storage/resetManifest.ts` key/prefix manifest through `walletResetStorage.ts`; clears secrets, accounts, pending requests, WalletConnect routing, cross-dapp batches, tx history, wallet portfolio state, transient result keys, and session auth state |
 | `confirmTransaction`               | User approved tx (sync, waits)                                                                  |
 | `confirmTransactionAsync`          | User approved tx (async, Bankr API). Optional `functionName` field                              |
-| `confirmTransactionAsyncPK`        | User approved tx (async, PK/seed local sign). Optional `functionName` and `gasOverrides` fields |
+| `getTransactionNonce`              | Read the next pending nonce for the exact PK/seed/Ledger account pinned to a pending transaction; does not reserve it |
+| `confirmTransactionAsyncPK`        | User approved tx (async, PK/seed local sign). Optional `functionName`, `gasOverrides`, and validated native-gas `nonce` fields |
+| `confirmTransactionAsyncLedger`    | User approved tx through Ledger. Optional `functionName`, `gasOverrides`, and validated `nonce` fields |
 | `estimateGas`                      | Estimate gas for pending tx (returns `GasEstimate` with fees, balance, USD price)               |
 | `updatePendingTxRequestData`       | Persist edited calldata for a pending single transaction                                        |
 | `rejectTransaction`                | User rejected tx                                                                                |

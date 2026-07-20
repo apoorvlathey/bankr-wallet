@@ -28,6 +28,9 @@ export async function handleAddToCrossDappBatch(
   if (!pending.tx.from) {
     return { success: false, error: "Pending request is no longer valid" };
   }
+  if (pending.replacement) {
+    return { success: false, error: "Replacement transactions cannot be batched" };
+  }
   if (!hasConcreteRecipientAddress(pending.tx.to)) {
     return {
       success: false,

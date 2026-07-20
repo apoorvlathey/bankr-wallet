@@ -199,9 +199,7 @@ function App() {
   // would otherwise cause a second transition after the pre-nav).
   const preNavigatedRef = useRef(false);
   // Storage changes can arrive before or after the reject callback. Remember
-  // which removals came from an explicit user rejection so the storage
-  // fallback returns to Assets instead of treating every removal as a
-  // submitted transaction and opening Activity.
+  // explicit rejections so removal does not masquerade as submission.
   const rejectingTxIdsRef = useRef(new Set<string>());
 
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
@@ -1211,12 +1209,14 @@ function App() {
                   !hasOtherPending &&
                   (view === "txConfirm" || view === "pendingTxList")
                 ) {
-                  if (wasUserRejected) {
+                  if (wasUserRejected && !selectedTxRequest.replacement) {
                     setHoldingsTabTrigger((current) =>
                       Math.max(current + 1, activityTabTrigger + 1),
                     );
                   } else {
-                    setActivityTabTrigger((k) => k + 1);
+                    setActivityTabTrigger((current) =>
+                      Math.max(current + 1, holdingsTabTrigger + 1),
+                    );
                   }
                   setView("main");
                 }
@@ -1381,7 +1381,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab, activityTabTrigger]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab, activityTabTrigger, holdingsTabTrigger]);
 
   // Keep the Home dapp context synchronized with both tab switches and
   // same-tab navigations (for example New Tab -> app.aave.com).
@@ -1649,15 +1649,20 @@ function App() {
       setView,
     });
 
-  // Called by confirmation screens BEFORE they fire a reject message to the
-  // background. Pre-switches the popup to the adjacent request in the combined
-  // carousel so that once the rejected request is removed from storage, the UI
-  // is already showing a valid peer — no "selectedX=null while view still
-  // X-confirm" intermediate render that would flash the main screen before
-  // the async onRejected handler catches up. If this is the only pending
-  // request (combined.length <= 1), we bail — onRejected will route to main
-  // or close the popup, which is the correct end state anyway.
+  const returnToActivity = useCallback(() => {
+    setActivityTabTrigger((current) => Math.max(current + 1, holdingsTabTrigger + 1));
+    setView("main");
+  }, [holdingsTabTrigger]);
+
+  // Before rejection, move to Activity for replacements or an adjacent prompt.
+  // This prevents prompt removal from briefly leaving an invalid selection.
   const navigateToAdjacentRequest = useCallback(() => {
+    if (selectedTxRequest?.replacement) {
+      setSelectedTxRequest(null);
+      preNavigatedRef.current = true;
+      returnToActivity();
+      return;
+    }
     const combined = getCombinedRequests(
       pendingRequests,
       pendingSignatureRequests,
@@ -1743,6 +1748,7 @@ function App() {
     selectedBatchRequest,
     selectedSignatureRequest,
     selectedErc7715PermissionRequest,
+    returnToActivity,
     view,
   ]);
 
@@ -2626,10 +2632,7 @@ function App() {
               tx={selectedCompletedTx}
               onBack={() => {
                 setSelectedCompletedTx(null);
-                setActivityTabTrigger((current) =>
-                  Math.max(current + 1, holdingsTabTrigger + 1),
-                );
-                setView("main");
+                returnToActivity();
               }}
             />
           </Suspense>
@@ -2723,11 +2726,9 @@ function App() {
                 accountType={selectedTxRequest.accountType ?? activeAccount?.type}
                 crossDappBatch={crossDappBatch}
                 onBack={() => {
-                  if (totalCount > 1) {
-                    setView("pendingTxList");
-                  } else {
-                    setView("main");
-                  }
+                  if (selectedTxRequest.replacement) {
+                    setSelectedTxRequest(null); returnToActivity();
+                  } else setView(totalCount > 1 ? "pendingTxList" : "main");
                 }}
                 onConfirmed={handleTxConfirmed}
                 onRejected={handleTxRejected}

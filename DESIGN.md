@@ -242,6 +242,17 @@
 
 ## Slop audit
 
+- 2026-07-20 pending-replacement audit: placed Cancel and Speed Up as one
+  centered pair of natural-width, 32px controls immediately below pending
+  status. Cancel uses the quiet outlined danger recipe and Speed Up the shared
+  amber brand commitment; both defer commitment to the existing confirmation
+  screen. The review keeps
+  its nonce/content locked, gas editable, and explains the replacement in one
+  token-driven notice without introducing a nested card or bespoke dialog.
+- 2026-07-20 transaction-nonce row audit: moved the editable address nonce
+  directly below Add to batch, removed redundant explanatory copy, and reduced
+  its numeric field to a dense technical control while retaining its visible
+  label, tabular numerals, validation, keyboard focus, and 24px-plus target.
 - 2026-07-20 Send recipient-discovery audit: opening or clicking the recipient
   input now reveals its wallet and contact suggestions immediately. An empty
   query shows the complete ordered set in a bounded scrollable combobox, while
@@ -574,6 +585,17 @@
 
 ## Changelog
 
+- 2026-07-20: made pending-detail and replacement Back/Reject navigation return
+  to Activity, with latest-trigger precedence preventing a stale Assets reset.
+- 2026-07-20: vertically centered context-free cancellation Activity titles
+  with the WalletChan mark while retaining status metadata on the lower track.
+- 2026-07-20: compacted pending-transaction Cancel and Speed Up into a centered
+  utility pair and moved Speed Up from blue to the shared amber brand treatment.
+- 2026-07-20: added pending local/Ledger Cancel and Speed Up review flows using
+  the existing transaction confirmation, compact locked nonce, and editable
+  replacement-fee controls.
+- 2026-07-20: tightened the transaction-review nonce into one compact labeled
+  row immediately below Add to batch.
 - 2026-07-20: aligned the manual add-token screen's final save action with the
   shared amber commitment treatment.
 - 2026-07-19: moved Ledger setup into a dedicated full extension tab, closes
@@ -1133,3 +1155,10 @@
   reviewed Pimlico token catalog. Each choice now carries its own symbol,
   decimals, balance, logo fallback, bounded quote, and stablecoin-only fiat
   equivalence while preserving the same compact pill and action sheet.
+- 2026-07-20: refined pending-transaction replacement receipts. Speed Up keeps
+  the original request identity, simulation, clear-signing content, action,
+  and Activity media beneath one concise nonce/fee notice. Cancel removes the
+  redundant self-transfer explanation and renders as a WalletChan-authored
+  “Cancel Transaction” row without duplicate context. Transaction details end
+  Advanced details with the signed nonce, while displaced mempool entries use
+  an amber `Dropped` state instead of the red execution-failure state.

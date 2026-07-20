@@ -22,6 +22,9 @@ here and should stay organized by one user-facing responsibility per file.
 | `TxDetailController.tsx` | Coordinate shared detail state and compose sections in the established visual/message order | Native-symbol lookup, delegate-label lookup, rebroadcast request, explorer navigation |
 | `TxDetailModal.tsx` | Adapt the shared controller to the modal host | None |
 | `TxDetailScreen.tsx` | Adapt the shared controller to navigation and refresh pending history | History messages, receipt polling, runtime listener |
+| `PendingTransactionActions.tsx` | Render the paired Cancel and Speed Up actions for an eligible pending row | Callback-driven only |
+| `transactionReplacementModel.ts` | Pure renderer eligibility hint for pending replacement actions | None |
+| `usePendingReplacementActions.ts` | Prepare one background-authored replacement review and surface bounded errors | Trusted runtime message |
 | `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status | Opens the requesting site and transaction explorer |
 | `BridgeSummary.tsx` | Render source and destination bridge legs, status, amounts, and explorer actions | Explorer navigation |
 | `TransactionImpact.tsx` | Render source/destination asset changes in the shared request-review direction hierarchy | None |
@@ -31,7 +34,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `Erc7715RevokeReceipt.tsx` | Render a confirmed permission revocation as the shared summary ledger rather than reusing its pre-confirmation warning card | Address and token tools delegated to shared popovers |
 | `DecodedFunctionSummary.tsx` | Render the existing calldata decoder's resolved function, contract, and optional native payment when no clear-signed summary exists | Address actions delegated to the shared labeled-address popover |
 | `TransactionMeta.tsx` | Render the signing identity, gas fee, sequential-batch context, and timestamp as compact post-submission metadata | None |
-| `AdvancedDetails.tsx` | Own the single technical disclosure, scroll its heading into view on user expansion, and compose raw transaction plus gas diagnostics | Scrolls the existing detail viewport only |
+| `AdvancedDetails.tsx` | Own the single technical disclosure, scroll its heading into view on user expansion, and compose raw transaction, gas diagnostics, then the signed nonce | Scrolls the existing detail viewport only |
 | `RawTransactionDetails.tsx` | Render function, transfer, addresses, value, calldata, and deploy data inside the advanced owner; publish the existing decoder's resolved function name | Copy/explorer actions delegated to shared components |
 | `GasDetails.tsx` | Render confirmed or estimated gas diagnostics inside the advanced owner | None |
 | `TransactionError.tsx` | Render bounded error detail and the optional rebroadcast action | Copy action; rebroadcast callback is owned by the controller |
@@ -100,6 +103,15 @@ large hook.
 - Processing and broadcast-uncertain records remain explicitly in progress;
   sequential batch receipts identify their call index without implying atomic
   execution.
+- Ordinary pending PK/seed/Ledger rows expose Cancel and Speed Up immediately
+  below status. Bankr, impersonator, fee-token, force-inclusion, and already-
+  superseded rows do not advertise the action; background policy remains
+  authoritative.
+- Signed local/Ledger transactions show their address nonce as the final
+  Advanced-details row. Dropped history is distinct from failed execution.
+- Leaving full-screen pending details restores Activity. Home honors only the
+  newer monotonic Activity/Holdings trigger so stale Holdings state cannot
+  override the return destination when `PortfolioTabs` remounts.
 - Confirmed ERC-7715 revocations use a receipt-specific ledger. The blue
   explanatory warning and nested allowance panel remain exclusive to the
   pre-confirmation review surface.

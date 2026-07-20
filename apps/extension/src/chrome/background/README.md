@@ -39,8 +39,8 @@ Review order:
    transaction/signature reads, rejection, and cancellation.
 17. `transactionExecutionRouter.ts`, `transactionExecutionRouterSupport.ts`, `swapExecutionRouter.ts`,
    `sponsoredTransferRouter.ts`, `internalOperationBarrier.ts` — first-action
-   transaction confirmation and reset-barrier-protected internal
-   execution/recovery transport.
+   transaction confirmation, pinned-account nonce/replacement review, and
+   reset-barrier-protected internal execution/recovery transport.
 18. `transactionStatusRouter.ts` — trusted-UI history, processing, failed-result,
    nonce-cache, enrichment, and receipt-status transport.
 19. `resetRouter.ts` — synchronous reset-barrier installation followed by the

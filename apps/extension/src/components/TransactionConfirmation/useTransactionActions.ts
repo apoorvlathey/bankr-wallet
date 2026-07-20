@@ -20,6 +20,7 @@ interface UseTransactionActionsOptions {
   forceInclusion: boolean;
   feePaymentToken: "native" | `0x${string}`;
   feePaymentQuoteId: string | null;
+  nonce: number | null;
   onConfirmed: () => void;
   onRejected: () => void;
   onBeforeReject?: () => void;
@@ -39,6 +40,7 @@ export function useTransactionActions({
   forceInclusion,
   feePaymentToken,
   feePaymentQuoteId,
+  nonce,
   onConfirmed,
   onRejected,
   onBeforeReject,
@@ -80,15 +82,18 @@ export function useTransactionActions({
         : accountType === "privateKey" || accountType === "seedPhrase"
           ? "confirmTransactionAsyncPK"
           : "confirmTransactionAsync";
-    const functionName = isErc7715PermissionRevoke
-      ? "Revoke delegated permission"
-      : is7702Revoke
-        ? "Revoke smart-account delegation"
-        : is7702SetDelegate
-          ? "Set smart-account delegation"
-          : !tx.to
-            ? "Contract Deployment"
-            : decodedFunctionName || undefined;
+    const functionName = txRequest.replacement?.kind === "cancel"
+      ? "Cancel Transaction"
+      : txRequest.replacement?.originalFunctionName ??
+        (isErc7715PermissionRevoke
+          ? "Revoke delegated permission"
+          : is7702Revoke
+            ? "Revoke smart-account delegation"
+            : is7702SetDelegate
+              ? "Set smart-account delegation"
+              : !tx.to
+                ? "Contract Deployment"
+                : decodedFunctionName || undefined);
 
     chrome.runtime.sendMessage(
       {
@@ -98,6 +103,7 @@ export function useTransactionActions({
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
         ...(forceInclusion ? { forceInclusion: true } : {}),
+        ...(nonce !== null ? { nonce } : {}),
         feePaymentToken: feePaymentToken === "native" ? "native" : "token",
         ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
       },

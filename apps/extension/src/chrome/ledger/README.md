@@ -13,6 +13,10 @@ device error normalization, and Ledger-specific transaction/message signing.
   and broadcasts the exact serialized transaction bytes.
 - `transactionExecution.ts` and `signatureConfirmation.ts` reuse the released
   pinned-request, authorization, reset-lease, history, and result boundaries.
+  Transaction execution validates and reserves an optional reviewed nonce
+  before preparing the exact unsigned payload. Pending speed-up and cancel
+  reviews use this path with an immutable original nonce and background-checked
+  replacement fee floors.
   They retain the pending row during the hardware prompt, then remove it only
   after a recovered Ledger signature and final authorization; transaction
   history begins at the final pre-broadcast boundary.

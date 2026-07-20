@@ -5,7 +5,7 @@ import type {
   GasData,
 } from "@/chrome/txHistoryStorage";
 import { InlineDisclosure } from "@/components/ui";
-import GasDetails from "./GasDetails";
+import GasDetails, { GasRow } from "./GasDetails";
 import RawTransactionDetails from "./RawTransactionDetails";
 
 export default function AdvancedDetails({
@@ -55,6 +55,7 @@ export default function AdvancedDetails({
   const userToggledRef = useRef(false);
   const [open, setOpen] = useState(defaultOpen);
   const prefersReducedMotion = usePrefersReducedMotion();
+  const addressNonce = tx.tx.nonce;
 
   useEffect(() => {
     if (transactionIdRef.current !== tx.id) {
@@ -126,6 +127,18 @@ export default function AdvancedDetails({
           estimatedMaxCost={estimatedMaxCost}
           formatWeiUsd={formatWeiUsd}
         />
+        {typeof addressNonce === "number" &&
+          Number.isSafeInteger(addressNonce) &&
+          addressNonce >= 0 && (
+            <Box
+              bg="surface.sunken"
+              borderTopWidth="1px"
+              borderTopStyle="solid"
+              borderTopColor="border.subtle"
+            >
+              <GasRow label="Address nonce" value={String(addressNonce)} />
+            </Box>
+          )}
       </Box>
     </InlineDisclosure>
   );

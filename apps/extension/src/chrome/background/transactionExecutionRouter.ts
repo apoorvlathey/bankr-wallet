@@ -1,14 +1,14 @@
 /** Trusted-UI transport for single-transaction confirmation and transfer intake. */
-
 import {
   HANDLED_TRANSACTION_EXECUTION_ASYNC as HANDLED_ASYNC,
+  respondToTransactionExecution,
   transactionExecutionError as errorMessage,
   validatedFeePaymentToken,
   type BackgroundTransactionExecutionDependencies, type BackgroundTransactionExecutionRouteResult,
 } from "./transactionExecutionRouterSupport";
 export type { BackgroundTransactionExecutionDependencies, BackgroundTransactionExecutionRouteResult } from "./transactionExecutionRouterSupport";
 export const BACKGROUND_TRANSACTION_EXECUTION_MESSAGE_TYPES = [
-  "confirmTransaction", "confirmTransactionAsync", "confirmTransactionAsyncPK", "confirmTransactionAsyncLedger", "confirmImpersonatedTransaction", "getFeePaymentOptions", "prepareFeePaymentQuote", "initiateTransfer",
+  "getTransactionNonce", "prepareTransactionReplacement", "confirmTransaction", "confirmTransactionAsync", "confirmTransactionAsyncPK", "confirmTransactionAsyncLedger", "confirmImpersonatedTransaction", "getFeePaymentOptions", "prepareFeePaymentQuote", "initiateTransfer",
 ] as const;
 export function createBackgroundTransactionExecutionMessageRouter(
   dependencies: BackgroundTransactionExecutionDependencies,
@@ -19,33 +19,34 @@ export function createBackgroundTransactionExecutionMessageRouter(
 ) => BackgroundTransactionExecutionRouteResult {
   return (message, sender, sendResponse) => {
     switch (message?.type) {
+      case "prepareTransactionReplacement":
+        return respondToTransactionExecution(
+          dependencies.prepareTransactionReplacement(message.txId, message.kind),
+          sendResponse, "Failed to prepare transaction replacement");
+      case "getTransactionNonce": {
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        return respondToTransactionExecution(dependencies.getTransactionNonce(txId),
+          sendResponse, "Failed to load transaction nonce");
+      }
       case "getFeePaymentOptions": {
         const txId = typeof message.txId === "string" ? message.txId : "";
         const query = message.requestKind === "batch"
           ? dependencies.getBatchFeePaymentOptions(txId)
           : dependencies.getFeePaymentOptions(txId);
-        query.then(sendResponse).catch((error) =>
-          sendResponse({
-            success: false,
-            error: errorMessage(error, "Failed to load gas-payment options"),
-          }),
-        );
-        return HANDLED_ASYNC;
+        return respondToTransactionExecution(query, sendResponse,
+          "Failed to load gas-payment options");
       }
 
       case "prepareFeePaymentQuote": {
-        const requestId =
-          typeof message.requestId === "string" ? message.requestId : "";
+        const requestId = typeof message.requestId === "string" ? message.requestId : "";
         const family = message.requestKind === "batch"
           ? "batchTransaction"
           : "transaction";
-        dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken)
-          .then(sendResponse)
-          .catch((error) => sendResponse({
-            success: false,
-            error: errorMessage(error, "Failed to prepare fee-token quote"),
-          }));
-        return HANDLED_ASYNC;
+        return respondToTransactionExecution(
+          dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken),
+          sendResponse,
+          "Failed to prepare fee-token quote",
+        );
       }
       case "confirmTransaction": {
         const txId = typeof message.txId === "string" ? message.txId : "";
@@ -138,6 +139,7 @@ export function createBackgroundTransactionExecutionMessageRouter(
                   message.forceInclusion,
                 ),
                 message.feePaymentQuoteId,
+                message.nonce,
               ),
             conflictResult: dependencies.pendingResolutionConflict,
           })
@@ -150,7 +152,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           );
         return HANDLED_ASYNC;
       }
-
       case "confirmTransactionAsyncLedger": {
         const tabId = message.tabId || sender.tab?.id;
         const txId = typeof message.txId === "string" ? message.txId : "";
@@ -167,6 +168,7 @@ export function createBackgroundTransactionExecutionMessageRouter(
                 message.functionName,
                 message.gasOverrides,
                 message.forceInclusion,
+                message.nonce,
               ),
             conflictResult: dependencies.pendingResolutionConflict,
           })

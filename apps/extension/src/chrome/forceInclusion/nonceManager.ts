@@ -12,8 +12,13 @@
  * - In-memory Map clears naturally on service worker restart
  */
 
-import { getRpcUrl } from "../transactions/rpcConfig";
-import { fetchRpcEnvelope } from "../network/rpcClient";
+import {
+  MAX_TRANSACTION_NONCE,
+  normalizeTransactionNonce,
+} from "@/lib/transactionNonce";
+import { fetchNonceFromRpc } from "./nonceRpc";
+
+export { MAX_TRANSACTION_NONCE, normalizeTransactionNonce };
 
 /** How long a cached nonce stays valid (ms) */
 const NONCE_TTL_MS = 30_000;
@@ -38,6 +43,19 @@ export async function getNextNonce(
   address: string,
   chainId: number,
 ): Promise<number> {
+  const nextNonce = await peekNextNonce(address, chainId);
+  return reserveNonce(address, chainId, nextNonce);
+}
+
+/**
+ * Read the nonce that getNextNonce would currently choose without consuming
+ * it. Transaction review uses this so opening or closing the UI cannot create
+ * a temporary gap in the local nonce cache.
+ */
+export async function peekNextNonce(
+  address: string,
+  chainId: number,
+): Promise<number> {
   const key = cacheKey(address, chainId);
   const cached = nonceCache.get(key);
 
@@ -53,9 +71,7 @@ export async function getNextNonce(
       `[nonceManager] eth_getTransactionCount failed for ${address} on chain ${chainId}: ${result.error}`,
     );
     if (cached && Date.now() - cached.timestamp < NONCE_TTL_MS) {
-      const nonce = cached.value;
-      nonceCache.set(key, { value: nonce + 1, timestamp: Date.now() });
-      return nonce;
+      return cached.value;
     }
     throw new Error(`Failed to fetch nonce: ${result.error}`);
   }
@@ -67,11 +83,34 @@ export async function getNextNonce(
   if (cached && Date.now() - cached.timestamp < NONCE_TTL_MS) {
     nextNonce = Math.max(cached.value, onChainNonce);
   }
-
-  // Store incremented value for next rapid call
-  nonceCache.set(key, { value: nextNonce + 1, timestamp: Date.now() });
-
   return nextNonce;
+}
+
+/**
+ * Reserve an exact reviewed nonce for one broadcast. A lower custom nonce is
+ * allowed for replacement transactions, but it must never move the rapid-send
+ * cache backwards.
+ */
+export function reserveNonce(
+  address: string,
+  chainId: number,
+  nonce: number,
+): number {
+  const normalized = normalizeTransactionNonce(nonce);
+  if (normalized === undefined) {
+    throw new Error("Transaction nonce is required");
+  }
+  const key = cacheKey(address, chainId);
+  const cached = nonceCache.get(key);
+  const cachedNext =
+    cached && Date.now() - cached.timestamp < NONCE_TTL_MS
+      ? cached.value
+      : 0;
+  nonceCache.set(key, {
+    value: Math.max(cachedNext, normalized + 1),
+    timestamp: Date.now(),
+  });
+  return normalized;
 }
 
 /**
@@ -101,65 +140,4 @@ export function clearNoncesForAddress(address: string): void {
  */
 export function clearAllNonces(): void {
   nonceCache.clear();
-}
-
-type NonceFetchResult = { nonce: number } | { error: string };
-
-async function callGetTransactionCount(
-  rpcUrl: string,
-  address: string,
-  blockTag: "pending" | "latest",
-): Promise<NonceFetchResult> {
-  try {
-    const json = await fetchRpcEnvelope(rpcUrl, "eth_getTransactionCount", [
-      address,
-      blockTag,
-    ], {
-      timeoutMs: 10_000,
-      allowPrivateWithoutOrigin: true,
-    });
-    if (json.error) {
-      const rpcError = json.error as Record<string, unknown>;
-      const msg =
-        typeof rpcError.message === "string"
-          ? rpcError.message.slice(0, 1_000)
-          : `RPC error code ${String(rpcError.code ?? "unknown")}`;
-      return { error: msg };
-    }
-    if (typeof json.result === "string") {
-      try {
-        return { nonce: Number(BigInt(json.result)) };
-      } catch {
-        return { error: `Invalid nonce response: ${json.result}` };
-      }
-    }
-    return { error: "RPC returned no result" };
-  } catch (err: any) {
-    if (err?.name === "HttpRequestTimeoutError") return { error: "RPC request timed out" };
-    return { error: err?.message || "Network error" };
-  }
-}
-
-async function fetchNonceFromRpc(
-  address: string,
-  chainId: number,
-): Promise<NonceFetchResult> {
-  const rpcUrl = await getRpcUrl(chainId);
-  if (!rpcUrl) return { error: "No RPC URL configured for this chain" };
-
-  // Try "pending" first (so back-to-back txs see in-mempool entries). Some
-  // chains (notably newer L2s without a public mempool) reject the pending
-  // block tag — fall back to "latest" in that case so the call still works.
-  const pendingResult = await callGetTransactionCount(rpcUrl, address, "pending");
-  if ("nonce" in pendingResult) return pendingResult;
-
-  const looksLikeUnsupportedTag = /pending|block tag|not supported|unknown block|invalid/i.test(
-    pendingResult.error,
-  );
-  if (!looksLikeUnsupportedTag) return pendingResult;
-
-  console.warn(
-    `[nonceManager] "pending" block tag rejected on chain ${chainId} ("${pendingResult.error}") — retrying with "latest"`,
-  );
-  return callGetTransactionCount(rpcUrl, address, "latest");
 }

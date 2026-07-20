@@ -663,8 +663,13 @@ export function responseForPreviewMessage(
       );
       return { success: true };
     }
+    case "getTransactionNonce":
+      return { success: true, nonce: 42 };
+    case "prepareTransactionReplacement":
+      return { success: true, txRequest: { id: "preview-replacement" } };
     case "confirmTransactionAsync":
     case "confirmTransactionAsyncPK":
+    case "confirmTransactionAsyncLedger":
     case "confirmSignatureRequest":
     case "confirmBatchTransactionAsync":
     case "confirmBatchTransactionAsyncPK":

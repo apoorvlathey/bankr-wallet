@@ -11,7 +11,18 @@ This directory owns the extracted, audit-sized transaction concerns:
 - `localConfirmation.ts` owns non-expiring PK/seed confirmation preflight, EIP-7702 master
   authorization capture, and master/agent/Never-session key recovery.
 - `localExecution.ts` owns nonce/gas preparation, sign-once execution, the
-  final pre-RPC account/transport/authority check, and receipt publication.
+  final pre-RPC account/transport/authority check, signed-nonce history, and
+  receipt publication.
+- `nonceReview.ts` exposes a trusted-UI, pinned-account nonce preview without
+  consuming the rapid-send nonce cache.
+- `noncePolicy.ts` validates explicit nonce values and excludes fee-token and
+  force-inclusion execution modes, including exact replacement-nonce locking.
+- `replacementPolicy.ts` strictly validates one configured-RPC pending
+  transaction and owns integer-safe replacement fee floors/recommendations.
+- `replacementPreparation.ts` accepts only a trusted history ID/kind, binds the
+  exact local/Ledger account and oldest pending nonce, and queues the pinned
+  Cancel or Speed Up review without broadcasting. Speed Up retains only the
+  original public presentation metadata around its RPC-reconstructed payload.
 - `impersonatedExecution.ts` owns the explicit per-RPC developer exception for
   view-only accounts: pinned confirmation policy, standard unsigned
   `eth_sendTransaction` projection, final endpoint/account/authority checks,

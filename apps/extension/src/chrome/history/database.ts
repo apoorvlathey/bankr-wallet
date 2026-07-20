@@ -168,7 +168,10 @@ async function deleteTransactions(ids: string[]): Promise<void> {
 async function enforceRetention(): Promise<void> {
   const transactions = await allStoredTransactions();
   const settled = transactions.filter(
-    (entry) => entry.status === "success" || entry.status === "failed",
+    (entry) =>
+      entry.status === "success" ||
+      entry.status === "failed" ||
+      entry.status === "dropped",
   );
   const remove = new Set<string>();
   const groups = new Map<string, StoredTransaction[]>();
@@ -204,7 +207,12 @@ async function enforceRetention(): Promise<void> {
     );
   }
   const oldest = remaining
-    .filter((entry) => entry.status === "success" || entry.status === "failed")
+    .filter(
+      (entry) =>
+        entry.status === "success" ||
+        entry.status === "failed" ||
+        entry.status === "dropped",
+    )
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   const budgetRemovals: string[] = [];
   for (const entry of oldest) {

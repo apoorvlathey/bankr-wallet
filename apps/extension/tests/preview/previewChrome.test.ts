@@ -114,6 +114,13 @@ test("App, Settings, and portfolio reads have explicit response shapes", async (
   );
   assert.deepEqual(
     responseForPreviewMessage(environment, {
+      type: "getTransactionNonce",
+      txId: environment.pendingTxRequests[0]?.id,
+    }),
+    { success: true, nonce: 42 },
+  );
+  assert.deepEqual(
+    responseForPreviewMessage(environment, {
       type: "getErc7715PermissionGrantsForAccount",
       accountId: environment.activeAccount.id,
     }),

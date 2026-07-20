@@ -27,9 +27,11 @@ import type { TransactionConfirmationProps } from "./types";
 import { useTransactionActions } from "./useTransactionActions";
 import { useTransactionBatchEligibility } from "./useTransactionBatchEligibility";
 import { useTransactionMetadata } from "./useTransactionMetadata";
+import { useTransactionNonce } from "./useTransactionNonce";
 import { useTransactionReviewState } from "./useTransactionReviewState";
 import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
 import { allowsImpersonatedTransactions } from "@/chrome/network/impersonatedRpcPolicy";
+import { replacementGasSelectionError } from "@/lib/transactionReplacement";
 
 function TransactionConfirmation({
   txRequest,
@@ -59,6 +61,7 @@ function TransactionConfirmation({
   const is7702SetDelegate = delegation7702?.kind === "setDelegate";
   const isErc7715PermissionRevoke =
     !!txRequest.erc7715PermissionRevokeMeta;
+  const replacement = txRequest.replacement;
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
@@ -96,12 +99,13 @@ function TransactionConfirmation({
     txRequest,
     accountType,
   );
+  const transactionNonce = useTransactionNonce(txRequest.id, accountType);
   useEffect(() => {
-    if (review.forceInclusion) {
+    if (review.forceInclusion || replacement) {
       setFeePaymentToken("native");
       setFeePaymentQuote(null);
     }
-  }, [review.forceInclusion]);
+  }, [replacement, review.forceInclusion]);
   useEffect(() => {
     setFeePaymentToken("native");
     setFeePaymentQuote(null);
@@ -112,6 +116,10 @@ function TransactionConfirmation({
     crossDappBatch,
     review.isValueMalformed,
   );
+  const usesEditableNonce =
+    transactionNonce.supported &&
+    feePaymentToken === "native" &&
+    !review.forceInclusion;
   const actions = useTransactionActions({
     txRequest,
     accountType,
@@ -125,6 +133,7 @@ function TransactionConfirmation({
     forceInclusion: review.forceInclusion,
     feePaymentToken,
     feePaymentQuoteId: feePaymentQuote?.quoteId ?? null,
+    nonce: usesEditableNonce ? transactionNonce.nonce : null,
     onConfirmed,
     onRejected,
     onBeforeReject,
@@ -132,6 +141,10 @@ function TransactionConfirmation({
   });
   const isLedgerWaiting =
     accountType === "ledger" && actions.state === "submitting";
+  const replacementGasError = replacementGasSelectionError(
+    replacement,
+    review.gasOverrides,
+  );
 
   if (actions.state === "forceInclusion" && review.forceInclusionInfo) {
     return (
@@ -146,7 +159,11 @@ function TransactionConfirmation({
   }
   if (actions.state === "sent") return <TransactionSentScreen />;
 
-  const screenTitle = is7702Revoke
+  const screenTitle = replacement
+    ? replacement.kind === "cancel"
+      ? "Cancel transaction"
+      : "Speed up transaction"
+    : is7702Revoke
     ? "Revoke smart account"
     : is7702SetDelegate
       ? "Set smart account"
@@ -163,18 +180,26 @@ function TransactionConfirmation({
           ? "Transaction value is malformed — signing blocked"
           : !review.splitState.ready
             ? review.splitState.label || "Waiting for prior transaction to land"
+            : usesEditableNonce && transactionNonce.loading
+              ? "Loading the address nonce"
+            : usesEditableNonce && !transactionNonce.valid
+              ? transactionNonce.error || "Set a valid address nonce"
+            : replacementGasError
+              ? replacementGasError
             : feePaymentToken === "native" && !review.gasValid
               ? "Set a valid gas fee — fee fields can't be empty / max fee must cover base + priority"
               : feePaymentToken !== "native" && !feePaymentQuote?.quoteId
                 ? "Waiting for a bounded fee-token quote"
               : null;
-  const decodedActionFallback = getDecodedActionFallback({
-    clearSigningStatus: review.clearSigningStatus,
-    decodedFunctionName,
-    hasSpecializedSummary: Boolean(
-      review.parsedApproval || isErc7715PermissionRevoke,
-    ),
-  });
+  const decodedActionFallback = replacement?.kind === "cancel"
+    ? "Cancel pending transaction"
+    : getDecodedActionFallback({
+        clearSigningStatus: review.clearSigningStatus,
+        decodedFunctionName,
+        hasSpecializedSummary: Boolean(
+          review.parsedApproval || isErc7715PermissionRevoke,
+        ),
+      });
   const rejectButton = (
     <RejectActionButton
       state={actions.state}
@@ -197,6 +222,9 @@ function TransactionConfirmation({
                 ? review.parsedTxValue.wei.toString()
                 : String(tx.value ?? ""),
               data: tx.data || "0x",
+              ...(usesEditableNonce && transactionNonce.nonce !== null
+                ? { nonce: transactionNonce.nonce }
+                : {}),
             },
             null,
             2,
@@ -263,12 +291,12 @@ function TransactionConfirmation({
           simulationUnavailable={review.simulationUnavailable}
           requestState={isLedgerWaiting ? "ready" : actions.state}
           requestError={actions.error}
-          gasValid={review.gasValid}
+          gasValid={review.gasValid && !replacementGasError}
           splitState={review.splitState}
           onClearSigningResolved={(matched) =>
             review.setClearSigningStatus(matched ? "matched" : "absent")
           }
-          isReadOnly={isLedgerWaiting}
+          isReadOnly={isLedgerWaiting || !!replacement}
         />
       }
       advancedDetails={
@@ -290,6 +318,13 @@ function TransactionConfirmation({
           isReadOnly={isLedgerWaiting}
           feePaymentToken={feePaymentToken}
           feePaymentQuote={feePaymentQuote}
+          showTransactionNonce={usesEditableNonce}
+          transactionNonce={transactionNonce.value}
+          transactionNonceLoading={transactionNonce.loading}
+          transactionNonceError={transactionNonce.error}
+          transactionNonceReadOnly={!!replacement}
+          onTransactionNonceChange={transactionNonce.setValue}
+          onTransactionNonceRetry={transactionNonce.retry}
         />
       }
       actionSummary={
@@ -301,6 +336,8 @@ function TransactionConfirmation({
           forceInclusionInfo={review.forceInclusionInfo}
           destinationChainName={resolvedChainName}
           isValueMalformed={review.isValueMalformed}
+          lockNativeFeePayment={!!replacement}
+          replacementGasError={review.gasOverrides ? replacementGasError : null}
           onGasOverrides={review.setGasOverrides}
           onGasValidityChange={review.setGasValid}
           isReadOnly={isLedgerWaiting}
@@ -334,6 +371,13 @@ function TransactionConfirmation({
               simulationReverted: review.simulationReverted,
             })}
             waitingForLedger={isLedgerWaiting}
+            label={
+              replacement?.kind === "cancel"
+                ? "Submit cancellation"
+                : replacement
+                  ? "Submit speed-up"
+                  : "Confirm"
+            }
             onConfirm={actions.handleConfirm}
           />
         )

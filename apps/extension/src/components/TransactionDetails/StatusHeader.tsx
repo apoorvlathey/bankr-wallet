@@ -59,6 +59,14 @@ function getStatusPresentation(tx: CompletedTransaction) {
     } as const;
   }
 
+  if (tx.status === "dropped") {
+    return {
+      label: "Dropped",
+      color: "status.warning.emphasis",
+      icon: WarningIcon,
+    } as const;
+  }
+
   return {
     label: tx.broadcastUncertain
       ? "Verifying broadcast"

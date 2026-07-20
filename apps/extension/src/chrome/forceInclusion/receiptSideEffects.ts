@@ -1,6 +1,5 @@
 import { getRpcUrl } from "../transactions/rpcConfig";
-import { getTxById } from "../txHistoryStorage";
-
+import { getTxById, updateTxInHistory } from "../txHistoryStorage";
 export async function applyReceiptStateMirrors(args: {
   txId: string;
   txHash: string;
@@ -10,10 +9,29 @@ export async function applyReceiptStateMirrors(args: {
   rpcUrl?: string;
 }): Promise<void> {
   const { txId, chainId, succeeded, rpcUrl } = args;
+  await markOriginalReplacementDropped(txId).catch((error) => console.warn("[receipt] Replacement history sync failed", error));
   await syncDelegationMirrorFromChain(txId, chainId, rpcUrl);
   if (succeeded) await markErc7715PermissionRevokedFromReceipt(txId);
 }
 
+async function markOriginalReplacementDropped(txId: string): Promise<void> {
+  let replacementTx = await getTxById(txId);
+  while (replacementTx?.replacement) {
+    const replacement = replacementTx.replacement;
+    const original = await getTxById(replacement.originalTxId);
+    if (!original || original.txHash !== replacement.originalTxHash) return;
+    if (original.status === "pending" || original.status === "processing") {
+      await updateTxInHistory(original.id, {
+        status: "dropped",
+        error: "Transaction replaced by a mined transaction",
+        completedAt: Date.now(),
+      });
+    } else if (original.status !== "dropped") {
+      return;
+    }
+    replacementTx = original;
+  }
+}
 export async function applyPostNotificationReceiptEffects(args: {
   txId: string;
   txHash: string;

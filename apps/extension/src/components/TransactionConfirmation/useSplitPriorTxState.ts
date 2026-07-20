@@ -42,12 +42,10 @@ export function useSplitPriorTxState(
             ? previous
             : { ready: true, justResolvedAt: Date.now() },
         );
-      } else if (tx.status === "failed") {
+      } else if (tx.status === "failed" || tx.status === "dropped") {
         setState({
           ready: false,
-          label: `Previous transaction ${
-            tx.error?.includes("dropped") ? "was dropped" : "failed"
-          } — bundle cancelled`,
+          label: `Previous transaction ${tx.status === "dropped" ? "was dropped" : "failed"} — bundle cancelled`,
         });
       }
     };

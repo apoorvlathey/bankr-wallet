@@ -39,6 +39,30 @@ export default function ActivityItem({
   const statusModel = getActivityStatusModel(tx);
   const explorer = useActivityExplorers(tx);
   const isOutgoingValue = presentation.value?.startsWith("−") ?? false;
+  const activityMeta = (
+    <HStack
+      flexShrink={0}
+      ml="auto"
+      spacing={1}
+      justify="flex-end"
+      color="fg.muted"
+    >
+      <ActivityStatus tx={tx} model={statusModel} />
+      <Text aria-hidden="true" fontSize="2xs" color="fg.muted">
+        ·
+      </Text>
+      <Text
+        fontSize="2xs"
+        color="fg.muted"
+        fontWeight="500"
+        lineHeight="1.3"
+        sx={{ fontVariantNumeric: "tabular-nums" }}
+        flexShrink={0}
+      >
+        {formatTimeAgo(tx.createdAt, Date.now())}
+      </Text>
+    </HStack>
+  );
 
   return (
     <ListItem
@@ -93,12 +117,15 @@ export default function ActivityItem({
         pointerEvents="none"
         flex="1 1 auto"
         minW={0}
+        minH={!presentation.context ? "40px" : undefined}
         templateColumns="minmax(0, 1fr)"
+        templateRows={!presentation.context ? "1fr auto" : undefined}
         rowGap={tx.bridge ? 0.5 : 0}
         alignItems="center"
       >
         <HStack
           gridColumn="1"
+          gridRow={!presentation.context ? "1 / span 2" : undefined}
           minW={0}
           w="full"
           spacing={2}
@@ -155,45 +182,27 @@ export default function ActivityItem({
 
         <HStack
           gridColumn="1"
+          gridRow={!presentation.context ? "2" : undefined}
           minW={0}
           w="full"
           spacing={2}
           justify="space-between"
         >
-          <Text
-            flex="1 1 auto"
-            minW={0}
-            fontSize="xs"
-            color="fg.secondary"
-            lineHeight="1.35"
-            whiteSpace="nowrap"
-            overflow="hidden"
-            textOverflow="ellipsis"
-          >
-            {presentation.context || tx.chainName}
-          </Text>
-
-          <HStack
-            flexShrink={0}
-            spacing={1}
-            justify="flex-end"
-            color="fg.muted"
-          >
-            <ActivityStatus tx={tx} model={statusModel} />
-            <Text aria-hidden="true" fontSize="2xs" color="fg.muted">
-              ·
-            </Text>
+          {presentation.context && (
             <Text
-              fontSize="2xs"
-              color="fg.muted"
-              fontWeight="500"
-              lineHeight="1.3"
-              sx={{ fontVariantNumeric: "tabular-nums" }}
-              flexShrink={0}
+              flex="1 1 auto"
+              minW={0}
+              fontSize="xs"
+              color="fg.secondary"
+              lineHeight="1.35"
+              whiteSpace="nowrap"
+              overflow="hidden"
+              textOverflow="ellipsis"
             >
-              {formatTimeAgo(tx.createdAt, Date.now())}
+              {presentation.context}
             </Text>
-          </HStack>
+          )}
+          {activityMeta}
         </HStack>
       </Grid>
     </ListItem>

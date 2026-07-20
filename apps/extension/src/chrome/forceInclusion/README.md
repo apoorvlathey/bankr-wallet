@@ -35,6 +35,9 @@ Receipt ownership:
 - `receiptFinalizer.ts` classifies confirmed, pending, ambiguous, and dropped
   broadcasts. An ambiguous deterministic hash is never declared dropped, and
   a derived force-inclusion L2 hash is never treated as a mempool transaction.
+  A missing ordinary hash can be dropped immediately only when the latest
+  account nonce has passed its persisted signed nonce; otherwise the existing
+  age/observation threshold remains.
 - `broadcastPolicy.ts` distinguishes ordinary/L1 broadcasts from derived L2
   deposits. Derived L2 hashes remain pending while absent and receive a
   fifteen-minute receipt-polling window around the expected one-to-ten-minute
@@ -44,10 +47,13 @@ Receipt ownership:
   zero-cost derived L2 receipt from overwriting that paid fee. The history
   repository enforces the tagged L1 record against every later enrichment
   writer. Startup recovery backfills older completed rows.
-- `receiptSideEffects.ts` mirrors EIP-7702/ERC-7715 state and advances split or
-  bridge flows only after receipt application.
+- `receiptSideEffects.ts` mirrors EIP-7702/ERC-7715 state, marks the exact
+  predecessor chain dropped after a replacement receipt, and advances split
+  or bridge flows only after receipt application.
 - `receiptRpc.ts` and `receiptNotification.ts` isolate RPC normalization and UI
   notifications from state transitions.
 
-`nonceManager.ts`, `splitBatchSequencer.ts`, and `broadcastPolicy.ts` remain
+`nonceManager.ts` owns the short-lived reservation cache while `nonceRpc.ts`
+owns bounded pending/latest RPC lookup. `splitBatchSequencer.ts` and
+`broadcastPolicy.ts` remain
 small independent units. Historical root modules are intentionally absent.

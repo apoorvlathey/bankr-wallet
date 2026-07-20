@@ -16,6 +16,8 @@ type Hooks = {
   deviceGate: Deferred;
   deviceError: string | null;
   events: string[];
+  history: any[];
+  transactionNonces: number[];
   processing: Set<string>;
   active: Map<string, AbortController>;
 };
@@ -58,6 +60,8 @@ test("Ledger pending requests cross the terminal boundary only after device appr
     deviceGate: deferred(),
     deviceError: null,
     events: [],
+    history: [],
+    transactionNonces: [],
     processing: new Set(),
     active: new Map(),
   };
@@ -99,6 +103,8 @@ test("Ledger pending requests cross the terminal boundary only after device appr
     hooks.deviceGate = deferred();
     hooks.deviceError = null;
     hooks.events = [];
+    hooks.history = [];
+    hooks.transactionNonces = [];
     hooks.processing.clear();
     hooks.active.clear();
   };
@@ -170,7 +176,14 @@ test("Ledger pending requests cross the terminal boundary only after device appr
               return "export const attachClearSignedMetaToHistory = async () => {};";
             }
             if (id === "\0ledger-nonce") {
-              return "export const getNextNonce = async () => { globalThis.__walletchanLedgerLifecycle.events.push('nonce'); return 7; }; export const resetNonce = () => {};";
+              return `
+                export const getNextNonce = async () => { globalThis.__walletchanLedgerLifecycle.events.push("nonce"); return 7; };
+                export const normalizeTransactionNonce = (value) => value;
+                export const reserveNonce = (_address, _chainId, nonce) => {
+                  globalThis.__walletchanLedgerLifecycle.events.push("reserve");
+                  return nonce;
+                };
+                export const resetNonce = () => {};`;
             }
             if (id === "\0ledger-receipt") {
               return "export const applyReceiptToHistory = async () => {}; export const startReceiptPolling = () => {};";
@@ -201,7 +214,10 @@ test("Ledger pending requests cross the terminal boundary only after device appr
             }
             if (id === "\0ledger-history") {
               return `
-                export const addTxToHistory = async () => globalThis.__walletchanLedgerLifecycle.events.push("history");
+                export const addTxToHistory = async (tx) => {
+                  globalThis.__walletchanLedgerLifecycle.events.push("history");
+                  globalThis.__walletchanLedgerLifecycle.history.push(tx);
+                };
                 export const updateTxInHistory = async () => {};`;
             }
             if (id === "\0ledger-display") {
@@ -227,6 +243,7 @@ test("Ledger pending requests cross the terminal boundary only after device appr
               return `
                 export const signAndBroadcastLedgerTransaction = async (input) => {
                   const hooks = globalThis.__walletchanLedgerLifecycle;
+                  hooks.transactionNonces.push(input.tx.nonce);
                   hooks.events.push("device-tx");
                   await hooks.deviceGate.promise;
                   if (hooks.deviceError) throw new Error(hooks.deviceError);
@@ -295,6 +312,8 @@ test("Ledger pending requests cross the terminal boundary only after device appr
       hooks.deviceGate.resolve();
       assert.deepEqual(await resultPromise, { success: true });
       assert.equal(hooks.pendingTx, null);
+      assert.deepEqual(hooks.transactionNonces, [7]);
+      assert.equal(hooks.history[0].tx.nonce, 7);
       assert.deepEqual(hooks.events, [
         "session",
         "authorization",
@@ -308,6 +327,77 @@ test("Ledger pending requests cross the terminal boundary only after device appr
         "broadcast",
         "result",
       ]);
+    });
+
+    await t.test("a transaction signs and broadcasts the reviewed nonce", async () => {
+      reset();
+      const resultPromise = transaction.handleConfirmTransactionAsyncLedger(
+        "ledger-tx",
+        "",
+        undefined,
+        undefined,
+        undefined,
+        false,
+        23,
+      );
+      await waitForEvent(hooks, "device-tx");
+      hooks.deviceGate.resolve();
+      assert.deepEqual(await resultPromise, { success: true });
+      assert.deepEqual(hooks.transactionNonces, [23]);
+      assert.equal(hooks.history[0].tx.nonce, 23);
+      assert.ok(hooks.events.includes("reserve"));
+      assert.ok(!hooks.events.includes("nonce"));
+    });
+
+    await t.test("an invalid reviewed nonce never reaches the device", async () => {
+      reset();
+      assert.deepEqual(
+        await transaction.handleConfirmTransactionAsyncLedger(
+          "ledger-tx",
+          "",
+          undefined,
+          undefined,
+          undefined,
+          false,
+          "23",
+        ),
+        {
+          success: false,
+          error: "Transaction nonce must be a non-negative safe integer",
+        },
+      );
+      assert.ok(hooks.pendingTx);
+      assert.deepEqual(hooks.events, []);
+      assert.deepEqual(hooks.transactionNonces, []);
+    });
+
+    await t.test("a replacement enforces its nonce and fee floor before the device", async () => {
+      reset();
+      hooks.pendingTx!.replacement = {
+        kind: "cancel",
+        originalTxId: "original",
+        originalTxHash: `0x${"aa".repeat(32)}`,
+        nonce: 23,
+        minimumMaxFeePerGas: "130",
+        minimumMaxPriorityFeePerGas: "12",
+      };
+      const blocked = await transaction.handleConfirmTransactionAsyncLedger(
+        "ledger-tx", "", undefined, undefined,
+        { gasLimit: "21000", maxFeePerGas: "130", maxPriorityFeePerGas: "11" },
+        false, 23,
+      );
+      assert.match(blocked.error, /priority fee.*minimum/i);
+      assert.deepEqual(hooks.events, []);
+
+      const resultPromise = transaction.handleConfirmTransactionAsyncLedger(
+        "ledger-tx", "", undefined, undefined,
+        { gasLimit: "21000", maxFeePerGas: "130", maxPriorityFeePerGas: "12" },
+        false, 23,
+      );
+      await waitForEvent(hooks, "device-tx");
+      hooks.deviceGate.resolve();
+      assert.deepEqual(await resultPromise, { success: true });
+      assert.deepEqual(hooks.transactionNonces, [23]);
     });
 
     await t.test("a rejected transaction signature remains retryable", async () => {

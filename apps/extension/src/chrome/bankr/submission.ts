@@ -18,6 +18,8 @@ export interface TransactionParams {
   data?: string;
   value?: string;
   chainId: number;
+  /** Background-authored exact nonce for a reviewed replacement request. */
+  nonce?: number;
   gas?: string;
   gasPrice?: string;
   maxFeePerGas?: string;

@@ -58,7 +58,7 @@ test("ambiguous broadcasts are retained before dropped-transaction classificatio
 test("recovery reopens false derived-L2 drops before ordinary failed entries return", async () => {
   const text = await source("recovery.ts");
   assertOrdered(text, [
-    'tx.error === "Transaction dropped from the mempool"',
+    'tx.status === "dropped"',
     "isForceInclusionL2Hash(tx, knownL2Hash)",
     'status: "pending"',
     'import("./receiptPoller")',

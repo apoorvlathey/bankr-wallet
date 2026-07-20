@@ -190,6 +190,107 @@ test("local confirmation preserves PK, seed, and Never sessions", async (t) => {
       });
     }
 
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`${type} forwards the reviewed nonce to execution`, async () => {
+        reset();
+        const id = `${type}-nonce`;
+        await queue(type, id);
+        const result = await confirmation.handleConfirmTransactionAsyncPK(
+          id,
+          "ignored",
+          undefined,
+          undefined,
+          undefined,
+          false,
+          "native",
+          undefined,
+          31,
+        );
+        assert.deepEqual(result, { success: true });
+        assert.equal(hooks.dispatched[0][8], 31);
+      });
+    }
+
+    await t.test("invalid or fee-token nonces leave the prompt retryable", async () => {
+      reset();
+      await queue("privateKey", "invalid-nonce");
+      const invalid = await confirmation.handleConfirmTransactionAsyncPK(
+        "invalid-nonce",
+        "ignored",
+        undefined,
+        undefined,
+        undefined,
+        false,
+        "native",
+        undefined,
+        "31",
+      );
+      assert.equal(invalid.success, false);
+      assert.ok(hooks.pending);
+      assert.equal(hooks.dispatched.length, 0);
+
+      reset();
+      await queue("seedPhrase", "fee-token-nonce");
+      const feeToken = await confirmation.handleConfirmTransactionAsyncPK(
+        "fee-token-nonce",
+        "ignored",
+        undefined,
+        undefined,
+        undefined,
+        false,
+        "token",
+        "quote",
+        31,
+      );
+      assert.deepEqual(feeToken, {
+        success: false,
+        error: "Custom nonce is unavailable when paying network fees with a token",
+      });
+      assert.ok(hooks.pending);
+      assert.equal(hooks.dispatched.length, 0);
+    });
+
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`${type} enforces replacement nonce and fee floors`, async () => {
+        reset();
+        const id = `${type}-replacement`;
+        await queue(type, id);
+        hooks.pending.replacement = {
+          kind: "speedUp",
+          originalTxId: "original",
+          originalTxHash: `0x${"aa".repeat(32)}`,
+          nonce: 9,
+          minimumMaxFeePerGas: "130",
+          minimumMaxPriorityFeePerGas: "12",
+        };
+        const wrongNonce = await confirmation.handleConfirmTransactionAsyncPK(
+          id, "ignored", undefined, undefined,
+          { gasLimit: "21000", maxFeePerGas: "130", maxPriorityFeePerGas: "12" },
+          false, "native", undefined, 10,
+        );
+        assert.match(wrongNonce.error, /must use nonce 9/i);
+        assert.ok(hooks.pending);
+        assert.equal(hooks.dispatched.length, 0);
+
+        const underpriced = await confirmation.handleConfirmTransactionAsyncPK(
+          id, "ignored", undefined, undefined,
+          { gasLimit: "21000", maxFeePerGas: "130", maxPriorityFeePerGas: "11" },
+          false, "native", undefined, 9,
+        );
+        assert.match(underpriced.error, /priority fee.*minimum/i);
+        assert.ok(hooks.pending);
+        assert.equal(hooks.dispatched.length, 0);
+
+        const accepted = await confirmation.handleConfirmTransactionAsyncPK(
+          id, "ignored", undefined, undefined,
+          { gasLimit: "21000", maxFeePerGas: "130", maxPriorityFeePerGas: "12" },
+          false, "native", undefined, 9,
+        );
+        assert.deepEqual(accepted, { success: true });
+        assert.equal(hooks.dispatched[0][8], 9);
+      });
+    }
+
     await t.test("Never mode restores a local key before consuming the prompt", async () => {
       reset();
       hooks.privateKey = null;

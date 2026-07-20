@@ -287,6 +287,15 @@ export function getActivityPresentation(
 ): ActivityPresentation {
   const originHostname =
     originDisplayHostname ?? getOriginHostname(tx.origin);
+  if (tx.replacement?.kind === "cancel") {
+    return {
+      originHostname: null,
+      intent: "Cancel Transaction",
+      context: "",
+      value: null,
+      compactValue: null,
+    };
+  }
   const arrow = " → ";
   const arrowIndex = tx.origin.indexOf(arrow);
   let bridgeIntent: string | null = null;

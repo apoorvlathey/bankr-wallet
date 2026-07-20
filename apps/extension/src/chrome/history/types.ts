@@ -1,8 +1,11 @@
 import type { TransactionParams } from "../bankr/submission";
-import type { Erc7715PermissionRevokeMeta } from "../requests/pendingTxStorage";
+import type {
+  Erc7715PermissionRevokeMeta,
+  TransactionReplacementMeta,
+} from "../requests/pendingTxStorage";
 import type { ForceInclusionMeta } from "./forceInclusionTypes";
 export type { ForceInclusionMeta } from "./forceInclusionTypes";
-export type TxStatus = "processing" | "pending" | "success" | "failed";
+export type TxStatus = "processing" | "pending" | "success" | "failed" | "dropped";
 export interface SwapMeta {
   sellTokenSymbol: string;
   sellTokenLogo: string | null;
@@ -179,5 +182,7 @@ export interface CompletedTransaction {
   };
   /** Disable-delegation display snapshot committed only after receipt success. */
   erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
+  replacement?: TransactionReplacementMeta;
+  replacedByTxId?: string;
   accountId?: string;
 }

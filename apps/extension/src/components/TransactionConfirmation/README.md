@@ -13,6 +13,8 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 | `useSplitPriorTxState.ts` | Prior-split history gate and gas-refresh signal. |
 | `useTransactionMetadata.ts` | Non-secret symbol, label, name, and origin lookups. |
 | `useTransactionReviewState.ts` | Simulation, native-price, gas, calldata, clear-signing, and force-inclusion review state. |
+| `useTransactionNonce.ts` | Loads the pinned local/Ledger address nonce and owns the editable decimal review state. |
+| `transactionNonceModel.ts` | Pure wallet-type eligibility for editable transaction nonces. |
 | `useTransactionBatchEligibility.ts` | Cross-dapp batch eligibility for every wallet type. |
 | `useTransactionActions.ts` | Bankr/local submission routing, rejection, batch-add, and completion transitions. |
 | `TransactionSummary.tsx` | Centered dapp identity, chain-qualified simulation heading, and financial impact. |
@@ -21,6 +23,8 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 | `TransactionContext.tsx` | Ordered warnings, intent, metadata, and status. |
 | `TransactionInfoCard.tsx` | Interacting identity popover and native value rows. |
 | `AdvancedDetails.tsx` | Force inclusion, calldata, digest, Tenderly, and batch controls. |
+| `TransactionNonceEditor.tsx` | Editable local/Ledger address nonce row inside Advanced details. |
+| `ReplacementNotice.tsx` | Explain Speed Up nonce and fee semantics without replacing the original review content. |
 | `DelegationNotices.tsx` | EIP-7702 consequences. |
 | `QueueNavigation.tsx` | Pending-request navigation. |
 | `RequestStatus.tsx` | Async, error, and split feedback. |
@@ -38,7 +42,14 @@ callers and lazy imports. It stays policy-free and preserves the default export.
   callback-driven presentation, except `CopyButton.tsx`'s clipboard feedback.
 - Presentation modules do not choose wallet authorization or message types.
 - Preserve the gas-estimator key/remount, request ID, first-action callbacks,
-  and Bankr/private-key/seed-phrase/impersonator branches.
+  and Bankr/private-key/seed-phrase/Ledger/impersonator branches.
+- Replacement requests keep native gas editable but lock transaction content,
+  batching, fee-token selection, force inclusion, and the exact pending nonce.
+- Speed Up retains the original request identity, simulation, clear-signing,
+  and decoded action; Cancel omits the redundant self-transfer explanation.
+- Back and Reject on either replacement return Home to Activity. Reject
+  pre-navigates before prompt removal so storage timing cannot flash Assets or
+  close the popup through the generic rejection fallback.
 - Keep the root facade tiny, one concern per file, and implementation files
   below roughly 400 lines. Add state to the narrow owning hook instead of
   creating one all-purpose controller.

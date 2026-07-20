@@ -365,7 +365,7 @@ configured auto-lock boundary.
 | Handler Class | Examples | Why Extension-Only |
 | --- | --- | --- |
 | Account/session reads and ordering | `getAccounts`, `reorderAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state or allowing webpages to mutate wallet UI ordering. |
-| Transaction/history UI | `getTxHistory`, `getTxHistoryPage`, `getTxHistoryItem`, `getTransactionCalldata`, `resolveHistoryNftMetadata`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. Lazy detail reads operate only on a trusted stored row and configured RPC. |
+| Transaction/history UI | `getTxHistory`, `getTxHistoryPage`, `getTxHistoryItem`, `getTransactionCalldata`, `resolveHistoryNftMetadata`, `getTransactionNonce`, `prepareTransactionReplacement`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers | Avoid letting content scripts inspect or alter local pending/history/status state. Nonce preview resolves only the account pinned to that pending request and does not reserve the nonce; replacement preparation accepts only a stored history ID/kind and reconstructs intent from the configured RPC; lazy detail reads operate only on a trusted stored row and configured RPC. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
@@ -430,7 +430,43 @@ persisted, or forwarded outside that boundary.
 `updatePendingTxRequestData` mutates a pending single transaction's calldata
 before the user signs, for example when the confirmation UI edits an ERC-20
 approve amount. It must stay classified as `wallet-ui` so a webpage
-cannot silently alter a pending tx between display and signing.
+cannot silently alter a pending tx between display and signing. Background-
+authored replacement requests reject this mutation because only their gas may
+change during review.
+
+`getTransactionNonce` is the adjacent read-only review helper. It stays
+`wallet-ui` only, accepts a pending transaction ID rather than an arbitrary
+address, re-resolves the exact pinned PK/seed/Ledger account, verifies the
+stored `from`, and previews the pending/cache nonce without advancing it. The
+confirmation handlers accept an explicit nonce only as a non-negative safe
+integer and only for native-gas PK/seed/Ledger execution; Bankr, impersonator,
+force-inclusion, and fee-token paths cannot silently consume the override.
+
+`prepareTransactionReplacement` is also `wallet-ui` only. It accepts no
+renderer-authored transaction fields, account, nonce, or fee values. Under a
+serialized preparation lock it re-resolves the stored history row and exact
+account, rejects Bankr/impersonator and fee-token/force-inclusion rows, fetches
+the transaction plus receipt and latest account nonce from the configured RPC,
+and validates hash, signer, chain, pending block state, bounded calldata,
+recipient, quantities, and supported transaction type. Only the oldest pending
+nonce may be replaced. Type-3/type-4 transactions fail closed rather than
+dropping blob or authorization-list semantics. The resulting request is pinned
+as `trustedInternal`; confirmation requires the exact stored nonce, native gas,
+and fee caps at or above the background-computed replacement floor. Replacement
+content cannot be edited or added to a cross-dapp batch. Type-1 or non-empty
+access-list transactions also fail closed because the released transaction
+shape cannot reproduce those semantics. Cancel is authored as an empty
+zero-value self-transfer, while Speed Up preserves the RPC transaction intent.
+Its origin, favicon, and prior function label are copied only as public display
+metadata; the signable `to`/value/data/nonce/fee fields still come exclusively
+from the configured-RPC transaction and background fee policy.
+
+Local and Ledger history records persist the nonce actually handed to the
+signer. Receipt reconciliation may use a strictly greater configured-RPC
+`latest` account nonce as proof that a missing transaction hash was displaced;
+ambiguous broadcasts and derived force-inclusion hashes remain excluded from
+this shortcut. A mined replacement receipt may walk only its exact stored
+predecessor ID/hash chain and terminalize matching pending rows as `dropped`.
 
 ### Dapp-Initiated Batch Handlers (`batchTxHandlers.ts`)
 

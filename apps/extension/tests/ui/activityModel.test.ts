@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { CompletedTransaction } from "../../src/chrome/txHistoryStorage";
 import {
@@ -216,4 +217,41 @@ test("transfer-only history resolves its recipient from current identities", () 
     ),
   );
   assert.equal(after.context, "To Newly added account");
+});
+
+test("cancellation activity uses the wallet action without redundant context", () => {
+  const presentation = getActivityPresentation(
+    transaction({
+      origin: "WalletChan",
+      functionName: "Cancel Transaction",
+      replacement: {
+        kind: "cancel",
+        originalTxId: "original",
+        originalTxHash: `0x${"ab".repeat(32)}`,
+        nonce: 7,
+        minimumMaxFeePerGas: "100",
+        minimumMaxPriorityFeePerGas: "10",
+      },
+    }),
+  );
+
+  assert.equal(presentation.intent, "Cancel Transaction");
+  assert.equal(presentation.context, "");
+  assert.equal(presentation.value, null);
+});
+
+test("context-free activity rows vertically center their title with the mark", async () => {
+  const source = await readFile(
+    new URL(
+      "../../src/components/Activity/ActivityItem.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /gridRow=\{!presentation\.context \? "1 \/ span 2" : undefined\}/,
+  );
+  assert.match(source, /minH=\{!presentation\.context \? "40px" : undefined\}/);
 });

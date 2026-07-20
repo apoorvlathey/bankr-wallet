@@ -6,7 +6,11 @@ import {
   signAndBroadcastTransaction,
   signEip7702Authorization,
 } from "../localSigner";
-import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
+import {
+  getNextNonce,
+  reserveNonce,
+  resetNonce,
+} from "../forceInclusion/nonceManager";
 import type { PendingTxRequest } from "../requests/pendingTxStorage";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
@@ -49,6 +53,7 @@ export async function processLocalTransactionInBackground(
   gasOverrides?: GasOverrides,
   effectLease?: PendingRequestEffectLease,
   expectedDelegatedAuthorityAuthEpoch?: string,
+  nonceOverride?: number,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -63,8 +68,12 @@ export async function processLocalTransactionInBackground(
           maxFeePerGas: gasOverrides.maxFeePerGas,
           maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
           gasPrice: undefined,
+          ...(nonceOverride !== undefined ? { nonce: nonceOverride } : {}),
         }
-      : pending.tx;
+      : {
+          ...pending.tx,
+          ...(nonceOverride !== undefined ? { nonce: nonceOverride } : {}),
+        };
 
     await addTxToHistory({
       id: txId,
@@ -81,6 +90,7 @@ export async function processLocalTransactionInBackground(
       bundleIndex: pending.bundleIndex,
       delegation7702Meta: pending.delegation7702Meta,
       erc7715PermissionRevokeMeta: pending.erc7715PermissionRevokeMeta,
+      replacement: pending.replacement,
       accountId: pending.accountId,
     });
 
@@ -104,7 +114,13 @@ export async function processLocalTransactionInBackground(
           explorer: resolvedChain.explorer || undefined,
         }
       : undefined;
-    const nonce = await getNextNonce(pending.tx.from, pending.tx.chainId);
+    const nonce =
+      nonceOverride === undefined
+        ? await getNextNonce(pending.tx.from, pending.tx.chainId)
+        : reserveNonce(pending.tx.from, pending.tx.chainId, nonceOverride);
+    await updateTxInHistory(txId, { tx: { ...txForHistory, nonce } }).catch(
+      (error) => console.warn("[local-transaction] Nonce history update failed", error),
+    );
     const baseTx = gasOverrides
       ? {
           ...pending.tx,
@@ -192,6 +208,14 @@ export async function processLocalTransactionInBackground(
 
     const txHash = result.txHash;
     broadcastTxHash = txHash;
+    if (pending.replacement && txHash) {
+      await updateTxInHistory(
+        pending.replacement.originalTxId,
+        { replacedByTxId: txId },
+      ).catch((error) => {
+        console.warn("[local-transaction] Replacement link update failed", error);
+      });
+    }
     if (txHash && result.receipt) {
       await applyReceiptToHistory(
         txId,

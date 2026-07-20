@@ -31,6 +31,9 @@ import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
 import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
 import { useResolvedCalldata } from "./useResolvedCalldata";
+import PendingTransactionActions from "./PendingTransactionActions";
+import { canPrepareTransactionReplacement } from "./transactionReplacementModel";
+import { usePendingReplacementActions } from "./usePendingReplacementActions";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -149,9 +152,11 @@ export function TxDetailController({
     formatWeiUsd,
   } = useAssetChangeData({ isOpen, tx });
   const toast = useThemedToast();
+  const replacementActions = usePendingReplacementActions(tx.id);
+  const canReplace = canPrepareTransactionReplacement(tx);
 
   const canRebroadcast =
-    tx.status === "failed" &&
+    (tx.status === "failed" || tx.status === "dropped") &&
     !!tx.error &&
     tx.error.toLowerCase().includes("dropped from the mempool") &&
     !!tx.tx.to && (!tx.calldataSelector || !!calldata.data);
@@ -266,6 +271,14 @@ export function TxDetailController({
           explorerBase={explorerBase}
           onViewExplorer={handleViewOnExplorer}
         />
+
+        {canReplace && (
+          <PendingTransactionActions
+            preparing={replacementActions.preparing}
+            onCancel={() => replacementActions.prepare("cancel")}
+            onSpeedUp={() => replacementActions.prepare("speedUp")}
+          />
+        )}
 
         <ArbitrumForceInclusionAction isOpen={isOpen} tx={tx} />
 

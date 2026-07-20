@@ -28,10 +28,10 @@ async function recoverSingleEntry(tx: CompletedTransaction): Promise<void> {
     await recoverArbitrumForceInclusion(tx);
     return;
   }
-  if (tx.status === "failed") {
+  if (tx.status === "failed" || tx.status === "dropped") {
     const knownL2Hash = tx.txHash;
     if (
-      tx.error === "Transaction dropped from the mempool" &&
+      tx.status === "dropped" &&
       isForceInclusionL2Hash(tx, knownL2Hash)
     ) {
       await updateTxInHistory(tx.id, {

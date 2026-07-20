@@ -1,7 +1,11 @@
 import { getStoredResolvedChainById } from "@/lib/chains";
 import { getAccountById } from "../accountStorage";
 import { attachClearSignedMetaToHistory } from "../clearSignedMetaSnapshot";
-import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
+import {
+  getNextNonce,
+  reserveNonce,
+  resetNonce,
+} from "../forceInclusion/nonceManager";
 import {
   applyReceiptToHistory,
   startReceiptPolling,
@@ -31,6 +35,8 @@ import type { GasOverrides } from "../transactions/localExecution";
 import { cancelLedgerOperation } from "./offscreenBridge";
 import { ensureLedgerSigningSession } from "./session";
 import { signAndBroadcastLedgerTransaction } from "./signing";
+import { validateTransactionNonceSelection } from "../transactions/noncePolicy";
+import { replacementGasSelectionError } from "@/lib/transactionReplacement";
 
 type ConfirmationResult = { success: boolean; error?: string };
 
@@ -42,6 +48,7 @@ export async function handleConfirmTransactionAsyncLedger(
   functionName?: string,
   gasOverrides?: GasOverrides,
   forceInclusion?: boolean,
+  nonce?: unknown,
 ): Promise<ConfirmationResult> {
   if (processingTxIds.has(txId)) {
     return { success: false, error: "Transaction already being processed" };
@@ -70,6 +77,17 @@ export async function handleConfirmTransactionAsyncLedger(
   ) {
     return fail("Transaction 'from' does not match active account");
   }
+  const nonceSelection = validateTransactionNonceSelection(
+    nonce,
+    "native",
+    pending.replacement?.nonce,
+  );
+  if (!nonceSelection.ok) return fail(nonceSelection.error);
+  const replacementGasError = replacementGasSelectionError(
+    pending.replacement,
+    gasOverrides,
+  );
+  if (replacementGasError) return fail(replacementGasError);
 
   try {
     await ensureLedgerSigningSession(password);
@@ -91,6 +109,7 @@ export async function handleConfirmTransactionAsyncLedger(
     account: pinned.account,
     functionName,
     gasOverrides,
+    nonce: nonceSelection.nonce,
     effectLease,
   });
 }
@@ -101,9 +120,18 @@ async function processLedgerTransaction(input: {
   account: LedgerAccount;
   functionName?: string;
   gasOverrides?: GasOverrides;
+  nonce?: number;
   effectLease: PendingRequestEffectLease;
 }): Promise<ConfirmationResult> {
-  const { txId, pending, account, functionName, gasOverrides, effectLease } = input;
+  const {
+    txId,
+    pending,
+    account,
+    functionName,
+    gasOverrides,
+    nonce: nonceOverride,
+    effectLease,
+  } = input;
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   abortController.signal.addEventListener(
@@ -122,10 +150,17 @@ async function processLedgerTransaction(input: {
           maxFeePerGas: gasOverrides.maxFeePerGas,
           maxPriorityFeePerGas: gasOverrides.maxPriorityFeePerGas,
           gasPrice: undefined,
+          ...(nonceOverride !== undefined ? { nonce: nonceOverride } : {}),
         }
-      : pending.tx;
+      : {
+          ...pending.tx,
+          ...(nonceOverride !== undefined ? { nonce: nonceOverride } : {}),
+        };
     const resolvedChain = await getStoredResolvedChainById(pending.tx.chainId);
-    const nonce = await getNextNonce(account.address, pending.tx.chainId);
+    const nonce =
+      nonceOverride === undefined
+        ? await getNextNonce(account.address, pending.tx.chainId)
+        : reserveNonce(account.address, pending.tx.chainId, nonceOverride);
     let result;
     try {
       result = await signAndBroadcastLedgerTransaction({
@@ -162,7 +197,7 @@ async function processLedgerTransaction(input: {
           await addTxToHistory({
             id: txId,
             status: "processing",
-            tx: txForHistory,
+            tx: { ...txForHistory, nonce },
             origin: pending.origin,
             favicon: pending.favicon,
             chainName: pending.chainName,
@@ -172,6 +207,7 @@ async function processLedgerTransaction(input: {
             functionName,
             parentBundleId: pending.parentBundleId,
             bundleIndex: pending.bundleIndex,
+            replacement: pending.replacement,
             accountId: pending.accountId,
           });
           if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
@@ -196,6 +232,12 @@ async function processLedgerTransaction(input: {
     }
 
     if (result.txHash && result.receipt) {
+      if (pending.replacement) {
+        await updateTxInHistory(
+          pending.replacement.originalTxId,
+          { replacedByTxId: txId },
+        ).catch(() => undefined);
+      }
       await applyReceiptToHistory(
         txId,
         result.txHash,
@@ -204,6 +246,12 @@ async function processLedgerTransaction(input: {
         { rpcUrl: resolvedChain?.rpcUrl, signedGasLimit: result.signedGasLimit },
       );
     } else {
+      if (pending.replacement && result.txHash) {
+        await updateTxInHistory(
+          pending.replacement.originalTxId,
+          { replacedByTxId: txId },
+        ).catch(() => undefined);
+      }
       await updateTxInHistory(txId, {
         status: "pending",
         txHash: result.txHash,

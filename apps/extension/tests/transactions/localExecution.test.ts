@@ -10,6 +10,7 @@ type Hooks = {
   processing: Set<string>;
   active: Map<string, AbortController>;
   signed: any[];
+  authorizationNonces: number[];
   events: string[];
   updates: any[];
   failures: string[];
@@ -38,6 +39,7 @@ test("local execution revalidates immediately before one broadcast", async (t) =
     processing: new Set(),
     active: new Map(),
     signed: [],
+    authorizationNonces: [],
     events: [],
     updates: [],
     failures: [],
@@ -100,7 +102,10 @@ test("local execution revalidates immediately before one broadcast", async (t) =
             };`;
           }
           if (id === "\0local-execution-signer") return `
-            export const signEip7702Authorization = async () => ({})
+            export const signEip7702Authorization = async (_key, params) => {
+              globalThis.__walletchanLocalTxExecution.authorizationNonces.push(params.nonce);
+              return {};
+            }
             export const signAndBroadcastTransaction = async (...args) => {
               const hooks = globalThis.__walletchanLocalTxExecution;
               hooks.signed.push(args[1]);
@@ -118,6 +123,10 @@ test("local execution revalidates immediately before one broadcast", async (t) =
             export const getNextNonce = async () => {
               globalThis.__walletchanLocalTxExecution.events.push("nonce");
               return 7;
+            };
+            export const reserveNonce = (_address, _chainId, nonce) => {
+              globalThis.__walletchanLocalTxExecution.events.push("reserve");
+              return nonce;
             };
             export const resetNonce = (...args) => globalThis.__walletchanLocalTxExecution.resets.push(args);`;
           if (id === "\0local-execution-lifecycle") return `
@@ -153,7 +162,11 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       "/src/chrome/requests/pendingRequestResolution.ts",
     );
     const address = "0x1111111111111111111111111111111111111111";
-    const pending = (id: string, type: "privateKey" | "seedPhrase") => ({
+    const pending = (
+      id: string,
+      type: "privateKey" | "seedPhrase",
+      delegated = false,
+    ) => ({
       id,
       tx: { from: address, to: `0x${"22".repeat(20)}`, chainId: 1, gasPrice: "0x5" },
       origin: "internal:test",
@@ -164,6 +177,14 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       accountId: `${type}-account`,
       accountAddress: address,
       accountType: type,
+      ...(delegated
+        ? {
+            delegation7702Meta: {
+              kind: "setDelegate",
+              targetDelegate: `0x${"55".repeat(20)}`,
+            },
+          }
+        : {}),
     });
     const account = (type: "privateKey" | "seedPhrase") => ({
       id: `${type}-account`, type, address, createdAt: 1,
@@ -175,6 +196,7 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       hooks.processing.clear();
       hooks.active.clear();
       hooks.signed = [];
+      hooks.authorizationNonces = [];
       hooks.events = [];
       hooks.updates = [];
       hooks.failures = [];
@@ -182,18 +204,25 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       hooks.results = [];
       hooks.polls = [];
     };
-    const execute = async (id: string, type: "privateKey" | "seedPhrase") => {
+    const execute = async (
+      id: string,
+      type: "privateKey" | "seedPhrase",
+      nonce?: number,
+      delegated = false,
+    ) => {
       hooks.processing.add(id);
       const lease = resolution.beginPendingRequestEffectLease("transaction", id);
       assert.ok(lease);
       await execution.processLocalTransactionInBackground(
         id,
-        pending(id, type),
+        pending(id, type, delegated),
         hooks.liveAccount,
         `0x${"11".repeat(32)}`,
         "transfer",
         { gasLimit: "0x5208", maxFeePerGas: "0x10", maxPriorityFeePerGas: "0x2" },
         lease,
+        undefined,
+        nonce,
       );
     };
     const resetResult = () => resolution.runWalletResetAgainstPendingResolutions({
@@ -212,9 +241,49 @@ test("local execution revalidates immediately before one broadcast", async (t) =
       assert.equal(hooks.signed.length, 1);
       assert.equal(hooks.signed[0].nonce, 7);
       assert.equal(hooks.signed[0].gasPrice, undefined);
+      assert.equal(
+        hooks.updates.find(
+          ([kind, id, update]) =>
+            kind === "update" && id === "seed-success" && update.tx,
+        )?.[2].tx.nonce,
+        7,
+      );
       assert.equal(hooks.polls.length, 1);
       assert.match(hooks.results[0][1].txHash, /^0x/);
       assert.equal(await resetResult(), "allowed");
+    });
+
+    for (const type of ["privateKey", "seedPhrase"] as const) {
+      await t.test(`${type} signs and broadcasts the reviewed nonce`, async () => {
+        reset(type, "success");
+        await execute(`${type}-custom-nonce`, type, 19);
+        assert.deepEqual(hooks.events, [
+          "clear",
+          "reserve",
+          "gas",
+          "authorize",
+          "signed",
+          "authorize",
+          "rpc",
+        ]);
+        assert.equal(hooks.signed[0].nonce, 19);
+        assert.equal(
+          hooks.updates.find(
+            ([kind, id, update]) =>
+              kind === "update" &&
+              id === `${type}-custom-nonce` &&
+              update.tx,
+          )?.[2].tx.nonce,
+          19,
+        );
+      });
+    }
+
+    await t.test("EIP-7702 derives its authorization from the reviewed nonce", async () => {
+      reset("privateKey", "success");
+      await execute("pk-delegation-nonce", "privateKey", 19, true);
+      assert.equal(hooks.signed[0].nonce, 19);
+      assert.deepEqual(hooks.authorizationNonces, [20]);
     });
 
     await t.test("account replacement after signing suppresses the raw RPC effect", async () => {

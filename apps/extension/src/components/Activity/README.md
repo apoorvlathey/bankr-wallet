@@ -17,6 +17,14 @@ and must not accumulate rendering or state-management policy.
 | `activityModel.ts` | Pure grouping, formatting, status, and row-label derivation helpers. | No React, Chakra, storage, or network dependencies. |
 | `activityIdentityModel.ts` | Merges current wallet names and contact labels by address, with contacts taking precedence. | Pure model; no React, Chrome, storage, or network dependencies. |
 
+Wallet-authored cancellation rows use the WalletChan mark and the single
+“Cancel Transaction” label. Because that label has no secondary context, its
+title spans the row's two text tracks and sits on the mark's vertical
+centerline while status metadata retains the lower track. Ordinary rows keep
+their two-line hierarchy. Speed-up rows retain the original transaction's
+identity and presentation. A displaced mempool transaction renders `Dropped`
+rather than sharing the `Failed` execution state.
+
 ## Dependency direction
 
 `TxStatusList` facade → `ActivityList` → `ActivityItem` → focused presentation

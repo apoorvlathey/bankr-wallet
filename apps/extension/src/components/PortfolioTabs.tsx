@@ -167,20 +167,18 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     );
   }, []);
 
-  // Switch to Activity tab when activityTabTrigger increments (after tx submission)
+  // The greater trigger is the parent's most recent explicit tab request.
   useEffect(() => {
-    if (activityTabTrigger > 0) {
+    if (activityTabTrigger > holdingsTabTrigger) {
       selectTab(2);
     }
-  }, [activityTabTrigger, selectTab]);
+  }, [activityTabTrigger, holdingsTabTrigger, selectTab]);
 
-  // Switch to Holdings tab when holdingsTabTrigger increments (e.g. user backs
-  // out of send/swap without submitting a tx).
   useEffect(() => {
-    if (holdingsTabTrigger > 0) {
+    if (holdingsTabTrigger > activityTabTrigger) {
       selectTab(0);
     }
-  }, [holdingsTabTrigger, selectTab]);
+  }, [activityTabTrigger, holdingsTabTrigger, selectTab]);
 
   useEffect(() => {
     if (tabIndex === 0) return;

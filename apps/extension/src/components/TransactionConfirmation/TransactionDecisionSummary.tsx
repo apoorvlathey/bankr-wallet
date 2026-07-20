@@ -20,6 +20,8 @@ interface TransactionDecisionSummaryProps {
   forceInclusionInfo: ForceInclusionInfo | null;
   destinationChainName: string;
   isValueMalformed: boolean;
+  lockNativeFeePayment?: boolean;
+  replacementGasError?: string | null;
   isReadOnly?: boolean;
   onGasOverrides: (overrides: GasOverrides | null) => void;
   onGasValidityChange: (valid: boolean) => void;
@@ -38,6 +40,8 @@ export function TransactionDecisionSummary({
   forceInclusionInfo,
   destinationChainName,
   isValueMalformed,
+  lockNativeFeePayment = false,
+  replacementGasError,
   isReadOnly = false,
   onGasOverrides,
   onGasValidityChange,
@@ -65,7 +69,7 @@ export function TransactionDecisionSummary({
         chainId={txRequest.tx.chainId}
         value={feePaymentToken}
         quote={feePaymentQuote}
-        disabled={forceInclusion}
+        disabled={forceInclusion || lockNativeFeePayment}
         nativeSummary={nativeFeeSummary}
         onChange={onFeePaymentTokenChange}
         onQuoteChange={onFeePaymentQuoteChange}
@@ -103,16 +107,28 @@ export function TransactionDecisionSummary({
       )}
 
       {!isValueMalformed && feePaymentToken === "native" && (
-        <GasEstimateDisplay
-          key={gasEstimateKey}
-          txRequest={txRequest}
-          accountType={accountType}
-          onGasOverrides={onGasOverrides}
-          onValidityChange={onGasValidityChange}
-          forceInclusion={forceInclusion}
-          isReadOnly={isReadOnly}
-          onFeeSummaryChange={setNativeFeeSummary}
-        />
+        <>
+          <GasEstimateDisplay
+            key={gasEstimateKey}
+            txRequest={txRequest}
+            accountType={accountType}
+            onGasOverrides={onGasOverrides}
+            onValidityChange={onGasValidityChange}
+            forceInclusion={forceInclusion}
+            isReadOnly={isReadOnly}
+            onFeeSummaryChange={setNativeFeeSummary}
+          />
+          {replacementGasError && (
+            <Text
+              role="alert"
+              color="status.error.emphasis"
+              fontSize="2xs"
+              fontWeight="700"
+            >
+              {replacementGasError}. Choose Fast or raise the Custom fees.
+            </Text>
+          )}
+        </>
       )}
     </VStack>
   );

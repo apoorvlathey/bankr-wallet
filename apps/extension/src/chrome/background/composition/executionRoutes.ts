@@ -1,5 +1,4 @@
 /** Transaction, swap, sponsored-transfer, and status route wiring. */
-
 import { clearAllNonces } from "../../forceInclusion/nonceManager";
 import { checkPendingTxReceipt as checkPendingTxReceiptFn } from "../../forceInclusion/receiptPoller";
 import { queueAssetChangesBackfill } from "../../receiptEnrichment";
@@ -48,6 +47,8 @@ import { createBackgroundTransactionStatusMessageRouter } from "../transactionSt
 import type { PendingResolutionComposition } from "./pendingResolution";
 import { getArbitrumForceInclusionStatus, submitArbitrumForceInclusion } from "../../arbitrumForceInclusion/status";
 import { handleConfirmTransactionAsyncLedger } from "../../ledger/transactionExecution";
+import { getTransactionNonceForReview } from "../../transactions/nonceReview";
+import { prepareTransactionReplacement } from "../../transactions/replacementPreparation";
 
 export function composeExecutionRoutes(
   pending: PendingResolutionComposition,
@@ -55,6 +56,8 @@ export function composeExecutionRoutes(
   const routeBackgroundTransactionExecutionMessage =
     createBackgroundTransactionExecutionMessageRouter({
       getPendingTxRequestById,
+      getTransactionNonce: getTransactionNonceForReview,
+      prepareTransactionReplacement,
       handleConfirmTransaction,
       handleConfirmTransactionAsync,
       handleConfirmTransactionAsyncPK,
@@ -69,14 +72,12 @@ export function composeExecutionRoutes(
       getBatchFeePaymentOptions,
       prepareFeePaymentQuote,
     });
-
   const runInternalIrreversibleOperation =
     createInternalIrreversibleOperationRunner({
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,
       createRequestId: () => crypto.randomUUID(),
     });
-
   const routeBackgroundSwapExecutionMessage =
     createBackgroundSwapExecutionMessageRouter({
       runInternalIrreversibleOperation,

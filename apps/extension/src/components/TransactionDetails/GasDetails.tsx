@@ -2,7 +2,7 @@ import { Box, HStack, StackDivider, Text, VStack } from "@chakra-ui/react";
 import type { GasData } from "@/chrome/txHistoryStorage";
 import { formatEth, formatGwei, formatNumber } from "@/lib/gasFormatUtils";
 
-function GasRow({ label, value }: { label: string; value: string }) {
+export function GasRow({ label, value }: { label: string; value: string }) {
   return (
     <HStack minH="40px" px={3} py={2} justify="space-between" spacing={3}>
       <Text color="fg.secondary" fontSize="xs" fontWeight="600">

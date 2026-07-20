@@ -3,13 +3,16 @@ import { getTxById, updateTxInHistory } from "../txHistoryStorage";
 import { shouldRetainUnobservedBroadcast } from "./broadcastPolicy";
 import { applyReceiptToHistory } from "./receiptHistory";
 import { showReceiptNotification } from "./receiptNotification";
-import { fetchReceipt, fetchTxByHash } from "./receiptRpc";
+import {
+  fetchLatestAccountNonce,
+  fetchReceipt,
+  fetchTxByHash,
+} from "./receiptRpc";
 import { maybeAdvanceSplitBundle } from "./receiptSideEffects";
 
 const DROPPED_NOT_FOUND_THRESHOLD = 3;
 const DROPPED_MIN_AGE_MS = 60_000;
 const notFoundCounts = new Map<string, number>();
-
 export function clearReceiptObservationState(txId: string): void {
   notFoundCounts.delete(txId);
 }
@@ -29,7 +32,7 @@ export async function checkAndFinalizeReceipt(
     }
     const transaction = await fetchTxByHash(rpcUrl, txHash);
     if (transaction === null) {
-      return evaluateMissingTransaction(txId, txHash, chainId);
+      return evaluateMissingTransaction(txId, txHash, chainId, rpcUrl);
     }
     notFoundCounts.delete(txId);
     const tx = await getTxById(txId);
@@ -46,11 +49,20 @@ async function evaluateMissingTransaction(
   txId: string,
   txHash: string,
   chainId: number,
+  rpcUrl: string,
 ): Promise<boolean | null> {
   const tx = await getTxById(txId);
   if (shouldRetainUnobservedBroadcast(tx, txHash)) {
     notFoundCounts.delete(txId);
     return null;
+  }
+  if (typeof tx?.tx.nonce === "number") {
+    const latestNonce = await fetchLatestAccountNonce(rpcUrl, tx.tx.from).catch(
+      () => null,
+    );
+    if (latestNonce !== null && latestNonce > BigInt(tx.tx.nonce)) {
+      return markTransactionDropped(txId, txHash, chainId);
+    }
   }
   const age = tx ? Date.now() - tx.createdAt : 0;
   if (age <= DROPPED_MIN_AGE_MS) return null;
@@ -58,8 +70,16 @@ async function evaluateMissingTransaction(
   notFoundCounts.set(txId, count);
   if (count < DROPPED_NOT_FOUND_THRESHOLD) return null;
   notFoundCounts.delete(txId);
+  return markTransactionDropped(txId, txHash, chainId);
+}
+
+async function markTransactionDropped(
+  txId: string,
+  txHash: string,
+  chainId: number,
+): Promise<false> {
   await updateTxInHistory(txId, {
-    status: "failed",
+    status: "dropped",
     error: "Transaction dropped from the mempool",
     completedAt: Date.now(),
   });

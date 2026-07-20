@@ -2,7 +2,15 @@
 
 These tests mirror `src/chrome/transactions/` and cover request intake,
 account pinning, local confirmation/execution, failure publication, calldata
-preflight, gas normalization, and the stable `txHandlers.ts` facade boundary.
+preflight, nonce review/selection, gas normalization, and the stable
+`txHandlers.ts` facade boundary.
+
+`replacementPolicy.test.ts` freezes the 12.5% priority-fee and 30% max-fee
+floors, strict configured-RPC transaction projection, and unsupported typed
+transaction rejection. `replacementPreparation.test.ts` covers the full
+Private Key / Seed Phrase / Ledger eligibility matrix, Bankr and impersonator
+rejection, same-nonce speed-up/cancel construction, original Speed Up display
+metadata, WalletChan Cancel identity, and oldest-pending gating.
 
 `localSwapAccountRace.test.ts` protects the final account revalidation callback
 at the direct local-swap broadcast boundary.

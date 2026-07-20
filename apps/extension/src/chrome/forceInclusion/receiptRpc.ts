@@ -24,6 +24,22 @@ export async function fetchReceipt(
   );
 }
 
+export async function fetchLatestAccountNonce(
+  rpcUrl: string,
+  address: string,
+): Promise<bigint | null> {
+  const result = await fetchRpcResult(
+    rpcUrl,
+    "eth_getTransactionCount",
+    [address, "latest"],
+    { allowPrivateWithoutOrigin: true },
+  );
+  if (typeof result !== "string" || !/^0x[0-9a-f]+$/iu.test(result)) {
+    return null;
+  }
+  return BigInt(result);
+}
+
 export async function buildReceiptGasData(
   rpcUrl: string | undefined,
   txHash: string,

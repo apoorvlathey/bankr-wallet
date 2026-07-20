@@ -33,7 +33,7 @@ The account/device write is the durable commit boundary. Updating the active-acc
 
 ## Signing
 
-- Transactions: standard legacy and EIP-1559 transactions are prepared with viem, serialized unsigned, approved on Ledger, reconstructed with the returned `r/s/v`, and recovered locally. Broadcast is blocked unless the recovered signer exactly matches the pinned Ledger account.
+- Transactions: standard legacy and EIP-1559 transactions are prepared with viem, serialized unsigned, approved on Ledger, reconstructed with the returned `r/s/v`, and recovered locally. Advanced details previews the pinned address's pending nonce without reserving it and allows a decimal edit; confirmation validates, reserves, signs, and broadcasts that exact reviewed nonce. Pending Activity rows can prepare Speed Up and Cancel reviews that pin the original nonce and enforce replacement fee floors before the device prompt. Broadcast is blocked unless the recovered signer exactly matches the pinned Ledger account.
 - Messages: `personal_sign` bytes are approved on device.
 - Typed data: EIP-712 v3/v4 is validated by the existing request path and approved on device. A domain chain ID that differs from the pinned request chain is rejected.
 - Raw `eth_sign` remains blocked.
@@ -47,7 +47,7 @@ lettermark on a black brand tile and a trailing dark spinner. The primary button
 uses the shared dark-to-muted three-dot loader with `Waiting`. The
 transaction-submitting
 banner remains reserved for the later broadcast phase. Request-mutating UI
-(approval amounts, gas selection, force inclusion/add-to-batch controls, SIWE
+(approval amounts, gas and nonce selection, force inclusion/add-to-batch controls, SIWE
 warning acknowledgment, queue actions, and rejection) is locked for that
 interval. Back remains available as navigation and does not cancel the active
 hardware request. The service worker's first-action claim is the enforcement

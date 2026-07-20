@@ -12,6 +12,8 @@ function dependencies(
 ): BackgroundTransactionExecutionDependencies {
   return {
     getPendingTxRequestById: async () => ({ id: "tx-1" }),
+    getTransactionNonce: async () => ({ success: true, nonce: 7 }),
+    prepareTransactionReplacement: async () => ({ success: true }),
     handleConfirmTransaction: async () => ({ success: true }),
     handleConfirmTransactionAsync: async () => ({ success: true }),
     handleConfirmTransactionAsyncPK: async () => ({ success: true }),
@@ -113,6 +115,7 @@ test("all transaction execution paths share the exact transaction claim", async 
       forceInclusion: false,
       feePaymentToken: "token",
       feePaymentQuoteId: "local-quote",
+      nonce: 12,
     },
     { tab: { id: 17 } } as chrome.runtime.MessageSender,
   );
@@ -125,6 +128,7 @@ test("all transaction execution paths share the exact transaction claim", async 
       functionName: "approve",
       gasOverrides: { gasLimit: "0x5208" },
       forceInclusion: false,
+      nonce: 13,
     },
     { tab: { id: 18 } } as chrome.runtime.MessageSender,
   );
@@ -167,6 +171,7 @@ test("all transaction execution paths share the exact transaction claim", async 
       false,
       "token",
       "local-quote",
+      12,
     ],
     [
       "ledger",
@@ -176,6 +181,7 @@ test("all transaction execution paths share the exact transaction claim", async 
       "approve",
       { gasLimit: "0x5208" },
       false,
+      13,
     ],
     [
       "impersonated",
@@ -206,10 +212,44 @@ test("private-key and seed-phrase confirmations both preserve token selection", 
     feePaymentToken: "token",
     feePaymentQuoteId: "seed-quote",
   });
-  assert.deepEqual(calls.map((call) => call.slice(-2)), [
+  assert.deepEqual(calls.map((call) => call.slice(6, 8)), [
     ["token", "private-quote"],
     ["token", "seed-quote"],
   ]);
+});
+
+test("loads the nonce through a read-only transaction route", async () => {
+  const result = await dispatch(dependencies(), {
+    type: "getTransactionNonce",
+    txId: "local-request",
+  });
+  assert.deepEqual(result.response, { success: true, nonce: 7 });
+  assert.deepEqual(result.route, { handled: true, keepChannelOpen: true });
+});
+
+test("prepares a replacement without claiming the pending signing request", async () => {
+  const calls: unknown[][] = [];
+  let claimed = false;
+  const result = await dispatch(dependencies({
+    prepareTransactionReplacement: async (...args) => {
+      calls.push(args);
+      return { success: true, txRequest: { id: "replacement" } };
+    },
+    runPendingRequestResolution: async () => {
+      claimed = true;
+      return {};
+    },
+  }), {
+    type: "prepareTransactionReplacement",
+    txId: "pending-history-id",
+    kind: "cancel",
+  });
+  assert.equal(claimed, false);
+  assert.deepEqual(calls, [["pending-history-id", "cancel"]]);
+  assert.deepEqual(result.response, {
+    success: true,
+    txRequest: { id: "replacement" },
+  });
 });
 
 test("rejects an unknown gas-payment token before execution", async () => {

@@ -10,7 +10,7 @@ interface ActivityStatusProps {
 
 interface StatusLabelProps {
   label: string;
-  tone: "success" | "info" | "error";
+  tone: "success" | "info" | "warning" | "error";
   isPending?: boolean;
 }
 
@@ -24,7 +24,7 @@ function StatusLabel({ label, tone, isPending }: StatusLabelProps) {
     >
       {isPending ? (
         <Spinner size="xs" color="currentColor" boxSize="8px" />
-      ) : tone === "error" ? (
+      ) : tone === "error" || tone === "warning" ? (
         <WarningIcon boxSize="9px" flexShrink={0} />
       ) : (
         <CheckIcon boxSize="8px" flexShrink={0} />
@@ -75,6 +75,8 @@ export default function ActivityStatus({ tx, model }: ActivityStatusProps) {
       return <StatusLabel label="Pending" tone="info" isPending />;
     case "success":
       return <StatusLabel label="Confirmed" tone="success" />;
+    case "dropped":
+      return <StatusLabel label="Dropped" tone="warning" />;
     case "failed": {
       let label = "Failed";
       if (model.isForceInclusion) {

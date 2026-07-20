@@ -18,6 +18,7 @@ import { ForceInclusionOption } from "@/components/RequestConfirmation/ForceIncl
 import type { ForceInclusionInfo } from "./types";
 import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
 import { FeePaymentAdvancedDetails } from "@/components/FeePaymentAdvancedDetails";
+import { TransactionNonceEditor } from "./TransactionNonceEditor";
 
 interface AdvancedDetailsProps {
   txRequest: PendingTxRequest;
@@ -33,9 +34,16 @@ interface AdvancedDetailsProps {
   forceInclusionInfo: ForceInclusionInfo | null;
   feePaymentToken: "native" | `0x${string}`;
   feePaymentQuote: FeePaymentQuoteSummary | null;
+  showTransactionNonce: boolean;
+  transactionNonce: string;
+  transactionNonceLoading: boolean;
+  transactionNonceError: string | null;
+  transactionNonceReadOnly?: boolean;
   onFunctionName: (name: string | undefined) => void;
   onAddToBatch: () => void;
   onForceInclusionChange: (enabled: boolean) => void;
+  onTransactionNonceChange: (value: string) => void;
+  onTransactionNonceRetry: () => void;
   isReadOnly?: boolean;
 }
 
@@ -94,9 +102,16 @@ export function AdvancedDetails({
   forceInclusionInfo,
   feePaymentToken,
   feePaymentQuote,
+  showTransactionNonce,
+  transactionNonce,
+  transactionNonceLoading,
+  transactionNonceError,
+  transactionNonceReadOnly = false,
   onFunctionName,
   onAddToBatch,
   onForceInclusionChange,
+  onTransactionNonceChange,
+  onTransactionNonceRetry,
   isReadOnly = false,
 }: AdvancedDetailsProps) {
   const { tx } = txRequest;
@@ -214,6 +229,17 @@ export function AdvancedDetails({
             onAddToBatch={onAddToBatch}
             isReadOnly={isReadOnly}
           />
+
+          {showTransactionNonce && (
+            <TransactionNonceEditor
+              value={transactionNonce}
+              loading={transactionNonceLoading}
+              error={transactionNonceError}
+              isReadOnly={isReadOnly || transactionNonceReadOnly}
+              onChange={onTransactionNonceChange}
+              onRetry={onTransactionNonceRetry}
+            />
+          )}
 
           {forceInclusionInfo && (
             <ForceInclusionOption

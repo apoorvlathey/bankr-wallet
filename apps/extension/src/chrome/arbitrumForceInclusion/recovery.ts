@@ -14,8 +14,8 @@ export async function recoverArbitrumForceInclusion(tx: CompletedTransaction) {
   const meta = tx.forceInclusionMeta;
   if (!meta || meta.protocol !== "arbitrum") return;
   const childHash = meta.l2TxHash || (tx.txHash !== meta.l1TxHash ? tx.txHash : undefined);
-  if (tx.status === "failed") {
-    if (tx.error === "Transaction dropped from the mempool" && childHash) {
+  if (tx.status === "failed" || tx.status === "dropped") {
+    if (tx.status === "dropped" && childHash) {
       await updateTxInHistory(tx.id, {
         status: "pending",
         error: undefined,

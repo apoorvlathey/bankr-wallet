@@ -7,10 +7,12 @@ export type BackgroundTransactionExecutionRouteResult =
 
 export type BackgroundTransactionExecutionDependencies = {
   getPendingTxRequestById: (txId: string) => Promise<any>;
+  getTransactionNonce: (txId: string) => Promise<any>;
+  prepareTransactionReplacement: (txId: unknown, kind: unknown) => Promise<any>;
   handleConfirmTransaction: (txId: string, password: string) => Promise<any>;
   handleConfirmTransactionAsync: (txId: string, password: string, functionName?: string, forceInclusion?: boolean, feePaymentToken?: "native" | "token", feePaymentQuoteId?: string) => Promise<any>;
-  handleConfirmTransactionAsyncPK: (txId: string, password: string, tabId?: number, functionName?: string, gasOverrides?: any, forceInclusion?: boolean, feePaymentToken?: "native" | "token", feePaymentQuoteId?: string) => Promise<any>;
-  handleConfirmTransactionAsyncLedger: (txId: string, password: string, tabId?: number, functionName?: string, gasOverrides?: any, forceInclusion?: boolean) => Promise<any>;
+  handleConfirmTransactionAsyncPK: (txId: string, password: string, tabId?: number, functionName?: string, gasOverrides?: any, forceInclusion?: boolean, feePaymentToken?: "native" | "token", feePaymentQuoteId?: string, nonce?: unknown) => Promise<any>;
+  handleConfirmTransactionAsyncLedger: (txId: string, password: string, tabId?: number, functionName?: string, gasOverrides?: any, forceInclusion?: boolean, nonce?: unknown) => Promise<any>;
   handleConfirmImpersonatedTransaction: (txId: string, functionName?: string, gasOverrides?: any) => Promise<any>;
   handleInitiateTransfer: (message: any) => Promise<any>;
   runPendingRequestResolution: typeof PendingRequestResolutionModule.runPendingRequestResolution;
@@ -29,6 +31,20 @@ export const HANDLED_TRANSACTION_EXECUTION_ASYNC: BackgroundTransactionExecution
 
 export function transactionExecutionError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+export function respondToTransactionExecution(
+  result: Promise<any>,
+  sendResponse: (response?: any) => void,
+  fallback: string,
+): BackgroundTransactionExecutionRouteResult {
+  result.then(sendResponse).catch((error) =>
+    sendResponse({
+      success: false,
+      error: transactionExecutionError(error, fallback),
+    }),
+  );
+  return HANDLED_TRANSACTION_EXECUTION_ASYNC;
 }
 
 function feePaymentToken(value: unknown): "native" | "token" {

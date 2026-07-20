@@ -33,6 +33,7 @@ interface ConfirmActionButtonProps {
   confirmDisabledReason: string | null;
   simulationFailed: boolean;
   waitingForLedger?: boolean;
+  label?: string;
   onConfirm: () => void;
 }
 
@@ -41,13 +42,14 @@ export function ConfirmActionButton({
   confirmDisabledReason,
   simulationFailed,
   waitingForLedger = false,
+  label = "Confirm",
   onConfirm,
 }: ConfirmActionButtonProps) {
   return (
     <SimulationFailureConfirmButton
       isDisabled={!!confirmDisabledReason}
       isLoading={state === "submitting"}
-      label="Confirm"
+      label={label}
       loadingSpinner={
         waitingForLedger ? (
           <ShapesLoader

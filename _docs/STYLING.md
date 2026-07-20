@@ -294,6 +294,31 @@ allowance, nonce, and one-time delegate details inside the existing Advanced
 disclosure; only the material one-time-upgrade warning appears in the primary
 review.
 
+Native-gas Private Key, Seed Phrase, and Ledger confirmations place the
+editable address nonce immediately below Add to batch in that same Advanced
+disclosure. Use one compact label/value row with a small decimal field and
+validation text only when needed; never surface it for Bankr or view-only
+accounts, and never imply that an EOA transaction nonce controls a fee-token
+UserOperation or force-inclusion deposit.
+Post-submission Transaction details repeat the signed address nonce as the
+final Advanced-details row, after confirmed or estimated gas diagnostics.
+
+Pending local/Ledger Transaction details place one centered pair of compact,
+natural-width 32px actions directly after status: a quiet outlined danger
+**Cancel** action and amber brand **Speed Up** commitment. Both open the normal
+transaction review rather than acting inline. Replacement review uses an
+intent-token info/warning notice, a locked
+compact nonce row, locked transaction content, native fee payment, and the
+existing editable gas popover; a below-floor gas choice gets concise inline
+error text instead of another card or dialog. Speed Up alone adds the concise
+resubmission notice while retaining the original request identity, simulation,
+clear-signing summary, and action language. Cancel needs no explanatory card.
+Its Activity row uses the WalletChan mark, “Cancel Transaction”, and no
+redundant second line; the title spans both text tracks so it sits on the
+mark's vertical centerline while status metadata remains on the lower track.
+Dropped transactions use the warning status language, distinct from execution
+failures.
+
 The outcome
 masthead is the only deliberately emphasized content surface. Asset direction
 always has a text label or signed amount in addition to semantic color. Review

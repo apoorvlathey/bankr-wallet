@@ -14,6 +14,7 @@ import type { detectAbiEncodingError } from "@/lib/calldataValidation";
 import type { parseApproveCalldata } from "@/lib/erc20Approve";
 import { DelegationRevokeNotice, DelegationSetNotice } from "./DelegationNotices";
 import { RequestStatus } from "./RequestStatus";
+import { ReplacementNotice } from "./ReplacementNotice";
 import { TransactionInfoCard } from "./TransactionInfoCard";
 import type { ConfirmationState } from "./types";
 import type { SplitPriorTxState } from "./useSplitPriorTxState";
@@ -74,6 +75,9 @@ export function TransactionContext({
 
   return (
     <VStack spacing={3} align="stretch">
+      {txRequest.replacement?.kind === "speedUp" && (
+        <ReplacementNotice replacement={txRequest.replacement} />
+      )}
       {txRequest.parentBundleId !== undefined &&
         txRequest.bundleIndex !== undefined &&
         txRequest.bundleTotalCalls !== undefined && (

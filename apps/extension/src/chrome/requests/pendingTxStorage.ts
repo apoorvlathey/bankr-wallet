@@ -21,6 +21,18 @@ export interface Erc7715PermissionRevokeMeta {
   approvalRevocationMethods?: string[];
 }
 
+export interface TransactionReplacementMeta {
+  kind: "speedUp" | "cancel";
+  originalTxId: string;
+  originalTxHash: string;
+  /** Original reviewed action label retained for Speed Up history. */
+  originalFunctionName?: string;
+  nonce: number;
+  /** Lowest values that still clear the original transaction's fee bump. */
+  minimumMaxFeePerGas: string;
+  minimumMaxPriorityFeePerGas: string;
+}
+
 export interface PendingTxRequest {
   id: string;
   tx: TransactionParams;
@@ -43,6 +55,8 @@ export interface PendingTxRequest {
   requestChainId?: number;
   /** Explicit service-worker-authored request; never accepted from a webpage. */
   trustedInternal?: true;
+  /** Background-authored replacement intent; content and nonce are immutable. */
+  replacement?: TransactionReplacementMeta;
   walletConnect?: {
     topic: string;
     requestId: number;
@@ -214,6 +228,9 @@ export async function updatePendingTxRequestData(
     const requests = await getPendingTxRequests();
     const idx = requests.findIndex((r) => r.id === txId);
     if (idx === -1) return;
+    if (requests[idx].replacement) {
+      throw new Error("Replacement transaction content cannot be changed");
+    }
     requests[idx].tx.data = newData;
     await chrome.storage.local.set({ [STORAGE_KEY]: requests });
   });

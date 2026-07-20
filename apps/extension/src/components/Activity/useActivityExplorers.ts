@@ -33,7 +33,10 @@ export function useActivityExplorers(
     ? getChainConfig(tx.forceInclusionMeta!.l1ChainId).explorer || ""
     : "";
   const l1Hash = exactTransactionHash(tx.forceInclusionMeta?.l1TxHash);
-  const l2IsResolved = tx.status === "success" || tx.status === "failed";
+  const l2IsResolved =
+    tx.status === "success" ||
+    tx.status === "failed" ||
+    tx.status === "dropped";
   const preferredForceInclusionHash =
     l2IsResolved && normalHash && normalHash !== l1Hash ? normalHash : l1Hash;
   const preferredForceInclusionExplorer =

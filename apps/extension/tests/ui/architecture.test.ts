@@ -66,12 +66,23 @@ const pureModules = [
     url: new URL("TransactionConfirmation/transactionPresentation.ts", componentsUrl),
   },
   {
+    path: "components/TransactionConfirmation/transactionNonceModel.ts",
+    url: new URL("TransactionConfirmation/transactionNonceModel.ts", componentsUrl),
+  },
+  {
     path: "components/TransactionConfirmation/transactionValue.ts",
     url: new URL("TransactionConfirmation/transactionValue.ts", componentsUrl),
   },
   {
     path: "components/TransactionDetails/forceInclusionState.ts",
     url: new URL("TransactionDetails/forceInclusionState.ts", componentsUrl),
+  },
+  {
+    path: "components/TransactionDetails/transactionReplacementModel.ts",
+    url: new URL(
+      "TransactionDetails/transactionReplacementModel.ts",
+      componentsUrl,
+    ),
   },
   {
     path: "components/TransactionDetails/formatting.ts",
