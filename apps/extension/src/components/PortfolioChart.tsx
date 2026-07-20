@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Box, HStack, Text, Skeleton } from "@chakra-ui/react";
+import { Box, HStack, Text } from "@chakra-ui/react";
 import { getSnapshots } from "@/chrome/portfolio/snapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
@@ -19,9 +19,15 @@ interface Snapshot {
   totalValueUsd: number;
 }
 
+interface SnapshotState {
+  address: string;
+  snapshots: Snapshot[];
+}
+
 const CHART_HEIGHT = 60;
 const CHART_PADDING_TOP = 4;
 const CHART_PADDING_BOTTOM = 4;
+const EMPTY_SNAPSHOTS: Snapshot[] = [];
 
 const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
@@ -33,8 +39,10 @@ export default function PortfolioChart({
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [snapshotState, setSnapshotState] = useState<SnapshotState>(() => ({
+    address,
+    snapshots: [],
+  }));
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverIndexRef = useRef<number | null>(null);
@@ -42,17 +50,28 @@ export default function PortfolioChart({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    getSnapshots(address).then((data) => {
-      if (!cancelled) {
-        setSnapshots(data);
-        setLoading(false);
-      }
-    });
+    void getSnapshots(address)
+      .then((snapshots) => {
+        if (!cancelled) {
+          setSnapshotState({ address, snapshots });
+        }
+      })
+      .catch(() => {
+        // Snapshot history is optional. Preserve an already-rendered chart on
+        // refresh failure and keep a different/new account chart-free.
+      });
     return () => {
       cancelled = true;
     };
   }, [address, refreshTrigger]);
+
+  // A same-account refresh keeps the last chart mounted until its replacement
+  // data is ready. On account changes, never show snapshots from the previous
+  // address while the new account's history is being resolved.
+  const snapshots =
+    snapshotState.address === address
+      ? snapshotState.snapshots
+      : EMPTY_SNAPSHOTS;
 
   const { path, areaPath, change, changePercent, points, dayTicks } = useMemo(() => {
     if (snapshots.length < 2)
@@ -149,14 +168,6 @@ export default function PortfolioChart({
     },
     [address, onHoverValueChange],
   );
-
-  if (loading) {
-    return (
-      <Box pt={2} pb={1}>
-        <Skeleton h="60px" />
-      </Box>
-    );
-  }
 
   if (snapshots.length < 2) return null;
 
