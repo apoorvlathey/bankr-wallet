@@ -59,7 +59,7 @@ Manual gate:
 2. Confirm Shield opens directly to `Deposit from` and compact fixed Sepolia
    ETH/Shielded ETH cards without a repeated balance strip or mode tabs.
 3. Return to Private and confirm Unshield and Send open their own titled screens;
-   Unshield defaults to the active wallet while Send starts recipient-first.
+   both start with an empty recipient and require an explicit address or choice.
 4. Review both themes and the popup/sidepanel layouts.
 5. Confirm no recovery or privacy explainer block appears in the healthy state.
 6. Confirm opening Shield creates no transaction prompt and shows no phrase.

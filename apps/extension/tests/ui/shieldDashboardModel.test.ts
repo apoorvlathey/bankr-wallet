@@ -62,7 +62,8 @@ test("Private home exposes Shield, Unshield, and Send as separate entry screens"
   assert.match(routerSource, /mode === "shield"/);
   assert.match(routerSource, /<PrivateWithdrawalScreen[\s\S]*intent=\{mode\}/);
   assert.doesNotMatch(dashboardSource, /role="tablist"|onTabChange/);
-  assert.match(withdrawalSource, /intent === "unshield" \? account\?\.address/);
+  assert.match(withdrawalSource, /initialRecipient: ""/);
+  assert.doesNotMatch(withdrawalSource, /initialRecipient:[^\n]*account\?\.address/);
 });
 
 test("Unshield keeps the inverse asset form and folds public exit into that route", async () => {

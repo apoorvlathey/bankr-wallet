@@ -286,10 +286,10 @@ support Sepolia; impersonator and agent paths fail closed.
 ### 7.5 Withdrawal flow
 
 Private home exposes two distinct entry screens over this same exact relayed
-withdrawal engine. **Unshield** defaults the public recipient to the active
-WalletChan account and uses Unshield labels. **Send** starts with an empty
-recipient and uses private-send labels. Neither screen contains a Shield mode
-tab or a public source-account selector.
+withdrawal engine. **Unshield** and **Send** both start with an empty recipient
+so the user must enter or choose the intended fresh destination. Unshield uses
+Unshield labels; Send uses private-send labels. Neither screen contains a
+Shield mode tab or a public source-account selector.
 
 1. Choose a ready commitment or an amount across compatible ready
    commitments.

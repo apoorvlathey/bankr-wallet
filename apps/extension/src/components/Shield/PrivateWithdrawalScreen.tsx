@@ -35,7 +35,7 @@ function isRecoveryCapableAccount(account: Pick<Account, "type">): boolean {
       PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled");
 }
 
-/** Shared relay engine with distinct Unshield-to-self and private-send entry points. */
+/** Shared relay engine with distinct Unshield and private-send entry points. */
 export default function PrivateWithdrawalScreen({
   intent,
   onBack,
@@ -56,7 +56,7 @@ export default function PrivateWithdrawalScreen({
     accounts,
     fromAddress: "",
     chainId: SHIELDED_ETH_CHAIN_ID,
-    initialRecipient: intent === "unshield" ? account?.address ?? "" : "",
+    initialRecipient: "",
   });
   const withdrawal = useUnshield({
     availableWei: activity.portfolio.maxPrivateSendWei,
