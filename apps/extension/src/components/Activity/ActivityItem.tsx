@@ -3,6 +3,7 @@ import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { ListItem } from "@/components/ui";
 import { isDarkThemeId, useIconChipBg, useTheme } from "@/theme";
 import type { DappOriginDisplay } from "@/lib/dappOriginDisplay";
+import { playInteractionSound } from "@/sounds/soundManager";
 import ActivityMedia from "./ActivityMedia";
 import ActivityExplorerActions from "./ActivityExplorerActions";
 import ActivityStatus from "./ActivityStatus";
@@ -96,6 +97,9 @@ export default function ActivityItem({
           boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
         }}
         aria-label={`Open transaction details for ${presentation.intent}`}
+        onMouseEnter={() =>
+          void playInteractionSound("portfolioTokenHover")
+        }
         onClick={onClick}
       />
 

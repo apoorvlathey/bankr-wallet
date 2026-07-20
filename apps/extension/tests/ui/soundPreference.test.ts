@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   initializeSoundManager,
@@ -41,4 +42,46 @@ test("sound preference remounts with the latest in-session value", async () => {
   } finally {
     globalThis.chrome = originalChrome;
   }
+});
+
+test("portfolio hover sound is shared by tabs, protocol links, and activity rows", async () => {
+  const sources = await Promise.all(
+    [
+      "PortfolioTabs.tsx",
+      "PortfolioDefiPositionRow.tsx",
+      "Activity/ActivityItem.tsx",
+    ].map((path) =>
+      readFile(new URL(`../../src/components/${path}`, import.meta.url), "utf8"),
+    ),
+  );
+
+  for (const source of sources) {
+    assert.match(
+      source,
+      /onMouseEnter=\{\(\) =>\s*void playInteractionSound\("portfolioTokenHover"\)/,
+    );
+  }
+});
+
+test("portfolio tab clicks use whisper only when switching tabs", async () => {
+  const [tabsSource, managerSource] = await Promise.all([
+    readFile(
+      new URL("../../src/components/PortfolioTabs.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/sounds/soundManager.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    managerSource,
+    /portfolioTabSwitch: \{ player: cuelume\("whisper"\)/,
+  );
+  assert.match(
+    tabsSource,
+    /if \(nextIndex === tabIndexRef\.current\) return;\s*void playInteractionSound\("portfolioTabSwitch"\);\s*selectTab\(nextIndex\);/,
+  );
+  assert.match(tabsSource, /onClick=\{\(\) => handleTabClick\(index\)\}/);
 });

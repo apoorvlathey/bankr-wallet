@@ -38,6 +38,7 @@ import {
 } from "@/components/portfolioChainFilterState";
 import { PortfolioOptionsSheet } from "@/components/Portfolio/PortfolioOptionsSheet";
 import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfolioBalances";
+import { playInteractionSound } from "@/sounds/soundManager";
 import type { RpcHealthReport } from "@/types";
 
 interface PortfolioTabsProps {
@@ -143,6 +144,15 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
       }
     },
     [],
+  );
+
+  const handleTabClick = useCallback(
+    (nextIndex: number) => {
+      if (nextIndex === tabIndexRef.current) return;
+      void playInteractionSound("portfolioTabSwitch");
+      selectTab(nextIndex);
+    },
+    [selectTab],
   );
 
   // Follow active dapp context changes only while the filter is linked. A
@@ -523,7 +533,10 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
                   bg: "surface.raisedHover",
                 }}
                 _active={{ transform: "none" }}
-                onClick={() => selectTab(index)}
+                onMouseEnter={() =>
+                  void playInteractionSound("portfolioTokenHover")
+                }
+                onClick={() => handleTabClick(index)}
                 onKeyDown={(event) => {
                   let next = index;
                   if (event.key === "ArrowRight") next = (index + 1) % labels.length;

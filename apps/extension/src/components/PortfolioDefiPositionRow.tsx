@@ -20,6 +20,7 @@ import {
 import { getChainConfig } from "@/constants/chainConfig";
 import { INERT_IMAGE_SRC } from "@/hooks/useCachedAvatarSrc";
 import { sanitizeExternalNavigationUrl } from "@/lib/externalNavigation";
+import { playInteractionSound } from "@/sounds/soundManager";
 
 interface PositionAssetLineProps {
   asset: DefiPosition["assets"][number];
@@ -228,6 +229,9 @@ export function DefiPositionRow({
                 href={safeSiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onMouseEnter={() =>
+                  void playInteractionSound("portfolioTokenHover")
+                }
               >
                 <ListItemTitle noOfLines={1}>{position.protocol}</ListItemTitle>
                 <ExternalLinkIcon

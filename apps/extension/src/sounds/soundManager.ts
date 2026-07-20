@@ -31,6 +31,7 @@ const SOUND_DEFINITIONS = {
     cooldownMs: 140,
     finePointerOnly: true,
   },
+  portfolioTabSwitch: { player: cuelume("whisper"), cooldownMs: 120 },
   quickActionHover: {
     player: cuelume("press"),
     cooldownMs: 120,

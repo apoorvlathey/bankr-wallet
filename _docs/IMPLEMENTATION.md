@@ -147,7 +147,8 @@ Current semantic cues:
 | `chartValueChange` | Custom value pulse | Portfolio-chart NumberFlow value changes |
 | `sliderValueChange` | Short custom tick | Send/Swap slider moves through non-snap values |
 | `sliderSnap` | `release` | Send/Swap slider enters a different 0/25/50/75/100 snap stop |
-| `portfolioTokenHover` | Custom value click | Fine-pointer entry into a portfolio token row; rate-limited |
+| `portfolioTokenHover` | Custom value click | Fine-pointer entry into a portfolio token row, portfolio section tab, DeFi protocol link, or Activity entry; rate-limited |
+| `portfolioTabSwitch` | `whisper` | Clicking Assets, Positions, or Activity when it switches the active portfolio section |
 | `quickActionHover` | `press` | Fine-pointer entry into Send, Swap, Shield, or More; rate-limited |
 
 The manager owns per-cue cooldowns and fine-pointer eligibility as well as the
