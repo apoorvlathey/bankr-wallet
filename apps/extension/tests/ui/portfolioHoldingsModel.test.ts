@@ -11,6 +11,7 @@ import {
   mergeTokenEnrichment,
 } from "../../src/components/Portfolio/Holdings/transforms";
 import {
+  resolveFollowDappNetwork,
   resolveUnifyPortfolioBalances,
 } from "../../src/components/Portfolio/portfolioPreferences";
 import { getProgressiveHoldingsRows } from "../../src/components/Portfolio/Holdings/progressiveRowsModel";
@@ -50,6 +51,12 @@ test("portfolio balance unification defaults on for missing or invalid storage",
   assert.equal(resolveUnifyPortfolioBalances(undefined), true);
   assert.equal(resolveUnifyPortfolioBalances("false"), true);
   assert.equal(resolveUnifyPortfolioBalances(false), false);
+});
+
+test("following the dapp network defaults on for missing or invalid storage", () => {
+  assert.equal(resolveFollowDappNetwork(undefined), true);
+  assert.equal(resolveFollowDappNetwork("false"), true);
+  assert.equal(resolveFollowDappNetwork(false), false);
 });
 
 test("portfolio rows can preserve individual cross-network balances", () => {

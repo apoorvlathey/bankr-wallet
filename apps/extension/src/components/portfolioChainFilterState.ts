@@ -41,6 +41,18 @@ export function manuallySelectPortfolioChain(
   };
 }
 
+export function setPortfolioDappNetworkFollowing(
+  state: PortfolioChainFilterState,
+  enabled: boolean,
+  connectedDappChainId: number | null,
+): PortfolioChainFilterState {
+  return {
+    ...state,
+    filterChainId: enabled ? connectedDappChainId : null,
+    isLinkedToDapp: enabled,
+  };
+}
+
 export function relinkPortfolioChain(
   state: PortfolioChainFilterState,
   request: PortfolioChainRelinkRequest | null | undefined,

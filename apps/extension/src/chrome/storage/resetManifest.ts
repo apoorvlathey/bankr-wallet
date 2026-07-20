@@ -55,6 +55,7 @@ export const WALLET_SYNC_STORAGE_KEYS = [
   "isArcBrowser",
   "hidePortfolioValue",
   "unifyPortfolioBalances",
+  "followDappNetwork",
   "sidePanelVerified",
   "sidePanelMode",
   "activeAccountId",

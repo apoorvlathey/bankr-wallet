@@ -4,6 +4,7 @@ import {
   createPortfolioChainFilterState,
   manuallySelectPortfolioChain,
   relinkPortfolioChain,
+  setPortfolioDappNetworkFollowing,
   syncLinkedPortfolioChain,
 } from "../../src/components/portfolioChainFilterState.ts";
 
@@ -53,4 +54,24 @@ test("a chain switch from another browser tab does not relink the active tab", (
 
   assert.equal(state.filterChainId, null);
   assert.equal(state.isLinkedToDapp, false);
+});
+
+test("disabling dapp following shows all networks and ignores later chain changes", () => {
+  let state = createPortfolioChainFilterState(8453);
+  state = setPortfolioDappNetworkFollowing(state, false, 8453);
+  state = syncLinkedPortfolioChain(state, 137);
+
+  assert.equal(state.filterChainId, null);
+  assert.equal(state.isLinkedToDapp, false);
+});
+
+test("enabling dapp following immediately applies the current dapp network", () => {
+  let state = manuallySelectPortfolioChain(
+    createPortfolioChainFilterState(8453),
+    null,
+  );
+  state = setPortfolioDappNetworkFollowing(state, true, 137);
+
+  assert.equal(state.filterChainId, 137);
+  assert.equal(state.isLinkedToDapp, true);
 });

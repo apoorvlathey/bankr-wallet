@@ -8,7 +8,8 @@ shared `components/` root. The historical
 - `Holdings/` owns the assets/DeFi holdings controller, cache adapter, derived
   display model, rows, and list presentation.
 - `PortfolioOptionsSheet.tsx` owns the compact portfolio action and preference
-  surface; `useUnifyPortfolioBalances.ts` owns its synced display preference.
+  surface; `useUnifyPortfolioBalances.ts` and `useFollowDappNetwork.ts` own its
+  synced display preferences.
 - `portfolioPreferences.ts` defines the preference key and fail-safe default.
 - Root-level historical component paths remain compatibility facades only.
 

@@ -11,11 +11,13 @@ import {
   IconButton,
   Skeleton,
   useDisclosure,
+  usePrefersReducedMotion,
   Button,
   VStack,
   type IconProps,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
+import { keyframes } from "@emotion/react";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
@@ -33,11 +35,13 @@ import {
   createPortfolioChainFilterState,
   manuallySelectPortfolioChain,
   relinkPortfolioChain,
+  setPortfolioDappNetworkFollowing,
   syncLinkedPortfolioChain,
   type PortfolioChainRelinkRequest,
 } from "@/components/portfolioChainFilterState";
 import { PortfolioOptionsSheet } from "@/components/Portfolio/PortfolioOptionsSheet";
 import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfolioBalances";
+import { useFollowDappNetwork } from "@/components/Portfolio/useFollowDappNetwork";
 import { playInteractionSound } from "@/sounds/soundManager";
 import type { RpcHealthReport } from "@/types";
 
@@ -87,6 +91,11 @@ const PORTFOLIO_VALUE_TIMING = {
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
 };
 
+const refreshRotation = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
 export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
@@ -100,12 +109,15 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const holdingsStateRef = useRef<TokenHoldingsStateSnapshot | null>(null);
   holdingsStateRef.current = holdingsState;
   const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
+  const [refreshPressNonce, setRefreshPressNonce] = useState(0);
+  const [isRefreshAnimating, setIsRefreshAnimating] = useState(false);
   const [hoveredChartValue, setHoveredChartValue] = useState<number | null>(null);
   const [balanceMotionDirection, setBalanceMotionDirection] = useState<
     "up" | "down" | null
   >(null);
   const displayedBalanceRef = useRef<number | null>(null);
   const balanceTintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addTokenModal = useDisclosure();
   const portfolioActions = useDisclosure();
   const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
@@ -121,6 +133,20 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
   const { unifyBalances, setUnifyBalances } = useUnifyPortfolioBalances();
+  const { followDappNetwork, setFollowDappNetwork } = useFollowDappNetwork();
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const connectedDappChainIdRef = useRef(connectedDappChainId);
+  connectedDappChainIdRef.current = connectedDappChainId;
+
+  useEffect(() => {
+    setChainFilterState((state) =>
+      setPortfolioDappNetworkFollowing(
+        state,
+        followDappNetwork,
+        connectedDappChainIdRef.current,
+      ),
+    );
+  }, [followDappNetwork]);
 
   const selectTab = useCallback(
     (nextIndex: number) => {
@@ -158,18 +184,20 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   // Follow active dapp context changes only while the filter is linked. A
   // manual selection remains detached across browser-tab changes.
   useEffect(() => {
+    if (!followDappNetwork) return;
     setChainFilterState((state) =>
       syncLinkedPortfolioChain(state, connectedDappChainId),
     );
-  }, [connectedDappChainId]);
+  }, [connectedDappChainId, followDappNetwork]);
 
   // A chain switch initiated by the dapp or the connected-site dock restores
   // the automatic link, even after a prior manual portfolio override.
   useEffect(() => {
+    if (!followDappNetwork) return;
     setChainFilterState((state) =>
       relinkPortfolioChain(state, chainRelinkRequest, connectedDappTabId),
     );
-  }, [chainRelinkRequest, connectedDappTabId]);
+  }, [chainRelinkRequest, connectedDappTabId, followDappNetwork]);
 
   const selectPortfolioChain = useCallback((chainId: number | null) => {
     setChainFilterState((state) =>
@@ -290,6 +318,9 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     () => () => {
       if (balanceTintTimerRef.current) {
         clearTimeout(balanceTintTimerRef.current);
+      }
+      if (refreshAnimationTimerRef.current) {
+        clearTimeout(refreshAnimationTimerRef.current);
       }
     },
     [],
@@ -466,14 +497,52 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
               </Text>
             )}
             {holdingsState && (
-              <IconButton
-                aria-label={holdingsState.hideValue ? "Show portfolio values" : "Hide portfolio values"}
-                icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
-                variant="ghost"
-                size="sm"
-                color="fg.secondary"
-                onClick={holdingsState.toggleHideValue}
-              />
+              <HStack spacing={0} align="center">
+                <IconButton
+                  aria-label={holdingsState.hideValue ? "Show portfolio values" : "Hide portfolio values"}
+                  icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
+                  variant="ghost"
+                  size="sm"
+                  minW="32px"
+                  minH="32px"
+                  color="fg.secondary"
+                  onClick={holdingsState.toggleHideValue}
+                />
+                <IconButton
+                  aria-label="Refresh portfolio"
+                  icon={
+                    <RepeatIcon
+                      key={refreshPressNonce}
+                      animation={
+                        isRefreshAnimating
+                          ? `${refreshRotation} 520ms cubic-bezier(0.23, 1, 0.32, 1)`
+                          : undefined
+                      }
+                      color={isRefreshAnimating ? "accent.highlight" : "inherit"}
+                    />
+                  }
+                  variant="ghost"
+                  size="sm"
+                  minW="32px"
+                  minH="32px"
+                  color="fg.secondary"
+                  isDisabled={holdingsState.loading}
+                  onClick={() => {
+                    setRefreshPressNonce((nonce) => nonce + 1);
+                    if (!prefersReducedMotion) {
+                      if (refreshAnimationTimerRef.current) {
+                        clearTimeout(refreshAnimationTimerRef.current);
+                      }
+                      setIsRefreshAnimating(true);
+                      refreshAnimationTimerRef.current = setTimeout(() => {
+                        refreshAnimationTimerRef.current = null;
+                        setIsRefreshAnimating(false);
+                      }, 520);
+                    }
+                    void holdingsState.refresh();
+                  }}
+                />
+              </HStack>
             )}
           </HStack>
         </Box>
@@ -627,12 +696,12 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
         isOpen={portfolioActions.isOpen}
         onClose={portfolioActions.onClose}
         finalFocusRef={portfolioActionsButtonRef}
-        isRefreshing={holdingsState?.loading ?? false}
-        onRefresh={() => void holdingsState?.refresh()}
         onAddToken={addTokenModal.onOpen}
         onHideTokens={onHideTokens}
         unifyBalances={unifyBalances}
         onUnifyBalancesChange={setUnifyBalances}
+        followDappNetwork={followDappNetwork}
+        onFollowDappNetworkChange={setFollowDappNetwork}
       />
 
       {isChainMenuOpen && (

@@ -1,5 +1,5 @@
 import { Icon, type IconProps } from "@chakra-ui/react";
-import { AddIcon, RepeatIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { AddIcon, ViewOffIcon } from "@chakra-ui/icons";
 import {
   ActionSheet,
   type ActionSheetChoice,
@@ -10,12 +10,12 @@ interface PortfolioOptionsSheetProps {
   isOpen: boolean;
   onClose: () => void;
   finalFocusRef?: ActionSheetProps["finalFocusRef"];
-  isRefreshing: boolean;
-  onRefresh: () => void;
   onAddToken: () => void;
   onHideTokens?: () => void;
   unifyBalances: boolean;
   onUnifyBalancesChange: (next: boolean) => void;
+  followDappNetwork: boolean;
+  onFollowDappNetworkChange: (next: boolean) => void;
 }
 
 const UnifyBalancesIcon = (props: IconProps) => (
@@ -39,29 +39,45 @@ const UnifyBalancesIcon = (props: IconProps) => (
   </Icon>
 );
 
+const FollowDappNetworkIcon = (props: IconProps) => (
+  <Icon viewBox="0 0 24 24" aria-hidden="true" {...props}>
+    <circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
+    <circle cx="18" cy="7" r="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
+    <circle cx="18" cy="17" r="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="m8.3 11 7.4-3M8.3 13l7.4 3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </Icon>
+);
+
 export function PortfolioOptionsSheet({
   isOpen,
   onClose,
   finalFocusRef,
-  isRefreshing,
-  onRefresh,
   onAddToken,
   onHideTokens,
   unifyBalances,
   onUnifyBalancesChange,
+  followDappNetwork,
+  onFollowDappNetworkChange,
 }: PortfolioOptionsSheetProps) {
   const choices: ActionSheetChoice[] = [
-    {
-      id: "refresh",
-      label: "Refresh portfolio",
-      icon: <RepeatIcon boxSize="18px" />,
-      isDisabled: isRefreshing,
-    },
     {
       id: "unify-balances",
       label: "Unify Balances",
       icon: <UnifyBalancesIcon boxSize="18px" />,
       isSelected: unifyBalances,
+      selectionVariant: "indicator-only",
+    },
+    {
+      id: "follow-dapp-network",
+      label: "Filter follows dapp chain",
+      icon: <FollowDappNetworkIcon boxSize="18px" />,
+      isSelected: followDappNetwork,
       selectionVariant: "indicator-only",
     },
     {
@@ -85,9 +101,10 @@ export function PortfolioOptionsSheet({
       title="Portfolio options"
       choices={choices}
       onSelect={(choiceId) => {
-        if (choiceId === "refresh") onRefresh();
-        else if (choiceId === "unify-balances") {
+        if (choiceId === "unify-balances") {
           onUnifyBalancesChange(!unifyBalances);
+        } else if (choiceId === "follow-dapp-network") {
+          onFollowDappNetworkChange(!followDappNetwork);
         } else if (choiceId === "add-token") onAddToken();
         else if (choiceId === "hide-tokens") onHideTokens?.();
       }}

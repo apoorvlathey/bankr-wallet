@@ -65,6 +65,7 @@ test("wallet reset local and sync manifests retain their exact released keys", (
     "isArcBrowser",
     "hidePortfolioValue",
     "unifyPortfolioBalances",
+    "followDappNetwork",
     "sidePanelVerified",
     "sidePanelMode",
     "activeAccountId",

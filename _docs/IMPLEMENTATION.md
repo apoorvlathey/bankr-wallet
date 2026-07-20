@@ -2909,7 +2909,7 @@ Important constraints:
 ### TokenHoldings Component
 
 - Shows token list with symbol, balance, USD value, chain badge
-- The portfolio network filter starts linked to the active connected dapp's chain. A manual chain or "All networks" selection detaches that link and survives browser-tab changes. A later chain switch requested by that dapp or from the connected-site bottom dock explicitly relinks the filter to the new chain. The background emits the verified internal `portfolioDappChainChanged` event after authorizing a provider switch notification; tab IDs prevent a switch in another tab from relinking the active tab's filter.
+- The portfolio network filter starts linked to the active connected dapp's chain. Portfolio options → Follow dapp network disables or re-enables that behavior for both Assets and Activity; disabling immediately shows all networks, while enabling immediately applies the current dapp chain. The default-on preference is persisted in `chrome.storage.sync.followDappNetwork`. While enabled, a manual chain or "All networks" selection detaches the link until a later chain switch requested by that dapp or from the connected-site bottom dock explicitly relinks it. The background emits the verified internal `portfolioDappChainChanged` event after authorizing a provider switch notification; tab IDs prevent a switch in another tab from relinking the active tab's filter.
 - Hover actions include Swap, Send, custom-token Edit, and an overflow menu for hiding ERC-20 tokens
 - Hiding a token stores a global hidden-token entry, removes it from totals, clears cached holdings, and force-appends a current aggregate snapshot so future chart points reflect the hidden-token view without deleting existing chart history
 - Total portfolio value header with hide/show toggle (persisted in `chrome.storage.sync.hidePortfolioValue`)
@@ -2929,7 +2929,7 @@ Important constraints:
   Scroll-driven cache persistence is coalesced for 750ms and chart snapshot
   recording for one second so rapid page advances do not serialize the complete
   catalog or touch extension storage once per page.
-- Refresh button, loading skeletons, empty state
+- Refresh icon beside the portfolio privacy control, loading skeletons, empty state
 - Click token → opens TokenTransfer view
 
 ### Portfolio Snapshot Storage

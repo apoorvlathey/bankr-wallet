@@ -242,6 +242,15 @@
 
 ## Slop audit
 
+- 2026-07-20 portfolio-options audit: moved the high-frequency refresh action
+  beside the balance privacy control as a named, compact 32px icon target and
+  reserved the action sheet for durable portfolio choices. Refresh performs one
+  520ms amber rotation per press, returns to the normal secondary foreground on
+  completion, and suppresses rotation for reduced-motion users.
+  Added a checkmarked,
+  instant-apply Follow dapp network preference directly beneath Unify Balances;
+  it uses the existing row, separator, focus, selected-indicator, and theme-token
+  grammar without adding a nested surface or color-only state.
 - 2026-07-20 pending-replacement audit: placed Cancel and Speed Up as one
   centered pair of natural-width, 32px controls immediately below pending
   status. Cancel uses the quiet outlined danger recipe and Speed Up the shared

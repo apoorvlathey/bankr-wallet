@@ -1284,6 +1284,7 @@ accessible resources.
 | `sidePanelVerified`                                    | Released legacy field; retained/reset for compatibility but not read by runtime windowing |
 | `hidePortfolioValue`                                   | Boolean - hide/show token USD values |
 | `unifyPortfolioBalances`                               | Non-secret boolean display preference; missing or malformed values default to unified balances |
+| `followDappNetwork`                                    | Non-secret boolean display preference; missing or malformed values default to following the active dapp network |
 
 ---
 
