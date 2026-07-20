@@ -12,14 +12,16 @@
   "action": {
     "default_title": "WalletChan",
     "default_icon": {
-      "128": "icons/icon128.png"
+      "16": "icons/white-icon16.png",
+      "48": "icons/white-icon48.png",
+      "128": "icons/white-icon128.png"
     },
     "default_popup": "popup-init.html"
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/white-icon16.png",
+    "48": "icons/white-icon48.png",
+    "128": "icons/white-icon128.png"
   },
   "background": {
     "service_worker": "static/js/background.js",
