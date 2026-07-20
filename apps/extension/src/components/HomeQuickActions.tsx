@@ -5,7 +5,7 @@ import { playInteractionSound } from "@/sounds/soundManager";
 interface HomeQuickActionsProps {
   onSend: () => void;
   onSwap: () => void;
-  onShield: () => void;
+  onReceive: () => void;
   onMore: () => void;
   hasConnectedApps?: boolean;
 }
@@ -36,6 +36,7 @@ const SwapIcon = () => (
   </Icon>
 );
 
+/* Shield will return in a future release.
 const ShieldIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
     <path
@@ -64,6 +65,19 @@ const ShieldIcon = () => (
     />
   </Icon>
 );
+*/
+
+const QrCodeIcon = () => (
+  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
+    <path
+      d="M3 3h6v6H3V3Zm12 0h6v6h-6V3ZM3 15h6v6H3v-6Zm12 0h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+  </Icon>
+);
 
 const MoreIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
@@ -80,7 +94,8 @@ const MoreIcon = () => (
 const actions = [
   { id: "send", label: "Send", icon: <SendIcon /> },
   { id: "swap", label: "Swap", icon: <SwapIcon /> },
-  { id: "shield", label: "Shield", icon: <ShieldIcon /> },
+  // { id: "shield", label: "Shield", icon: <ShieldIcon /> },
+  { id: "receive", label: "Receive", icon: <QrCodeIcon /> },
   { id: "more", label: "More", icon: <MoreIcon /> },
 ] as const;
 
@@ -88,13 +103,18 @@ const actions = [
 export default function HomeQuickActions({
   onSend,
   onSwap,
-  onShield,
+  onReceive,
   onMore,
   hasConnectedApps = false,
 }: HomeQuickActionsProps) {
   const { themeId } = useTheme();
   const isWarmMidnight = isDarkThemeId(themeId);
-  const handlers = { send: onSend, swap: onSwap, shield: onShield, more: onMore };
+  const handlers = {
+    send: onSend,
+    swap: onSwap,
+    receive: onReceive,
+    more: onMore,
+  };
 
   return (
     <Grid

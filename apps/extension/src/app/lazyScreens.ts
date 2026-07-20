@@ -36,7 +36,7 @@ export const QRCodeModal = lazy(() =>
 );
 export const TokenTransfer = lazy(() => import("@/components/TokenTransfer"));
 export const SwapView = lazy(() => import("@/components/Swap/SwapView"));
-export const ShieldView = lazy(() => import("@/components/ShieldView"));
+// export const ShieldView = lazy(() => import("@/components/ShieldView"));
 export const MoreActionsView = lazy(
   () => import("@/components/MoreActionsView"),
 );
@@ -99,7 +99,7 @@ if (typeof window !== "undefined") {
     void import("@/components/QRCodeModal");
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
-    void import("@/components/ShieldView");
+    // void import("@/components/ShieldView");
     void import("@/components/MoreActionsView");
     void import("@/components/HideTokensView");
     void import("@/components/HiddenPortfolioTokensView");

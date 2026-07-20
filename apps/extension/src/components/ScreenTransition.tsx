@@ -41,7 +41,7 @@ export type AppView =
   | "addAccount"
   | "transfer"
   | "swap"
-  | "shield"
+  // | "shield"
   | "more"
   | "hideTokens"
   | "hiddenTokens"
@@ -62,7 +62,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   settingsAddChain: { kind: "slide", depth: 2 },
   accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
-  shield: { kind: "slide", depth: 1 },
+  // shield: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   more: { kind: "slide", depth: 1 },
   hideTokens: { kind: "slide", depth: 2 },

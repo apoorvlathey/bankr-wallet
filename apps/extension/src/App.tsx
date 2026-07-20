@@ -43,7 +43,7 @@ import {
   preloadApprovalRequestScreen,
   QRCodeModal,
   Settings,
-  ShieldView,
+  // ShieldView,
   SignatureRequestConfirmation,
   SwapView,
   TokenTransfer,
@@ -2478,7 +2478,7 @@ function App() {
     );
   }
 
-  // Shield placeholder view
+  /* Shield placeholder view — retained for a future release.
   if (view === "shield") {
     return (
       <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
@@ -2497,6 +2497,7 @@ function App() {
       </Box>
     );
   }
+  */
 
   // More actions view
   if (view === "more") {
@@ -3469,7 +3470,8 @@ function App() {
                       setSwapInitialSellToken(undefined);
                       setView("swap");
                     }}
-                    onShield={() => setView("shield")}
+                    // onShield={() => setView("shield")}
+                    onReceive={onQROpen}
                     onMore={() => setView("more")}
                   />
                 }
