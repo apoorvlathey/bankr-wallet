@@ -1,5 +1,5 @@
-import { resolvePrivacyPoolsSepoliaRpcUrl } from "../deployment/health";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   readPrivacyBlockHash,
   readPrivacyPoolEvents,
@@ -10,6 +10,7 @@ import {
   commitPrivacyPoolEventPage,
   readPrivacyEventCheckpoint,
 } from "./repository";
+import { PRIVACY_EVENT_CHECKPOINT_KEY } from "./types";
 
 const CONFIRMATIONS = 12n;
 const INITIAL_CHUNK_SIZE = 50_000n;
@@ -17,7 +18,7 @@ const MIN_CHUNK_SIZE = 1_000n;
 const MAX_CHUNKS_PER_RUN = 64;
 
 export interface PrivacyEventSyncResult {
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   status: "current" | "partial";
   safeHead: string;
   nextBlock: string;
@@ -28,7 +29,7 @@ export interface PrivacyEventSyncResult {
 let activeSync: Promise<PrivacyEventSyncResult> | null = null;
 
 async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResult> {
-  const rpcUrl = await resolvePrivacyPoolsSepoliaRpcUrl();
+  const rpcUrl = await resolvePrivacyPoolsRpcUrl();
   let checkpoint = await readPrivacyEventCheckpoint();
   if (checkpoint) {
     const canonicalHash = await readPrivacyBlockHash(
@@ -45,7 +46,7 @@ async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResul
   const safeHead = latest > CONFIRMATIONS ? latest - CONFIRMATIONS : 0n;
   let nextBlock = checkpoint
     ? BigInt(checkpoint.nextBlock)
-    : PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.deploymentBlock;
+    : PRIVACY_POOLS_DEPLOYMENT.deploymentBlock;
   let chunkSize = INITIAL_CHUNK_SIZE;
   let chunks = 0;
   let eventsAdded = 0;
@@ -69,8 +70,8 @@ async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResul
     lastSyncAt = Date.now();
     await commitPrivacyPoolEventPage(events, {
       version: 1,
-      key: "sepolia-pool-events",
-      chainId: 11_155_111,
+      key: PRIVACY_EVENT_CHECKPOINT_KEY,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
       nextBlock: (toBlock + 1n).toString(),
       lastBlockNumber: toBlock.toString(),
       lastBlockHash: blockHash,
@@ -82,7 +83,7 @@ async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResul
   }
 
   return {
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     status: nextBlock > safeHead ? "current" : "partial",
     safeHead: safeHead.toString(),
     nextBlock: nextBlock.toString(),
@@ -91,7 +92,7 @@ async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResul
   };
 }
 
-/** One bounded global Sepolia deposit sync at a time. */
+/** One bounded global active-pool event sync at a time. */
 export function syncPrivacyDepositEvents(): Promise<PrivacyEventSyncResult> {
   if (activeSync) return activeSync;
   activeSync = syncPrivacyDepositEventsInternal().finally(() => {

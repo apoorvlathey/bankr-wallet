@@ -7,6 +7,7 @@ import {
   authorizePrivacyRagequitConfirmation,
   type PrivacyRagequitAuthorization,
 } from "../privacy/ragequit/submission";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../privacy/deployment/manifest";
 
 export type PrivacyConfirmationAuthorizationResult =
   | {
@@ -23,7 +24,7 @@ export function privacyConfirmationGasError(
 ): string | null {
   return (pending.privacyShieldMeta || pending.privacyRagequitMeta) &&
       (forceInclusion === true || feePaymentToken === "token")
-    ? "Privacy Pools transactions require normal Sepolia gas payment"
+    ? `Privacy Pools transactions require normal ${PRIVACY_POOLS_DEPLOYMENT.chainName} gas payment`
     : null;
 }
 

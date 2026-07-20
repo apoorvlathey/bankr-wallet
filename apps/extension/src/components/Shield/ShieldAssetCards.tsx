@@ -19,7 +19,10 @@ import {
   snapBalanceSliderValue,
   useSliderValueSound,
 } from "@/sounds/useSliderValueSound";
-import { SHIELDED_ETH_LOGO_URL } from "./model/shieldedAsset";
+import {
+  SHIELDED_ETH_LOGO_URL,
+  SHIELDED_ETH_NETWORK_NAME,
+} from "./model/shieldedAsset";
 import { formatShieldWei } from "./model/shieldQuote";
 
 const ETH_LOGO_URL = "/chainIcons/ethereum.svg";
@@ -46,7 +49,7 @@ function FixedAssetIdentity({ shielded }: { shielded: boolean }) {
           {shielded ? "Shielded ETH" : "ETH"}
         </Text>
         <Text fontSize="2xs" color="fg.muted" lineHeight="1.2" noOfLines={1}>
-          {shielded ? "Privacy Pools" : "Sepolia"}
+          {shielded ? "Privacy Pools" : SHIELDED_ETH_NETWORK_NAME}
         </Text>
       </VStack>
     </HStack>
@@ -165,7 +168,7 @@ export function ShieldSourceCard({
       {maxWei > 0n && (
         <Box px={1} pt={2.5} pb={5}>
           <Slider
-            aria-label={`Percentage of ${shielded ? "shielded" : "Sepolia"} ETH balance`}
+            aria-label={`Percentage of ${shielded ? "shielded" : SHIELDED_ETH_NETWORK_NAME} ETH balance`}
             min={0}
             max={100}
             step={1}

@@ -16,8 +16,12 @@ import {
   assertPrivacyMasterAuthorization,
   capturePrivacyMasterAuthorization,
 } from "../authorization";
-import { PRIVACY_POOLS_RELEASE_POLICY } from "../deployment/manifest";
-import { verifyPrivacyPoolsSepoliaDeployment } from "../deployment/health";
+import {
+  PRIVACY_POOLS_DEPLOYMENT,
+  PRIVACY_POOLS_RELEASE_POLICY,
+} from "../deployment/manifest";
+import { verifyPrivacyPoolsDeployment } from "../deployment/health";
+import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
 import { readPrivacyCommitments } from "../commitments/repository";
 import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
@@ -94,7 +98,7 @@ function exactPending(
 }
 
 async function loadOperation(operationId: string) {
-  if (!UUID.test(operationId) || PRIVACY_POOLS_RELEASE_POLICY.mutations !== "sepolia-enabled") {
+  if (!UUID.test(operationId) || PRIVACY_POOLS_RELEASE_POLICY.mutations !== "enabled") {
     throw new Error("operation-unavailable");
   }
   const operation = await getPrivacyRagequitById(operationId);
@@ -108,7 +112,7 @@ export async function queuePrivacyRagequitConfirmation(operationId: string) {
   const expectedEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new Error("auth-required");
   });
-  await verifyPrivacyPoolsSepoliaDeployment().catch(() => {
+  await verifyPrivacyPoolsDeployment().catch(() => {
     throw new Error("operation-unavailable");
   });
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
@@ -116,8 +120,9 @@ export async function queuePrivacyRagequitConfirmation(operationId: string) {
     const { operation, details } = await loadOperation(operationId);
     const account = await getAccountById(operation.summary.accountId);
     if (
-      !account || account.type === "bankr" || account.type === "impersonator" ||
+      !account || account.type === "impersonator" ||
       account.type !== operation.summary.accountType ||
+      !isPrivacyPoolsMutationAccountType(account.type) ||
       account.address.toLowerCase() !== operation.summary.accountAddress.toLowerCase()
     ) throw new Error("operation-unavailable");
     const existing = await getPendingTxRequestById(operationId);
@@ -138,7 +143,7 @@ export async function queuePrivacyRagequitConfirmation(operationId: string) {
       },
       origin: "WalletChan Shield Recovery",
       favicon: null,
-      chainName: "Sepolia",
+      chainName: PRIVACY_POOLS_DEPLOYMENT.chainName,
       timestamp: Date.now(),
       trustedInternal: true,
       privacyRagequitMeta: { version: 1, operationId: operation.summary.id },
@@ -162,7 +167,7 @@ export async function authorizePrivacyRagequitConfirmation(
   const expectedAuthEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new Error("auth-required");
   });
-  await verifyPrivacyPoolsSepoliaDeployment();
+  await verifyPrivacyPoolsDeployment();
   const { operation, details } = await loadOperation(pending.id);
   if (!exactPending(pending, operation, details.callData)) {
     throw new Error("operation-unavailable");

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { InfoOutlineIcon } from "@chakra-ui/icons";
 import { Box, Button, Checkbox, HStack, Text, VStack } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
+import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manifest";
 import { RecipientPicker } from "@/components/Transfer/RecipientPicker";
 import { useTransferRecipient } from "@/components/Transfer/hooks/useTransferRecipient";
 import ShieldDashboard from "./ShieldDashboard";
@@ -15,6 +16,10 @@ import { usePublicRecovery } from "./hooks/usePublicRecovery";
 import PublicRecoveryPanel from "./PublicRecoveryPanel";
 import { getPublicWithdrawalOffer } from "./model/recovery";
 import type { PrivateWithdrawalIntent } from "./model/unshield";
+import {
+  SHIELDED_ETH_CHAIN_ID,
+  SHIELDED_ETH_EXPLORER_URL,
+} from "./model/shieldedAsset";
 
 interface PrivateWithdrawalScreenProps {
   intent: PrivateWithdrawalIntent;
@@ -24,7 +29,11 @@ interface PrivateWithdrawalScreenProps {
   accounts?: Account[];
 }
 
-const SEPOLIA_EXPLORER = "https://sepolia.etherscan.io";
+function isRecoveryCapableAccount(account: Pick<Account, "type">): boolean {
+  return account.type === "privateKey" || account.type === "seedPhrase" ||
+    (account.type === "bankr" &&
+      PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled");
+}
 
 /** Shared relay engine with distinct Unshield-to-self and private-send entry points. */
 export default function PrivateWithdrawalScreen({
@@ -35,12 +44,10 @@ export default function PrivateWithdrawalScreen({
   accounts = [],
 }: PrivateWithdrawalScreenProps) {
   const [recoveryAccount, setRecoveryAccount] = useState<ShieldSourceAccount | null>(() => {
-    if (account && (account.type === "privateKey" || account.type === "seedPhrase")) {
+    if (account && isRecoveryCapableAccount(account)) {
       return account;
     }
-    return accounts.find((candidate) =>
-      candidate.type === "privateKey" || candidate.type === "seedPhrase"
-    ) ?? null;
+    return accounts.find(isRecoveryCapableAccount) ?? null;
   });
   const [acknowledgedPublicExitKey, setAcknowledgedPublicExitKey] = useState<string | null>(null);
   const { initialization, retry } = useShieldInitialization();
@@ -48,7 +55,7 @@ export default function PrivateWithdrawalScreen({
   const recipientState = useTransferRecipient({
     accounts,
     fromAddress: "",
-    chainId: 11_155_111,
+    chainId: SHIELDED_ETH_CHAIN_ID,
     initialRecipient: intent === "unshield" ? account?.address ?? "" : "",
   });
   const withdrawal = useUnshield({
@@ -79,11 +86,9 @@ export default function PrivateWithdrawalScreen({
     setRecoveryAccount((current) => {
       if (current && accounts.some((candidate) =>
         candidate.id === current.id &&
-        (candidate.type === "privateKey" || candidate.type === "seedPhrase")
+        isRecoveryCapableAccount(candidate)
       )) return current;
-      return accounts.find((candidate) =>
-        candidate.type === "privateKey" || candidate.type === "seedPhrase"
-      ) ?? null;
+      return accounts.find(isRecoveryCapableAccount) ?? null;
     });
   }, [accounts]);
 
@@ -102,7 +107,7 @@ export default function PrivateWithdrawalScreen({
         intent={intent}
         controller={withdrawal}
         recipientLabel={recipientState.resolvedName}
-        explorerUrl={SEPOLIA_EXPLORER}
+        explorerUrl={SHIELDED_ETH_EXPLORER_URL}
         onBack={() => withdrawal.resetQuote()}
       />
     );
@@ -146,7 +151,7 @@ export default function PrivateWithdrawalScreen({
     const matching = accounts.find((candidate) =>
       candidate.id === publicWithdrawalOffer.accountId &&
       candidate.address.toLowerCase() === publicWithdrawalOffer.accountAddress.toLowerCase() &&
-      (candidate.type === "privateKey" || candidate.type === "seedPhrase")
+      isRecoveryCapableAccount(candidate)
     );
     if (matching) setRecoveryAccount(matching);
   };
@@ -166,7 +171,7 @@ export default function PrivateWithdrawalScreen({
           pendingWei={activity.portfolio.pendingBalanceWei}
           controller={withdrawal}
           recipientState={recipientState}
-          explorerUrl={SEPOLIA_EXPLORER}
+          explorerUrl={SHIELDED_ETH_EXPLORER_URL}
           publicExit={intent === "unshield" && publicWithdrawalOffer ? {
             amountWei: publicWithdrawalOffer.amountWei,
             depositAccountAddress: publicWithdrawalOffer.accountAddress,

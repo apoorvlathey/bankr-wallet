@@ -6,6 +6,7 @@ import {
   isValidStoredPrivacyCommitment,
   MAX_PRIVACY_COMMITMENTS,
   PRIVACY_COMMITMENTS_DATABASE,
+  PRIVACY_COMMITMENTS_DATABASES,
   PRIVACY_COMMITMENTS_DATABASE_VERSION,
   PRIVACY_COMMITMENTS_STORE,
   type PrivacyCommitmentDetailsV1,
@@ -369,10 +370,12 @@ export async function deletePrivacyCommitmentsDatabase(): Promise<void> {
   databasePromise = null;
   if (existing) (await existing.catch(() => null))?.close();
   if (typeof indexedDB === "undefined") return;
-  await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(PRIVACY_COMMITMENTS_DATABASE);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("Commitment reset failed"));
-    request.onblocked = () => reject(new Error("Commitment reset blocked"));
-  });
+  await Promise.all(PRIVACY_COMMITMENTS_DATABASES.map((name) =>
+    new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error ?? new Error("Commitment reset failed"));
+      request.onblocked = () => reject(new Error("Commitment reset blocked"));
+    })
+  ));
 }

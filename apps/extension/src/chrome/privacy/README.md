@@ -21,13 +21,14 @@ map, not the release checklist.
 - `identity.ts`: master-authorized, idempotent first-Private-mode initialization.
 - `protocol/`: pinned official SDK primitives plus locally packaged,
   integrity-checked commitment/withdrawal artifacts.
-- `deployment/`: exact Sepolia ETH deployment pins, bounded onchain snapshot,
-  and fail-closed runtime validation.
-- `deposit/`: exact-account Sepolia ETH quote plus master-only, independently
+- `deployment/`: compile-time-selected exact Sepolia/mainnet ETH deployment
+  pins, bounded onchain snapshot, release/account policy, and fail-closed
+  runtime validation.
+- `deposit/`: exact-account active-chain ETH quote plus master-only, independently
   decoded, non-submittable deposit review preparation.
 - `operations/`: encrypted, account-bound Shield intent, normal WalletChan
   confirmation, receipt/event tracking, and ASP lifecycle.
-- `events/`: bounded rebuildable Sepolia pool log index and canonical checkpoints.
+- `events/`: bounded rebuildable active-pool log index and canonical checkpoints.
 - `commitments/`: exact-event commitment materialization, encrypted current
   note lineage, and aggregate portfolio facade.
 - `asp/`: strict endpoint codecs, lifecycle orchestration, and focused
@@ -70,8 +71,10 @@ a distinct real deposit index, and atomically stores its encrypted calldata,
 precommitment, and index beside a sanitized public summary. Only the background
 can convert it into a trusted, account-pinned normal transaction request. Local
 private-key and seed-phrase accounts recheck the encrypted intent and master
-epoch at the raw-RPC boundary; Bankr is blocked because its API does not support
-Sepolia submission. Receipt and bounded pool-event sync recover the commitment,
+epoch at the raw-RPC boundary. Bankr is blocked in the Sepolia development
+profile; the production mainnet profile uses Bankr's normal pinned confirmation
+and submission coordinator with the same final privacy authorization boundary.
+Receipt and bounded pool-event sync recover the commitment,
 and local/onchain ASP membership makes it privately spendable.
 
 Full/partial Unshield verifies a signed pinned-relayer quote, both Merkle roots,
@@ -87,12 +90,14 @@ cleanup but omitted from the Activity projection. SDK contract/submission helper
 unavailable, and the artifact
 loader accepts only packaged Chrome-extension resources with exact size and
 SHA-256 checks. The deployment reader sends one
-batched, fixed public snapshot to a user-configured Sepolia RPC or WalletChan's
-immutable known-chain default during diagnostic readiness checks and final
+batched, fixed public snapshot to a user-configured active-chain RPC or
+WalletChan's immutable known-chain default during diagnostic readiness checks and final
 durable preparation; it does not block opening the Shield amount form. No
 account, phrase, commitment, or amount is included in that fixed snapshot.
-The release policy contains no mainnet deployment and enables mutations only
-for the exact Sepolia manifest. The prover bridge accepts fixed self-tests plus
+The release policy is selected at Vite compile time: `dev:extension` uses the
+exact `sepolia-local-beta` manifest and normal production builds use the exact
+`mainnet-production` manifest. Both profiles fail closed on any deployment
+drift; only mainnet permits Bankr mutations. The prover bridge accepts fixed self-tests plus
 bounded real commitment/withdrawal inputs, runs them in a packaged single-thread
 worker, and verifies every proof locally.
 Contract data, proofs, signals, fixtures, and internal errors do not enter the
@@ -118,7 +123,8 @@ all-width parameters.
 The checked-in prover budget manifest caps package/artifact/worker/background
 size, first/restart runtime, Chromium process-tree RSS delta, and concurrency.
 The unpacked Sepolia target is allowed; GitHub, Chrome Web Store, and Firefox
-packaging fail closed pending GPL-3.0 legal review. Firefox also fails the
+packaging fail closed pending GPL-3.0 legal review. Compiling the mainnet
+profile does not override this distribution gate. Firefox also fails the
 runtime offscreen feature gate.
 
 Password rotation rewraps the same privacy key; passkey setup adds independent

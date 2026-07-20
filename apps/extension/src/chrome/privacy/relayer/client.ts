@@ -6,7 +6,7 @@ import {
 } from "viem";
 
 import { fetchJsonBounded } from "../../network/boundedHttp";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   parsePrivacyRelayerDetails,
   parsePrivacyRelayerQuote,
@@ -42,7 +42,7 @@ const RELAYER_COMMITMENT_TYPES = {
   ],
 } as const;
 
-type RelayerPin = typeof PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers[number];
+type RelayerPin = typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[number];
 
 export class PrivacyRelayerSubmissionError extends Error {
   constructor(readonly kind: "rejected" | "ambiguous") {
@@ -65,8 +65,8 @@ function relayerUrl(pin: RelayerPin, path: string): URL {
 
 async function fetchDetails(pin: RelayerPin): Promise<PrivacyRelayerDetails> {
   const url = relayerUrl(pin, "/relayer/details");
-  url.searchParams.set("chainId", String(PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId));
-  url.searchParams.set("assetAddress", PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset);
+  url.searchParams.set("chainId", String(PRIVACY_POOLS_DEPLOYMENT.chainId));
+  url.searchParams.set("assetAddress", PRIVACY_POOLS_DEPLOYMENT.nativeAsset);
   const { response, data } = await fetchJsonBounded(
     url,
     { method: "GET", headers: { Accept: "application/json" } },
@@ -78,8 +78,8 @@ async function fetchDetails(pin: RelayerPin): Promise<PrivacyRelayerDetails> {
   );
   if (!response.ok) throw new Error("Relayer details were unavailable");
   const details = parsePrivacyRelayerDetails(data);
-  if (!details || !sameAddress(details.assetAddress, PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset)) {
-    throw new Error("Relayer details did not match Sepolia ETH");
+  if (!details || !sameAddress(details.assetAddress, PRIVACY_POOLS_DEPLOYMENT.nativeAsset)) {
+    throw new Error("Relayer details did not match the active ETH pool");
   }
   return details;
 }
@@ -95,9 +95,9 @@ async function fetchQuote(
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({
-        chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+        chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
         amount: amountWei.toString(),
-        asset: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset,
+        asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
         recipient,
         extraGas: false,
       }),
@@ -127,10 +127,10 @@ export async function verifyPrivacyRelayerQuote(input: {
   if (
     input.amountWei < details.minWithdrawAmount ||
     quote.feeCommitment.amount !== input.amountWei ||
-    !sameAddress(quote.feeCommitment.asset, PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset) ||
+    !sameAddress(quote.feeCommitment.asset, PRIVACY_POOLS_DEPLOYMENT.nativeAsset) ||
     quote.baseFeeBPS !== details.feeBPS ||
     quote.feeBPS < quote.baseFeeBPS ||
-    quote.feeBPS > PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.assetConfig.maxRelayFeeBPS ||
+    quote.feeBPS > PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS ||
     quote.gasPrice > details.maxGasPrice ||
     quote.relayCostWei !== quote.relayGas * quote.gasPrice ||
     quote.feeCommitment.expiration <= now ||
@@ -157,7 +157,7 @@ export async function verifyPrivacyRelayerQuote(input: {
     domain: {
       name: "Privacy Pools Relayer",
       version: "1",
-      chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     },
     types: RELAYER_COMMITMENT_TYPES,
     primaryType: "RelayerCommitment",
@@ -203,21 +203,21 @@ async function quoteOneRelayer(
   return verifyPrivacyRelayerQuote({ pin, details, quote, amountWei, recipient });
 }
 
-/** Query pinned Sepolia relayers and return the cheapest fully verified quote. */
+/** Query pinned active-profile relayers and return the cheapest verified quote. */
 export async function quotePrivacyUnshield(
   amountWei: bigint,
   recipient: Address,
 ): Promise<PrivacyRelayerQuoteSelection> {
   if (amountWei <= 0n) throw new Error("Invalid Unshield amount");
   const settled = await Promise.allSettled(
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers.map((pin) =>
+    PRIVACY_POOLS_DEPLOYMENT.services.relayers.map((pin) =>
       quoteOneRelayer(pin, amountWei, recipient)
     ),
   );
   const valid = settled.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : []
   );
-  if (valid.length === 0) throw new Error("No valid Sepolia relayer quote");
+  if (valid.length === 0) throw new Error("No valid Privacy Pools relayer quote");
   valid.sort((left, right) =>
     left.feeBPS < right.feeBPS ? -1 :
       left.feeBPS > right.feeBPS ? 1 :
@@ -233,7 +233,7 @@ export async function submitPrivacyUnshieldToRelayer(input: {
   publicSignals: readonly string[];
   beforeSubmit?: () => void;
 }): Promise<PrivacyRelayerSubmission> {
-  const pin = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers.find(
+  const pin = PRIVACY_POOLS_DEPLOYMENT.services.relayers.find(
     (candidate) => candidate.url === input.details.relayerUrl,
   );
   if (!pin || input.publicSignals.length !== 8) {
@@ -275,13 +275,13 @@ export async function submitPrivacyUnshieldToRelayer(input: {
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
           withdrawal: {
-            processooor: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+            processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
             data: input.details.feeCommitment.withdrawalData,
           },
           proof: input.proof,
           publicSignals: input.publicSignals,
-          scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-          chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+          scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+          chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
           feeCommitment: input.details.feeCommitment,
         }),
       },

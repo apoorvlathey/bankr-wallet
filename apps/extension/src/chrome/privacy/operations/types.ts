@@ -2,9 +2,15 @@ import type { Address, Hex } from "viem";
 import type { PrivacyShieldLifecycleState } from "../../../lib/privacyShieldLifecycle";
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
-export const PRIVACY_OPERATIONS_DATABASE = "walletchan-privacy-v1";
+export const PRIVACY_OPERATIONS_DATABASES = Object.freeze([
+  "walletchan-privacy-v1",
+  "walletchan-privacy-mainnet-v1",
+] as const);
+export const PRIVACY_OPERATIONS_DATABASE = PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+  ? PRIVACY_OPERATIONS_DATABASES[0]
+  : PRIVACY_OPERATIONS_DATABASES[1];
 export const PRIVACY_OPERATIONS_DATABASE_VERSION = 1;
 export const PRIVACY_OPERATIONS_STORE = "operations";
 export const PRIVACY_OPERATIONS_METADATA_STORE = "metadata";
@@ -67,7 +73,7 @@ export interface PrivacyShieldOperationSummaryV1 {
   state: PrivacyShieldOperationState;
   createdAt: number;
   updatedAt: number;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   accountId: string;
   accountAddress: Address;
   accountType: "bankr" | "privateKey" | "seedPhrase";
@@ -207,7 +213,7 @@ export function isValidPrivacyShieldOperationSummary(
     !Number.isSafeInteger(summary.createdAt) ||
     summary.createdAt < 0 ||
     summary.updatedAt !== summary.createdAt ||
-    summary.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId ||
+    summary.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     typeof summary.accountId !== "string" ||
     summary.accountId.length === 0 ||
     summary.accountId.length > 128 ||
@@ -217,16 +223,16 @@ export function isValidPrivacyShieldOperationSummary(
       summary.accountType !== "seedPhrase") ||
     !isAddress(summary.destinationAddress) ||
     summary.destinationAddress.toLowerCase() !==
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase() ||
+      PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase() ||
     !isAddress(summary.poolAddress) ||
     summary.poolAddress.toLowerCase() !==
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
+      PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
     amountWei === null ||
     protocolFeeWei === null ||
     shieldedAmountWei === null ||
     gasReserveWei === null ||
     totalRequiredWei === null ||
-    amountWei < PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.assetConfig.minimumDepositAmount ||
+    amountWei < PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount ||
     amountWei !== protocolFeeWei + shieldedAmountWei ||
     totalRequiredWei !== amountWei + gasReserveWei ||
     summary.dedupeKey !==

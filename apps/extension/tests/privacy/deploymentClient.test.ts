@@ -8,8 +8,8 @@ import {
   toHex,
 } from "viem";
 
-import { readPrivacyPoolsSepoliaSnapshot } from "../../src/chrome/privacy/deployment/client";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { readPrivacyPoolsSnapshot } from "../../src/chrome/privacy/deployment/client";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 
 const ADDRESS_OUTPUT = parseAbiParameters("address");
 const ASSET_CONFIG_OUTPUT = parseAbiParameters(
@@ -17,7 +17,7 @@ const ASSET_CONFIG_OUTPUT = parseAbiParameters(
 );
 
 function resultForRequest(request: Record<string, unknown>): unknown {
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
+  const deployment = PRIVACY_POOLS_DEPLOYMENT;
   switch (request.method) {
     case "eth_chainId":
       return deployment.chainIdHex;
@@ -96,7 +96,7 @@ test("Sepolia deployment reads never exceed three requests per RPC batch", async
   }) as typeof fetch;
 
   try {
-    const snapshot = await readPrivacyPoolsSepoliaSnapshot(
+    const snapshot = await readPrivacyPoolsSnapshot(
       "https://rpc.example",
     );
     assert.equal(calls, 5);
@@ -107,14 +107,14 @@ test("Sepolia deployment reads never exceed three requests per RPC batch", async
       observedInits.every((init) => init.referrerPolicy === "no-referrer"),
     );
     assert.equal(snapshot.chainId, 11_155_111);
-    assert.equal(snapshot.pool.scope, PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope);
+    assert.equal(snapshot.pool.scope, PRIVACY_POOLS_DEPLOYMENT.scope);
     assert.deepEqual(snapshot.contracts.entrypointProxy, {
       runtimeByteLength: 2,
       runtimeBytecodeHash: keccak256("0x6000"),
     });
     assert.equal(
       snapshot.entrypoint.assetPool,
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+      PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     );
   } finally {
     globalThis.fetch = originalFetch;

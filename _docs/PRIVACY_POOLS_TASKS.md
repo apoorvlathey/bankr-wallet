@@ -1,7 +1,8 @@
 # Privacy Pools implementation checklist
 
-> **Status:** Sepolia implementation complete; manual rehearsal partially complete
-> **Target:** Sepolia first; Ethereum mainnet remains disabled until the final gates
+> **Status:** Dual Sepolia-development/mainnet-production implementation complete;
+> value-bearing mainnet rehearsal pending
+> **Target:** `dev:extension` on Sepolia; normal/production builds on Ethereum mainnet only
 > **Product source:** [`PRIVACY_POOLS_PRD.md`](./PRIVACY_POOLS_PRD.md)
 > **Fresh-session handoff:** [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md)
 
@@ -23,7 +24,8 @@ complete; the matching manual gate remains the product owner's approval point.
 | Private Unshield | Automated full/partial, quote, proof, relayer, lineage, and retry coverage passes | No complete manual partial/full ASP-approved withdrawal has been recorded |
 | Withdraw publicly | One real Sepolia public withdrawal succeeded after the proof-signal fix | Repeat for both local wallet types after clean recovery; recheck that a user-rejected prompt creates no Activity card |
 | Recovery and destructive safety | Automated phrase, rescan, account-removal, and reset coverage passes | Complete the written disposable-wallet rehearsal |
-| Distribution/mainnet | Unpacked Chrome Sepolia target passes automated gates | GPL/legal/store review, full Sepolia sign-off, mainnet read-only rehearsal, then controlled beta |
+| Production profile | Mainnet pins, onchain relationships, endpoint/relayer signatures, compile-time bundle isolation, and all wallet-type code paths are automated | Value-bearing Bankr/private-key/seed-phrase smoke matrix and incident/recovery procedure |
+| Distribution | Unpacked Chrome Sepolia target passes automated gates; production compilation does not grant distribution approval | GPL/legal/compliance/store review remains required before release packaging |
 
 ## Checkpoint 1: Sepolia product shell
 
@@ -251,22 +253,36 @@ through recovery with no unsupported or unexplained state.
 
 ## Checkpoint 10: Mainnet read-only rehearsal
 
-- [ ] Pin and monitor the official production deployment and implementation.
-- [ ] Rescan production-equivalent known fixtures without enabling deposits.
+- [x] Pin the official production deployment, live proxy implementation, pool,
+  verifiers, bytecode identities, scope, fees, deployment block, ASP, and relayers.
+- [x] Verify the complete pinned deployment through bounded live mainnet reads.
+- [x] Verify production bundles contain mainnet pins and exclude Sepolia pins;
+  verify development bundles contain Sepolia pins and exclude mainnet pins.
+- [x] Isolate mainnet and Sepolia operations, commitment, withdrawal, ragequit,
+  portfolio, and event databases while deleting both secret profiles on reset.
+- [ ] Rescan production-equivalent known fixtures without sending value.
 - [ ] Complete security, legal/compliance, licensing, endpoint, and store-policy
   reviews.
 - [ ] Exercise the kill switch and recovery-only procedures.
 
-Manual gate: approve the PRD's entire mainnet go/no-go list. Mainnet deposit
-code remains disabled during this checkpoint.
+Manual gate: approve the remaining PRD go/no-go items before a distribution or
+value-bearing rollout. Mainnet code is compiled for normal builds, but no live
+transaction was sent during the read-only verification.
 
-## Checkpoint 11: Controlled mainnet beta
+## Checkpoint 11: Mainnet implementation and controlled beta
 
-- [ ] Enable only explicitly approved wallet types behind the kill switch.
-- [ ] Keep amounts governed by the contract minimum, valid `uint256` input,
+- [x] Select mainnet only for normal/production builds and retain Sepolia only
+  for `dev:extension`, without a runtime or remote network override.
+- [x] Enable Bankr, private-key, and seed-phrase production mutations; keep
+  impersonators reject-only and agent-password mutations blocked.
+- [x] Keep amounts governed by the contract minimum, valid `uint256` input,
   and available balance after gas.
-- [ ] Keep Bankr deposits disabled until its production ragequit gate passes.
-- [ ] Monitor only privacy-safe operational health.
+- [x] Reuse the exact final authorization/effect boundary for Bankr Shield and
+  public-recovery submissions before pending request removal or remote submit.
+- [ ] Complete a capped, explicitly authorized Shield/Unshield/recovery smoke
+  run for Bankr, private-key, and seed-phrase accounts.
+- [ ] Monitor only privacy-safe operational health and exercise recovery-only
+  response before wider availability.
 
 Manual gate: perform the first mainnet shield, private withdrawal,
 clean-install recovery, and emergency procedure only after every earlier gate

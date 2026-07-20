@@ -21,11 +21,23 @@ import {
   validateBankrTransactionChain,
   validatePinnedBankrTransaction,
 } from "./bankrPolicy";
+import { authorizePrivacyConfirmation } from "./privacyConfirmation";
+import {
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+  recordPrivacyShieldSubmissionFailure,
+} from "../privacy/operations/lifecycle";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+  recordPrivacyRagequitSubmissionFailure,
+} from "../privacy/ragequit/lifecycle";
 import {
   activeAbortControllers,
   processingTxIds,
   type TransactionResult,
 } from "./runtime";
+import { startReceiptPolling } from "../forceInclusion/receiptPoller";
 export async function handleConfirmTransaction(
   txId: string,
   password: string,
@@ -37,6 +49,11 @@ export async function handleConfirmTransaction(
 
   const policy = await validatePinnedBankrTransaction(pending);
   if (!policy.ok) return { success: false, error: policy.error };
+
+  const privacyAuthorization = await authorizePrivacyConfirmation(pending);
+  if (!privacyAuthorization.ok) {
+    return { success: false, error: privacyAuthorization.error };
+  }
 
   const apiKey = await getBankrApiKeyForConfirmation(password);
   if (!apiKey) return { success: false, error: "Invalid password" };
@@ -71,14 +88,33 @@ export async function handleConfirmTransaction(
           "transaction",
           pending,
           effectGuard.beginEffect,
+          async () => {
+            await beginPrivacyShieldSubmission(
+              pending,
+              privacyAuthorization.shield,
+            );
+            await beginPrivacyRagequitSubmission(
+              pending,
+              privacyAuthorization.ragequit,
+            );
+          },
         ),
     );
     effectGuard.settleEffect();
+    if (result.transactionHash) {
+      await recordPrivacyShieldSubmitted(pending, result.transactionHash);
+      await recordPrivacyRagequitSubmitted(pending, result.transactionHash);
+      if (pending.privacyShieldMeta || pending.privacyRagequitMeta) {
+        startReceiptPolling(txId, result.transactionHash, pending.tx.chainId);
+      }
+    }
     if (result.status === "reverted") {
       return { success: false, error: "Transaction reverted" };
     }
     return { success: true, txHash: result.transactionHash };
   } catch (error) {
+    await recordPrivacyShieldSubmissionFailure(pending).catch(() => undefined);
+    await recordPrivacyRagequitSubmissionFailure(pending).catch(() => undefined);
     if (error instanceof Error && error.name === "AbortError") {
       return {
         success: false,
@@ -122,6 +158,11 @@ export async function handleConfirmTransactionAsync(
     forceInclusion,
   );
   if (!chainPolicy.ok) return { success: false, error: chainPolicy.error };
+
+  const privacyAuthorization = await authorizePrivacyConfirmation(pending);
+  if (!privacyAuthorization.ok) {
+    return { success: false, error: privacyAuthorization.error };
+  }
 
   processingTxIds.add(txId);
   const apiKey = await getBankrApiKeyForConfirmation(password);
@@ -193,6 +234,8 @@ export async function handleConfirmTransactionAsync(
       apiKey,
       functionName,
       effectLease,
+      privacyAuthorization.shield,
+      privacyAuthorization.ragequit,
     );
   }
   return { success: true };

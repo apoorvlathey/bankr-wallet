@@ -1,4 +1,5 @@
 import type { ShieldSourceAccount } from "./shieldQuote";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 import { parseUnshieldOperation, type UnshieldOperation } from "./unshield";
 import { parsePublicRecoveryOperation, type PublicRecoveryOperation } from "./recovery";
 
@@ -29,7 +30,7 @@ export interface ShieldPendingOperation {
     | "failed_recoverable"
     | "failed_needs_support";
   readonly createdAt: number;
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly accountId: string;
   readonly accountAddress: string;
   readonly accountType: Exclude<ShieldSourceAccount["type"], "impersonator">;
@@ -147,7 +148,7 @@ function parseOperation(value: unknown): ShieldPendingOperation | null {
     typeof raw.createdAt !== "number" ||
     !Number.isSafeInteger(raw.createdAt) ||
     raw.createdAt < 0 ||
-    raw.chainId !== 11_155_111 ||
+    raw.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     typeof raw.accountId !== "string" ||
     raw.accountId.length === 0 ||
     raw.accountId.length > 128 ||
@@ -179,7 +180,7 @@ function parseOperation(value: unknown): ShieldPendingOperation | null {
     revision: raw.revision,
     state: raw.state as ShieldPendingOperation["state"],
     createdAt: raw.createdAt,
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     accountId: raw.accountId,
     accountAddress: raw.accountAddress,
     accountType: raw.accountType,

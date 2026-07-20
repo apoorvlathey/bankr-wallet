@@ -18,8 +18,8 @@ import {
   readPrivacyCommitments,
   updatePrivacyCommitmentStatus,
 } from "../commitments/repository";
-import { verifyPrivacyPoolsSepoliaDeployment } from "../deployment/health";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { verifyPrivacyPoolsDeployment } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { provePrivacyWithdrawal } from "../prover/coordinator";
 import {
   PrivacyRelayerSubmissionError,
@@ -80,7 +80,7 @@ export async function executePrivacyUnshield(
 ): Promise<StoredPrivacyUnshieldV1> {
   if (!UUID.test(operationId)) throw new Error("invalid-request");
   const expectedEpoch = await capturePrivacyMasterAuthorization();
-  await verifyPrivacyPoolsSepoliaDeployment();
+  await verifyPrivacyPoolsDeployment();
   const material = await readPrivacyAspMasterMaterial();
   if (!material) throw new Error("auth-required");
 
@@ -160,10 +160,10 @@ export async function executePrivacyUnshield(
     }
     const context = BigInt(calculateContext(
       {
-        processooor: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+        processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
         data: claimed.details.feeCommitment.withdrawalData,
       },
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope as never,
+      PRIVACY_POOLS_DEPLOYMENT.scope as never,
     ));
     const proof = await provePrivacyWithdrawal({
       withdrawnValue: claimed.operation.summary.amountWei,

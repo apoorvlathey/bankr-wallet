@@ -1,4 +1,5 @@
 import { getAddress, isAddress, parseEther, zeroAddress } from "viem";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -18,7 +19,7 @@ export interface UnshieldOperation {
   readonly revision: number;
   readonly createdAt: number;
   readonly updatedAt: number;
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly amountWei: bigint;
   readonly netRecipientAmountWei: bigint;
   readonly relayFeeWei: bigint;
@@ -68,9 +69,9 @@ export function parseUnshieldOperation(value: unknown): UnshieldOperation | null
     typeof value.revision !== "number" || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
     typeof value.createdAt !== "number" || !Number.isSafeInteger(value.createdAt) || value.createdAt < 0 ||
     typeof value.updatedAt !== "number" || !Number.isSafeInteger(value.updatedAt) || value.updatedAt < value.createdAt ||
-    value.chainId !== 11_155_111 || amountWei === null || amountWei <= 0n ||
+    value.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId || amountWei === null || amountWei <= 0n ||
     netRecipientAmountWei === null || relayFeeWei === null || amountWei !== netRecipientAmountWei + relayFeeWei ||
-    feeBPS === null || feeBPS > 100n ||
+    feeBPS === null || feeBPS > PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS ||
     typeof value.recipient !== "string" || !ADDRESS.test(value.recipient) ||
     typeof value.relayerName !== "string" || value.relayerName.length === 0 || value.relayerName.length > 64 ||
     typeof value.expiresAt !== "number" || !Number.isSafeInteger(value.expiresAt) || value.expiresAt < value.createdAt ||
@@ -85,7 +86,7 @@ export function parseUnshieldOperation(value: unknown): UnshieldOperation | null
     revision: value.revision,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     amountWei,
     netRecipientAmountWei,
     relayFeeWei,

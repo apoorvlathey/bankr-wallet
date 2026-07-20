@@ -3,17 +3,21 @@ import test from "node:test";
 
 import {
   PRIVACY_POOLS_RELEASE_POLICY,
-  PRIVACY_POOLS_SEPOLIA_DEPLOYMENT,
+  PRIVACY_POOLS_DEPLOYMENT,
+  PRIVACY_POOLS_MAINNET_DEPLOYMENT,
+  PRIVACY_POOLS_MAINNET_RELEASE_POLICY,
   type PrivacyPoolsContractId,
+  type PrivacyPoolsDeployment,
 } from "../../src/chrome/privacy/deployment/manifest";
 import {
-  assertPrivacyPoolsSepoliaSnapshot,
+  assertPrivacyPoolsSnapshot,
   PrivacyDeploymentVerificationError,
-  type PrivacyPoolsSepoliaSnapshot,
+  type PrivacyPoolsSnapshot,
 } from "../../src/chrome/privacy/deployment/validation";
 
-function validSnapshot(): PrivacyPoolsSepoliaSnapshot {
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
+function validSnapshot(
+  deployment: PrivacyPoolsDeployment = PRIVACY_POOLS_DEPLOYMENT,
+): PrivacyPoolsSnapshot {
   const contracts = Object.fromEntries(
     (Object.keys(deployment.contracts) as PrivacyPoolsContractId[]).map((id) => [
       id,
@@ -22,12 +26,11 @@ function validSnapshot(): PrivacyPoolsSepoliaSnapshot {
         runtimeBytecodeHash: deployment.contracts[id].runtimeBytecodeHash,
       },
     ]),
-  ) as PrivacyPoolsSepoliaSnapshot["contracts"];
+  ) as PrivacyPoolsSnapshot["contracts"];
 
   return {
     chainId: deployment.chainId,
-    implementationSlot:
-      "0x000000000000000000000000457f219308fd4f06ffb39dc7b532a51b1580f58b",
+    implementationSlot: `0x${"0".repeat(24)}${deployment.contracts.entrypointImplementation.address.slice(2).toLowerCase()}`,
     contracts,
     pool: {
       scope: deployment.scope,
@@ -54,33 +57,68 @@ function isMismatch(error: unknown): boolean {
   );
 }
 
-test("Sepolia release pins enable only the pinned local beta and remain mainnet-free", () => {
+test("direct test and development imports retain the pinned Sepolia local beta", () => {
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.mode, "sepolia-local-beta");
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.readiness, "enabled");
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.quotes, "enabled");
-  assert.equal(PRIVACY_POOLS_RELEASE_POLICY.mutations, "sepolia-enabled");
-  assert.equal(PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId, 11_155_111);
+  assert.equal(PRIVACY_POOLS_RELEASE_POLICY.mutations, "enabled");
+  assert.equal(PRIVACY_POOLS_RELEASE_POLICY.bankrMutations, "blocked");
+  assert.equal(PRIVACY_POOLS_DEPLOYMENT.chainId, 11_155_111);
   assert.equal(
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.source.commit,
+    PRIVACY_POOLS_DEPLOYMENT.source.commit,
     "461867adb439f25f1cc809ee0187357916b90ef6",
   );
   assert.equal(Object.isFrozen(PRIVACY_POOLS_RELEASE_POLICY), true);
-  assert.equal(Object.isFrozen(PRIVACY_POOLS_SEPOLIA_DEPLOYMENT), true);
-  assert.equal(Object.isFrozen(PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts), true);
+  assert.equal(Object.isFrozen(PRIVACY_POOLS_DEPLOYMENT), true);
+  assert.equal(Object.isFrozen(PRIVACY_POOLS_DEPLOYMENT.contracts), true);
   assert.doesNotMatch(
-    JSON.stringify(PRIVACY_POOLS_SEPOLIA_DEPLOYMENT, (_key, value) =>
+    JSON.stringify(PRIVACY_POOLS_DEPLOYMENT, (_key, value) =>
       typeof value === "bigint" ? value.toString() : value,
     ),
     /6818809eefce719e480a7526d76bd3e561526b46/i,
   );
 });
 
+test("mainnet release pins the live proxy implementation and production services", () => {
+  const deployment = PRIVACY_POOLS_MAINNET_DEPLOYMENT;
+  assert.equal(PRIVACY_POOLS_MAINNET_RELEASE_POLICY.mode, "mainnet-production");
+  assert.equal(PRIVACY_POOLS_MAINNET_RELEASE_POLICY.bankrMutations, "enabled");
+  assert.equal(deployment.chainId, 1);
+  assert.equal(deployment.chainName, "Ethereum");
+  assert.equal(
+    deployment.scope,
+    4_916_574_638_117_198_869_413_701_114_161_172_350_986_437_430_914_933_850_166_949_084_132_905_299_523n,
+  );
+  assert.equal(deployment.assetConfig.minimumDepositAmount, 10_000_000_000_000_000n);
+  assert.equal(deployment.assetConfig.vettingFeeBPS, 50n);
+  assert.equal(deployment.assetConfig.maxRelayFeeBPS, 1_000n);
+  assert.equal(
+    deployment.contracts.entrypointImplementation.address,
+    "0x15e355024de1CDc74ADdea7EBDf98418Ba5B1a2c",
+  );
+  assert.equal(deployment.services.aspBaseUrl, "https://api.0xbow.io");
+  assert.deepEqual(
+    deployment.services.relayers.map(({ name, url }) => ({ name, url })),
+    [
+      { name: "Fast Relay", url: "https://fastrelay.xyz" },
+      { name: "Cloaked Relay", url: "https://api.clkd.xyz" },
+    ],
+  );
+  assert.doesNotThrow(() =>
+    assertPrivacyPoolsSnapshot(
+      validSnapshot(deployment),
+      deployment,
+      PRIVACY_POOLS_MAINNET_RELEASE_POLICY,
+    )
+  );
+});
+
 test("the exact verified Sepolia snapshot passes", () => {
-  assert.doesNotThrow(() => assertPrivacyPoolsSepoliaSnapshot(validSnapshot()));
+  assert.doesNotThrow(() => assertPrivacyPoolsSnapshot(validSnapshot()));
 });
 
 test("chain, proxy, bytecode, pool, verifier, scope, and fee drift fail closed", () => {
-  const mutations: Array<(snapshot: PrivacyPoolsSepoliaSnapshot) => void> = [
+  const mutations: Array<(snapshot: PrivacyPoolsSnapshot) => void> = [
     (snapshot) => {
       snapshot.chainId = 1;
     },
@@ -128,7 +166,7 @@ test("chain, proxy, bytecode, pool, verifier, scope, and fee drift fail closed",
   for (const mutate of mutations) {
     const snapshot = validSnapshot();
     mutate(snapshot);
-    assert.throws(() => assertPrivacyPoolsSepoliaSnapshot(snapshot), isMismatch);
+    assert.throws(() => assertPrivacyPoolsSnapshot(snapshot), isMismatch);
   }
 });
 
@@ -140,12 +178,12 @@ test("malformed EIP-1967 words and code hashes are rejected", () => {
   ]) {
     const snapshot = validSnapshot();
     snapshot.implementationSlot = implementationSlot;
-    assert.throws(() => assertPrivacyPoolsSepoliaSnapshot(snapshot), isMismatch);
+    assert.throws(() => assertPrivacyPoolsSnapshot(snapshot), isMismatch);
   }
 
   for (const runtimeBytecodeHash of [null, "", "0x1234", `0x${"A".repeat(64)}`]) {
     const snapshot = validSnapshot();
     snapshot.contracts.entrypointProxy.runtimeBytecodeHash = runtimeBytecodeHash;
-    assert.throws(() => assertPrivacyPoolsSepoliaSnapshot(snapshot), isMismatch);
+    assert.throws(() => assertPrivacyPoolsSnapshot(snapshot), isMismatch);
   }
 });

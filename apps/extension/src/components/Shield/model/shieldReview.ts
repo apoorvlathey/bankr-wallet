@@ -1,10 +1,11 @@
 import type { ShieldSourceAccount } from "./shieldQuote";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const SERIALIZED_WEI = /^(?:0|[1-9]\d{0,79})$/;
 
 export interface ShieldPreparedReview {
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly accountId: string;
   readonly accountAddress: string;
   readonly accountType: ShieldSourceAccount["type"];
@@ -55,7 +56,7 @@ export function parseShieldReviewResponse(
   }
   const value = raw as Record<string, unknown>;
   if (
-    value.chainId !== 11_155_111 ||
+    value.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     value.accountId !== expectedAccount.id ||
     value.accountType !== expectedAccount.type ||
     typeof value.accountAddress !== "string" ||
@@ -77,7 +78,7 @@ export function parseShieldReviewResponse(
   if (amountWei !== expectedAmountWei) return null;
 
   return Object.freeze({
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     accountId: expectedAccount.id,
     accountAddress: value.accountAddress,
     accountType: expectedAccount.type,

@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import type { ShieldSourceAccount } from "../model/shieldQuote";
+import { isPrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
 
 export function usePublicRecovery(onQueued: () => void) {
   const [status, setStatus] = useState<"idle" | "preparing" | "queued" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const prepare = useCallback((account: ShieldSourceAccount | null) => {
-    if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) {
+    if (!account || !isPrivacyPoolsMutationAccountType(account.type)) {
       setStatus("error");
       setError("Choose the original deposit account.");
       return;

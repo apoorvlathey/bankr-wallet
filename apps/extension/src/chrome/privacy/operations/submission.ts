@@ -16,8 +16,9 @@ import {
   assertPrivacyMasterAuthorization,
   capturePrivacyMasterAuthorization,
 } from "../authorization";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT, PRIVACY_POOLS_RELEASE_POLICY } from "../deployment/manifest";
-import { verifyPrivacyPoolsSepoliaDeployment } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT, PRIVACY_POOLS_RELEASE_POLICY } from "../deployment/manifest";
+import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
+import { verifyPrivacyPoolsDeployment } from "../deployment/health";
 import { decodePrivacyShieldReviewIntent } from "../deposit/intent";
 import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
@@ -51,7 +52,7 @@ type Dependencies = {
   getAccountById: typeof getAccountById;
   getPending: typeof getPendingTxRequestById;
   savePending: typeof savePendingTxRequest;
-  verifyDeployment: typeof verifyPrivacyPoolsSepoliaDeployment;
+  verifyDeployment: typeof verifyPrivacyPoolsDeployment;
   sendRuntimeMessage: (message: unknown) => Promise<unknown>;
 };
 
@@ -60,7 +61,7 @@ const productionDependencies: Dependencies = {
   getAccountById,
   getPending: getPendingTxRequestById,
   savePending: savePendingTxRequest,
-  verifyDeployment: verifyPrivacyPoolsSepoliaDeployment,
+  verifyDeployment: verifyPrivacyPoolsDeployment,
   sendRuntimeMessage: (message) => chrome.runtime.sendMessage(message),
 };
 
@@ -141,16 +142,16 @@ async function loadSubmittableOperation(
   if (!UUID.test(operationId)) {
     throw new PrivacyShieldSubmissionError("invalid-request");
   }
-  if (PRIVACY_POOLS_RELEASE_POLICY.mutations !== "sepolia-enabled") {
+  if (PRIVACY_POOLS_RELEASE_POLICY.mutations !== "enabled") {
     throw new PrivacyShieldSubmissionError("operation-unavailable");
   }
   const operation = await dependencies.getOperation(operationId);
   if (!operation || trackingFor(operation).state !== "awaiting_wallet_confirmation") {
     throw new PrivacyShieldSubmissionError("operation-unavailable");
   }
-  if (operation.summary.accountType === "bankr") {
-    // Bankr's documented raw-submit chains do not include Sepolia. Do not
-    // pretend the remote signer can satisfy this testnet confirmation path.
+  if (
+    !isPrivacyPoolsMutationAccountType(operation.summary.accountType)
+  ) {
     throw new PrivacyShieldSubmissionError("bankr-testnet-unsupported");
   }
   const details = await releaseOperationDetails(operation);
@@ -206,11 +207,11 @@ export async function queuePrivacyShieldConfirmation(
         to: operation.summary.destinationAddress,
         data: details.callData,
         value: toHex(BigInt(operation.summary.amountWei)),
-        chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+        chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
       },
       origin: "WalletChan Shield",
       favicon: null,
-      chainName: "Sepolia",
+      chainName: PRIVACY_POOLS_DEPLOYMENT.chainName,
       timestamp: Date.now(),
       trustedInternal: true,
       privacyShieldMeta: { version: 1, operationId },
@@ -271,7 +272,7 @@ export function assertPrivacyShieldConfirmationAuthorization(
   authorization: PrivacyShieldConfirmationAuthorization | null,
 ): void {
   if (!authorization) return;
-  if (PRIVACY_POOLS_RELEASE_POLICY.mutations !== "sepolia-enabled") {
+  if (PRIVACY_POOLS_RELEASE_POLICY.mutations !== "enabled") {
     throw new PrivacyShieldSubmissionError("operation-unavailable");
   }
   assertPrivacyMasterAuthorization(authorization.expectedAuthEpoch);
@@ -285,4 +286,4 @@ export function isPrivacyShieldPendingTransaction(
 }
 
 export const privacyShieldSubmissionDestination =
-  PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address as Address;
+  PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address as Address;

@@ -9,8 +9,10 @@ import {
 } from "./ShieldAssetCards";
 import {
   formatShieldWei,
+  SHIELD_VETTING_FEE_BPS,
   type ShieldSourceAccount,
 } from "./model/shieldQuote";
+import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
 
 interface ShieldAmountPanelProps {
   account: ShieldSourceAccount | null;
@@ -34,7 +36,7 @@ export default function ShieldAmountPanel({
       : quote.state.status === "failed"
         ? quote.state.error
         : readyQuote && !readyQuote.canAfford
-          ? "Not enough Sepolia ETH for this amount and network fee."
+          ? `Not enough ${SHIELDED_ETH_NETWORK_NAME} ETH for this amount and network fee.`
           : quote.validation.message;
 
   return (
@@ -55,7 +57,7 @@ export default function ShieldAmountPanel({
         amount={visibleQuote ? formatShieldWei(visibleQuote.shieldedAmountWei) : null}
         detail={visibleQuote
           ? `${formatShieldWei(visibleQuote.protocolFeeWei)} ETH protocol fee`
-          : "Net of the 1% protocol fee"}
+          : `Net of the ${Number(SHIELD_VETTING_FEE_BPS) / 100}% protocol fee`}
       />
 
       {quote.state.status === "loading" && (
@@ -66,7 +68,9 @@ export default function ShieldAmountPanel({
       )}
       {readyQuote && (
         <HStack justify="space-between" pt={3} spacing={3}>
-          <Text fontSize="xs" color="fg.secondary">Privacy Pools · Sepolia</Text>
+          <Text fontSize="xs" color="fg.secondary">
+            Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
+          </Text>
           <Text fontSize="xs" color="fg.secondary" textAlign="right">
             Network fee shown in review
           </Text>

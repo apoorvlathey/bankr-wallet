@@ -1,6 +1,13 @@
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
-export const PRIVACY_PORTFOLIO_DATABASE = "walletchan-privacy-portfolio-v1";
+export const PRIVACY_PORTFOLIO_DATABASES = Object.freeze([
+  "walletchan-privacy-portfolio-v1",
+  "walletchan-privacy-portfolio-mainnet-v1",
+] as const);
+export const PRIVACY_PORTFOLIO_DATABASE = PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+  ? PRIVACY_PORTFOLIO_DATABASES[0]
+  : PRIVACY_PORTFOLIO_DATABASES[1];
 export const PRIVACY_PORTFOLIO_DATABASE_VERSION = 1;
 export const PRIVACY_PORTFOLIO_STORE = "snapshots";
 export const MAX_PRIVACY_PORTFOLIO_SNAPSHOTS = 193;

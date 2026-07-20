@@ -1,5 +1,7 @@
 /** Wallet-UI transport for bounded Privacy Pools setup and operation state. */
 
+import { formatEther } from "viem";
+
 import { ensurePrivacyIdentityInitialized } from "../privacy/identity";
 import { quotePrivacyShield } from "../privacy/deposit/quote";
 import {
@@ -52,6 +54,7 @@ import {
 } from "../privacy/ragequit/lifecycle";
 import { privacyRagequitPublicSummary } from "../privacy/ragequit/types";
 import { runPrivacyProverFixedSelfTest } from "../privacy/prover/coordinator";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../privacy/deployment/manifest";
 
 export const BACKGROUND_PRIVACY_MESSAGE_TYPES = [
   "privacyEnsureInitialized",
@@ -182,7 +185,7 @@ interface PrivacyPrepareRagequitMessage {
   requestId: string;
   accountId: string;
   accountAddress: string;
-  accountType: "privateKey" | "seedPhrase";
+  accountType: "bankr" | "privateKey" | "seedPhrase";
 }
 
 function isPrivacyPrepareUnshieldMessage(
@@ -217,7 +220,8 @@ function isPrivacyPrepareRagequitMessage(
     typeof value.requestId === "string" &&
     typeof value.accountId === "string" &&
     typeof value.accountAddress === "string" &&
-    (value.accountType === "privateKey" || value.accountType === "seedPhrase");
+    (value.accountType === "bankr" || value.accountType === "privateKey" ||
+      value.accountType === "seedPhrase");
 }
 
 function isPrivacyAmountMessage(
@@ -287,14 +291,16 @@ function privacyOperationFailure(error: unknown): {
     "account-unavailable": "Switch accounts and try again.",
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
-    "amount-below-minimum": "Minimum is 0.001 ETH.",
+    "amount-below-minimum":
+      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
     "quote-unavailable": "Quote unavailable. Try again.",
     "auth-required": "Unlock with your main password or biometrics and try again.",
     "recovery-unavailable": "Shield recovery needs attention before you continue.",
-    "insufficient-funds": "Not enough Sepolia ETH for this amount and gas.",
+    "insufficient-funds":
+      `Not enough ${PRIVACY_POOLS_DEPLOYMENT.chainName} ETH for this amount and gas.`,
     "operation-unavailable": "Couldn’t save this Shield operation. Try again.",
     "bankr-testnet-unsupported":
-      "Bankr doesn’t support Sepolia transactions. Use a Private Key or Seed Phrase test account.",
+      `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
   };
   return { success: false, code, error: messages[code] };
 }
@@ -361,11 +367,13 @@ function privacyReviewFailure(error: unknown): {
     "account-unavailable": "Switch accounts and try again.",
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
-    "amount-below-minimum": "Minimum is 0.001 ETH.",
+    "amount-below-minimum":
+      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
     "quote-unavailable": "Quote unavailable. Try again.",
     "auth-required": "Unlock with your main password or biometrics and try again.",
     "recovery-unavailable": "Shield recovery needs attention before you continue.",
-    "insufficient-funds": "Not enough Sepolia ETH for this amount and gas.",
+    "insufficient-funds":
+      `Not enough ${PRIVACY_POOLS_DEPLOYMENT.chainName} ETH for this amount and gas.`,
     "review-unavailable": "Review unavailable. Try again.",
   };
   return { success: false, code, error: messages[code] };
@@ -385,7 +393,8 @@ function privacyQuoteFailure(error: unknown): {
     "account-unavailable": "Switch accounts and try again.",
     "view-only-account": "View-only accounts can’t Shield.",
     "invalid-amount": "Enter a valid ETH amount.",
-    "amount-below-minimum": "Minimum is 0.001 ETH.",
+    "amount-below-minimum":
+      `Minimum is ${formatEther(PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount)} ETH.`,
     "quote-unavailable": "Quote unavailable. Try again.",
   };
   return { success: false, code, error: messages[code] };
@@ -650,7 +659,8 @@ export function createBackgroundPrivacyMessageRouter(
             "invalid-request": "Enter a valid amount and recipient.",
             "auth-required": "Unlock with your main password or biometrics and try again.",
             "balance-unavailable": "No single ready Shield balance can cover that amount.",
-            "quote-unavailable": "No valid Sepolia relayer quote is available.",
+            "quote-unavailable":
+              `No valid ${PRIVACY_POOLS_DEPLOYMENT.chainName} relayer quote is available.`,
             "operation-unavailable": "Unshield is unavailable. Try again.",
           } as const;
           sendResponse({ success: false, code, error: messages[code] });
@@ -701,7 +711,8 @@ export function createBackgroundPrivacyMessageRouter(
               "invalid-request": "Invalid recovery request.",
               "auth-required": "Unlock with your main password or biometrics and try again.",
               "account-unavailable": "Choose the original deposit account and try again.",
-              "bankr-testnet-unsupported": "Bankr doesn’t support Sepolia transactions.",
+              "bankr-testnet-unsupported":
+                `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
               "recovery-unavailable": "No public recovery is available for this account.",
               "proof-failed": "Couldn’t prepare the recovery proof. Try again.",
             } as const;

@@ -1,13 +1,16 @@
 import { FORCE_INCLUSION_CHAINS } from "@/constants/chainRegistry";
 import { BANKR_SUPPORTED_CHAIN_IDS, CHAIN_NAMES } from "../../constants/networks";
 import type { PendingTxRequest } from "../requests/pendingTxStorage";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../privacy/deployment/manifest";
+import { isPrivacyPoolsMutationAccountType } from "../privacy/deployment/accountPolicy";
 import { resolvePinnedAccount } from "./runtime";
 
 export function bankrPrivacyConfirmationError(
   pending: PendingTxRequest,
 ): string | null {
-  return pending.privacyShieldMeta || pending.privacyRagequitMeta
-    ? "Bankr cannot submit Privacy Pools transactions on Sepolia"
+  return (pending.privacyShieldMeta || pending.privacyRagequitMeta) &&
+      !isPrivacyPoolsMutationAccountType("bankr")
+    ? `Bankr cannot submit Privacy Pools transactions on ${PRIVACY_POOLS_DEPLOYMENT.chainName}`
     : null;
 }
 

@@ -8,6 +8,7 @@ import {
   MAX_VISIBLE_PRIVACY_OPERATIONS,
   PRIVACY_NEXT_DEPOSIT_INDEX_KEY,
   PRIVACY_OPERATIONS_DATABASE,
+  PRIVACY_OPERATIONS_DATABASES,
   PRIVACY_OPERATIONS_DATABASE_VERSION,
   PRIVACY_OPERATIONS_METADATA_STORE,
   PRIVACY_OPERATIONS_STORE,
@@ -394,10 +395,12 @@ export async function deletePrivacyOperationsDatabase(): Promise<void> {
     database?.close();
   }
   if (typeof indexedDB === "undefined") return;
-  await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(PRIVACY_OPERATIONS_DATABASE);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("Privacy operation reset failed"));
-    request.onblocked = () => reject(new Error("Privacy operation reset blocked"));
-  });
+  await Promise.all(PRIVACY_OPERATIONS_DATABASES.map((name) =>
+    new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error ?? new Error("Privacy operation reset failed"));
+      request.onblocked = () => reject(new Error("Privacy operation reset blocked"));
+    })
+  ));
 }

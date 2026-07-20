@@ -1,17 +1,23 @@
 import type { Address, Hex } from "viem";
 
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
+
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const UINT = /^(?:0|[1-9]\d{0,79})$/;
 const EVENT_ID = /^0x[0-9a-fA-F]{64}:(?:0|[1-9]\d{0,9})$/;
 
-export const PRIVACY_PUBLIC_EVENTS_DATABASE = "walletchan-privacy-events-v1";
+export const PRIVACY_PUBLIC_EVENTS_DATABASE =
+  PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+    ? "walletchan-privacy-events-v1"
+    : "walletchan-privacy-events-mainnet-v1";
 export const PRIVACY_PUBLIC_EVENTS_DATABASE_VERSION = 2;
 export const PRIVACY_DEPOSIT_EVENTS_STORE = "deposits";
 export const PRIVACY_WITHDRAWAL_EVENTS_STORE = "withdrawals";
 export const PRIVACY_RAGEQUIT_EVENTS_STORE = "ragequits";
 export const PRIVACY_EVENT_CHECKPOINT_STORE = "checkpoints";
-export const PRIVACY_SEPOLIA_EVENT_CHECKPOINT_KEY = "sepolia-pool-events";
+export const PRIVACY_EVENT_CHECKPOINT_KEY =
+  `${PRIVACY_POOLS_DEPLOYMENT.profile}-pool-events`;
 export const MAX_PRIVACY_DEPOSIT_EVENTS = 20_000;
 export const MAX_PRIVACY_WITHDRAWAL_EVENTS = 20_000;
 export const MAX_PRIVACY_RAGEQUIT_EVENTS = 20_000;
@@ -19,7 +25,7 @@ export const MAX_PRIVACY_RAGEQUIT_EVENTS = 20_000;
 export interface PrivacyDepositEventV1 {
   version: 1;
   id: string;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   blockNumber: string;
   blockHash: Hex;
   logIndex: number;
@@ -34,7 +40,7 @@ export interface PrivacyDepositEventV1 {
 export interface PrivacyWithdrawalEventV1 {
   version: 1;
   id: string;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   blockNumber: string;
   blockHash: Hex;
   logIndex: number;
@@ -48,7 +54,7 @@ export interface PrivacyWithdrawalEventV1 {
 export interface PrivacyRagequitEventV1 {
   version: 1;
   id: string;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   blockNumber: string;
   blockHash: Hex;
   logIndex: number;
@@ -67,8 +73,8 @@ export interface PrivacyPoolEventPageV1 {
 
 export interface PrivacyEventCheckpointV1 {
   version: 1;
-  key: typeof PRIVACY_SEPOLIA_EVENT_CHECKPOINT_KEY;
-  chainId: 11_155_111;
+  key: typeof PRIVACY_EVENT_CHECKPOINT_KEY;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   nextBlock: string;
   lastBlockNumber: string;
   lastBlockHash: Hex;
@@ -112,7 +118,7 @@ export function isValidPrivacyDepositEvent(value: unknown): value is PrivacyDepo
   ) return false;
   const event = value as Partial<PrivacyDepositEventV1>;
   return event.version === 1 &&
-    event.chainId === 11_155_111 &&
+    event.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     typeof event.id === "string" && EVENT_ID.test(event.id) &&
     typeof event.blockHash === "string" && HASH.test(event.blockHash) &&
     typeof event.transactionHash === "string" && HASH.test(event.transactionHash) &&
@@ -139,7 +145,7 @@ function commonEvent(
   },
 ): boolean {
   return event.version === 1 &&
-    event.chainId === 11_155_111 &&
+    event.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     typeof event.id === "string" && EVENT_ID.test(event.id) &&
     typeof event.blockHash === "string" && HASH.test(event.blockHash) &&
     typeof event.transactionHash === "string" && HASH.test(event.transactionHash) &&
@@ -208,8 +214,8 @@ export function isValidPrivacyEventCheckpoint(
   const nextBlock = uint(checkpoint.nextBlock);
   const lastBlock = uint(checkpoint.lastBlockNumber);
   return checkpoint.version === 1 &&
-    checkpoint.key === PRIVACY_SEPOLIA_EVENT_CHECKPOINT_KEY &&
-    checkpoint.chainId === 11_155_111 &&
+    checkpoint.key === PRIVACY_EVENT_CHECKPOINT_KEY &&
+    checkpoint.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     nextBlock !== null && lastBlock !== null && nextBlock === lastBlock + 1n &&
     typeof checkpoint.lastBlockHash === "string" && HASH.test(checkpoint.lastBlockHash) &&
     typeof checkpoint.lastSyncAt === "number" &&

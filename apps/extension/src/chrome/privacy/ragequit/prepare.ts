@@ -15,8 +15,9 @@ import {
   updatePrivacyCommitmentStatus,
 } from "../commitments/repository";
 import { isPrivacyCommitmentPubliclyRecoverableStatus } from "../commitments/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
-import { verifyPrivacyPoolsSepoliaDeployment } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
+import { verifyPrivacyPoolsDeployment } from "../deployment/health";
+import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
 import { derivePrivacyPoolCommitment } from "../protocol/primitives";
 import {
   getPrivacyProverDiagnosticCode,
@@ -120,7 +121,7 @@ export async function preparePrivacyRagequit(
   requestedAccount: {
     accountId: string;
     accountAddress: string;
-    accountType: "privateKey" | "seedPhrase";
+    accountType: "bankr" | "privateKey" | "seedPhrase";
   },
 ): Promise<StoredPrivacyRagequitV1> {
   if (!UUID.test(requestId)) throw new PrivacyRagequitPrepareError("invalid-request");
@@ -133,7 +134,9 @@ export async function preparePrivacyRagequit(
     account.type !== requestedAccount.accountType) {
     throw new PrivacyRagequitPrepareError("account-unavailable");
   }
-  if (account.type !== "privateKey" && account.type !== "seedPhrase") {
+  if (
+    !isPrivacyPoolsMutationAccountType(account.type)
+  ) {
     throw new PrivacyRagequitPrepareError("bankr-testnet-unsupported");
   }
   const [byRequest, existing, material] = await Promise.all([
@@ -155,7 +158,7 @@ export async function preparePrivacyRagequit(
   );
   if (reusable) return reusable;
   if (!material) throw new PrivacyRagequitPrepareError("auth-required");
-  await verifyPrivacyPoolsSepoliaDeployment().catch(() => {
+  await verifyPrivacyPoolsDeployment().catch(() => {
     throw new PrivacyRagequitPrepareError("recovery-unavailable");
   });
   const commitments = await readPrivacyCommitments(material.key, material.keyId);
@@ -219,12 +222,12 @@ export async function preparePrivacyRagequit(
     id: operationId,
     requestId,
     createdAt,
-    chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     accountId: account.id,
     accountAddress: account.address as Address,
     accountType: account.type,
     amountWei: selected.details.balanceWei,
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
   };
   const details: PrivacyRagequitDetailsV1 = {
     version: 1,

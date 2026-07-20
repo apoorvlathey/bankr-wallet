@@ -15,9 +15,10 @@ import {
 import { decryptPrivacyRecovery } from "../crypto";
 import {
   PRIVACY_POOLS_RELEASE_POLICY,
-  PRIVACY_POOLS_SEPOLIA_DEPLOYMENT,
+  PRIVACY_POOLS_DEPLOYMENT,
 } from "../deployment/manifest";
-import { verifyPrivacyPoolsSepoliaDeployment } from "../deployment/health";
+import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
+import { verifyPrivacyPoolsDeployment } from "../deployment/health";
 import {
   assertPinnedSourceAccount,
   quotePrivacyShield,
@@ -80,7 +81,7 @@ export interface PrivacyShieldOperationRequest
 type Dependencies = {
   getAccountById: typeof getAccountById;
   quotePrivacyShield: typeof quotePrivacyShield;
-  verifyDeployment: typeof verifyPrivacyPoolsSepoliaDeployment;
+  verifyDeployment: typeof verifyPrivacyPoolsDeployment;
   findOperation: typeof findPrivacyShieldOperation;
   readNextDepositIndex: typeof readNextPrivacyDepositIndex;
   commitOperation: typeof commitPrivacyShieldOperation;
@@ -91,7 +92,7 @@ type Dependencies = {
 const productionDependencies: Dependencies = {
   getAccountById,
   quotePrivacyShield,
-  verifyDeployment: verifyPrivacyPoolsSepoliaDeployment,
+  verifyDeployment: verifyPrivacyPoolsDeployment,
   findOperation: findPrivacyShieldOperation,
   readNextDepositIndex: readNextPrivacyDepositIndex,
   commitOperation: commitPrivacyShieldOperation,
@@ -157,14 +158,12 @@ export async function preparePrivacyShieldOperation(
   }
   if (
     PRIVACY_POOLS_RELEASE_POLICY.operationPreparation !== "enabled" ||
-    (PRIVACY_POOLS_RELEASE_POLICY.mutations !== "blocked" &&
-      PRIVACY_POOLS_RELEASE_POLICY.mutations !== "sepolia-enabled")
+    PRIVACY_POOLS_RELEASE_POLICY.mutations !== "enabled"
   ) {
     throw new PrivacyShieldOperationError("operation-unavailable");
   }
   if (
-    PRIVACY_POOLS_RELEASE_POLICY.mutations === "sepolia-enabled" &&
-    request.accountType === "bankr"
+    !isPrivacyPoolsMutationAccountType(request.accountType)
   ) {
     throw new PrivacyShieldOperationError("bankr-testnet-unsupported");
   }
@@ -230,7 +229,7 @@ export async function preparePrivacyShieldOperation(
         const masterKeys = derivePrivacyPoolMasterKeys(phrase);
         const secrets = derivePrivacyPoolDepositSecrets(
           masterKeys,
-          PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+          PRIVACY_POOLS_DEPLOYMENT.scope,
           BigInt(depositIndex),
         );
         const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -267,7 +266,7 @@ export async function preparePrivacyShieldOperation(
           gasReserveWei: quote.gasReserveWei,
           totalRequiredWei: quote.totalRequiredWei,
           destinationAddress: intent.destinationAddress,
-          poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+          poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
           dedupeKey,
         };
         const details: PrivacyShieldOperationDetailsV1 = {

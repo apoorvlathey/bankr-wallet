@@ -22,7 +22,8 @@ This document describes the core architecture and transaction handling implement
 - [THEMING_PRD.md](./THEMING_PRD.md) - Theme engine architecture, token contract, phased rollout history
 - [PRIVACY_POOLS_PRD.md](./PRIVACY_POOLS_PRD.md) - Proposed Shield integration, custody boundary, proving architecture, recovery, and rollout gates
 - [PRIVACY_POOLS_SEPOLIA_TEST.md](./PRIVACY_POOLS_SEPOLIA_TEST.md) - Unpacked-extension manual Sepolia rehearsal and expected wallet-type outcomes
-- [PRIVACY_POOLS_HANDOFF.md](./PRIVACY_POOLS_HANDOFF.md) - Current Sepolia progress, recent proof-signal correction, automated baseline, and ordered next steps
+- [PRIVACY_POOLS_MAINNET_TEST.md](./PRIVACY_POOLS_MAINNET_TEST.md) - Production deployment pins, live read-only evidence, build-profile checks, and value-bearing smoke gates
+- [PRIVACY_POOLS_HANDOFF.md](./PRIVACY_POOLS_HANDOFF.md) - Current dual-profile progress, recent proof-signal correction, automated baseline, and ordered next steps
 
 ## Theme Engine
 
@@ -141,7 +142,7 @@ processing deposits do not increase the headline or chart until ASP clearance.
 ### Shield initialization boundary
 
 `components/ShieldView.tsx` is the stable lazy-route facade for the
-`components/Shield/` feature domain. The Sepolia-first renderer routes three
+`components/Shield/` feature domain. The build-profile renderer routes three
 private-home actions to separate Shield, Unshield, and Send screens. Entering
 Private mode starts the wallet-UI-only `privacyEnsureInitialized` request in
 the background; the Shield screen repeats it to expose bounded status and Retry.
@@ -168,7 +169,7 @@ acknowledgements before accepting a replacement. The background validates
 BIP-39 and exact revision-bound backup proof before changing storage, repeats
 master authorization after asynchronous work, encrypts a new vault revision,
 preserves the existing key capability, and resets only rebuildable Privacy
-Pools databases. The Settings renderer starts a bounded Sepolia rescan only
+Pools databases. The Settings renderer starts a bounded active-chain rescan only
 after restore succeeds; abandoning the flow or submitting an invalid phrase
 leaves the prior encrypted phrase untouched. A biometric-only compatibility vault can add its
 missing main-password wrapper from the live fresh passkey capability plus the
@@ -179,15 +180,17 @@ authorize phrase replacement.
 
 Pressing Shield opens the inline amount form immediately, without blocking on
 deployment reads or a fixed proof self-test. `hooks/useShieldQuote.ts` debounces
-exact ETH input at or above the onchain `0.001 ETH` minimum and sends wallet-UI-only
+exact ETH input at or above the active manifest's onchain minimum (`0.001 ETH`
+on Sepolia, `0.01 ETH` on mainnet) and sends wallet-UI-only
 `privacyQuoteShield` with the current
 `{ accountId, accountAddress, accountType }` snapshot. `privacy/deposit/quote.ts`
 resolves that exact stored account, rejects impersonators, and supports Bankr,
 private-key, and seed-phrase public addresses. `quoteClient.ts` uses the same
-bounded Sepolia transport to read the public balance, estimate the standard fee
+bounded active-chain transport to read the public balance, estimate the standard fee
 tier, and simulate the pinned Entrypoint `deposit(uint256)` call with the
 entered value and a fresh throwaway public precommitment. The pure policy
-applies the onchain 1% vetting fee, the existing 20% gas-limit buffer,
+applies the active manifest's onchain vetting fee (1% Sepolia, 0.5% mainnet),
+the existing 20% gas-limit buffer,
 total-required check, and gas-aware Max. It deliberately does not adopt the
 official website's app-only `1 ETH` preference; amounts are limited only by
 valid `uint256` input and the source balance after gas. All returned integers
@@ -195,7 +198,7 @@ are decimal strings. No privacy phrase, derived commitment, signer, pending
 transaction, operation storage, confirmation control, or submission function
 is reachable from this route.
 
-The final durable preparation still resolves a user-configured Sepolia RPC or
+The final durable preparation resolves a user-configured active-chain RPC or
 WalletChan's immutable known-chain default, reads the 14 fixed deployment
 fields in JSON-RPC batches capped at three requests, and verifies the exact
 chain, proxy/implementation, pool, scope, asset, verifiers, configuration, and
@@ -224,14 +227,18 @@ prepare this operation without first adding a main-password wrapper; plaintext
 recovery reveal remains explicitly main-password-gated. Under the wallet-secret
 lock it encrypts the real deposit index, precommitment, and exact calldata with
 the dedicated privacy key. `privacy/operations/repository.ts`
-then atomically advances `nextDepositIndex` and adds the operation in IndexedDB
-`walletchan-privacy-v1`; request-ID and pending account/amount lookups make a
+then atomically advances `nextDepositIndex` and adds the operation in the
+active profile's IndexedDB (`walletchan-privacy-v1` on Sepolia,
+`walletchan-privacy-mainnet-v1` on mainnet); request-ID and pending account/amount lookups make a
 retry idempotent. Only the sanitized public summary is returned. The background
 then creates a trusted, pinned normal WalletChan transaction request. Local
 private-key and seed-phrase accounts repeat the encrypted intent, account,
 deployment, and master-epoch checks at confirmation and immediately before raw
-RPC publication. Bankr is rejected before a prompt because its transaction API
-does not support Sepolia. Receipt polling verifies the exact ETH-pool
+RPC publication. Sepolia development builds reject Bankr before a prompt.
+Production mainnet builds admit Bankr through the ordinary account-pinned
+Bankr confirmation path, perform the same privacy authorization before pending
+request removal, and begin the encrypted privacy effect before Bankr's
+irreversible submit boundary. Receipt polling verifies the exact ETH-pool
 `Deposited` event; bounded pool-log sync and encrypted phrase rescan can rebuild
 the same commitment after UI/service-worker restart or disposable cache loss.
 
@@ -294,7 +301,7 @@ after an exact operation/transaction/account/chain/value binding check. The
 projection contains only operation ID, gross and net public amounts, lifecycle
 state, and update time. Main wallet Activity renders `Shield ETH`, the amount,
 plain-language stage copy, and `Step n of 4`; it continues opening the existing
-Sepolia transaction-details screen, where the lifecycle/status projection is
+active-chain transaction-details screen, where the lifecycle/status projection is
 shown with the ordinary receipt data. Sanitized relayed withdrawals are merged
 as private-send rows into the private dated Activity list and open a concise
 route/fee/status detail screen. One private-home operation subscription updates
@@ -313,13 +320,13 @@ is still required. Private send spends the wallet-wide privacy identity and is
 not bound to the active public account or its custody type; Bankr and
 impersonator selection therefore cannot redirect or veto the withdrawal. Agent
 sessions remain blocked by the same master-authorization boundary. Shield and
-public recovery still require an explicit internal signer: Shield presents a
-Sepolia source-account picker and public recovery resolves the exact original
+public recovery still require an explicit internal signer: Shield presents an
+active-chain source-account picker and public recovery resolves the exact original
 depositor, without mutating the globally selected public account.
 
 Unshield preserves that same inverse asset form even when no relayed balance is
 ready. If ragequit is available, the source/outcome cards become a fixed
-Shielded ETH -> Sepolia ETH public-exit route to the original depositor, the
+Shielded ETH -> active-chain ETH public-exit route to the original depositor, the
 sticky footer requires an unchecked original-address/public-transaction
 acknowledgement, and only then enables the existing public-recovery action. A
 compact amber status panel precedes that acknowledgement while ASP compliance
@@ -1110,7 +1117,7 @@ src/
 │   │   ├── passkey.ts       # Locked pre-Shield biometric compatibility commit
 │   │   ├── identity.ts      # Locked idempotent first-Private-mode initialization
 │   │   ├── protocol/        # Pinned SDK primitive and packaged-artifact boundary
-│   │   ├── deployment/      # Exact Sepolia manifest, bounded reads, fail-closed check
+│   │   ├── deployment/      # Exact build-profile manifest, bounded reads, fail-closed check
 │   │   ├── deposit/         # Public ETH quote + master-only non-submittable review intent
 │   │   ├── operations/      # Encrypted durable operation + atomic deposit-index reservation
 │   │   ├── prover/          # Exact offscreen port, fixed fixtures, packaged worker
@@ -4334,20 +4341,20 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `revealPrivateKey`                 | Reveal private key (security-sensitive)  |
 | `revealSeedPhrase`                 | Reveal seed phrase (security-sensitive)  |
 | `privacyEnsureInitialized`         | Ensure the encrypted Privacy Pools phrase exists; an already-ready record returns without secret access |
-| `privacyRunShieldReadinessCheck`   | Trusted diagnostic only: verify the pinned Sepolia deployment, then run packaged public commitment/withdrawal fixtures; return status only; the Shield UI does not invoke it |
+| `privacyRunShieldReadinessCheck`   | Trusted diagnostic only: verify the pinned active-profile deployment, then run packaged public commitment/withdrawal fixtures; return status only; the Shield UI does not invoke it |
 | `privacyRunProverSelfTest`         | Trusted-UI QA-only packaged proof self-test; returns aggregate commitment/withdrawal/total timing only |
-| `privacyQuoteShield`               | Return an exact account-pinned Sepolia ETH balance/fee/gas quote; no commitment, signer, or transaction is created |
+| `privacyQuoteShield`               | Return an exact account-pinned active-chain ETH balance/fee/gas quote; no commitment, signer, or transaction is created |
 | `privacyPrepareShieldReview`       | Master-authorized exact deposit intent preparation and independent decode in the background; return only a public ready summary without persistence, signing, or submission |
 | `privacyPrepareShield`             | Revalidate and atomically persist an encrypted Shield operation, then queue only its trusted account-pinned normal confirmation |
 | `privacyListShieldOperations`      | Return bounded public Shield/Unshield/recovery activity and aggregate private portfolio state; never note linkage |
-| `privacySyncShield`                | Advance the bounded Sepolia event index, match encrypted lineage, refresh ASP membership, and resume exit tracking |
+| `privacySyncShield`                | Advance the bounded active-pool event index, match encrypted lineage, refresh ASP membership, and resume exit tracking |
 | `privacyPrepareUnshieldQuote`      | Master-only selection of one sufficient ready commitment plus strict signed pinned-relayer quote validation |
 | `privacyExecuteUnshield`           | Recheck roots/quote/auth, locally prove and verify, persist the effect transition, then submit the exact relayer payload |
 | `privacyPrepareRagequit`           | Master-only original-depositor commitment proof, encrypted recovery intent, and trusted local-wallet confirmation queue |
 | `privacyGetRecoveryStatus`         | Return non-secret Shield identity and backup status for Settings |
 | `privacyRevealRecovery`            | Explicit main-password-only Shield phrase reveal to the trusted Settings document and record backup verification |
 | `privacyRestoreRecovery`           | Explicit main-password-only BIP-39 restore; replacing an existing identity additionally requires its exact-revision backup marker plus both loss acknowledgements before the encrypted vault or rebuildable indexes change |
-| `privacyRescanRecovery`            | Master-only bounded phrase-derived Sepolia event rescan |
+| `privacyRescanRecovery`            | Master-only bounded phrase-derived active-pool event rescan |
 | `privacyGetResetRisk`              | Return only whether Shield data exists and whether its exact identity has a verified backup |
 | `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
@@ -4985,9 +4992,9 @@ notification clicks. The focused callback implementations remain under
 | `isApiKeyCached`                   | Check if password needed                                                                        |
 | `unlockWallet`                     | Unlock wallet with password                                                                     |
 | `privacyEnsureInitialized`         | Wallet-UI-only, status-only first-Private-mode initialization with a Shield-screen retry; phrases and keys never enter the renderer |
-| `privacyRunShieldReadinessCheck`   | Wallet-UI-only diagnostic for Sepolia deployment plus fixed-proof readiness; responses contain no contract data, proofs, signals, fixtures, or timing data, and the normal Shield UI does not invoke it |
+| `privacyRunShieldReadinessCheck`   | Wallet-UI-only diagnostic for the active deployment plus fixed-proof readiness; responses contain no contract data, proofs, signals, fixtures, or timing data, and the normal Shield UI does not invoke it |
 | `privacyRunProverSelfTest`         | Wallet-UI-only QA route returning only aggregate packaged self-test timing; no proof, signal, fixture, or input leaves the background |
-| `privacyQuoteShield`               | Wallet-UI-only, exact-account Sepolia ETH balance/fee/gas quote; impersonators rejected and all values serialized without creating an intent |
+| `privacyQuoteShield`               | Wallet-UI-only, exact-account active-chain ETH balance/fee/gas quote; impersonators rejected and all values serialized without creating an intent |
 | `privacyPrepareShieldReview`       | Wallet-UI-only master-authorized preparation; exact request/account checks and independent calldata decode occur in the background, while only a public ready summary reaches the renderer |
 | `privacyPrepareShield`             | Wallet-UI-only master-authorized durable preparation; reserves one encrypted deposit index and returns only a sanitized public pending summary without signing/submission |
 | `privacyListShieldOperations`      | Wallet-UI-only bounded Activity read of sanitized pending summaries; encrypted calldata, precommitment, and index stay in the background-owned database |

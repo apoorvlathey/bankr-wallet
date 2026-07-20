@@ -47,7 +47,7 @@ inject.ts (content script bridge)  Extension UI (popup/sidepanel)
 background.ts (five-line entrypoint) → background/bootstrap.ts
   → background/messagePipeline.ts + background/composition/
   → privacy/protocol/ (pinned crypto/artifact boundary; no UI import)
-  → privacy/deployment/ (fixed Sepolia public-RPC identity check; no account input)
+  → privacy/deployment/ (compile-time-selected fixed-chain public-RPC identity check; no account input)
   → privacy/deposit/ (public quote + master-only non-submittable review preparation)
   → privacy/operations/ (encrypted durable operation; no signer/submission import)
   → privacy/prover/ (fixed-input offscreen worker; no secret release)
@@ -191,12 +191,12 @@ The agent password model restricts what operations are available when the wallet
 | Reveal seed phrase               | Yes    | **BLOCKED** | `background/secretManagementRouter.ts` transport + `secrets/revealHandlers.ts` |
 | Remove account                   | Yes    | **BLOCKED** | `background/accountManagementRouter.ts` + account-removal privacy boundary     |
 | Initialize Privacy Pools recovery | Yes | **BLOCKED** | `background/privacyRouter.ts` → `privacy/identity.ts`; already-ready status is non-secret and does not reopen the vault |
-| Run Privacy Pools readiness check | Yes | Yes | Fixed public Sepolia deployment fields plus packaged proof fixtures only; no account, phrase, balance, signing, or transaction input |
+| Run Privacy Pools readiness check | Yes | Yes | Fixed public active-profile deployment fields plus packaged proof fixtures only; no account, phrase, balance, signing, or transaction input |
 | Run Privacy Pools prover QA self-test | Yes | Yes | Trusted-UI-only route returns aggregate self-test timing only; no proof, signal, fixture, input, phrase, or wallet key |
-| Quote a Sepolia Shield amount | Yes | Yes | Read-only exact-account public balance/fee/gas simulation; impersonators rejected and no intent, note, signer, or submission exists |
-| Prepare a Sepolia Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; produces a non-persisted, non-submittable background intent and returns no calldata or commitment material |
-| Persist a Sepolia Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
-| Confirm/submit Sepolia Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, local account, and master epoch are rechecked at confirmation and raw-RPC publication. Bankr is blocked on Sepolia. |
+| Quote an active-chain Shield amount | Yes | Yes | Read-only exact-account public balance/fee/gas simulation; impersonators rejected and no intent, note, signer, or submission exists |
+| Prepare an active-chain Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; produces a non-persisted, non-submittable background intent and returns no calldata or commitment material |
+| Persist an active-chain Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
+| Confirm/submit active-chain Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, account, and master epoch are rechecked at confirmation and the final effect boundary. Sepolia blocks Bankr; mainnet supports Bankr/private-key/seed-phrase. Impersonators never submit. |
 | Prepare/submit private Unshield | Yes | **BLOCKED** | Wallet-wide privacy authority: no active public account is accepted in the request or consulted during quote/proof work. `privacy/withdrawals/` validates the dedicated master capability, signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST. |
 | Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, locally verifies the commitment proof/calldata, and rechecks the encrypted commitment claim at the raw-RPC boundary |
 | Reveal/restore/rescan Privacy Pools recovery | Yes | **BLOCKED** | `background/privacyRecoveryRouter.ts` requires the exact trusted UI plus explicit main-password proof or a live master epoch; plaintext reveal is confined to the Settings leaf and restore resets only rebuildable privacy state |
@@ -779,20 +779,20 @@ again before confirmation, and before the privileged chain-ID probe.
 
 The diagnostic Shield readiness route uses that same bounded viem transport to
 send 14 fixed reads in JSON-RPC batches of at most three requests to a
-user-configured Sepolia RPC, or WalletChan's immutable known-chain default when
-Sepolia has not been added. It is not invoked by the normal Shield UI. The
+user-configured active-chain RPC, or WalletChan's immutable known-chain default.
+It is not invoked by the normal Shield UI. The
 request contains only `eth_chainId`, five fixed-address `eth_getCode` reads,
 the fixed Entrypoint EIP-1967 implementation slot, and fixed public pool/
 Entrypoint getters. It contains no WalletChan account, phrase, commitment,
 label, amount, recipient, or transaction. The RPC can observe the user's IP and
 request timing. WalletChan locally compares every response with the immutable
-Sepolia manifest; a transport/decode mismatch is a generic failure, never a
+compile-time-selected manifest; a transport/decode mismatch is a generic failure, never a
 fallback or success. The response remains in the service worker. Durable
 operation preparation independently runs the same deployment verification
 before it can persist or queue a deposit.
 
 After the user enters an amount, the wallet-UI-only quote route uses the
-selected Sepolia RPC for public balance and fee reads plus
+selected active-chain RPC for public balance and fee reads plus
 `eth_estimateGas` against the pinned Entrypoint native `deposit(uint256)` call.
 The RPC receives the selected public address, candidate amount, exact calldata,
 and a random throwaway public precommitment, and can correlate those with IP
@@ -1288,13 +1288,17 @@ accessible resources.
 
 | Database / store | Contains Secrets | Description |
 | --- | --- | --- |
-| `walletchan-privacy-v1.operations` | Yes (encrypted) | At most 100 exact pending Shield records. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. Only the newest 20 sanitized summaries reach Activity. |
-| `walletchan-privacy-v1.metadata` | No | Atomic `nextDepositIndex` counter. Durable indices stop at `0xfffffffe`; the final uint32 index is reserved for ephemeral review. Reset and disposable onboarding cleanup delete the complete database. |
-| `walletchan-privacy-commitments-v1.commitments` | Yes (encrypted) | Current commitment hash/value lineage, depositor recovery dependency, status, and derivation indexes with revision-bound AAD. Only aggregate balances leave the background. |
-| `walletchan-privacy-withdrawals-v1.withdrawals` | Yes (encrypted) | At most 256 restart-safe Unshield intents; commitment linkage, expected nullifier/replacement, signed quote, and relayer payload remain encrypted. |
-| `walletchan-privacy-ragequits-v1.ragequits` | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
-| `walletchan-privacy-portfolio-v1.snapshots` | Yes (encrypted) | At most 193 eight-day private balance/price/USD points. Values use fresh-IV AES-GCM under the dedicated privacy key with record/key/timestamp-bound AAD; only identifiers and creation time remain public metadata. The background verifies the current privacy vault/key binding before returning bounded chart points. |
-| `walletchan-privacy-events-v1` | No | Disposable bounded public Deposited/Withdrawn/Ragequit logs plus a canonical Sepolia checkpoint; rebuilt from the pinned pool and never treated as note authority without local derivation checks. |
+| Active operations DB (`walletchan-privacy-v1` Sepolia / `walletchan-privacy-mainnet-v1` mainnet) | Yes (encrypted) | At most 100 exact pending Shield records plus the atomic `nextDepositIndex`. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. |
+| Active commitments DB (`walletchan-privacy-commitments-*-v1`) | Yes (encrypted) | Current commitment hash/value lineage, depositor recovery dependency, status, and derivation indexes with revision-bound AAD. Only aggregate balances leave the background. |
+| Active withdrawals DB (`walletchan-privacy-withdrawals-*-v1`) | Yes (encrypted) | At most 256 restart-safe Unshield intents; commitment linkage, expected nullifier/replacement, signed quote, and relayer payload remain encrypted. |
+| Active ragequits DB (`walletchan-privacy-ragequits-*-v1`) | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
+| Active portfolio DB (`walletchan-privacy-portfolio-*-v1`) | Yes (encrypted) | At most 193 eight-day private balance/price/USD points. Values use fresh-IV AES-GCM under the dedicated privacy key with record/key/timestamp-bound AAD; only identifiers and creation time remain public metadata. |
+| Active events DB (`walletchan-privacy-events-*-v1`) | No | Disposable bounded public Deposited/Withdrawn/Ragequit logs plus an active-profile checkpoint; rebuilt from the pinned pool and never treated as note authority without local derivation checks. |
+
+The `*-mainnet-v1` spellings are exact mainnet names; Sepolia retains the
+released names without an inserted profile token. Reset and recovery
+replacement delete both profiles' encrypted databases so inactive-profile
+secrets cannot survive wallet replacement.
 
 ---
 
@@ -1537,22 +1541,25 @@ These must always hold true. Violations indicate a security bug.
     fail closed while only the unpacked Sepolia test target is permitted.
 
 12f. **Privacy deployment support is an exact fail-closed allowlist** - The
-    official Privacy Pools app commit, Sepolia chain, ETH pool, scope,
+    official Privacy Pools app commit, Sepolia/mainnet chains, ETH pools, scopes,
     deployment block, Entrypoint proxy and EIP-1967 implementation, both
     verifiers, asset config, and all five runtime bytecode identities are
     immutable release pins under `privacy/deployment/`. The runtime verifies
     the onchain fields before proving. The official website's app-only `1 ETH`
     setting is not an onchain constraint and is deliberately not enforced;
     quote amounts remain `uint256`-valid, minimum-bound, balance-bound, and
-    gas-aware. Mainnet and ERC-20 deployments are
-    absent, the release policy has no environment override, and the exact
-    `sepolia-local-beta` state enables mutations only for the pinned Sepolia
-    deployment. Bankr Sepolia transactions remain unsupported. RPC
+    gas-aware. ERC-20 deployments remain absent. Vite mode selects one immutable
+    profile at compile time with no runtime or remote override:
+    `dev:extension` uses `sepolia-local-beta`, while normal production builds
+    use `mainnet-production`. Profile-isolated IndexedDB names prevent dev and
+    production lineage from mixing. Bankr remains blocked on Sepolia; mainnet
+    Bankr submission uses the same pinned privacy authorization immediately
+    before its irreversible effect boundary. RPC
     unavailability or any drift returns only a bounded generic retry status to
     the renderer.
 
 12g. **Shield review intent cannot become an implicit transaction** -
-    `privacy/deposit/intent.ts` creates one exact Sepolia native-deposit call
+    `privacy/deposit/intent.ts` creates one exact active-chain native-deposit call
     with the ABI encoder, then independently checks the selector, one-word
     precommitment argument, source, pinned Entrypoint, chain, transaction
     value, onchain fee math, and protocol scalar bounds without using that
@@ -1604,9 +1611,12 @@ These must always hold true. Violations indicate a security bug.
     `Poseidon(nullifier)` and checks the exact circuit order against the pinned
     artifacts. Rejection restores the claimed commitment's prior
     ASP status; success requires the exact Ragequit event before the source
-    activity becomes terminal. Agent sessions, impersonator accounts, and Bankr
-    Sepolia accounts fail before relayer quote/proof publication or signing;
-    local private-key and seed-phrase accounts share the same bounded path.
+    activity becomes terminal. Agent and impersonator accounts fail before
+    relayer quote/proof publication or signing. Sepolia Bankr accounts also
+    fail before mutation. Production Bankr, private-key, and seed-phrase
+    accounts may act only for an exact pinned original depositor; local
+    accounts share one bounded raw-RPC path and Bankr uses its separately
+    authorized submission path.
 
 12i. **Account removal and reset cannot silently orphan Shield funds** -
     Account deletion checks Shield safety once before any dapp revocation and
@@ -1616,8 +1626,9 @@ These must always hold true. Violations indicate a security bug.
     deletion. Reset exposes only a public `{hasShieldData, backupVerified}`
     preflight and requires an exact boolean acknowledgement when Shield data
     exists before installing the destructive barrier. The reset manifest owns
-    `privacyVault`, `privacyRecoveryBackup`, and deletion of all five privacy
-    databases; a renderer cannot narrow that deletion set.
+    `privacyVault`, `privacyRecoveryBackup`, deletion of both profiles'
+    encrypted privacy databases, and the active disposable event database; a
+    renderer cannot narrow that deletion set.
 
 13. **Signing confirmation preserves explicit user control** -
     `handleConfirmTransaction`, `handleConfirmTransactionAsync`, and

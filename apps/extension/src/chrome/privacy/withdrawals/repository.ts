@@ -4,6 +4,7 @@ import {
   MAX_PRIVACY_WITHDRAWALS,
   MAX_VISIBLE_PRIVACY_WITHDRAWALS,
   PRIVACY_WITHDRAWALS_DATABASE,
+  PRIVACY_WITHDRAWALS_DATABASES,
   PRIVACY_WITHDRAWALS_DATABASE_VERSION,
   PRIVACY_WITHDRAWALS_STORE,
   type PrivacyUnshieldTrackingV1,
@@ -150,10 +151,12 @@ export async function deletePrivacyWithdrawalsDatabase(): Promise<void> {
   databasePromise = null;
   if (existing) (await existing.catch(() => null))?.close();
   if (typeof indexedDB === "undefined") return;
-  await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(PRIVACY_WITHDRAWALS_DATABASE);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("Unshield reset failed"));
-    request.onblocked = () => reject(new Error("Unshield reset blocked"));
-  });
+  await Promise.all(PRIVACY_WITHDRAWALS_DATABASES.map((name) =>
+    new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error ?? new Error("Unshield reset failed"));
+      request.onblocked = () => reject(new Error("Unshield reset blocked"));
+    })
+  ));
 }

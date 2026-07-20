@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { generateVaultKey, importVaultKey } from "../../src/chrome/crypto";
 import { buildPrivacyShieldCommitment } from "../../src/chrome/privacy/commitments/materializeShield";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import { encryptPrivacyShieldOperationDetails } from "../../src/chrome/privacy/operations/crypto";
 import {
   privacyShieldOperationDedupeKey,
@@ -26,7 +26,7 @@ test("an indexed ASP-pending Shield deposit materializes its encrypted public-ex
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const secrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     7n,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -49,8 +49,8 @@ test("an indexed ASP-pending Shield deposit materializes its encrypted public-ex
     gasReserveWei: "200",
     totalRequiredWei: "100200",
     destinationAddress:
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+      PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     dedupeKey: privacyShieldOperationDedupeKey({
       chainId: 11_155_111,
       accountId: "pk-1",

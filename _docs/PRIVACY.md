@@ -17,9 +17,9 @@
 > Password login and fresh biometric login both support this; a biometric
 > factor that predates Shield receives an empty purpose-separated scaffold on
 > its next assertion. Pressing Shield opens the exact ETH quote/review flow
-> immediately above the onchain `0.001 ETH` minimum; no proof-readiness wait
-> blocks amount entry. Final durable preparation independently verifies the
-> pinned official Sepolia ETH deployment, while packaged proof self-tests stay
+> immediately above the active deployment's onchain minimum; no proof-readiness
+> wait blocks amount entry. Final durable preparation independently verifies the
+> compile-time-selected official Sepolia/mainnet ETH deployment, while packaged proof self-tests stay
 > available as a trusted diagnostic and release gate.
 > Private-key and seed-phrase accounts can Shield on Sepolia through the normal
 > pinned confirmation flow; receipt/event sync, encrypted commitments, strict
@@ -32,10 +32,12 @@
 > displayed separately and can be withdrawn publicly by the exact original
 > depositor. One real Sepolia public withdrawal has been observed after fixing
 > and regression-testing the distinction between the deposit precommitment and
-> spent-nullifier hash. Bankr Sepolia submission,
-> impersonator signing, agent-password mutations, every mainnet path, and store
-> distribution remain blocked. The automated Sepolia implementation is
-> complete, but the complete written browser rehearsal is not. See
+> spent-nullifier hash. Normal production builds now select the pinned Ethereum
+> mainnet profile and support Bankr/private-key/seed-phrase mutations; Sepolia
+> development continues to block Bankr. Impersonator signing, agent-password
+> mutations, value-bearing mainnet rollout, and store distribution remain
+> blocked by their respective gates. The automated dual-profile implementation
+> is complete, but the complete written browser rehearsals are not. See
 > [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 
 [privacy.eth.sh](https://privacy.eth.sh/) was used as the discovery directory
@@ -454,16 +456,17 @@ current main password; restore validates a user-entered BIP-39 phrase and runs
 a bounded rescan. Agent sessions cannot create, reveal, restore, or rescan.
 Plaintext exists in renderer memory only while that trusted Settings leaf is
 open and is cleared on close; content scripts, dapp frames, and ordinary Shield
-routes never receive it. Mainnet remains disabled and may add a stricter
-pre-deposit backup gate after product/security review.
+routes never receive it. The production mainnet profile retains the same
+recovery boundary; value-bearing rollout may add a stricter pre-deposit backup
+gate after product/security review.
 
 ### Storage and access control
 
-The Sepolia implementation now stores its independent encrypted recovery in
-`privacyVault` and durable pre-signing Shield operations in IndexedDB
-`walletchan-privacy-v1`. Encrypted current commitments, relayed withdrawals,
-and public-recovery intents use separate bounded IndexedDB databases; a fifth
-disposable database holds public Sepolia pool events and its checkpoint. All
+The implementation stores its independent encrypted recovery in `privacyVault`.
+Sepolia development preserves the released `walletchan-privacy-*-v1` database
+names; production uses corresponding `*-mainnet-v1` names for durable
+pre-signing operations, commitments, withdrawals, ragequits, portfolio, and
+public event checkpoints. All
 follow `_docs/STORAGE.md` and `_docs/PUBLISHING.md` and need no eager migration.
 The implemented separation is:
 
@@ -508,9 +511,11 @@ handling:
 | Veil | Imported Veil private key if WalletChan's derivation is documented | Registration mapping and hosted relay availability for normal UX |
 
 Bankr Sepolia Shield is disabled because the Bankr raw transaction API does not
-support Sepolia. Impersonator deposits are always disabled. Before any mainnet
-Bankr enablement, WalletChan must prove that the same original Bankr depositor
-can still authorize public recovery after a clean phrase rescan.
+support Sepolia. The production mainnet path is implemented through the normal
+Bankr confirmation/submission coordinator with privacy authorization at its
+final effect boundary. Impersonator deposits are always disabled. Before a
+value-bearing Bankr rollout, WalletChan must prove that the same original Bankr
+depositor can still authorize public recovery after a clean phrase rescan.
 
 ## Proposed UX
 
@@ -855,12 +860,13 @@ it is incomplete until all three wallet types pass.
 | Block setup/export under agent password | Required | Required | Required |
 | Restore root after service-worker restart | Required | Required | Required |
 | Public Sepolia shield confirmation and signing | Rejected before prompt | Required | Required |
-| Sepolia native ETH shield | Quote only | Required | Required |
+| Production mainnet native ETH shield | Required | Required | Required |
 | Resume after popup closes | Required | Required | Required |
 | Private Sepolia withdrawal confirmation | Rejected | Required | Required |
 | Relayer quote substitution rejected | Required | Required | Required |
 | Full rescan from privacy phrase | Required | Required | Required |
 | Emergency exit/ragequit on Sepolia | Rejected | Required | Required |
+| Production mainnet original-depositor ragequit | Required | Required | Required |
 | Password change preserves identity | Required | Required | Required |
 | Passkey unlock preserves identity | Required | Required | Required |
 | Reset/account removal warns on funds | Required | Required | Required |
@@ -894,7 +900,7 @@ Protocol tests must include:
 - Benchmark packaged MV3 proving and full rescan on low/mid/high-end devices.
 - Record bundle size, first sync time, proving time, peak memory, and retry
   behavior.
-- No mainnet secret creation or deposits.
+- No value-bearing mainnet transactions during this historical prototype phase.
 
 ### Phase 1: testnet Privacy Pools spike
 

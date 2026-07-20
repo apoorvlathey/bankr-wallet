@@ -1,10 +1,16 @@
 import type { Address, Hex } from "viem";
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import type { PrivacyCommitmentStatus } from "../commitments/types";
 
-export const PRIVACY_RAGEQUITS_DATABASE = "walletchan-privacy-ragequits-v1";
+export const PRIVACY_RAGEQUITS_DATABASES = Object.freeze([
+  "walletchan-privacy-ragequits-v1",
+  "walletchan-privacy-ragequits-mainnet-v1",
+] as const);
+export const PRIVACY_RAGEQUITS_DATABASE = PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+  ? PRIVACY_RAGEQUITS_DATABASES[0]
+  : PRIVACY_RAGEQUITS_DATABASES[1];
 export const PRIVACY_RAGEQUITS_DATABASE_VERSION = 1;
 export const PRIVACY_RAGEQUITS_STORE = "ragequits";
 export const MAX_PRIVACY_RAGEQUITS = 256;
@@ -36,10 +42,10 @@ export interface PrivacyRagequitSummaryV1 {
   id: string;
   requestId: string;
   createdAt: number;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   accountId: string;
   accountAddress: Address;
-  accountType: "privateKey" | "seedPhrase";
+  accountType: "bankr" | "privateKey" | "seedPhrase";
   amountWei: string;
   poolAddress: Address;
 }
@@ -138,14 +144,15 @@ export function isValidPrivacyRagequitSummary(value: unknown): value is PrivacyR
     typeof value.id === "string" && UUID.test(value.id) &&
     typeof value.requestId === "string" && UUID.test(value.requestId) &&
     typeof value.createdAt === "number" && Number.isSafeInteger(value.createdAt) && value.createdAt >= 0 &&
-    value.chainId === PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId &&
+    value.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     typeof value.accountId === "string" && value.accountId.length > 0 && value.accountId.length <= 128 &&
     address(value.accountAddress) &&
-    (value.accountType === "privateKey" || value.accountType === "seedPhrase") &&
+    (value.accountType === "bankr" || value.accountType === "privateKey" ||
+      value.accountType === "seedPhrase") &&
     amount !== null && amount > 0n &&
     address(value.poolAddress) &&
     value.poolAddress.toLowerCase() ===
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase();
+      PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase();
 }
 
 export function isValidPrivacyRagequitTracking(

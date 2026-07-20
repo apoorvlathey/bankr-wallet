@@ -4,12 +4,12 @@ import {
   parseAbi,
   type Address,
 } from "viem";
-import { sepolia } from "viem/chains";
 
 import { estimateFees } from "../../gas/feeEstimator";
 import { DEFAULT_GAS_BUFFER_PCT } from "../../gas/singlePolicy";
 import { secureHttpTransport } from "../../network/rpcClient";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_VIEM_CHAIN } from "../deployment/chain";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { PRIVACY_POOLS_RPC_BATCH_SIZE } from "../rpcPolicy";
 
 const ENTRYPOINT_DEPOSIT_ABI = parseAbi([
@@ -38,7 +38,7 @@ export async function readPrivacyShieldRpcQuote(
   amountWei: bigint,
 ): Promise<PrivacyShieldRpcQuote> {
   const client = createPublicClient({
-    chain: sepolia,
+    chain: PRIVACY_POOLS_VIEM_CHAIN,
     transport: secureHttpTransport(rpcUrl, {
       batch: { batchSize: PRIVACY_POOLS_RPC_BATCH_SIZE, wait: 0 },
       retryCount: 1,
@@ -55,11 +55,11 @@ export async function readPrivacyShieldRpcQuote(
     client.getBalance({ address: sourceAddress }),
     client.estimateGas({
       account: sourceAddress,
-      to: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+      to: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
       data,
       value: amountWei,
     }),
-    estimateFees(client, PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId),
+    estimateFees(client, PRIVACY_POOLS_DEPLOYMENT.chainId),
   ]);
   if (!fees || fees.maxFeePerGas <= 0n || estimatedGas <= 0n) {
     throw new Error("Privacy Shield fee estimate unavailable");

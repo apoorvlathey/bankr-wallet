@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
 export const PRIVACY_RELAYER_QUOTE_TIMEOUT_MS = 12_000;
 export const PRIVACY_RELAYER_SUBMIT_TIMEOUT_MS = 90_000;
@@ -10,7 +10,7 @@ export const PRIVACY_RELAYER_MAX_QUOTE_LIFETIME_MS = 5 * 60_000;
 export interface PrivacyRelayerDetails {
   readonly feeBPS: bigint;
   readonly feeReceiverAddress: Address;
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly assetAddress: Address;
   readonly minWithdrawAmount: bigint;
   readonly maxGasPrice: bigint;
@@ -94,7 +94,7 @@ export function parsePrivacyRelayerDetails(value: unknown): PrivacyRelayerDetail
   const minWithdrawAmount = uint(value.minWithdrawAmount);
   const maxGasPrice = uint(value.maxGasPrice);
   if (
-    value.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId ||
+    value.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     feeBPS === null || feeBPS > 10_000n ||
     !feeReceiverAddress || !assetAddress ||
     minWithdrawAmount === null || maxGasPrice === null || maxGasPrice === 0n
@@ -102,7 +102,7 @@ export function parsePrivacyRelayerDetails(value: unknown): PrivacyRelayerDetail
   return Object.freeze({
     feeBPS,
     feeReceiverAddress,
-    chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     assetAddress,
     minWithdrawAmount,
     maxGasPrice,

@@ -1,6 +1,6 @@
 # Privacy Shield operation audit domain
 
-This domain owns the durable boundary between a reviewed Sepolia Shield amount
+This domain owns the durable boundary between a reviewed active-chain Shield amount
 and a future wallet confirmation. It deliberately cannot sign or submit a
 transaction.
 

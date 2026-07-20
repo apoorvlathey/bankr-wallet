@@ -1,9 +1,12 @@
 import { formatEther, parseEther } from "viem";
 import { formatUsd } from "@/lib/currencyFormatUtils";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 
-export const DEFAULT_SHIELD_AMOUNT = "0.001";
-export const SHIELD_MINIMUM_WEI = 1_000_000_000_000_000n;
-const SHIELD_VETTING_FEE_BPS = 100n;
+export const SHIELD_MINIMUM_WEI =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
+export const DEFAULT_SHIELD_AMOUNT = formatEther(SHIELD_MINIMUM_WEI);
+export const SHIELD_VETTING_FEE_BPS =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
 const BASIS_POINTS_SCALE = 10_000n;
 const MAX_UINT256 = (1n << 256n) - 1n;
 const ETH_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
@@ -31,7 +34,7 @@ export type ShieldAmountValidation =
     };
 
 export interface ShieldQuote {
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly amountWei: bigint;
   readonly balanceWei: bigint;
   readonly minimumAmountWei: bigint;
@@ -71,7 +74,7 @@ export function validateShieldAmountInput(
     return {
       status: "below-minimum",
       amountWei: null,
-      message: "Minimum is 0.001 ETH.",
+      message: `Minimum is ${formatEther(SHIELD_MINIMUM_WEI)} ETH.`,
     };
   }
   if (amountWei > MAX_UINT256) {
@@ -149,7 +152,7 @@ export function parseShieldQuoteResponse(
   const maxShieldableWei = serializedWei(value.maxShieldableWei);
   const vettingFeeBPS = serializedWei(value.vettingFeeBPS);
   if (
-    value.chainId !== 11_155_111 ||
+    value.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     typeof value.canAfford !== "boolean" ||
     amountWei === null ||
     balanceWei === null ||
@@ -179,7 +182,7 @@ export function parseShieldQuoteResponse(
   }
 
   return Object.freeze({
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     amountWei,
     balanceWei,
     minimumAmountWei,

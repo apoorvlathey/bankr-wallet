@@ -17,7 +17,7 @@ import type {
   PrivacyShieldTrackingErrorCode,
   PrivacyShieldTrackingState,
 } from "./types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import type { PrivacyDepositEventV1 } from "../events/types";
 import type { PrivacyAspReviewStatus } from "../asp/types";
 
@@ -192,7 +192,7 @@ function depositEvent(receipt: any): {
       if (
         typeof log?.address !== "string" ||
         log.address.toLowerCase() !==
-          PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase()
+          PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase()
       ) {
         continue;
       }
@@ -231,7 +231,7 @@ export async function applyPrivacyShieldReceipt(args: {
   succeeded: boolean;
 }): Promise<void> {
   const normalized = normalizedHash(args.txHash);
-  if (!normalized || args.chainId !== 11_155_111) return;
+  if (!normalized || args.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId) return;
   await updatePrivacyShieldOperationTracking(args.txId, (current, operation) => {
     if (
       current.txHash &&

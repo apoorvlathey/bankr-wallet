@@ -1,6 +1,7 @@
 # Privacy Pools Integration PRD
 
-> **Status:** Sepolia implementation complete; manual release rehearsal in progress
+> **Status:** Dual-profile implementation complete; mainnet value-bearing and
+> distribution gates remain
 > **Owner:** WalletChan extension
 > **Last updated:** 2026-07-20
 > **Source research:** [`PRIVACY.md`](./PRIVACY.md)
@@ -13,8 +14,10 @@ the broader privacy exploration into a bounded first product: an Ethereum ETH
 private balance with public shielding, ASP-gated relayed withdrawals, partial
 withdrawals, deterministic recovery, and public ragequit.
 
-The first deliverable is a packaged Manifest V3 testnet spike. Mainnet remains
-disabled until every go/no-go requirement in this PRD passes.
+The first deliverable was a packaged Manifest V3 testnet spike. The extension
+now compiles Sepolia for `dev:extension` and Ethereum mainnet for normal/
+production builds. Compiled mainnet support does not approve store distribution
+or a value-bearing rollout; those remain subject to the go/no requirements.
 
 ---
 
@@ -109,7 +112,7 @@ The privacy benefit is breaking the direct protocol-level link between them.
 | Private authorization | Live master or biometric-master capability |
 | Agent password | Cannot set up, shield, withdraw, rescan from phrase, export, delete, or ragequit in v1 |
 | Impersonator | Read-only overview only; never an operation source or submitter |
-| Mainnet Bankr deposits | Disabled until original-depositor ragequit recovery is proven |
+| Mainnet Bankr deposits | Implemented through the pinned Bankr confirmation/effect boundary; live value-bearing ragequit rehearsal required before rollout approval |
 | Proof generation | Local, packaged extension artifacts only |
 | Browser rollout | Chrome first; Firefox remains disabled until its prover host passes equivalent QA |
 | Deposit bounds | No arbitrary application cap; enforce the contract minimum, valid `uint256` input, source balance after gas, and any separately approved future release limit |
@@ -208,7 +211,7 @@ Shield Recovery action in Settings. Reveal requires an explicit current main
 password, upgrades a passkey-only compatibility identity with a main wrapper,
 and auto-hides after one minute. Restore accepts only one valid 12-word Shield
 phrase, refuses to replace a different existing identity, and immediately
-starts a bounded Sepolia rescan. The only plaintext release is the explicit
+starts a bounded active-profile rescan. The only plaintext release is the explicit
 Settings reveal response; ordinary Shield routes remain status-only.
 
 Agent-password and impersonator sessions cannot initialize, export, replace,
@@ -754,7 +757,9 @@ An unexpected proxy implementation or verifier/config mismatch disables new
 deposits and new normal withdrawals. Existing balances remain visible and
 recovery-only actions remain available after a specific safety assessment.
 
-### Current Sepolia deployment and quote pin
+### Current deployment and quote pins
+
+#### Sepolia development profile
 
 The public deployments page currently documents Ethereum mainnet only. For
 Sepolia, WalletChan pins the official Privacy Pools app configuration at commit
@@ -780,12 +785,45 @@ fail-closed pins. The official app config at the same pinned commit
 publishes a `1 ETH` Sepolia app preference, but the Entrypoint does not enforce
 it and WalletChan deliberately excludes it from its policy. The current release
 mode is `sepolia-local-beta`: exact-manifest Sepolia Shield, relayed Unshield,
-and original-depositor public recovery are enabled; mainnet is absent and Bankr
-Sepolia submission is blocked.
+and original-depositor public recovery are enabled, while Bankr Sepolia
+submission is blocked.
 
-The trusted diagnostic readiness route sends the fixed
-chain/contract/scope/asset reads above to a user-configured Sepolia RPC, or
-WalletChan's immutable known-chain default when Sepolia has not been added.
+#### Ethereum mainnet production profile
+
+WalletChan pins the official deployments page and the same official app commit,
+then independently verifies the proxy's live EIP-1967 implementation and every
+runtime identity. The 2026-07-20 observation was made at mainnet block
+`25573384` (`0x0533bd1be8dfa610a1497bd174b640164b3aad03f9e86ad8a245505bc900de1c`).
+The public deployments page's listed implementation was stale at verification
+time; the table below records the active proxy implementation.
+
+| Item | Pinned value | Runtime bytecode Keccak-256 |
+| --- | --- | --- |
+| Entrypoint proxy | `0x6818809EefCe719E480a7526D76bD3e561526b46` | `0xf15a07c54ab3420101c38795fc919a27ffb05f1a0049070ba3b8f10bae32af97` |
+| Active Entrypoint implementation | `0x15e355024de1CDc74ADdea7EBDf98418Ba5B1a2c` | `0xfb5c2ac0d0556e489bce13315892302150e6f682e6cab57e317ab1a4945af5e6` |
+| ETH pool | `0xF241d57C6DebAe225c0F2e6eA1529373C9A9C9fB` | `0xd7f3f10491a60c3295019ec7f7bfc4e70290d2bbc5278245b12dda8e93b066de` |
+| Withdrawal verifier | `0x022891F938Ae7fDC8Ab9Ead0FBf50aBA8C897D6d` | `0x54515096fff858166d381897047ecf92c8b6a595c01416cafa7b9b608670ab67` |
+| Ragequit/commitment verifier | `0xa45ACa8604a73D80C551fAad6355A5c3A5565eC6` | `0x1045f87f241bb626b24e0156a478cc0a1d018ad7850c728fd93f10c4b03b27cd` |
+
+The native-asset sentinel is unchanged, pool deployment block is `22153707`,
+and scope is
+`4916574638117198869413701114161172350986437430914933850166949084132905299523`.
+The exact asset configuration is a `0.01 ETH` minimum deposit, `50` bps vetting
+fee, and `1,000` bps maximum relay fee. The production ASP is
+`https://api.0xbow.io`. Fast Relay uses a fee-recipient signer policy; Cloaked
+Relay uses the pinned quote signer
+`0x3A27cfd1BB78Ff6Fd356Eaa59c2f6232FfC6554a`.
+
+Vite production mode selects `mainnet-production`; development mode selects
+`sepolia-local-beta`. There is no runtime/remote override, and bundle probes
+require each emitted profile to exclude the other profile's contract and ASP
+pins. Encrypted/rebuildable IndexedDB state is profile-isolated. Production
+Bankr/private-key/seed-phrase mutations are enabled, impersonators remain
+reject-only, and agent-password mutations remain blocked.
+
+The trusted diagnostic readiness route sends the selected profile's fixed
+chain/contract/scope/asset reads to a user-configured active-chain RPC, or
+WalletChan's immutable known-chain default.
 Every JSON-RPC batch is capped at three requests so reviewed free-tier providers
 remain compatible. It sends no WalletChan address, phrase, commitment, label,
 amount, recipient, or transaction. This diagnostic is not invoked by the
@@ -794,7 +832,7 @@ deployment checks before persisting or queuing an operation.
 
 Pressing Shield opens amount entry immediately. `privacyQuoteShield` sends the
 selected public account address, entered public amount, fixed Entrypoint address, and a fresh
-throwaway public precommitment only to that same bounded Sepolia RPC for
+throwaway public precommitment only to that same bounded active-chain RPC for
 `eth_getBalance`, fee reads, and `eth_estimateGas`. The throwaway value is never
 returned, persisted, or reused as a deposit note. The quote response contains
 only serialized public amounts and affordability state. The RPC can observe
@@ -851,12 +889,14 @@ For ragequit, WalletChan verifies:
 Prepared public operations enter the existing pending transaction system.
 Signer selection remains owned by WalletChan's transaction coordinator.
 
-The Sepolia implementation keeps review and execution separate. Review uses a
+Both build profiles keep review and execution separate. Review uses a
 disposable reserved derivation and cannot be submitted. Confirming the review
 repeats every deployment, account, quote, and authorization check; reserves a
 distinct durable derivation; encrypts the exact operation; and creates a normal
 account-pinned WalletChan confirmation. Only private-key and seed-phrase
-accounts can reach raw-RPC publication on Sepolia. Receipt and pool-event
+accounts can reach raw-RPC publication on Sepolia. Production also permits
+Bankr through its separate confirmation/submission path after the exact privacy
+authorization and effect claim run at the final irreversible boundary. Receipt and pool-event
 reconciliation recover the exact commitment after restart or cache loss.
 
 ## 17. ASP sync and verification
@@ -1080,12 +1120,12 @@ recipients, tx hashes, or timing precise enough to correlate operations.
 | Create root with existing biometric factor | Required | Required | Required | Rejected |
 | Block root setup/export under agent | Required | Required | Required | Rejected |
 | Restore after service-worker restart | Required | Required | Required | Read-only |
-| Public shield confirmation | Rejected on Sepolia | Required | Required | Rejected |
+| Public shield confirmation | Rejected on Sepolia; required on mainnet | Required | Required | Rejected |
 | Resume after popup closes | Required | Required | Required | N/A |
-| Private withdrawal authorization | Rejected on Sepolia | Required | Required | Rejected |
+| Private withdrawal authorization | Wallet-wide identity; required path coverage | Required | Required | Rejected |
 | Relayer substitution rejection | Required | Required | Required | N/A |
 | Full rescan from phrase | Required | Required | Required | Rejected |
-| Ragequit | Rejected on Sepolia | Required | Required | Rejected |
+| Ragequit | Rejected on Sepolia; original depositor on mainnet | Required | Required | Rejected |
 | Password rotation preserves identity | Required | Required | Required | N/A |
 | Passkey lifecycle preserves identity | Required | Required | Required | N/A |
 | Reset/account removal warnings | Required | Required | Required | Required |
@@ -1189,30 +1229,36 @@ negative path, and destructive safeguards still need the written rehearsal.
 
 ### Phase 4: mainnet recovery-only rehearsal
 
-- Pin the production deployment and monitor proxy implementation.
+- **Implementation/read-only verification:** Complete on 2026-07-20. The exact
+  production deployment, active proxy implementation, bytecode, services, and
+  build isolation are pinned and live-read verified.
 - Restore known test commitments from phrase on production-equivalent data.
 - Exercise emergency procedures without enabling public deposits.
 - Complete security, legal/compliance, licensing, and store-policy review.
 
-### Phase 5: controlled Chrome beta
+### Phase 5: mainnet implementation and controlled Chrome beta
 
-- Enable private-key and seed accounts only through an explicitly reviewed
-  checked-in release-policy state; do not add an unauthenticated environment or
-  remote override.
+- **Implementation:** Complete. Normal production builds select the immutable
+  mainnet profile; `dev:extension` selects Sepolia. No runtime or remote
+  override exists.
+- Enable Bankr, private-key, and seed accounts only through the checked-in
+  release-policy state. Impersonators and agent-password mutations stay blocked.
 - Keep amounts governed by the contract minimum, valid `uint256` input, and
   available balance after gas.
-- Keep Bankr mainnet deposits disabled until its ragequit gate passes.
+- Require a capped live Shield/Unshield/ragequit and clean-recovery rehearsal
+  for each supported wallet type before rollout approval.
 - Monitor only privacy-safe operational health.
 
 ### Phase 6: broader availability
 
-- Consider Bankr mainnet support after recovery proof.
+- Expand Bankr rollout only after its live original-depositor recovery proof.
 - Consider Firefox after equivalent prover QA.
 - Evaluate ERC-20 pools or other deployments only through a new PRD revision.
 
 ## 27. Mainnet go/no-go
 
-Mainnet deposits remain disabled until all are true:
+The mainnet build profile is implemented. Value-bearing rollout and release
+distribution remain unapproved until all are true:
 
 - officially documented deployment and implementation are pinned;
 - audit-to-contract, circuit, SDK, artifact, and adapter mapping is complete;

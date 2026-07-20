@@ -1,9 +1,15 @@
 import type { Address, Hex } from "viem";
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
-export const PRIVACY_WITHDRAWALS_DATABASE = "walletchan-privacy-withdrawals-v1";
+export const PRIVACY_WITHDRAWALS_DATABASES = Object.freeze([
+  "walletchan-privacy-withdrawals-v1",
+  "walletchan-privacy-withdrawals-mainnet-v1",
+] as const);
+export const PRIVACY_WITHDRAWALS_DATABASE = PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+  ? PRIVACY_WITHDRAWALS_DATABASES[0]
+  : PRIVACY_WITHDRAWALS_DATABASES[1];
 export const PRIVACY_WITHDRAWALS_DATABASE_VERSION = 1;
 export const PRIVACY_WITHDRAWALS_STORE = "withdrawals";
 export const MAX_PRIVACY_WITHDRAWALS = 256;
@@ -32,7 +38,7 @@ export interface PrivacyUnshieldSummaryV1 {
   id: string;
   requestId: string;
   createdAt: number;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   amountWei: string;
   netRecipientAmountWei: string;
   relayFeeWei: string;
@@ -141,9 +147,9 @@ export function isValidPrivacyUnshieldSummary(value: unknown): value is PrivacyU
     typeof value.id === "string" && UUID.test(value.id) &&
     typeof value.requestId === "string" && UUID.test(value.requestId) &&
     typeof value.createdAt === "number" && Number.isSafeInteger(value.createdAt) && value.createdAt >= 0 &&
-    value.chainId === PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId &&
+    value.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     amount !== null && amount > 0n && net !== null && fee !== null && net + fee === amount &&
-    bps !== null && bps <= PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.assetConfig.maxRelayFeeBPS &&
+    bps !== null && bps <= PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS &&
     fee === amount * bps / 10_000n && address(value.recipient) &&
     typeof value.relayerName === "string" && value.relayerName.length > 0 && value.relayerName.length <= 64 &&
     typeof value.expiresAt === "number" && Number.isSafeInteger(value.expiresAt) && value.expiresAt >= value.createdAt &&
@@ -194,11 +200,11 @@ export function isValidPrivacyUnshieldDetails(
     typeof value.commitmentRevision === "number" && Number.isSafeInteger(value.commitmentRevision) && value.commitmentRevision >= 0 &&
     numeric.every((item) => item !== null) && numeric[0]! > 0n && numeric[2]! > 0n && numeric[5]! > 0n && numeric[7]! > 0n && numeric[9]! > 0n &&
     numeric[4]! <= numeric[0]! && numeric[6] === numeric[12]! + 1n &&
-    typeof value.relayerUrl === "string" && PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers.some((pin) => pin.url === value.relayerUrl) &&
+    typeof value.relayerUrl === "string" && PRIVACY_POOLS_DEPLOYMENT.services.relayers.some((pin) => pin.url === value.relayerUrl) &&
     address(value.signerAddress) && address(value.feeReceiverAddress) &&
     typeof value.feeCommitment.expiration === "number" && Number.isSafeInteger(value.feeCommitment.expiration) && value.feeCommitment.expiration >= 0 &&
     typeof value.feeCommitment.withdrawalData === "string" && /^0x[0-9a-fA-F]{192}$/.test(value.feeCommitment.withdrawalData) &&
-    address(value.feeCommitment.asset) && value.feeCommitment.asset.toLowerCase() === PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset.toLowerCase() &&
+    address(value.feeCommitment.asset) && value.feeCommitment.asset.toLowerCase() === PRIVACY_POOLS_DEPLOYMENT.nativeAsset.toLowerCase() &&
     value.feeCommitment.extraGas === false &&
     typeof value.feeCommitment.signedRelayerCommitment === "string" && SIGNATURE.test(value.feeCommitment.signedRelayerCommitment);
 }

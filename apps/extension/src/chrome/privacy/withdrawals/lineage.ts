@@ -1,5 +1,5 @@
 import type { PrivacyCommitmentDetailsV1 } from "../commitments/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositSecrets,
@@ -26,7 +26,7 @@ export function derivePrivacyCurrentCommitmentSecrets(input: {
   return withdrawalIndex === 0n
     ? derivePrivacyPoolDepositSecrets(
         input.masterKeys,
-        PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+        PRIVACY_POOLS_DEPLOYMENT.scope,
         BigInt(details.depositIndex),
       )
     : derivePrivacyPoolWithdrawalSecrets(

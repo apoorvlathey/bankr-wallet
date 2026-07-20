@@ -1,7 +1,7 @@
 import { decodeEventLog, keccak256, parseAbi, stringToHex, type Hex } from "viem";
 
 import { fetchRpcResult } from "../../network/rpcClient";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import type {
   PrivacyDepositEventV1,
   PrivacyPoolEventPageV1,
@@ -44,7 +44,7 @@ export async function readPrivacyLatestBlock(rpcUrl: string): Promise<bigint> {
     maxResponseBytes: 64_000,
   });
   const block = hexUint(result);
-  if (block === null) throw new Error("Invalid Sepolia head");
+  if (block === null) throw new Error("Invalid Privacy Pools head");
   return block;
 }
 
@@ -64,7 +64,7 @@ export async function readPrivacyBlockHash(
   );
   const hash = (result as { hash?: unknown } | null)?.hash;
   if (typeof hash !== "string" || !HASH.test(hash)) {
-    throw new Error("Invalid Sepolia block");
+    throw new Error("Invalid Privacy Pools block");
   }
   return hash.toLowerCase() as Hex;
 }
@@ -89,7 +89,7 @@ export async function readPrivacyPoolEvents(
     rpcUrl,
     "eth_getLogs",
     [{
-      address: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+      address: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
       fromBlock: `0x${fromBlock.toString(16)}`,
       toBlock: `0x${toBlock.toString(16)}`,
       topics: [[DEPOSIT_TOPIC, WITHDRAWAL_TOPIC, RAGEQUIT_TOPIC]],
@@ -123,7 +123,7 @@ export async function readPrivacyPoolEvents(
       !HASH.test(log.transactionHash) ||
       typeof log.address !== "string" ||
       log.address.toLowerCase() !==
-        PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
+        PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
       log.removed === true ||
       typeof log.data !== "string" ||
       !Array.isArray(log.topics)
@@ -140,7 +140,7 @@ export async function readPrivacyPoolEvents(
     const common = {
       version: 1,
       id: `${transactionHash}:${logIndex.toString()}`,
-      chainId: 11_155_111,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
       blockNumber: blockNumber.toString(),
       blockHash: log.blockHash.toLowerCase() as Hex,
       logIndex: Number(logIndex),

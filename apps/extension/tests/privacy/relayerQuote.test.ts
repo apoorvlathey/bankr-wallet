@@ -4,7 +4,7 @@ import test from "node:test";
 import { encodeAbiParameters, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import { verifyPrivacyRelayerQuote } from "../../src/chrome/privacy/relayer/client";
 import {
   parsePrivacyRelayerDetails,
@@ -36,7 +36,7 @@ async function fixture(now = 1_750_000_000_000) {
     domain: {
       name: "Privacy Pools Relayer",
       version: "1",
-      chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     },
     types: {
       RelayerCommitment: [
@@ -50,7 +50,7 @@ async function fixture(now = 1_750_000_000_000) {
     primaryType: "RelayerCommitment",
     message: {
       withdrawalData,
-      asset: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset,
+      asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
       expiration: BigInt(expiration),
       amount,
       extraGas: false,
@@ -59,8 +59,8 @@ async function fixture(now = 1_750_000_000_000) {
   const rawDetails = {
     feeBPS: baseFee.toString(),
     feeReceiverAddress: account.address,
-    chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
-    assetAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+    assetAddress: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
     minWithdrawAmount: "100",
     maxGasPrice: "40000000000",
   };
@@ -71,7 +71,7 @@ async function fixture(now = 1_750_000_000_000) {
     feeCommitment: {
       expiration,
       withdrawalData,
-      asset: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset,
+      asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
       amount: amount.toString(),
       extraGas: false,
       signedRelayerCommitment: signature,
@@ -92,7 +92,7 @@ test("strict relayer codecs accept the live Sepolia response shape", async () =>
   assert.equal(value.details.chainId, 11_155_111);
   assert.equal(value.quote.feeCommitment.amount, amount);
   assert.equal(
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers[0].signerAddress,
+    PRIVACY_POOLS_DEPLOYMENT.services.relayers[0].signerAddress,
     "0x696FE46495688fC9e99BAd2dAF2133B33de364eA",
   );
 });
@@ -104,7 +104,7 @@ test("verified quote binds fee data, recipient, economics, and signer", async ()
       name: "Fixture Relay",
       url: "https://fixture.invalid",
       signerPolicy: "fee-recipient",
-    } as typeof PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers[1],
+    } as typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[1],
     details: value.details,
     quote: value.quote,
     amountWei: amount,
@@ -125,7 +125,7 @@ test("quote validation rejects tampered economics and extra response fields", as
         name: "Fixture Relay",
         url: "https://fixture.invalid",
         signerPolicy: "fee-recipient",
-      } as typeof PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers[1],
+      } as typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[1],
       details: value.details,
       quote: { ...value.quote, relayCostWei: value.quote.relayCostWei + 1n },
       amountWei: amount,
@@ -144,7 +144,7 @@ test("quote validation rejects a signature not controlled by the fee recipient",
         name: "Fixture Relay",
         url: "https://fixture.invalid",
         signerPolicy: "fee-recipient",
-      } as typeof PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.relayers[1],
+      } as typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[1],
       details: {
         ...value.details,
         feeReceiverAddress: recipient,

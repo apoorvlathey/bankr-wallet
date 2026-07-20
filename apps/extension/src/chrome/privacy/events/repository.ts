@@ -11,7 +11,7 @@ import {
   PRIVACY_PUBLIC_EVENTS_DATABASE,
   PRIVACY_PUBLIC_EVENTS_DATABASE_VERSION,
   PRIVACY_RAGEQUIT_EVENTS_STORE,
-  PRIVACY_SEPOLIA_EVENT_CHECKPOINT_KEY,
+  PRIVACY_EVENT_CHECKPOINT_KEY,
   PRIVACY_WITHDRAWAL_EVENTS_STORE,
   type PrivacyDepositEventV1,
   type PrivacyEventCheckpointV1,
@@ -96,7 +96,7 @@ export async function readPrivacyEventCheckpoint(): Promise<PrivacyEventCheckpoi
   const completion = transactionComplete(transaction);
   const raw = await requestResult(
     transaction.objectStore(PRIVACY_EVENT_CHECKPOINT_STORE).get(
-      PRIVACY_SEPOLIA_EVENT_CHECKPOINT_KEY,
+      PRIVACY_EVENT_CHECKPOINT_KEY,
     ),
   );
   await completion;

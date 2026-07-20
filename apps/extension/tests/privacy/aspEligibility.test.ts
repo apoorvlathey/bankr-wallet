@@ -14,7 +14,7 @@ import {
   parsePrivacyAspLeaves,
   parsePrivacyAspRoots,
 } from "../../src/chrome/privacy/asp/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import { isPrivacyCommitmentPubliclyRecoverableStatus } from "../../src/chrome/privacy/commitments/types";
 import {
   derivePrivacyPoolCommitment,
@@ -34,7 +34,7 @@ function membershipFixture() {
   const value = 99_000n;
   const secrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     depositIndex,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -153,7 +153,7 @@ test("approved membership requires local lineage plus ASP and state roots pinned
         onchainMtRoot: fixture.roots.mtRoot,
       },
     }),
-    /roots do not match Sepolia/,
+    /roots do not match the active Privacy Pools deployment/,
   );
   assert.throws(
     () => verifyPrivacyAspMembership({
@@ -192,7 +192,7 @@ test("ASP client sends only the requested labels and rejects response injection"
     assert.equal(observedHeaders?.get("X-Labels"), "7");
     assert.equal(
       observedHeaders?.get("X-Pool-Scope"),
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
+      PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
     );
     assert.equal(observedHeaders?.has("Authorization"), false);
   } finally {

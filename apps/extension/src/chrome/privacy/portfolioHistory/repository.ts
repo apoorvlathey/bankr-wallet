@@ -1,6 +1,7 @@
 import { formatEther } from "viem";
 import { fetchNativePrice } from "../../gasEstimation";
 import { getCachedPrivacyKey } from "../../sessionCache";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
 import {
@@ -11,6 +12,7 @@ import {
   isValidStoredPrivacyPortfolioSnapshot,
   MAX_PRIVACY_PORTFOLIO_SNAPSHOTS,
   PRIVACY_PORTFOLIO_DATABASE,
+  PRIVACY_PORTFOLIO_DATABASES,
   PRIVACY_PORTFOLIO_DATABASE_VERSION,
   PRIVACY_PORTFOLIO_RETENTION_MS,
   PRIVACY_PORTFOLIO_SAMPLE_INTERVAL_MS,
@@ -103,7 +105,7 @@ async function readSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeri
 
   const [records, priceResult] = await Promise.all([
     readRecords(),
-    fetchNativePrice(11_155_111).catch(() => null),
+    fetchNativePrice(PRIVACY_POOLS_DEPLOYMENT.chainId).catch(() => null),
   ]);
   const decrypted = (await Promise.all(
     records
@@ -175,10 +177,12 @@ export async function deletePrivacyPortfolioDatabase(): Promise<void> {
   databasePromise = null;
   if (existing) (await existing.catch(() => null))?.close();
   if (typeof indexedDB === "undefined") return;
-  await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(PRIVACY_PORTFOLIO_DATABASE);
-    request.onsuccess = () => resolve();
-    request.onblocked = () => reject(new Error("Private portfolio storage is busy"));
-    request.onerror = () => reject(request.error ?? new Error("Private portfolio reset failed"));
-  });
+  await Promise.all(PRIVACY_PORTFOLIO_DATABASES.map((name) =>
+    new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onblocked = () => reject(new Error("Private portfolio storage is busy"));
+      request.onerror = () => reject(request.error ?? new Error("Private portfolio reset failed"));
+    })
+  ));
 }

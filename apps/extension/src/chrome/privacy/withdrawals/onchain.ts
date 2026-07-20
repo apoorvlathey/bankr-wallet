@@ -1,9 +1,9 @@
 import { createPublicClient, parseAbi } from "viem";
-import { sepolia } from "viem/chains";
 
 import { secureHttpTransport } from "../../network/rpcClient";
-import { resolvePrivacyPoolsSepoliaRpcUrl } from "../deployment/health";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_VIEM_CHAIN } from "../deployment/chain";
+import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { PRIVACY_POOLS_RPC_BATCH_SIZE } from "../rpcPolicy";
 
 const POOL_ABI = parseAbi([
@@ -12,9 +12,9 @@ const POOL_ABI = parseAbi([
 
 export async function isPrivacyNullifierSpent(nullifier: bigint): Promise<boolean> {
   if (nullifier <= 0n) throw new Error("Invalid Privacy Pools nullifier");
-  const rpcUrl = await resolvePrivacyPoolsSepoliaRpcUrl();
+  const rpcUrl = await resolvePrivacyPoolsRpcUrl();
   const client = createPublicClient({
-    chain: sepolia,
+    chain: PRIVACY_POOLS_VIEM_CHAIN,
     transport: secureHttpTransport(rpcUrl, {
       batch: { batchSize: PRIVACY_POOLS_RPC_BATCH_SIZE, wait: 0 },
       retryCount: 1,
@@ -22,7 +22,7 @@ export async function isPrivacyNullifierSpent(nullifier: bigint): Promise<boolea
     }),
   });
   return client.readContract({
-    address: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    address: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     abi: POOL_ABI,
     functionName: "nullifierHashes",
     args: [nullifier],

@@ -5,7 +5,7 @@ import {
   type Hex,
 } from "viem";
 
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
 const ENTRYPOINT_NATIVE_DEPOSIT_ABI = parseAbi([
   "function deposit(uint256 precommitment) payable returns (uint256 commitment)",
@@ -23,7 +23,7 @@ export interface PrivacyShieldReviewIntent {
   readonly kind: "privacy-shield-review-intent";
   readonly version: 1;
   readonly submittable: false;
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly sourceAddress: Address;
   readonly destinationAddress: Address;
   readonly valueWei: bigint;
@@ -56,7 +56,7 @@ function feeValues(valueWei: bigint): {
   protocolFeeWei: bigint;
   shieldedAmountWei: bigint;
 } {
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
+  const deployment = PRIVACY_POOLS_DEPLOYMENT;
   if (
     valueWei < deployment.assetConfig.minimumDepositAmount ||
     valueWei < 0n
@@ -81,7 +81,7 @@ export function decodePrivacyShieldReviewIntent(
     intent?.kind !== "privacy-shield-review-intent" ||
     intent.version !== 1 ||
     intent.submittable !== false ||
-    intent.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId ||
+    intent.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
     typeof intent.valueWei !== "bigint" ||
     typeof intent.protocolFeeWei !== "bigint" ||
     typeof intent.shieldedAmountWei !== "bigint" ||
@@ -95,7 +95,7 @@ export function decodePrivacyShieldReviewIntent(
   const destinationAddress = normalizeAddress(intent.destinationAddress);
   if (
     destinationAddress !==
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase()
+    PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase()
   ) {
     throw new Error("invalid-shield-intent");
   }
@@ -157,10 +157,10 @@ export function createPrivacyShieldReviewIntent(input: {
     kind: "privacy-shield-review-intent" as const,
     version: 1 as const,
     submittable: false as const,
-    chainId: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     sourceAddress,
     destinationAddress:
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+      PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
     valueWei: input.valueWei,
     ...fees,
     callData,

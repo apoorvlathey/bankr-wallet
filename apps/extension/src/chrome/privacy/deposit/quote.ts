@@ -5,7 +5,7 @@ import {
   normalizeEvmAccountAddress,
 } from "../../accounts/repository";
 import type { Account, AccountType } from "../../types";
-import { resolvePrivacyPoolsSepoliaRpcUrl } from "../deployment/health";
+import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
 import { readPrivacyShieldRpcQuote } from "./quoteClient";
 import {
   createPrivacyShieldQuoteValues,
@@ -36,7 +36,7 @@ type Dependencies = {
 
 const productionDependencies: Dependencies = {
   getAccountById,
-  resolveRpcUrl: resolvePrivacyPoolsSepoliaRpcUrl,
+  resolveRpcUrl: resolvePrivacyPoolsRpcUrl,
   readRpcQuote: readPrivacyShieldRpcQuote,
 };
 
@@ -89,7 +89,7 @@ export function assertPinnedSourceAccount(
   return requestedAddress as Address;
 }
 
-/** Return an informational Sepolia quote; this module has no signing path. */
+/** Return an informational active-profile quote; this module has no signing path. */
 export async function quotePrivacyShield(
   request: PrivacyShieldQuoteRequest,
   overrides: Partial<Dependencies> = {},

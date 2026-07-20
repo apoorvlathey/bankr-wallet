@@ -10,8 +10,12 @@ import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import { ArrowDownIcon } from "@chakra-ui/icons";
-import { SHIELDED_ETH_LOGO_URL } from "@/components/Shield/model/shieldedAsset";
+import {
+  SHIELDED_ETH_LOGO_URL,
+  SHIELDED_ETH_NETWORK_NAME,
+} from "@/components/Shield/model/shieldedAsset";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 
 interface TransactionOutcomeProps {
   txRequest: PendingTxRequest;
@@ -51,8 +55,10 @@ export function PrivacyShieldTransactionOutcome({
   } catch {
     amountWei = 0n;
   }
-  const feeWei = amountWei / 100n;
+  const feeBPS = PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
+  const feeWei = amountWei * feeBPS / 10_000n;
   const shieldedWei = amountWei - feeWei;
+  const feePercent = Number(feeBPS) / 100;
 
   return (
     <Box
@@ -65,7 +71,9 @@ export function PrivacyShieldTransactionOutcome({
     >
       <HStack justify="space-between" spacing={3}>
         <VStack align="start" spacing={0} minW={0}>
-          <Text fontSize="xs" color="fg.secondary">From Sepolia ETH</Text>
+          <Text fontSize="xs" color="fg.secondary">
+            From {SHIELDED_ETH_NETWORK_NAME} ETH
+          </Text>
           <Text fontFamily="mono" fontSize="xl" fontWeight="700">
             {formatShieldWei(amountWei)} ETH
           </Text>
@@ -83,7 +91,9 @@ export function PrivacyShieldTransactionOutcome({
         <Image src={SHIELDED_ETH_LOGO_URL} alt="" boxSize="38px" />
       </HStack>
       <HStack mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle" justify="space-between">
-        <Text fontSize="xs" color="fg.secondary">Protocol fee (1%)</Text>
+        <Text fontSize="xs" color="fg.secondary">
+          Protocol fee ({feePercent}%)
+        </Text>
         <Text fontSize="xs" fontWeight="600" fontFamily="mono">
           {formatShieldWei(feeWei)} ETH
         </Text>
@@ -104,7 +114,7 @@ export function PrivacyShieldRequestContext() {
     >
       <HStack justify="space-between" spacing={3}>
         <Text fontSize="sm" color="fg.secondary">Network</Text>
-        <Text fontSize="sm" fontWeight="600">Sepolia</Text>
+        <Text fontSize="sm" fontWeight="600">{SHIELDED_ETH_NETWORK_NAME}</Text>
       </HStack>
       <HStack mt={2.5} justify="space-between" spacing={3}>
         <Text fontSize="sm" color="fg.secondary">Route</Text>

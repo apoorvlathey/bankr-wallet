@@ -1,10 +1,16 @@
 import type { Address, Hex } from "viem";
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { PRIVACY_SNARK_SCALAR_FIELD } from "../asp/types";
 
-export const PRIVACY_COMMITMENTS_DATABASE = "walletchan-privacy-commitments-v1";
+export const PRIVACY_COMMITMENTS_DATABASES = Object.freeze([
+  "walletchan-privacy-commitments-v1",
+  "walletchan-privacy-commitments-mainnet-v1",
+] as const);
+export const PRIVACY_COMMITMENTS_DATABASE = PRIVACY_POOLS_DEPLOYMENT.profile === "sepolia"
+  ? PRIVACY_COMMITMENTS_DATABASES[0]
+  : PRIVACY_COMMITMENTS_DATABASES[1];
 export const PRIVACY_COMMITMENTS_DATABASE_VERSION = 1;
 export const PRIVACY_COMMITMENTS_STORE = "commitments";
 export const MAX_PRIVACY_COMMITMENTS = 1_024;
@@ -23,7 +29,7 @@ export type PrivacyCommitmentStatus =
 export interface PrivacyCommitmentDetailsV1 {
   version: 1;
   id: string;
-  chainId: 11_155_111;
+  chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   scope: string;
   poolAddress: Address;
   commitment: string;
@@ -143,11 +149,11 @@ export function isValidPrivacyCommitmentDetails(
   return details.version === 1 &&
     typeof details.id === "string" && UUID.test(details.id) &&
     (!expectedId || details.id === expectedId) &&
-    details.chainId === PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId &&
-    details.scope === PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString() &&
+    details.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
+    details.scope === PRIVACY_POOLS_DEPLOYMENT.scope.toString() &&
     typeof details.poolAddress === "string" && ADDRESS.test(details.poolAddress) &&
     details.poolAddress.toLowerCase() ===
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase() &&
+      PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase() &&
     field(details.commitment) !== null &&
     field(details.label) !== null &&
     field(details.precommitment) !== null &&

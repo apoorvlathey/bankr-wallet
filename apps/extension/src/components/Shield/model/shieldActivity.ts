@@ -1,10 +1,13 @@
 import type { PublicRecoveryOperation } from "./recovery";
 import type { ShieldPendingOperation } from "./shieldOperation";
 import type { UnshieldOperation } from "./unshield";
+import { SHIELDED_ETH_NETWORK_NAME } from "./shieldedAsset";
 
 export function recoveryStatusCopy(state: PublicRecoveryOperation["state"]): string {
   if (state === "awaiting_wallet_confirmation") return "Waiting for wallet confirmation";
-  if (state === "submission_unknown" || state === "submitted") return "Confirming on Sepolia";
+  if (state === "submission_unknown" || state === "submitted") {
+    return `Confirming on ${SHIELDED_ETH_NETWORK_NAME}`;
+  }
   if (state === "public_confirmed") return "Updating Shield balance";
   if (state === "recovered") return "Returned to the original address";
   if (state === "wallet_rejected") return "Cancelled in wallet";
@@ -41,7 +44,9 @@ export function unshieldStatusCopy(state: UnshieldOperation["state"]): string {
   if (state === "quote_ready") return "Ready to confirm";
   if (state === "proof_preparing" || state === "proof_verified") return "Preparing withdrawal";
   if (state === "submitting_to_relayer" || state === "submission_unknown") return "Checking submission";
-  if (state === "submitted" || state === "public_confirmed") return "Confirming on Sepolia";
+  if (state === "submitted" || state === "public_confirmed") {
+    return `Confirming on ${SHIELDED_ETH_NETWORK_NAME}`;
+  }
   if (state === "private_balance_updated") return "Private balance updated";
   if (state === "quote_expired") return "Quote expired";
   if (state === "relayer_rejected") return "Relay rejected";
@@ -66,7 +71,9 @@ export function shieldOperationStatusCopy(
 ): string {
   if (state === "awaiting_wallet_confirmation") return "Waiting for wallet confirmation";
   if (state === "submission_unknown") return "Checking whether it was submitted";
-  if (state === "submitted" || state === "public_confirmed") return "Confirming on Sepolia";
+  if (state === "submitted" || state === "public_confirmed") {
+    return `Confirming on ${SHIELDED_ETH_NETWORK_NAME}`;
+  }
   if (state === "awaiting_event") return "Finding the confirmed deposit";
   if (state === "awaiting_asp") return "Waiting for eligibility";
   if (state === "private_ready") return "Available to Unshield";

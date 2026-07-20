@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { generateVaultKey, importVaultKey } from "../../src/chrome/crypto";
 import type { PrivacyCommitmentDetailsV1 } from "../../src/chrome/privacy/commitments/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositPrecommitment,
@@ -35,7 +35,7 @@ function commitment(): { details: PrivacyCommitmentDetailsV1; masterKeys: Return
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const secrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     0n,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -47,8 +47,8 @@ function commitment(): { details: PrivacyCommitmentDetailsV1; masterKeys: Return
       version: 1,
       id: COMMITMENT_ID,
       chainId: 11_155_111,
-      scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-      poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+      scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+      poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
       commitment: derived.hash.toString(),
       label: "456",
       valueWei: value.toString(),
@@ -113,7 +113,7 @@ function recordFixture() {
     feeCommitment: {
       expiration: 60_001,
       withdrawalData: `0x${"11".repeat(96)}`,
-      asset: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.nativeAsset,
+      asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
       amount: amount.toString(),
       extraGas: false,
       signedRelayerCommitment: `0x${"22".repeat(65)}`,

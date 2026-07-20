@@ -1,17 +1,20 @@
 # Privacy Pools implementation handoff
 
 > **Handoff date:** 2026-07-20
-> **Current target:** Unpacked Chrome extension on Sepolia only
-> **Implementation status:** Sepolia feature code is complete; the written
-> manual rehearsal is only partially complete
-> **Mainnet status:** Not configured and not enabled
-> **Resume with:** [`PRIVACY_POOLS_SEPOLIA_TEST.md`](./PRIVACY_POOLS_SEPOLIA_TEST.md)
+> **Build targets:** `dev:extension` uses Sepolia; normal/production builds use
+> Ethereum mainnet only
+> **Implementation status:** Dual-profile code and automated profile/wallet
+> coverage are complete; value-bearing mainnet browser smoke tests remain
+> **Distribution status:** Store/release packaging remains blocked pending the
+> existing GPL/legal/compliance gate
+> **Resume with:** [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md)
 
 This is the starting document for the next implementation session. It records
 what is built, what the product owner has observed manually, the important
 security and protocol decisions, the latest fixed defects, and the remaining
-gates. Do not infer mainnet readiness from the completed implementation
-checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
+gates. A production build now contains only the mainnet deployment, but that
+does not by itself approve store distribution or authorize a value-bearing
+mainnet rehearsal.
 
 ## Product behavior now
 
@@ -26,17 +29,17 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
   Shield/Unshield rows and never mixes the private balance into account totals.
   The three private actions reuse the exact public-home action treatment and
   icons instead of introducing large action cards.
-- Shield now follows the wallet's Swap form grammar with compact fixed Sepolia
+- Shield now follows the wallet's Swap form grammar with compact fixed active-chain
   ETH and Shielded ETH amount cards and one sticky review action. Shield,
   Unshield, and Send are independent screens reached directly from Private;
   there is no internal mode selector. `Deposit from` names the signer without a redundant
   network subtitle, and the private balance is not repeated inside the form. There is no
   recovery wizard, protocol primer, local activity list, asset selector, or
-  network selector in the normal flow. Shield chooses its Sepolia-paying
+  network selector in the normal flow. Shield chooses its active-chain-paying
   account inside the form without changing the global public account.
 - `Shielded ETH` is permanent only in Private Assets, even at zero. It shows
   the compliance-cleared balance with amber processing subcopy, carries a
-  Sepolia test identity, and opens Shield, Unshield, Send privately, or Private Activity.
+  active deployment identity, and opens Shield, Unshield, Send privately, or Private Activity.
   Generic public Send and Swap never receive this pseudo-asset.
 - First eligible Private-mode entry starts creation of a separate 12-word
   Privacy Pools phrase inside the background service worker without blocking
@@ -46,13 +49,16 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 - A main-password session or fresh biometric/passkey master session can use
   Shield without an extra password interruption. Explicit phrase reveal and
   restore remain main-password-only under Settings -> Shield recovery.
-- Sepolia Shield quotes use the selected public account, the contract-enforced
-  `0.001 ETH` minimum, the onchain 1% fee, estimated gas, and a gas-aware Max.
+- Shield quotes use the selected public account, the active contract minimum
+  and fee (`0.001 ETH`/1% on Sepolia; `0.01 ETH`/0.5% on mainnet), estimated
+  gas, and a gas-aware Max.
   WalletChan deliberately has no arbitrary 1 ETH application cap.
 - Private-key and seed-phrase accounts use the normal local WalletChan
-  confirmation/signing path. Bankr can quote/review but is rejected before a
-  Sepolia transaction prompt because its raw-submit API does not support
-  Sepolia. Impersonators and agent-password sessions cannot mutate Shield.
+  confirmation/signing path. Sepolia development builds reject Bankr before a
+  mutation prompt. Production mainnet builds support Bankr through the normal
+  Bankr confirmation/submission coordinator, with privacy authorization and
+  effect claiming immediately before the irreversible API boundary.
+  Impersonators and agent-password sessions cannot mutate Shield.
 - The main private USD balance and encrypted chart include only ASP-cleared,
   spendable Shielded ETH. The compact breakdown beneath it separately shows
   the shielded amount and amber processing ETH still waiting for the ASP
@@ -60,7 +66,7 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 - Private Unshield and **Send privately** are separate entries over the same
   relayed withdrawal engine. Unshield defaults receipt to the active WalletChan
   account; Send begins with an empty recipient. Shielded ETH is debited and
-  public Sepolia ETH is delivered through the shared Send recipient/contact/ENS
+  public active-chain ETH is delivered through the shared Send recipient/contact/ENS
   flow through the pinned relay. Its concise review uses a normal button press,
   explains there is no direct onchain link to the deposit, and makes no claim
   that timing, amount matching, or address reuse are untraceable. No additional
@@ -77,7 +83,7 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
   account, and publicly links the exit to the deposit.
 - Public Shield progress and relayed private-send outcomes live in Private
   Activity only. Shield deposits keep their four real stages
-  and ordinary Sepolia transaction details; both the Activity row and detail
+  and ordinary active-chain transaction details; both the Activity row and detail
   screen use the same amber privacy mark and durable lifecycle projection.
   Successful Shield and public-recovery confirmations return to Private
   Activity instead of resetting to Assets. Deposit, lifecycle, and recovery
@@ -193,7 +199,7 @@ a self-consistent mock.
 | Trusted UI transport | `apps/extension/src/chrome/background/privacyRouter.ts` | Status, quote, review, operations, sync, Unshield, public withdrawal |
 | Recovery transport | `apps/extension/src/chrome/background/privacyRecoveryRouter.ts` | Main-password reveal/restore and bounded rescan |
 | Privacy custody | `apps/extension/src/chrome/privacy/{identity,record,repository,crypto,vault,passkey}.ts` | Phrase generation, record validation, wrappers, authorization |
-| Protocol/deployment | `apps/extension/src/chrome/privacy/protocol/`, `deployment/` | Pinned primitives, artifacts, exact Sepolia allowlist |
+| Protocol/deployment | `apps/extension/src/chrome/privacy/protocol/`, `deployment/` | Pinned primitives, artifacts, exact compile-time Sepolia/mainnet allowlists |
 | Deposit lifecycle | `apps/extension/src/chrome/privacy/deposit/`, `operations/` | Quote/review, encrypted durable intent, confirmation, receipt |
 | Private state | `apps/extension/src/chrome/privacy/events/`, `commitments/`, `asp/` | Pool indexing, local lineage, verified eligibility |
 | Private exit | `apps/extension/src/chrome/privacy/relayer/`, `withdrawals/` | Signed quote validation, proof, submit, nullifier-aware recovery |
@@ -216,10 +222,12 @@ forwarded through the content script or exposed to dapps.
 | --- | --- | --- | --- | --- | --- |
 | View aggregate status | Yes | Yes | Yes | Read-only | Read-only |
 | Initialize with master/passkey | Yes | Yes | Yes | No | No |
-| Quote and review Sepolia Shield | Yes | Yes | Yes | No | No |
-| Submit Sepolia Shield | No, rejected before prompt | Yes | Yes | No | No |
+| Quote and review active-chain Shield | Yes | Yes | Yes | No | No |
+| Submit Sepolia Shield (`dev:extension`) | No, rejected before prompt | Yes | Yes | No | No |
+| Submit mainnet Shield (production) | Yes | Yes | Yes | No | No |
 | Private Unshield | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | No |
-| Withdraw publicly on Sepolia | No | Original depositor only | Original depositor only | No | No |
+| Withdraw publicly on Sepolia (`dev:extension`) | No | Original depositor only | Original depositor only | No | No |
+| Withdraw publicly on mainnet (production) | Original depositor only | Original depositor only | Original depositor only | No | No |
 | Reveal/restore phrase | Main password only | Main password only | Main password only | No | No |
 
 Account switching after a Shield review does not transfer authority: final
@@ -252,38 +260,70 @@ The exact implementation address, verifier addresses, scope, bytecode hashes,
 artifact hashes, SDK integrity, and source commits remain in the checked-in
 manifests and PRD; do not copy-edit those values independently.
 
+## Mainnet release pins and network behavior
+
+- Chain ID: `1`; deployment block: `22,153,707`.
+- Entrypoint proxy: `0x6818809EefCe719E480a7526D76bD3e561526b46`.
+- Active EIP-1967 implementation observed on 2026-07-20:
+  `0x15e355024de1CDc74ADdea7EBDf98418Ba5B1a2c`. This live proxy value supersedes
+  the older implementation address still shown by the public deployments page.
+- ETH pool: `0xF241d57C6DebAe225c0F2e6eA1529373C9A9C9fB`.
+- Scope:
+  `4916574638117198869413701114161172350986437430914933850166949084132905299523`.
+- Minimum deposit: `0.01 ETH`; vetting fee: `50` bps; maximum relay fee:
+  `1,000` bps.
+- ASP: `https://api.0xbow.io`; relayers: Fast Relay and Cloaked Relay. Cloaked
+  Relay quotes are pinned to signer
+  `0x3A27cfd1BB78Ff6Fd356Eaa59c2f6232FfC6554a`; Fast Relay uses its validated
+  fee-recipient signer policy.
+- The proxy, active implementation, pool, both verifiers, asset configuration,
+  scope, relationships, and all five bytecode identities were checked through
+  Ethereum RPC at block `25,573,384` on 2026-07-20. The exact observation and
+  hashes are recorded in the mainnet manifest and mainnet test document.
+
+`import.meta.env.MODE === "production"` selects this immutable profile during
+the Vite build. The production background bundle is checked to contain the
+mainnet pins and exclude the Sepolia deployment/API; the development bundle is
+checked for the inverse. There is no runtime, storage, or remote deployment
+override.
+
 ## Storage and recovery
 
 - `chrome.storage.local.privacyVault` contains the encrypted phrase plus
   master/passkey wrappers and a key check. `privacyRecoveryBackup` contains
   only `{version, keyId, verifiedAt}`.
-- `walletchan-privacy-v1` stores bounded encrypted Shield operations and the
-  atomic next-deposit index.
-- `walletchan-privacy-commitments-v1`,
-  `walletchan-privacy-withdrawals-v1`, and
-  `walletchan-privacy-ragequits-v1` store encrypted private lineage and
+- The released `walletchan-privacy-*-v1` names remain Sepolia-only for dev
+  continuity. Production uses corresponding `*-mainnet-v1` databases for
+  operations, commitments, withdrawals, ragequits, portfolio, and public
+  events, so testnet and mainnet lineage cannot mix.
+- The active operations database stores bounded encrypted Shield operations
+  and the atomic next-deposit index. The active commitments, withdrawals, and
+  ragequits databases store encrypted private lineage and
   restart-safe exit state.
-- `walletchan-privacy-portfolio-v1` stores at most 193 fresh-IV encrypted
+- The active portfolio database stores at most 193 fresh-IV encrypted
   ASP-cleared private balance/price/USD chart points with eight-day retention.
-- `walletchan-privacy-events-v1` is a disposable public Sepolia event cache.
+- The active events database is a disposable public pool-event cache.
   Phrase rescan rederives and verifies lineage instead of trusting the cache.
 - Password rotation rewraps the same privacy key. Passkey setup/removal
   preserves the identity. Manual lock clears live capabilities but tracking of
   already-submitted public effects can continue.
 - Account removal is blocked for unresolved Shield work, in-flight public
   recovery, or unspent commitments. Reset requires the explicit Shield-loss
-  acknowledgement and deletes the vault, marker, and all six databases.
+  acknowledgement and deletes the vault, marker, and both profiles' encrypted
+  databases. Recovery replacement follows the same cross-profile secret
+  cleanup policy.
 
 ## Current automated baseline
 
-The 2026-07-20 dual-mode verification passed the full Privacy Pools suite
-(`175/175`), all three TypeScript configurations, `222/222` UI tests, all six
+The 2026-07-20 dual-profile verification passed the full Privacy Pools suite
+(`181/181`), all three TypeScript configurations, `222/222` UI tests, all six
 renderer architecture guards, targeted changed-file lint, all 12 private-home
-preview states, and `pnpm build:extension`. The refreshed build measured 46,233,929
-bytes, including 23,690,342 artifact bytes, a 336,397-byte prover worker, and a
-3,522,011-byte background bundle. Packaged Chromium QA passed both proofs
-across a closed and reopened extension page in 9.027/9.981 seconds with a
-352,976,896-byte peak process-tree RSS delta, within every frozen budget.
+preview states, production-profile bundle isolation, live read-only mainnet
+deployment assertion, and `pnpm build:extension`. The refreshed build measured
+46,239,514 bytes, including 23,690,342 artifact bytes, a 336,397-byte prover
+worker, and a 3,525,783-byte background bundle. Packaged Chromium QA passed
+both proofs across a closed and reopened extension page in 9.205/8.988 seconds
+with a 261,128,192-byte peak process-tree RSS delta, within every frozen budget.
 Targeted changed-file lint is clean; repository-wide lint was not part of this
 checkpoint.
 Re-run the commands below after any further change and record the new results
@@ -317,48 +357,32 @@ proofs, public signals, calldata, or secret material to logs.
 
 ## Resume order
 
-1. Reload `apps/extension/build` and reject one **Withdraw publicly** prompt.
-   Confirm no cancelled/failed public-withdrawal card appears after Activity
-   refresh or extension reload.
-2. Complete one full Shield lifecycle with a private-key account and one with
-   a seed-phrase account. Exercise password and fresh passkey login, account
-   switching during review, prompt rejection, approval, UI closure, and
-   service-worker restart.
-3. Confirm Private mode shows the same confirmed, available, and pending
-   amounts in its balance and sole asset row, while Public account totals,
-   assets, Send, chart, and Activity contain no Shielded ETH. Verify the row
-   actions route to Shield, Send privately, and Private Activity.
-4. Confirm Private Activity advances live through wallet confirmation,
-   Sepolia confirmation, indexing, and ASP review, while the Shielded ETH
-   balance appears after pool confirmation.
-5. Obtain an ASP-approved test commitment and complete partial and Max/full
-   private Unshield. Test quote expiry, relayer substitution rejection,
-   restart during proving/submission, recipient receipt, replacement lineage,
-   and nullifier-aware retry.
-6. Use Settings -> Shield recovery on disposable accounts: reveal, auto-hide,
-   backup marker, scan, clean-install restore, and invalid-phrase rejection.
-   Then repeat public withdrawal after a clean restore/rescan for both local
-   wallet types.
-7. Exercise Bankr, impersonator, and agent-password paths. Bankr and
-   impersonator cannot sign Shield/public-recovery transactions, but an
-   existing master-unlocked wallet-wide privacy identity may send privately
-   regardless of the displayed public account. Agent sessions must never reach
-   private proof/submission.
-8. Exercise account-removal and reset safeguards with pending work and unspent
-   commitments. Verify cancel leaves state intact and acknowledged disposable
-   reset removes all Shield data.
-9. Run the complete automated rehearsal above, reconcile any browser findings,
-   and mark each manual gate in `PRIVACY_POOLS_SEPOLIA_TEST.md`.
-10. Before any store build or mainnet work, resolve the `snarkjs` license and
-   distribution decision, complete security/legal/compliance/store-policy
-   review, and approve the full PRD go/no-go list.
-11. Only then begin the mainnet **read-only** rehearsal: pin the official
-    production deployment and bytecode, rescan known fixtures, and exercise
-    kill-switch/recovery-only procedures. Do not enable mainnet deposits in
-    that phase.
-12. A controlled mainnet beta is the final step, after every Sepolia and
-    read-only gate passes. Start with explicitly approved local wallet types;
-    Bankr remains disabled until original-depositor public recovery is proven.
+1. Use [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md) to
+   inspect a normal production build and confirm Ethereum/mainnet labels,
+   `0.01 ETH` minimum, 0.5% protocol fee, mainnet explorer links, and Bankr plus
+   both local source-account options. Confirm no Sepolia endpoint/address is in
+   the emitted privacy bundles.
+2. Reload a `dev:extension` build and complete the remaining written Sepolia
+   rehearsal for private-key and seed-phrase accounts, including recovery,
+   rejection, restart, private Unshield, and destructive safeguards. Confirm
+   Bankr remains blocked in this profile.
+3. On an unfunded or otherwise non-submitting production wallet, exercise
+   mainnet quote/review validation and the negative matrix: impersonator,
+   agent session, insufficient funds, below-minimum input, deployment drift,
+   ASP/root failure, and relayer substitution.
+4. Obtain explicit value-bearing test authorization and caps before sending
+   mainnet funds. Then perform the ordered mainnet smoke matrix with Bankr,
+   private-key, and seed-phrase accounts: Shield, confirmation/indexing/ASP,
+   partial and full Unshield, clean phrase restore/rescan, and exact-original-
+   depositor public recovery. Record hashes and outcomes without recording
+   privacy secrets or linkable private-withdrawal details in shared logs.
+5. Exercise account-removal, reset, recovery-only, and incident/kill procedures
+   against disposable mainnet state. Verify cross-profile reset removes both
+   Sepolia and mainnet encrypted databases.
+6. Resolve the `snarkjs` license/distribution decision and complete
+   security/legal/compliance/store-policy review before using GitHub release,
+   Chrome Web Store, or Firefox packaging. The mainnet build profile does not
+   bypass those gates.
 
 ## Documents to keep synchronized
 
@@ -368,6 +392,9 @@ proofs, public signals, calldata, or secret material to logs.
   manual-gate status.
 - [`PRIVACY_POOLS_SEPOLIA_TEST.md`](./PRIVACY_POOLS_SEPOLIA_TEST.md): exact
   browser rehearsal.
+- [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md): exact
+  mainnet pins, read-only verification, production bundle checks, and manual
+  value-bearing gates.
 - [`IMPLEMENTATION.md`](./IMPLEMENTATION.md): message flow and background/UI
   architecture.
 - [`SECURITY.md`](./SECURITY.md): authorization, cryptographic, message, and

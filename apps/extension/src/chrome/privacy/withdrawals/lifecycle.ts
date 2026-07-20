@@ -11,8 +11,8 @@ import {
   readPrivacyCommitments,
   updatePrivacyCommitmentStatus,
 } from "../commitments/repository";
-import { resolvePrivacyPoolsSepoliaRpcUrl } from "../deployment/health";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { listPrivacyWithdrawalEvents } from "../events/repository";
 import { syncPrivacyDepositEvents } from "../events/sync";
 import type { PrivacyWithdrawalEventV1 } from "../events/types";
@@ -90,7 +90,7 @@ async function applyVerifiedWithdrawal(
 ): Promise<void> {
   if (
     event.processooor.toLowerCase() !==
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase() ||
+      PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase() ||
     event.valueWei !== operation.summary.amountWei ||
     event.spentNullifier !== details.expectedSpentNullifier ||
     event.newCommitment !== details.expectedNewCommitment
@@ -161,7 +161,7 @@ function eventFromReceipt(
     try {
       if (
         typeof log.address !== "string" ||
-        log.address.toLowerCase() !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
+        log.address.toLowerCase() !== PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase() ||
         typeof log.logIndex !== "string" ||
         typeof log.data !== "string" || !Array.isArray(log.topics)
       ) continue;
@@ -181,7 +181,7 @@ function eventFromReceipt(
       return {
         version: 1,
         id: `${txHash}:${logIndex.toString()}`,
-        chainId: 11_155_111,
+        chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
         blockNumber: blockNumber.toString(),
         blockHash: blockHash.toLowerCase() as Hex,
         logIndex: Number(logIndex),
@@ -235,7 +235,7 @@ async function poll(operationId: string, txHash: Hex): Promise<void> {
   if (active.has(operationId)) return;
   active.add(operationId);
   try {
-    const rpcUrl = await resolvePrivacyPoolsSepoliaRpcUrl();
+    const rpcUrl = await resolvePrivacyPoolsRpcUrl();
     const receipt = await fetchRpcResult(rpcUrl, "eth_getTransactionReceipt", [txHash], {
       allowPrivateWithoutOrigin: true,
       timeoutMs: 12_000,

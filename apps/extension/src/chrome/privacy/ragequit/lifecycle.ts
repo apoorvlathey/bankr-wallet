@@ -7,7 +7,7 @@ import {
   readPrivacyCommitments,
   updatePrivacyCommitmentStatus,
 } from "../commitments/repository";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { listPrivacyRagequitEvents } from "../events/repository";
 import type { PrivacyRagequitEventV1 } from "../events/types";
 import { readPrivacyAspMasterMaterial } from "../asp/eligibility";
@@ -176,7 +176,7 @@ export function decodePrivacyRagequitReceiptEvent(receipt: any): Omit<PrivacyRag
       if (
         typeof log?.address !== "string" ||
         log.address.toLowerCase() !==
-          PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address.toLowerCase()
+          PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address.toLowerCase()
       ) continue;
       const decoded = decodeEventLog({
         abi: RAGEQUIT_EVENT_ABI,
@@ -243,7 +243,7 @@ export async function applyPrivacyRagequitReceipt(args: {
   succeeded: boolean;
 }): Promise<void> {
   const normalized = normalizedHash(args.txHash);
-  if (!normalized || args.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId) return;
+  if (!normalized || args.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId) return;
   const operations = await listAllPrivacyRagequits();
   const operation = operations.find((item) => item.summary.id === args.txId);
   if (!operation) return;

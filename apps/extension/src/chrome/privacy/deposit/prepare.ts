@@ -13,7 +13,7 @@ import {
   withStorageLock,
 } from "../../storageLock";
 import { decryptPrivacyRecovery } from "../crypto";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   derivePrivacyPoolDepositPrecommitment,
   derivePrivacyPoolDepositSecrets,
@@ -142,7 +142,7 @@ export async function preparePrivacyShieldReview(
       const masterKeys = derivePrivacyPoolMasterKeys(phrase);
       const secrets = derivePrivacyPoolDepositSecrets(
         masterKeys,
-        PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+        PRIVACY_POOLS_DEPLOYMENT.scope,
         REVIEW_DERIVATION_INDEX,
       );
       const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);

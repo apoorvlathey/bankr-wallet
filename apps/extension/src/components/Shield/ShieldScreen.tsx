@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
+import { isPrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
 import ShieldAmountPanel from "./ShieldAmountPanel";
 import ShieldDashboard from "./ShieldDashboard";
 import { useShieldInitialization } from "./hooks/useShieldInitialization";
@@ -17,19 +18,21 @@ interface ShieldScreenProps {
   accounts?: Account[];
 }
 
-/** Public Sepolia ETH deposit into the wallet-wide private balance. */
+function isShieldSourceAccount(account: ShieldSourceAccount): boolean {
+  return isPrivacyPoolsMutationAccountType(account.type);
+}
+
+/** Public ETH deposit into the active build's wallet-wide private balance. */
 export default function ShieldScreen({
   onBack,
   account,
   accounts = [],
 }: ShieldScreenProps) {
   const [sourceAccount, setSourceAccount] = useState<ShieldSourceAccount | null>(() => {
-    if (account && (account.type === "privateKey" || account.type === "seedPhrase")) {
+    if (account && isShieldSourceAccount(account)) {
       return account;
     }
-    return accounts.find((candidate) =>
-      candidate.type === "privateKey" || candidate.type === "seedPhrase"
-    ) ?? null;
+    return accounts.find(isShieldSourceAccount) ?? null;
   });
   const { initialization, retry } = useShieldInitialization();
   const activity = useShieldOperations();
@@ -48,11 +51,9 @@ export default function ShieldScreen({
     setSourceAccount((current) => {
       if (current && accounts.some((candidate) =>
         candidate.id === current.id &&
-        (candidate.type === "privateKey" || candidate.type === "seedPhrase")
+        isShieldSourceAccount(candidate)
       )) return current;
-      return accounts.find((candidate) =>
-        candidate.type === "privateKey" || candidate.type === "seedPhrase"
-      ) ?? null;
+      return accounts.find(isShieldSourceAccount) ?? null;
     });
   }, [accounts]);
 

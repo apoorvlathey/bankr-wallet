@@ -24,6 +24,16 @@ import {
   processingTxIds,
   writeResultToStorage,
 } from "./runtime";
+import {
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+} from "../privacy/operations/lifecycle";
+import type { PrivacyShieldConfirmationAuthorization } from "../privacy/operations/submission";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+} from "../privacy/ragequit/lifecycle";
+import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
 /** Own the fire-and-forget Bankr submission and terminal publication flow. */
 export async function processBankrTransactionInBackground(
   txId: string,
@@ -31,6 +41,8 @@ export async function processBankrTransactionInBackground(
   apiKey: string,
   functionName?: string,
   effectLease?: PendingRequestEffectLease,
+  privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
+  privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -77,10 +89,27 @@ export async function processBankrTransactionInBackground(
           "transaction",
           pending,
           effectGuard.beginEffect,
+          async () => {
+            await beginPrivacyShieldSubmission(
+              pending,
+              privacyShieldAuthorization ?? null,
+            );
+            await beginPrivacyRagequitSubmission(
+              pending,
+              privacyRagequitAuthorization ?? null,
+            );
+          },
         ),
     );
     effectGuard.settleEffect();
     const txHash = result.transactionHash;
+    if (txHash) {
+      await recordPrivacyShieldSubmitted(pending, txHash);
+      await recordPrivacyRagequitSubmitted(pending, txHash);
+      if (pending.privacyShieldMeta || pending.privacyRagequitMeta) {
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    }
     if (result.status === "reverted") {
       await handleTransactionFailure(txId, pending, "Transaction reverted");
     } else if (result.status === "success" && txHash) {

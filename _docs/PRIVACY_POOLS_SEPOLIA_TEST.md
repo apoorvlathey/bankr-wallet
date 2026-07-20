@@ -1,7 +1,9 @@
 # Privacy Pools Sepolia rehearsal
 
-This is the manual gate for the unpacked WalletChan extension. Use only test
-wallets and Sepolia ETH. Ethereum mainnet is not enabled.
+This is the manual gate for the unpacked WalletChan `dev:extension` profile.
+Use only test wallets and Sepolia ETH. Normal/production builds now select
+Ethereum mainnet; their separate evidence and manual gates live in
+[`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md).
 
 For architecture, recent defect history, and the next-session starting point,
 read [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md) first.
@@ -22,10 +24,12 @@ read [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md) first.
 | ASP-approved partial/full private Unshield | Pending |
 | Reveal/clean restore/full rescan | Pending |
 | Account-removal/reset safeguards | Pending |
-| Current automated implementation set | Passed after dual-mode work on 2026-07-20: 175/175 privacy tests, 222/222 UI tests, 6/6 architecture guards, all three typechecks, targeted changed-file lint, 12/12 private-home preview states, extension build/budgets, packaged prover restart QA, and unpacked-Sepolia distribution policy |
+| Current automated implementation set | Passed after dual-profile work on 2026-07-20: 181/181 privacy tests, 222/222 UI tests, 6/6 architecture guards, all three typechecks, targeted changed-file lint, 12/12 private-home preview states, extension build/budgets, production-profile isolation, live read-only mainnet validation, and packaged prover restart QA |
 
-Do not mark this rehearsal complete or begin mainnet work until every pending
-row and step below has been exercised and recorded.
+Do not mark this Sepolia rehearsal complete until every pending row and step
+below has been exercised and recorded. Mainnet implementation has begun by
+explicit product-owner direction, but this unfinished rehearsal remains a
+release-risk input and must not be represented as completed evidence.
 
 ## Build and load
 
@@ -156,14 +160,17 @@ pnpm --filter @walletchan/extension qa:extension:privacy-prover
 node apps/extension/scripts/privacy-prover-distribution.mjs --target=unpacked-sepolia-test
 ```
 
-The unpacked Sepolia build is the only approved distribution target. Chrome Web
+The unpacked Sepolia build remains the only approved distribution target. Chrome Web
 Store, GitHub release, and Firefox zip commands intentionally fail until the
-`snarkjs` GPL-3.0 distribution decision is approved. Do not begin a mainnet
-test until every Sepolia step above, legal/security review, and the mainnet
-go/no-go checklist in `PRIVACY_POOLS_PRD.md` have passed.
+`snarkjs` GPL-3.0 distribution decision is approved. Production compilation
+does not override that gate. Do not send a value-bearing mainnet test until the
+explicit gates in `PRIVACY_POOLS_MAINNET_TEST.md` have passed.
 
-Latest automated run (2026-07-20): all commands above passed. The build was
-46,233,929 bytes, with 23,690,342 bytes of circuit artifacts, a 336,397-byte
-prover worker, and a 3,522,011-byte background bundle. Packaged Chromium proved
-successfully before and after reopening in 9.027/9.981 seconds, with a peak
-process-tree RSS delta of 352,976,896 bytes.
+Latest automated run (2026-07-20): all code, UI, architecture, typecheck,
+preview, build/budget, production-profile isolation, live read-only mainnet,
+and packaged-prover checks passed. The production build was 46,239,514 bytes,
+with 23,690,342 bytes of circuit artifacts, a 336,397-byte prover worker, and a
+3,525,783-byte background bundle. Packaged Chromium proved successfully before
+and after reopening in 9.205/8.988 seconds, with a peak process-tree RSS delta
+of 261,128,192 bytes. The unpacked-Sepolia distribution policy had already
+passed in the immediately preceding checkpoint; it was not changed by this port.

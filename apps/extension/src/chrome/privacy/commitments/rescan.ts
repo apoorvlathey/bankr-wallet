@@ -12,7 +12,7 @@ import {
   withStorageLock,
 } from "../../storageLock";
 import { decryptPrivacyRecovery } from "../crypto";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   listPrivacyDepositEvents,
   listPrivacyRagequitEvents,
@@ -83,7 +83,7 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
   const bySpentNullifier = new Map<string, PrivacyWithdrawalEventV1>();
   const ragequitByCommitment = new Map<string, PrivacyRagequitEventV1>();
   for (const event of input.events) {
-    if (event.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId) {
+    if (event.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId) {
       throw new Error("Invalid privacy rescan event chain");
     }
     if (byPrecommitment.has(event.precommitment)) {
@@ -93,14 +93,14 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
   }
   for (const event of input.withdrawals ?? []) {
     if (
-      event.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId ||
+      event.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
       bySpentNullifier.has(event.spentNullifier)
     ) throw new Error("Invalid privacy withdrawal history");
     bySpentNullifier.set(event.spentNullifier, event);
   }
   for (const event of input.ragequits ?? []) {
     if (
-      event.chainId !== PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId ||
+      event.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId ||
       ragequitByCommitment.has(event.commitment)
     ) throw new Error("Invalid privacy ragequit history");
     ragequitByCommitment.set(event.commitment, event);
@@ -113,7 +113,7 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
   for (let index = 0; index <= maxIndex; index += 1) {
     const secrets = derivePrivacyPoolDepositSecrets(
       input.masterKeys,
-      PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+      PRIVACY_POOLS_DEPLOYMENT.scope,
       BigInt(index),
     );
     const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -132,7 +132,7 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
         commitment.precommitment !== precommitment ||
         commitment.hash !== BigInt(event.commitment)
       ) {
-        throw new Error("Recovered commitment does not match Sepolia event");
+        throw new Error("Recovered commitment does not match the active pool event");
       }
       let withdrawalIndex = 0n;
       let status: PrivacyCommitmentDetailsV1["status"] = "awaiting_asp";
@@ -171,7 +171,7 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
           nextSecrets,
         );
         if (nextCommitment.hash !== BigInt(withdrawal.newCommitment)) {
-          throw new Error("Recovered replacement commitment does not match Sepolia event");
+          throw new Error("Recovered replacement commitment does not match the active pool event");
         }
         currentValue = remaining;
         commitment = nextCommitment;
@@ -185,9 +185,9 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
       commitments.push({
         version: 1,
         id,
-        chainId: 11_155_111,
-        scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-        poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+        chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+        scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+        poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
         commitment: commitment.hash.toString(),
         label: event.label,
         valueWei: event.valueWei,

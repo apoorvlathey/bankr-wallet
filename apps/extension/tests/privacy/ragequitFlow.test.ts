@@ -9,7 +9,7 @@ import {
 
 import { generateVaultKey, importVaultKey } from "../../src/chrome/crypto";
 import type { PrivacyCommitmentDetailsV1 } from "../../src/chrome/privacy/commitments/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositPrecommitment,
@@ -44,7 +44,7 @@ function currentCommitment(): PrivacyCommitmentDetailsV1 {
   const keys = derivePrivacyPoolMasterKeys(PHRASE);
   const depositSecrets = derivePrivacyPoolDepositSecrets(
     keys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     3n,
   );
   const label = 456n;
@@ -54,8 +54,8 @@ function currentCommitment(): PrivacyCommitmentDetailsV1 {
     version: 1,
     id: COMMITMENT_ID,
     chainId: 11_155_111,
-    scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     commitment: current.hash.toString(),
     label: label.toString(),
     valueWei: "1000",
@@ -127,7 +127,7 @@ test("public recovery intent is encrypted and summary-bound", async () => {
     accountAddress: DEPOSITOR,
     accountType: "privateKey",
     amountWei: "600",
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
   };
   const callData = encodePrivacyRagequitCallData({
     proof: {
@@ -185,7 +185,7 @@ test("public recovery intent accepts the ASP-unavailable recovery reason", async
     accountAddress: DEPOSITOR,
     accountType: "privateKey",
     amountWei: "600",
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
   };
   const details: PrivacyRagequitDetailsV1 = {
     version: 1,
@@ -224,7 +224,7 @@ test("receipt decoder accepts only the exact pinned ETH pool Ragequit event", ()
     "event Ragequit(address indexed _ragequitter, uint256 _commitment, uint256 _label, uint256 _value)",
   ]);
   const log = {
-    address: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    address: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     topics: encodeEventTopics({
       abi,
       eventName: "Ragequit",

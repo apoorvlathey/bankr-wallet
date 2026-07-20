@@ -14,7 +14,7 @@ import {
   isValidStoredPrivacyCommitment,
   type PrivacyCommitmentDetailsV1,
 } from "../../src/chrome/privacy/commitments/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositPrecommitment,
@@ -35,8 +35,8 @@ function details(): PrivacyCommitmentDetailsV1 {
     version: 1,
     id: ID,
     chainId: 11_155_111,
-    scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-    poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+    scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+    poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
     commitment: "123",
     label: "456",
     valueWei: "99000",
@@ -85,7 +85,7 @@ test("phrase rescan finds a sparse WalletChan deposit and verifies its commitmen
   const index = 5n;
   const secrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     index,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -122,7 +122,7 @@ test("phrase rescan fails on a matching precommitment with altered commitment", 
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const secrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     0n,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(secrets);
@@ -152,7 +152,7 @@ test("phrase rescan follows partial withdrawals to the active replacement commit
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const depositSecrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     0n,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(depositSecrets);
@@ -183,7 +183,7 @@ test("phrase rescan follows partial withdrawals to the active replacement commit
       blockHash: `0x${"55".repeat(32)}`,
       logIndex: 1,
       transactionHash: `0x${"44".repeat(32)}`,
-      processooor: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+      processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
       valueWei: "39000",
       spentNullifier: deposit.nullifierHash.toString(),
       newCommitment: replacement.hash.toString(),
@@ -202,7 +202,7 @@ test("phrase rescan recognizes a public emergency exit after a partial withdrawa
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const depositSecrets = derivePrivacyPoolDepositSecrets(
     masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     0n,
   );
   const precommitment = derivePrivacyPoolDepositPrecommitment(depositSecrets);
@@ -235,7 +235,7 @@ test("phrase rescan recognizes a public emergency exit after a partial withdrawa
       blockHash: `0x${"55".repeat(32)}`,
       logIndex: 1,
       transactionHash: withdrawalTx,
-      processooor: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.entrypointProxy.address,
+      processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
       valueWei: "39000",
       spentNullifier: deposit.nullifierHash.toString(),
       newCommitment: replacement.hash.toString(),

@@ -4,7 +4,7 @@ import type {
   PrivacyShieldOperationTrackingV1,
   StoredPrivacyShieldOperationV1,
 } from "../operations/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositSecrets,
@@ -66,7 +66,7 @@ export async function buildPrivacyShieldCommitment(input: {
   }
   const secrets = derivePrivacyPoolDepositSecrets(
     material.masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     BigInt(operationDetails.depositIndex),
   );
   const derived = derivePrivacyPoolCommitment(
@@ -86,8 +86,8 @@ export async function buildPrivacyShieldCommitment(input: {
     commitment: {
       version: 1,
       id: crypto.randomUUID(),
-      chainId: 11_155_111,
-      scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+      scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
       poolAddress: operation.summary.poolAddress,
       commitment: tracking.commitment,
       label: tracking.label,

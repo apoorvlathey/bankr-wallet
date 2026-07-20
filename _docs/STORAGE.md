@@ -253,15 +253,17 @@ session, and a copied profile after browser close lacks the session half.
 
 ## IndexedDB
 
-### `walletchan-privacy-v1` (version 1)
+### Privacy Pools profile-isolated databases (version 1)
 
 This additive, extension-origin database is owned only by
-`chrome/privacy/operations/repository.ts`. Missing on an older install means no
+`chrome/privacy/operations/repository.ts`. Development preserves the released
+Sepolia name `walletchan-privacy-v1`; production uses
+`walletchan-privacy-mainnet-v1`. Missing on an older install means no
 prepared Privacy Pools operation; no eager migration is required.
 
 | Store | Key / indexes | Shape and policy |
 | --- | --- | --- |
-| `operations` | Key path `summary.id`; unique `summary.requestId`; non-unique `summary.dedupeKey`; `summary.createdAt` | At most 100 exact V1 Shield records. The sanitized summary contains public Sepolia account, amount, fee, route, state, and timestamps. `encryptedDetails` contains the deposit index, precommitment, and calldata under the dedicated privacy key with a fresh 12-byte AES-GCM IV; AAD binds the key ID and complete public summary. The newest 20 summaries may be returned to Activity. |
+| `operations` | Key path `summary.id`; unique `summary.requestId`; non-unique `summary.dedupeKey`; `summary.createdAt` | At most 100 exact V1 Shield records. The sanitized summary contains the public active-chain account, amount, fee, route, state, and timestamps. `encryptedDetails` contains the deposit index, precommitment, and calldata under the dedicated privacy key with a fresh 12-byte AES-GCM IV; AAD binds the key ID and complete public summary. The newest 20 summaries may be returned to Activity. |
 | `metadata` | Key path `key`; singleton `nextDepositIndex` | Exact non-negative integer counter. It and the matching operation record advance atomically in one read-write transaction. Durable indices are `0..0xfffffffe`; the final uint32 index is reserved for non-persisted review material. |
 
 The database is wallet-scoped even though it is not part of
@@ -276,13 +278,15 @@ must eventually rebuild from the privacy phrase and verified onchain history.
 
 | Database | Contents and policy |
 | --- | --- |
-| `walletchan-privacy-commitments-v1` | At most 1,024 encrypted current commitment records. A confirmed deposit is materialized after its exact pool event is indexed, before ASP approval, so the original depositor retains an immediate public exit. Revision-bound AAD protects deposit/withdrawal indexes, current balance, commitment/nullifier lineage, original depositor, and ASP/recovery status. Renderer access is aggregate-only. |
-| `walletchan-privacy-withdrawals-v1` | At most 256 encrypted, request-idempotent Unshield records. Public tracking is restart-safe; commitment linkage, signed relayer quote, expected nullifier, and replacement commitment stay encrypted. |
-| `walletchan-privacy-ragequits-v1` | At most 256 encrypted public-recovery records. Commitment linkage, nullifier, proof calldata, and prior status (including `awaiting_asp`) stay encrypted. Rejection or pre-submit failure restores that prior status. A user-rejected record may remain as safe cleanup/dedupe history but is filtered from the bounded Activity projection; genuine failures remain visible. |
-| `walletchan-privacy-portfolio-v1` | At most 193 encrypted private balance/ETH-price/USD points with eight-day retention and no more than hourly time samples unless the confirmed balance changes. Fresh-IV AES-GCM under the dedicated privacy key binds each payload to its public record/key/timestamp header; reset and recovery replacement delete the database. |
-| `walletchan-privacy-events-v1` (DB version 2) | Disposable public Sepolia ETH-pool `Deposited`, `Withdrawn`, and `Ragequit` logs plus the atomic `sepolia-pool-events` checkpoint. The bounded cache is rebuilt from deployment block `8,587,019` and is never sufficient to release a private balance without phrase-derived verification. |
+| `walletchan-privacy-commitments-v1` / `walletchan-privacy-commitments-mainnet-v1` | At most 1,024 encrypted current commitment records. A confirmed deposit is materialized after its exact pool event is indexed, before ASP approval, so the original depositor retains an immediate public exit. Revision-bound AAD protects deposit/withdrawal indexes, current balance, commitment/nullifier lineage, original depositor, and ASP/recovery status. Renderer access is aggregate-only. |
+| `walletchan-privacy-withdrawals-v1` / `walletchan-privacy-withdrawals-mainnet-v1` | At most 256 encrypted, request-idempotent Unshield records. Public tracking is restart-safe; commitment linkage, signed relayer quote, expected nullifier, and replacement commitment stay encrypted. |
+| `walletchan-privacy-ragequits-v1` / `walletchan-privacy-ragequits-mainnet-v1` | At most 256 encrypted public-recovery records. Commitment linkage, nullifier, proof calldata, and prior status (including `awaiting_asp`) stay encrypted. Rejection or pre-submit failure restores that prior status. A user-rejected record may remain as safe cleanup/dedupe history but is filtered from the bounded Activity projection; genuine failures remain visible. |
+| `walletchan-privacy-portfolio-v1` / `walletchan-privacy-portfolio-mainnet-v1` | At most 193 encrypted private balance/ETH-price/USD points with eight-day retention and no more than hourly time samples unless the confirmed balance changes. Fresh-IV AES-GCM under the dedicated privacy key binds each payload to its public record/key/timestamp header; reset and recovery replacement delete the database. |
+| `walletchan-privacy-events-v1` / `walletchan-privacy-events-mainnet-v1` (DB version 2) | Disposable public active-pool `Deposited`, `Withdrawn`, and `Ragequit` logs plus an active-profile checkpoint. Sepolia rebuilds from block `8,587,019`; mainnet rebuilds from block `22,153,707`. The cache is never sufficient to release a private balance without phrase-derived verification. |
 
-Reset deletes every privacy database under the wallet-secret/reset barriers.
+Reset and recovery replacement delete both profiles' encrypted databases under
+the wallet-secret/reset barriers, so inactive-profile secrets cannot survive a
+wallet replacement. The disposable public event cache is active-profile scoped.
 Phrase rescan rederives deposit and replacement commitments from the phrase and
 verifies the complete public event lineage rather than trusting old operations.
 

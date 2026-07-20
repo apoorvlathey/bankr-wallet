@@ -5,7 +5,7 @@ import type {
   PrivacyShieldOperationTrackingV1,
   StoredPrivacyShieldOperationV1,
 } from "../operations/types";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
   derivePrivacyPoolDepositSecrets,
@@ -65,9 +65,9 @@ export function verifyPrivacyAspMembership(input: PrivacyAspMembershipInput): vo
     details: {
       version: 1,
       id: details.operationId,
-      chainId: 11_155_111,
-      scope: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
-      poolAddress: PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.contracts.ethPool.address,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+      scope: PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
+      poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
       commitment: tracking.commitment,
       label: tracking.label,
       valueWei: tracking.poolValueWei,
@@ -104,7 +104,7 @@ export function verifyPrivacyCommitmentAspMembership(
   }
   const depositSecrets = derivePrivacyPoolDepositSecrets(
     input.masterKeys,
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
     BigInt(details.depositIndex),
   );
   const originalCommitment = derivePrivacyPoolCommitment(
@@ -138,7 +138,7 @@ export function verifyPrivacyCommitmentAspMembership(
     endpointAspRoot !== onchain.associationRoot ||
     endpointStateRoot !== onchain.stateRoot
   ) {
-    throw new Error("ASP roots do not match Sepolia");
+    throw new Error("ASP roots do not match the active Privacy Pools deployment");
   }
   const aspProof = generateMerkleProof(
     bigintLeaves(leaves.aspLeaves),

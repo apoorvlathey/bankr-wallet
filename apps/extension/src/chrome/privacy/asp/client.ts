@@ -1,5 +1,5 @@
 import { fetchJsonBounded } from "../../network/boundedHttp";
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
   MAX_PRIVACY_ASP_LABELS_PER_REQUEST,
   parsePrivacyAspDeposits,
@@ -17,13 +17,13 @@ const LEAVES_RESPONSE_BYTES = 2_000_000;
 const DEPOSITS_RESPONSE_BYTES = 512_000;
 
 function endpoint(path: "mt-roots" | "mt-leaves" | "deposits-by-label"): string {
-  return `${PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.services.aspBaseUrl}/${PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.chainId}/public/${path}`;
+  return `${PRIVACY_POOLS_DEPLOYMENT.services.aspBaseUrl}/${PRIVACY_POOLS_DEPLOYMENT.chainId}/public/${path}`;
 }
 
 function requestHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return {
     Accept: "application/json",
-    "X-Pool-Scope": PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.scope.toString(),
+    "X-Pool-Scope": PRIVACY_POOLS_DEPLOYMENT.scope.toString(),
     ...extra,
   };
 }

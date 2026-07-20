@@ -10,6 +10,7 @@ import {
   ShieldSourceCard,
 } from "./ShieldAssetCards";
 import { formatShieldWei } from "./model/shieldQuote";
+import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
 import type { PrivateWithdrawalIntent } from "./model/unshield";
 
 interface Props {
@@ -154,7 +155,9 @@ export default function UnshieldAmountPanel({
         ) : null
       ) : (
         <HStack justify="space-between" spacing={3}>
-          <Text fontSize="xs" color="fg.secondary">Privacy Pools · Sepolia</Text>
+          <Text fontSize="xs" color="fg.secondary">
+            Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
+          </Text>
           <Text fontSize="xs" color="fg.secondary" textAlign="right">
             Sent by a verified relay
           </Text>

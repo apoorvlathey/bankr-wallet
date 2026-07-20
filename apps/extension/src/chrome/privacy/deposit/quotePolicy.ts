@@ -1,6 +1,6 @@
 import { parseUnits } from "viem";
 
-import { PRIVACY_POOLS_SEPOLIA_DEPLOYMENT } from "../deployment/manifest";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 
 const ETH_DECIMALS = 18;
 const BASIS_POINTS_SCALE = 10_000n;
@@ -55,7 +55,7 @@ export function parsePrivacyShieldAmount(amount: unknown): bigint {
   }
 
   const { minimumDepositAmount } =
-    PRIVACY_POOLS_SEPOLIA_DEPLOYMENT.assetConfig;
+    PRIVACY_POOLS_DEPLOYMENT.assetConfig;
   if (amountWei < minimumDepositAmount) {
     throw new PrivacyShieldQuoteError("amount-below-minimum");
   }
@@ -71,7 +71,7 @@ export function createPrivacyShieldQuoteValues(input: {
   gasLimit: bigint;
   maxFeePerGas: bigint;
 }): PrivacyShieldQuoteValues {
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
+  const deployment = PRIVACY_POOLS_DEPLOYMENT;
   const { amountWei, balanceWei, gasLimit, maxFeePerGas } = input;
   if (
     amountWei < deployment.assetConfig.minimumDepositAmount ||

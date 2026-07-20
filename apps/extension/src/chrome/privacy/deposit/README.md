@@ -4,7 +4,7 @@ The public quote validates an exact account snapshot, rejects impersonators,
 enforces the onchain 0.001 ETH minimum and valid `uint256` input, simulates the
 exact Entrypoint native `deposit(uint256)` call, and returns only serialized
 public amounts. It applies no arbitrary application maximum: affordability is
-bounded by the public source balance after the gas reserve. The shared Sepolia
+bounded by the public source balance after the gas reserve. The shared active-chain
 RPC policy caps JSON-RPC batches at three requests for free-tier compatibility.
 
 The review path requires a current password or fresh biometric master session.

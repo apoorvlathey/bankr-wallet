@@ -11,9 +11,11 @@ import {
 } from "@chakra-ui/react";
 import { CheckIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
+import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manifest";
 import { AccountAvatar } from "@/components/AccountIdentity";
 import { truncateAddress } from "@/lib/addressUtils";
 import type { ShieldSourceAccount } from "./model/shieldQuote";
+import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
 
 interface ShieldSourceAccountPickerProps {
   accounts: Account[];
@@ -22,9 +24,13 @@ interface ShieldSourceAccountPickerProps {
 }
 
 function accountTypeCopy(account: Account): string {
-  if (account.type === "privateKey") return "Private key · Sepolia";
-  if (account.type === "seedPhrase") return "Seed phrase · Sepolia";
-  if (account.type === "bankr") return "Sepolia shielding unavailable";
+  if (account.type === "privateKey") return `Private key · ${SHIELDED_ETH_NETWORK_NAME}`;
+  if (account.type === "seedPhrase") return `Seed phrase · ${SHIELDED_ETH_NETWORK_NAME}`;
+  if (account.type === "bankr") {
+    return PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled"
+      ? `Bankr · ${SHIELDED_ETH_NETWORK_NAME}`
+      : `${SHIELDED_ETH_NETWORK_NAME} shielding unavailable`;
+  }
   return "View-only accounts cannot shield";
 }
 
@@ -73,7 +79,10 @@ export default function ShieldSourceAccountPicker({
         </MenuButton>
         <MenuList minW="300px" maxW="calc(100vw - 32px)" maxH="320px" overflowY="auto" py={1}>
           {accounts.map((candidate) => {
-            const eligible = candidate.type === "privateKey" || candidate.type === "seedPhrase";
+            const eligible = candidate.type === "privateKey" ||
+              candidate.type === "seedPhrase" ||
+              (candidate.type === "bankr" &&
+                PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled");
             const isSelected = candidate.id === account?.id;
             return (
               <MenuItem

@@ -1,7 +1,9 @@
 import {
   PRIVACY_POOLS_RELEASE_POLICY,
-  PRIVACY_POOLS_SEPOLIA_DEPLOYMENT,
+  PRIVACY_POOLS_DEPLOYMENT,
   type PrivacyPoolsContractId,
+  type PrivacyPoolsDeployment,
+  type PrivacyPoolsReleasePolicy,
 } from "./manifest";
 
 export type PrivacyDeploymentFailureCode =
@@ -24,7 +26,7 @@ export interface PrivacyPoolsRuntimeIdentity {
   runtimeBytecodeHash: unknown;
 }
 
-export interface PrivacyPoolsSepoliaSnapshot {
+export interface PrivacyPoolsSnapshot {
   chainId: unknown;
   implementationSlot: unknown;
   contracts: Record<PrivacyPoolsContractId, PrivacyPoolsRuntimeIdentity>;
@@ -69,19 +71,21 @@ function mismatch(): never {
 }
 
 /** Fail closed unless every pinned address, relationship, and code identity matches. */
-export function assertPrivacyPoolsSepoliaSnapshot(
-  snapshot: PrivacyPoolsSepoliaSnapshot,
+export function assertPrivacyPoolsSnapshot(
+  snapshot: PrivacyPoolsSnapshot,
+  deployment: PrivacyPoolsDeployment = PRIVACY_POOLS_DEPLOYMENT,
+  releasePolicy: PrivacyPoolsReleasePolicy = PRIVACY_POOLS_RELEASE_POLICY,
 ): void {
   if (
-    PRIVACY_POOLS_RELEASE_POLICY.mode !== "sepolia-local-beta" ||
-    PRIVACY_POOLS_RELEASE_POLICY.readiness !== "enabled" ||
-    PRIVACY_POOLS_RELEASE_POLICY.quotes !== "enabled" ||
-    PRIVACY_POOLS_RELEASE_POLICY.mutations !== "sepolia-enabled"
+    releasePolicy.deploymentProfile !== deployment.profile ||
+    releasePolicy.readiness !== "enabled" ||
+    releasePolicy.quotes !== "enabled" ||
+    releasePolicy.operationPreparation !== "enabled" ||
+    releasePolicy.mutations !== "enabled"
   ) {
     throw new PrivacyDeploymentVerificationError("release-disabled");
   }
 
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
   if (snapshot.chainId !== deployment.chainId) mismatch();
 
   const implementation = implementationFromSlot(snapshot.implementationSlot);

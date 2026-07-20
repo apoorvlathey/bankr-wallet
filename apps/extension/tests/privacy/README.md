@@ -20,9 +20,9 @@ budget verifier freezes package/artifact/worker/background ceilings; packaged
 Chromium QA enforces first/restart duration and process-tree RSS delta. The
 distribution gate allows only unpacked Sepolia testing pending GPL review and
 Firefox is explicitly offscreen-feature-gated.
-Deployment tests pin the official Sepolia ETH manifest, prove that mutations
-are limited to that exact Sepolia release state while mainnet remains absent,
-enforce the three-request JSON-RPC batch ceiling, and reject
+Deployment tests pin both official ETH manifests, prove the compile-time
+development/Sepolia and production/mainnet selection, enforce the
+three-request JSON-RPC batch ceiling, and reject
 chain, proxy, bytecode, pool, verifier, scope, asset, or fee drift.
 Deposit quote tests cover exact input, the 0.001 ETH minimum, `uint256` safety,
 the absence of an arbitrary maximum, onchain fee arithmetic,
@@ -41,6 +41,10 @@ index per Bankr/private-key/seed-phrase account, passkey-authorized preparation,
 agent rejection, encrypted detail round trips, and summary-bound AAD. Router
 and UI model tests separately prove that calldata, precommitment, index,
 request IDs, dedupe fields, and ciphertext never cross into Activity.
+Wallet-type policy tests require production Bankr, private-key, and seed-phrase
+Shield/public-recovery paths, preserve Sepolia's local-only mutation policy,
+reject impersonators, and pin the final Bankr authorization-before-effect
+ordering.
 Recovery tests cover explicit main-password reveal, BIP-39 restore, backup
 markers, passkey-only master-wrapper upgrade, rebuildable database reset, and
 bounded rescan. ASP tests cover approved/declined/removed/malformed/root-drift

@@ -1,6 +1,8 @@
 # Shield UI audit map
 
-The Shield domain owns WalletChan's fixed Sepolia ETH ↔ Shielded ETH renderer.
+The Shield domain owns WalletChan's fixed active-chain ETH ↔ Shielded ETH
+renderer. Development builds select Sepolia; production builds select Ethereum
+mainnet at compile time.
 Secret storage, authorization, protocol, proving, RPC, signing, and relayer
 effects remain background responsibilities.
 
@@ -18,7 +20,7 @@ effects remain background responsibilities.
   percentage slider, and direction marker. The amount field follows each drag
   frame, while the value stays renderer-local and triggers a quote only on
   release. Neither side exposes an asset/network picker.
-- `ShieldAmountPanel.tsx`: public Sepolia ETH source and Shielded ETH outcome.
+- `ShieldAmountPanel.tsx`: public active-chain ETH source and Shielded ETH outcome.
 - `UnshieldAmountPanel.tsx`: Shielded ETH source, public ETH outcome, shared
   recipient controls, and intent-aware Unshield/Send copy.
 - `PrivateSendReview.tsx`: concise relayed-withdrawal review with a normal
@@ -33,7 +35,7 @@ effects remain background responsibilities.
   single adaptive event/index/ASP sync loop for its mounted feature owner.
 - `hooks/useUnshield.ts`: private-send quote and relay submission controller.
 - `hooks/usePublicRecovery.ts`: user-triggered public-exit preparation.
-- `model/shieldedAsset.ts`: Shielded ETH identity, Sepolia pin, asset actions,
+- `model/shieldedAsset.ts`: Shielded ETH identity, active deployment pin, asset actions,
   and the renderer-only Send-selector sentinel.
 - `model/shieldQuote.ts`, `shieldReview.ts`, `shieldOperation.ts`,
   `unshield.ts`, and `recovery.ts`: exact bounded public response models.
@@ -62,7 +64,7 @@ checked in the background; the renderer adds no password, biometric, or
 hold-to-confirm step.
 
 Unshield always retains the inverse Shield asset form. With ready funds it is
-an editable Shielded ETH -> Sepolia ETH relayed withdrawal. When no private
+an editable Shielded ETH -> active-chain ETH relayed withdrawal. When no private
 balance is ready but ragequit is available, those same cards show the fixed
 public amount and original depositor. A required, unchecked commitment control
 states that recovery returns to the original address through a public

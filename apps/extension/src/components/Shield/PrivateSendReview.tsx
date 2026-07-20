@@ -4,7 +4,10 @@ import { ArrowDownIcon } from "@chakra-ui/icons";
 import { ConfirmationScreen, ListSurface, ListItem, ListItemContent, ListItemMeta, ListItemTitle } from "@/components/ui";
 import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import type { ReturnTypeUseUnshield } from "./hooks/useUnshield.types";
-import { SHIELDED_ETH_LOGO_URL } from "./model/shieldedAsset";
+import {
+  SHIELDED_ETH_LOGO_URL,
+  SHIELDED_ETH_NETWORK_NAME,
+} from "./model/shieldedAsset";
 import { formatShieldWei } from "./model/shieldQuote";
 import type { PrivateWithdrawalIntent } from "./model/unshield";
 
@@ -109,7 +112,7 @@ export default function PrivateSendReview({
       )}
       context={(
         <ListSurface>
-          <DetailRow label="Network" value="Sepolia" />
+          <DetailRow label="Network" value={SHIELDED_ETH_NETWORK_NAME} />
           <DetailRow label="Route" value="Privacy Pools" />
           <DetailRow label="Relayer" value={operation.relayerName} />
           <DetailRow label="Quote expires" value={formatExpiry(operation.expiresAt - now)} />

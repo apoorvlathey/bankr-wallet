@@ -5,16 +5,17 @@ import {
   size,
   type Hex,
 } from "viem";
-import { sepolia } from "viem/chains";
+import { mainnet, sepolia } from "viem/chains";
 import { secureHttpTransport } from "../../network/rpcClient";
 import { PRIVACY_POOLS_RPC_BATCH_SIZE } from "../rpcPolicy";
 import {
-  PRIVACY_POOLS_SEPOLIA_DEPLOYMENT,
+  PRIVACY_POOLS_DEPLOYMENT,
   type PrivacyPoolsContractId,
+  type PrivacyPoolsDeployment,
 } from "./manifest";
 import type {
   PrivacyPoolsRuntimeIdentity,
-  PrivacyPoolsSepoliaSnapshot,
+  PrivacyPoolsSnapshot,
 } from "./validation";
 
 const POOL_ABI = parseAbi([
@@ -40,14 +41,14 @@ function runtimeIdentity(bytecode: Hex | undefined): PrivacyPoolsRuntimeIdentity
   };
 }
 
-/** Read only the fixed, public fields required to identify the Sepolia deployment. */
-export async function readPrivacyPoolsSepoliaSnapshot(
+/** Read only the fixed, public fields required to identify the active deployment. */
+export async function readPrivacyPoolsSnapshot(
   rpcUrl: string,
-): Promise<PrivacyPoolsSepoliaSnapshot> {
-  const deployment = PRIVACY_POOLS_SEPOLIA_DEPLOYMENT;
+  deployment: PrivacyPoolsDeployment = PRIVACY_POOLS_DEPLOYMENT,
+): Promise<PrivacyPoolsSnapshot> {
   const contracts = deployment.contracts;
   const client = createPublicClient({
-    chain: sepolia,
+    chain: deployment.chainId === mainnet.id ? mainnet : sepolia,
     transport: secureHttpTransport(rpcUrl, {
       batch: { batchSize: PRIVACY_POOLS_RPC_BATCH_SIZE, wait: 0 },
       retryCount: 1,

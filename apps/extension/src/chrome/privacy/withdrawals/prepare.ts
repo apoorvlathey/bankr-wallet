@@ -10,6 +10,7 @@ import {
 } from "../authorization";
 import { readPrivacyAspMasterMaterial } from "../asp/eligibility";
 import { readPrivacyCommitments } from "../commitments/repository";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { quotePrivacyUnshield } from "../relayer/client";
 import { encryptPrivacyUnshieldDetails } from "./crypto";
 import { derivePrivacyWithdrawalLineage } from "./lineage";
@@ -87,7 +88,7 @@ export async function preparePrivacyUnshieldQuote(input: {
     id: operationId,
     requestId: input.requestId,
     createdAt,
-    chainId: 11_155_111,
+    chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
     amountWei: amountWei.toString(),
     netRecipientAmountWei: quote.netRecipientAmountWei.toString(),
     relayFeeWei: relayFeeWei.toString(),

@@ -4,6 +4,7 @@ import {
   createPrivacyShieldReviewIntent,
   decodePrivacyShieldReviewIntent,
 } from "../deposit/intent";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { MAX_PRIVACY_DEPOSIT_INDEX } from "./types";
 
 export interface PrivacyShieldOperationIntent {
@@ -12,7 +13,7 @@ export interface PrivacyShieldOperationIntent {
   readonly submittable: false;
   readonly operationId: string;
   readonly depositIndex: number;
-  readonly chainId: 11_155_111;
+  readonly chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   readonly sourceAddress: Address;
   readonly destinationAddress: Address;
   readonly valueWei: bigint;
