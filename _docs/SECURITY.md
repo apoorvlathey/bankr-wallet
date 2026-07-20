@@ -1804,12 +1804,12 @@ Quick reference for which files to examine based on what area of security you're
 - `background/chainPromptRouter.ts` - Mixed-audience EIP-3085 intake/read/confirm/reject and connected-site chain-notice transport
 - `background/signingRequestRouter.ts` - Post-gate provider tx/signature intake and trusted-UI pending-request reads/decisions; domain handlers retain authorization, signing, and durable publication
 - `background/transactionExecutionRouter.ts` - First-action claimed immediate/background Bankr, local PK/seed, Ledger, and per-RPC-opted-in impersonated confirmations plus non-signing internal transfer prompt intake
-- `background/swapExecutionRouter.ts` - Reset-barrier-protected account-bound direct, Bankr-batch, and local-atomic swap execution transport
+- `background/swapExecutionRouter.ts` - Reset-barrier-protected account-bound direct, Bankr-batch, and local-atomic swap/staking execution transport; staking aliases hard-block impersonator submission
 - `background/sponsoredTransferRouter.ts` - Reset-barrier-protected submission plus fail-closed unresolved status and retryable acknowledgement transport
 - `background/internalOperationBarrier.ts` - Unique `internalOperation` confirmation claims that expose independent swap/relayer effects to the global reset barrier
 - `background/transactionStatusRouter.ts` - Trusted-UI transaction history, processing, failed-result, nonce-cache, enrichment, and receipt-status transport
 - `background/swapBridgeDataRouter.ts` - Trusted-UI swap/bridge quote, status, chain, and token-catalog transport
-- `background/tokenDataRouter.ts` - Trusted-UI token metadata/CRUD/price/image/allowance/balance transport with exact-sender avatar defense
+- `background/tokenDataRouter.ts` - Trusted-UI token metadata/CRUD/price/image/allowance/balance, WCHAN staking-state, and bounded vault-APY transport with exact-sender avatar defense
 - `background/resetRouter.ts` - Synchronous pending-resolution barrier, restored master proof, sponsored-intent guard, and ordered destructive reset
 - `background/lifecycle/` - Focused Chrome callbacks and immediate startup effects
 - `walletConnect/` - WalletConnect relay audit domain: SDK lifecycle, proposal policy, claimed request dispatch, pinned confirmation adapters, durable terminal outbox, active-session keepalive, and replacement-wallet namespace teardown; see its `README.md`
@@ -1821,7 +1821,8 @@ Quick reference for which files to examine based on what area of security you're
   and `bankrProcessing.ts` - pinned Bankr policy, credential restoration,
   prompt/effect ownership, and outcome publication
 - `transactions/swaps/` - account/chain-locked direct, Bankr batch, and
-  PK/seed atomic-7702 swap orchestration with ordered ambiguity stops
+  PK/seed atomic-7702 swap/staking orchestration with ordered ambiguity stops;
+  Ledger direct execution rebinds the pinned device before every leg
 - `transactions/localConfirmation.ts` and `localExecution.ts` - pinned local
   confirmation, key recovery, sign-once execution, and final authority gate
 - `transactions/impersonatedExecution.ts` - pinned view-only confirmation,

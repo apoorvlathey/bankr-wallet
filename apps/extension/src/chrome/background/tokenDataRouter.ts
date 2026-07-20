@@ -16,6 +16,8 @@ export const BACKGROUND_TOKEN_DATA_MESSAGE_TYPES = [
   "checkTokenAllowance",
   "getTokenBalanceWei",
   "checkPermit2Allowance",
+  "getWchanStakingState",
+  "getWchanVaultApy",
 ] as const;
 
 export type BackgroundTokenDataRouteResult =
@@ -65,6 +67,8 @@ type Dependencies = {
     amount: bigint;
     expiration: number;
   }>;
+  getWchanStakingState: (...args: any[]) => Promise<any>;
+  fetchWchanVaultApy: () => Promise<any>;
 };
 
 const HANDLED_ASYNC: BackgroundTokenDataRouteResult = {
@@ -314,6 +318,24 @@ export function createBackgroundTokenDataMessageRouter(
               expiration,
             }),
           )
+          .catch((error) => sendResponse(promiseError(error)));
+        return HANDLED_ASYNC;
+
+      case "getWchanStakingState":
+        respondWithData(
+          dependencies.getWchanStakingState({
+            owner: message.owner,
+            previewMode: message.previewMode,
+            previewAmount: message.previewAmount,
+          }),
+          sendResponse,
+        );
+        return HANDLED_ASYNC;
+
+      case "getWchanVaultApy":
+        dependencies
+          .fetchWchanVaultApy()
+          .then((data) => sendResponse({ success: true, data }))
           .catch((error) => sendResponse(promiseError(error)));
         return HANDLED_ASYNC;
 

@@ -688,7 +688,7 @@ export function PreviewScreen({
         <PreviewShell>
           <MoreActionsView
             onBack={noop}
-            onWalletConnect={noop}
+            onWalletConnect={noop} onStake={noop}
             fromAddress={account.address}
             walletConnectSessionCount={1}
           />

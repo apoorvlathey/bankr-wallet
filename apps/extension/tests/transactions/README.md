@@ -17,6 +17,8 @@ at the direct local-swap broadcast boundary.
 `impersonatedSwapArchitecture.test.ts` protects the explicit all-wallet-type
 direct routing and the selected-endpoint/account rechecks at the unsigned
 developer-RPC swap boundary.
+`swapHistoryMetadata.test.ts` keeps approval-first batches titled by their
+final reviewed action while retaining swap/bridge metadata priority.
 
 The mirrored background router tests freeze one transaction-confirm claim for
 immediate/background Bankr and local private-key/seed paths, exact sender-tab

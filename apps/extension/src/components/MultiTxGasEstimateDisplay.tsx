@@ -626,7 +626,9 @@ function MultiTxGasEstimateDisplay({
           );
 
           setEstimates(finalResults);
-          if (isLocalSigningAccount && batchedTx) {
+          // Local signers need reviewed gas for batches and individual calls;
+          // otherwise one-call estimates never reach the parent validity gate.
+          if (isLocalSigningAccount) {
             const passthrough = finalResults.filter(
               (r): r is GasEstimate => r !== null,
             );

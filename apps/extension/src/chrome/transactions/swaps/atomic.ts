@@ -7,6 +7,7 @@ import {
   resolveSwapChain,
   validateLockedSwapTransactions,
 } from "./accountPolicy";
+import { selectSwapHistoryEntry } from "./historyMetadata";
 import type {
   SwapAccountLock,
   SwapExecutionResult,
@@ -86,10 +87,7 @@ export async function handleExecuteSwapAtomicPK(
   const bridge = originalTransactions.find(
     (transaction) => transaction.bridge,
   )?.bridge;
-  const mainEntry =
-    originalTransactions.find((transaction) => transaction.bridge) ??
-    originalTransactions.find((transaction) => transaction.swapMeta) ??
-    originalTransactions[0];
+  const mainEntry = selectSwapHistoryEntry(originalTransactions);
   const functionNames = originalTransactions
     .map((transaction) => transaction.functionName || transaction.origin)
     .filter(Boolean) as string[];

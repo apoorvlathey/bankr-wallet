@@ -242,6 +242,16 @@
 
 ## Slop audit
 
+- 2026-07-20 in-wallet staking audit: replaced More's external Stake link with
+  a focused Warm Midnight decision path. The screen keeps staked sWCHAN and
+  claimable WETH in one thin shared surface, places the Stake/Unstake selector
+  before the reused amber amount slider, and makes the seven-day weighted
+  timelock or current early-withdrawal fee visible before review. Approval
+  batching is explained in concise, account-specific copy; the final review
+  uses the existing amber commitment, gas, chain, smart-account, and Ledger
+  patterns. View-only state is explicit and non-signing. All controls retain
+  visible labels, tab semantics, 44px primary targets, token-driven colors,
+  tabular/monospace amounts, and a single scroll owner. Result: pass.
 - 2026-07-20 portfolio-options audit: moved the high-frequency refresh action
   beside the balance privacy control as a named, compact 32px icon target and
   reserved the action sheet for durable portfolio choices. Refresh performs one
@@ -594,6 +604,8 @@
 
 ## Changelog
 
+- 2026-07-20: brought WCHAN stake, unstake, WETH claim, penalty disclosure,
+  amount slider, and atomic/sequential review into the Warm Midnight extension.
 - 2026-07-20: made pending-detail and replacement Back/Reject navigation return
   to Activity, with latest-trigger precedence preventing a stale Assets reset.
 - 2026-07-20: vertically centered context-free cancellation Activity titles
@@ -1179,3 +1191,9 @@
   compact, logo-only address-dashboard row above the active account's chain
   explorer list. Each 36px shortcut exposes its name on hover and keyboard
   focus while keeping the chain-specific destinations visually primary below.
+- 2026-07-20: matched the staking amount field to the wallet's established
+  token/USD conversion control while retaining exact-token MAX execution.
+- 2026-07-20: added a compact 7-day APY strip above staking balances, using
+  amber for the total and quiet secondary copy for the WCHAN/WETH breakdown.
+- 2026-07-20: unified More and Stake on one APY presentation source so a
+  resolved zero remains `0.0%`/`0.00%` instead of degrading to unavailable.

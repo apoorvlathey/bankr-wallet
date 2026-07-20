@@ -46,6 +46,7 @@ import {
   // ShieldView,
   SignatureRequestConfirmation,
   SwapView,
+  StakingScreen,
   TokenTransfer,
   TransactionConfirmation,
   TxDetailScreen,
@@ -54,6 +55,7 @@ import {
 } from "@/app/lazyScreens";
 import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
 import LoadingFallback from "@/app/LoadingFallback";
+import AppFeatureFrame from "@/app/AppFeatureFrame";
 import { isArcBrowser } from "@/app/isArcBrowser";
 
 // Eager load components needed immediately
@@ -2403,16 +2405,7 @@ function App() {
   // Transfer view
   if (view === "transfer") {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Suspense fallback={<LoadingFallback />}>
+      <AppFeatureFrame isFullscreenTab={isFullscreenTab}>
             <TokenTransfer
               token={transferToken}
               fromAddress={address}
@@ -2434,25 +2427,14 @@ function App() {
                 // Normal flow: the newPendingTxRequest listener will auto-switch to txConfirm
               }}
             />
-          </Suspense>
-        </Box>
-      </Box>
+      </AppFeatureFrame>
     );
   }
 
   // Swap view
   if (view === "swap") {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Suspense fallback={<LoadingFallback />}>
+      <AppFeatureFrame isFullscreenTab={isFullscreenTab}>
             <SwapView
               fromAddress={address}
               accountId={activeAccount?.id}
@@ -2478,9 +2460,25 @@ function App() {
               initialBuyToken={swapInitialBuyToken}
               initialSellToken={swapInitialSellToken}
             />
-          </Suspense>
-        </Box>
-      </Box>
+      </AppFeatureFrame>
+    );
+  }
+
+  if (view === "staking") {
+    return (
+      <AppFeatureFrame isFullscreenTab={isFullscreenTab}>
+            <StakingScreen
+              fromAddress={address}
+              accountId={activeAccount?.id}
+              accountType={activeAccount?.type || "bankr"}
+              onBack={() => setView("more")}
+              onTransactionInitiated={() => {
+                setView("main");
+                setActivityTabTrigger((value) => value + 1);
+                setHoldingsTabTrigger((value) => value + 1);
+              }}
+            />
+      </AppFeatureFrame>
     );
   }
 
@@ -2508,25 +2506,15 @@ function App() {
   // More actions view
   if (view === "more") {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Suspense fallback={<LoadingFallback />}>
+      <AppFeatureFrame isFullscreenTab={isFullscreenTab}>
             <MoreActionsView
               fromAddress={address}
               walletConnectSessionCount={walletConnectSessionCount}
               onBack={() => setView("main")}
               onWalletConnect={() => setView("walletConnect")}
+              onStake={() => setView("staking")}
             />
-          </Suspense>
-        </Box>
-      </Box>
+      </AppFeatureFrame>
     );
   }
 

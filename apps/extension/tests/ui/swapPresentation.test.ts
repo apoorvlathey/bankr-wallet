@@ -76,6 +76,11 @@ test("Swap uses a compact amber wallet-sized intent form", async () => {
   assert.match(multiGas, /import \{ GasFeePopover \} from "@\/components\/GasEstimate\/GasFeePopover"/u);
   assert.match(multiGas, /<GasFeePopover[\s\S]*?fallbackContent=/u);
   assert.doesNotMatch(multiGas, /import \{ GasFeeTrigger \}/u);
+  assert.match(
+    multiGas,
+    /if \(isLocalSigningAccount\) \{[\s\S]*?setPassthroughEstimates\(passthrough\)[\s\S]*?setEditedGasLimits/u,
+  );
+  assert.doesNotMatch(multiGas, /if \(isLocalSigningAccount && batchedTx\)/u);
 });
 
 test("view-only Swap stages review and gates execution on the selected developer RPC", async () => {

@@ -12,9 +12,21 @@ test("direct swap routing keeps all wallet types explicit", async () => {
   const direct = await readTransactionSource("swaps/direct.ts");
 
   assert.match(direct, /account\.type === "impersonator"[\s\S]*?executeImpersonatedSwap/u);
+  assert.match(direct, /!policy\.allowImpersonator[\s\S]*?View-only accounts cannot execute staking transactions/u);
   assert.match(direct, /account\.type === "bankr"/u);
+  assert.match(direct, /account\.type === "ledger"[\s\S]*?executeLedgerSwap/u);
   assert.match(direct, /account\.type !== "privateKey" && account\.type !== "seedPhrase"/u);
-  assert.match(direct, /Unsupported account type/u, "Ledger remains blocked");
+  assert.match(direct, /Unsupported account type/u);
+});
+
+test("Ledger direct execution rechecks the pinned device before every broadcast", async () => {
+  const source = await readTransactionSource("swaps/ledgerDirect.ts");
+
+  assert.match(source, /ensureLedgerSigningSession/u);
+  assert.match(source, /getAccountById\(account\.id\)/u);
+  assert.match(source, /latest\.deviceId !== account\.deviceId/u);
+  assert.match(source, /latest\.hdPath !== account\.hdPath/u);
+  assert.match(source, /signAndBroadcastLedgerTransaction/u);
 });
 
 test("impersonated swaps recheck endpoint and account at the RPC boundary", async () => {

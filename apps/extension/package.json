@@ -78,6 +78,7 @@
     "@reown/walletkit": "1.5.5",
     "@scure/bip32": "^2.0.1",
     "@scure/bip39": "^2.0.1",
+    "@walletchan/contract-addresses": "workspace:*",
     "@walletchan/shared": "workspace:*",
     "@walletconnect/core": "2.23.9",
     "@walletconnect/utils": "2.23.9",

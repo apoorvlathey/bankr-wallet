@@ -43,7 +43,8 @@ This directory owns the extracted, audit-sized transaction concerns:
   `eth_sendTransaction` submission for reviewed view-only swaps.
 - `swaps/batch.ts` owns Bankr ERC-7821 submission while `swaps/atomic.ts` owns
   PK/seed EIP-7702 + ERC-7821 submission. Shared public shapes are in
-  `swaps/types.ts`.
+  `swaps/types.ts`; `swaps/historyMetadata.ts` selects specialized metadata or
+  the final user intent after setup and approval calls.
 - `internalTransfer.ts`, `securityReset.ts`, `rpcConfig.ts`, and
   `accountMutations.ts` contain the smaller operations historically exposed by
   the transaction facade.

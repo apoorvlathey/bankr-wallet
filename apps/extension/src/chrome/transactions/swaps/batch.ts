@@ -9,6 +9,7 @@ import {
   validateLockedSwapTransactions,
 } from "./accountPolicy";
 import { processSwapTxBankr } from "./bankrLeg";
+import { selectSwapHistoryEntry } from "./historyMetadata";
 import type {
   SwapAccountLock,
   SwapExecutionResult,
@@ -58,10 +59,7 @@ export async function handleExecuteSwapBatch(
   const bridge = originalTransactions.find(
     (transaction) => transaction.bridge,
   )?.bridge;
-  const mainEntry =
-    originalTransactions.find((transaction) => transaction.bridge) ??
-    originalTransactions.find((transaction) => transaction.swapMeta) ??
-    originalTransactions[0];
+  const mainEntry = selectSwapHistoryEntry(originalTransactions);
 
   const { estimateGasLimitWithBuffer } = await import("../../gasEstimation");
   const buffered = await estimateGasLimitWithBuffer(

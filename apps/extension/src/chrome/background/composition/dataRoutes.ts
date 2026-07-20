@@ -60,6 +60,7 @@ import {
   WALLET_SYNC_STORAGE_KEYS,
 } from "../../walletResetStorage";
 import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
+import { fetchWchanVaultApy, getWchanStakingState } from "../../staking";
 import {
   handleUnlockWallet,
 } from "../../authHandlers";
@@ -115,6 +116,8 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
       checkTokenAllowance,
       getTokenBalanceWei,
       checkPermit2Allowance,
+      getWchanStakingState,
+      fetchWchanVaultApy,
     });
 
   const routeBackgroundChatMessage = createBackgroundChatMessageRouter({

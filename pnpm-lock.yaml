@@ -111,6 +111,9 @@ importers:
       '@scure/bip39':
         specifier: ^2.0.1
         version: 2.0.1
+      '@walletchan/contract-addresses':
+        specifier: workspace:*
+        version: link:../../packages/contract-addresses
       '@walletchan/shared':
         specifier: workspace:*
         version: link:../../packages/shared

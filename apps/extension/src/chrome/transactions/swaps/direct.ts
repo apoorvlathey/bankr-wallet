@@ -25,6 +25,7 @@ import {
 import { processSwapTxBankr } from "./bankrLeg";
 import { broadcastSwapTxLocal } from "./localBroadcast";
 import { executeImpersonatedSwap } from "./impersonated";
+import { executeLedgerSwap } from "./ledgerDirect";
 import type {
   SwapAccountLock,
   SwapExecutionResult,
@@ -38,6 +39,7 @@ export async function handleExecuteSwapDirect(
   chainName: string,
   gasEstimates?: SwapGasOverride[],
   accountLock?: SwapAccountLock,
+  policy: { allowImpersonator: boolean } = { allowImpersonator: true },
 ): Promise<SwapExecutionResult> {
   if (transactions.length === 0) {
     return { success: false, error: "No transactions provided" };
@@ -60,6 +62,9 @@ export async function handleExecuteSwapDirect(
 
   const account = locked.account;
   if (account.type === "impersonator") {
+    if (!policy.allowImpersonator) {
+      return { success: false, error: "View-only accounts cannot execute staking transactions" };
+    }
     return executeImpersonatedSwap(
       transactions,
       chainName,
@@ -82,6 +87,10 @@ export async function handleExecuteSwapDirect(
       account,
       apiKey,
     );
+  }
+
+  if (account.type === "ledger") {
+    return executeLedgerSwap(transactions, chainName, account, gasEstimates);
   }
 
   if (account.type !== "privateKey" && account.type !== "seedPhrase") {

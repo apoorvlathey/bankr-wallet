@@ -22,7 +22,6 @@ const ScreenEnteredContext = createContext<boolean>(true);
 export function useScreenEntered(): boolean {
   return useContext(ScreenEnteredContext);
 }
-
 export type AppView =
   | "main"
   | "unlock"
@@ -41,6 +40,7 @@ export type AppView =
   | "addAccount"
   | "transfer"
   | "swap"
+  | "staking"
   // | "shield"
   | "more"
   | "hideTokens"
@@ -54,7 +54,6 @@ interface ScreenMeta {
   kind: ScreenTransitionKind;
   depth: number;
 }
-
 // eslint-disable-next-line react-refresh/only-export-components
 export const SCREEN_META: Record<AppView, ScreenMeta> = {
   main: { kind: "slide", depth: 0 },
@@ -62,6 +61,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   settingsAddChain: { kind: "slide", depth: 2 },
   accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
+  staking: { kind: "slide", depth: 2 },
   // shield: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   more: { kind: "slide", depth: 1 },

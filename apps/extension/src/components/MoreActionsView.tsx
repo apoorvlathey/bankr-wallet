@@ -10,16 +10,14 @@ import {
 import {
   REVOKE_CASH_URL,
   revokeCashAddressUrl,
-  WALLETCHAN_STAKE_URL,
-  WALLETCHAN_VAULT_DATA_API,
 } from "@/constants/externalUrls";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import ConnectedDappsView from "@/components/ConnectedDappsView";
 import WalletConnectLogoIcon from "@/components/WalletConnectLogoIcon";
 import { GlobeIcon } from "@/components/Settings/icons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AddressBookScreen from "@/components/AddressBook/AddressBookScreen";
-import { fetchJsonBounded } from "@/chrome/network/boundedHttp";
+import { useWchanApy } from "@/components/Staking/hooks/useWchanApy";
 import {
   AppHeader,
   AppScreen,
@@ -37,6 +35,7 @@ import {
 interface MoreActionsViewProps {
   onBack: () => void;
   onWalletConnect: () => void;
+  onStake: () => void;
   fromAddress: string;
   walletConnectSessionCount?: number;
 }
@@ -176,44 +175,15 @@ function ActionListRow({ action }: { action: MoreAction }) {
 export default function MoreActionsView({
   onBack,
   onWalletConnect,
+  onStake,
   fromAddress,
   walletConnectSessionCount = 0,
 }: MoreActionsViewProps) {
-  const [stakeApy, setStakeApy] = useState<number | null>(null);
+  const stakeApy = useWchanApy();
   const [showConnectedDapps, setShowConnectedDapps] = useState(false);
   const [showAddressBook, setShowAddressBook] = useState(false);
   const isFirefox =
     typeof navigator !== "undefined" && /Firefox/.test(navigator.userAgent);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchApy = () => {
-      fetchJsonBounded(
-        WALLETCHAN_VAULT_DATA_API,
-        { method: "GET", signal: controller.signal },
-        { timeoutMs: 8_000, maxBytes: 64 * 1024 },
-      )
-        .then(({ response, data }) => {
-          const payload =
-            response.ok && data && typeof data === "object"
-              ? data as { totalApy?: unknown }
-              : null;
-          if (typeof payload?.totalApy === "number") {
-            setStakeApy(payload.totalApy);
-          }
-        })
-        .catch(() => {});
-    };
-
-    fetchApy();
-    const interval = window.setInterval(fetchApy, 60_000);
-
-    return () => {
-      controller.abort();
-      window.clearInterval(interval);
-    };
-  }, []);
 
   const primaryActions: MoreAction[] = [
     {
@@ -222,8 +192,9 @@ export default function MoreActionsView({
       icon: <StakeIcon />,
       iconBg: "accent.primary",
       iconColor: "accentFg.primary",
-      badge: stakeApy !== null ? `${stakeApy.toFixed(1)}% APY` : undefined,
-      onClick: () => openExternal(WALLETCHAN_STAKE_URL),
+      badge: stakeApy !== null ? `${stakeApy.totalApy.toFixed(1)}% APY` : undefined,
+      external: false,
+      onClick: onStake,
     },
   ];
 

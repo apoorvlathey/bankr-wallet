@@ -4,6 +4,9 @@ export const BACKGROUND_SWAP_EXECUTION_MESSAGE_TYPES = [
   "executeSwapDirect",
   "executeSwapBatch",
   "executeSwapAtomicPK",
+  "executeStakingDirect",
+  "executeStakingBatch",
+  "executeStakingAtomicPK",
 ] as const;
 
 export type BackgroundSwapExecutionRouteResult =
@@ -56,7 +59,26 @@ export function createBackgroundSwapExecutionMessageRouter(
           .catch((error) => sendResponse(executionError(error)));
         return HANDLED_ASYNC;
 
+      case "executeStakingDirect":
+        dependencies
+          .runInternalIrreversibleOperation(() =>
+            dependencies.handleExecuteSwapDirect(
+              message.transactions,
+              message.chainName,
+              message.gasEstimates,
+              {
+                accountId: message.accountId,
+                fromAddress: message.fromAddress,
+              },
+              { allowImpersonator: false },
+            ),
+          )
+          .then(sendResponse)
+          .catch((error) => sendResponse(executionError(error)));
+        return HANDLED_ASYNC;
+
       case "executeSwapBatch":
+      case "executeStakingBatch":
         dependencies
           .runInternalIrreversibleOperation(() =>
             dependencies.handleExecuteSwapBatch(
@@ -75,6 +97,7 @@ export function createBackgroundSwapExecutionMessageRouter(
         return HANDLED_ASYNC;
 
       case "executeSwapAtomicPK":
+      case "executeStakingAtomicPK":
         dependencies
           .runInternalIrreversibleOperation(() =>
             dependencies.handleExecuteSwapAtomicPK({

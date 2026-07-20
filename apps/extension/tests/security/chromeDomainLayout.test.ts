@@ -55,6 +55,7 @@ const ALLOWED_CHROME_ROOT_TYPESCRIPT = [
   "secretRevealHandlers.ts",
   "sessionCache.ts",
   "sidepanelManager.ts",
+  "staking.ts",
   "storageCachePruner.ts",
   "storageLock.ts",
   "storageResultWaiter.ts",

@@ -203,6 +203,8 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "checkTokenAllowance",
   "getTokenBalanceWei",
   "checkPermit2Allowance",
+  "getWchanStakingState",
+  "getWchanVaultApy",
 
   // EIP-7702 and delegated authority management
   "getDelegationStatus",
@@ -229,6 +231,9 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "executeSwapDirect",
   "executeSwapBatch",
   "executeSwapAtomicPK",
+  "executeStakingDirect",
+  "executeStakingBatch",
+  "executeStakingAtomicPK",
   "initiateTransfer",
   "cancelProcessingTx",
   "sponsoredTransfer",

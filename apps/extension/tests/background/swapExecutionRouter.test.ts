@@ -57,6 +57,12 @@ test("all swap paths enter the reset barrier before exact account-bound executio
     ...accountLock,
   });
   await dispatch(deps, {
+    type: "executeStakingDirect",
+    transactions: ["tx-stake"],
+    chainName: "Base",
+    ...accountLock,
+  });
+  await dispatch(deps, {
     type: "executeSwapBatch",
     batchTx: "batch-tx",
     originalTransactions: ["tx-b"],
@@ -76,6 +82,8 @@ test("all swap paths enter the reset barrier before exact account-bound executio
   assert.deepEqual(events, [
     ["barrier"],
     ["direct", ["tx-a"], "Base", ["gas-a"], accountLock],
+    ["barrier"],
+    ["direct", ["tx-stake"], "Base", undefined, accountLock, { allowImpersonator: false }],
     ["barrier"],
     ["batch", "batch-tx", ["tx-b"], 8453, "Base", accountLock],
     ["barrier"],

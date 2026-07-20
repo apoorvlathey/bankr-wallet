@@ -4236,6 +4236,13 @@ agent-capable. `delegation/storage.ts` owns the unchanged nested
 
 - Dapp-created pending txs and `wallet_sendCalls` batches are pinned at request creation with `accountId`, `accountAddress`, and `accountType`. Cross-dapp batch add/confirm handlers must resolve that pinned account directly; they must never fall back to the current active account when `params.from` is omitted or when the user switches accounts while the request is open.
 - Internal swap/bridge confirmations capture `{ accountId, fromAddress }` when the quote is prepared. `executeSwapDirect`, `executeSwapBatch`, and `executeSwapAtomicPK` must resolve that locked account directly and reject if the stored account address differs from the lock, or if any prepared transaction's `tx.from` / `chainId` differs from the locked values.
+- The in-wallet WCHAN staking screen uses the same pinned prepared-work
+  boundary with staking-specific trusted-UI route aliases. Its
+  `executeStakingDirect` route explicitly rejects impersonator accounts in the
+  background, while `executeStakingBatch` is Bankr-only and
+  `executeStakingAtomicPK` is private-key/seed-only. Ledger staking uses the
+  ordered direct path and rechecks account address, device ID, derivation path,
+  and recovered signer before each raw broadcast.
 
 **CRITICAL: Adding New Handlers**
 
@@ -5264,6 +5271,39 @@ The `TransactionConfirmation` component uses `key={selectedTxRequest.id}` to for
 ### Avoiding Stale State
 
 When handling transaction completion, always capture the current transaction ID before async operations and reload pending requests fresh from storage rather than using React state. This prevents the common bug where async operations use stale closure values.
+
+## In-wallet WCHAN staking
+
+The More → Stake row opens `components/Staking/StakingScreen.tsx` inside the
+extension instead of navigating to the website. The screen is Base-pinned and
+loads WCHAN balance, sWCHAN balance, allowance, current penalty, weighted last
+deposit timestamp, earned WETH, and deposit/redeem previews through the
+trusted-wallet-UI-only `getWchanStakingState` route. The sibling
+`getWchanVaultApy` route returns the website's canonical bounded 7-day WCHAN,
+WETH, and total APY projection. `chrome/staking/` owns the
+bounded configured-RPC reads and shares the generated contract-address package
+with the website.
+
+The renderer creates the same vault calls used by the website:
+
+- stake: optional exact-amount WCHAN `approve(amount)`, then
+  `WCHANVault.deposit(amount, account)`;
+- unstake: `WCHANVault.redeem(shares, account, account)`;
+- rewards: `WCHANVault.claimRewards()`.
+
+Approval plus deposit is encoded as one ERC-7821 batch for Bankr accounts and
+as an EIP-7702 atomic batch for private-key/seed accounts with a resolved
+delegate. Otherwise calls are broadcast in reviewed order. Ledger never uses
+the atomic path and prompts on-device once per sequential leg. View-only
+accounts may read the screen but the renderer and background staking route both
+reject submission. All execution aliases enter the internal reset barrier and
+retain `{ accountId, fromAddress, chainId }` pinning.
+Single-call private-key/seed reviews publish their resolved gas parameters to
+the same confirmation-validity gate as wrapped and sequential batches; a
+successful estimate therefore enables confirmation and is reused at broadcast.
+Approval-first batches use the final reviewed action as their Activity title,
+so staking records remain “Stake WCHAN” while the approval/deposit breakdown
+stays available in the batch detail.
 
 ## Cross-Chain Bridging
 
