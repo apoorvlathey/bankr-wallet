@@ -30,8 +30,9 @@ export interface PreviewAssetManifest {
   portfolio: {
     octav: string;
     debank: string;
-    zapper: string;
+    zerion: string;
     nansen: string;
+    blockscan: string;
   };
 }
 
@@ -59,8 +60,9 @@ export const previewAssets = {
   portfolio: {
     octav: "/octav-icon.png",
     debank: "/debank-icon.ico",
-    zapper: "/zapper-icon.png",
+    zerion: "/zerion-icon.png",
     nansen: "/nansen-icon.png",
+    blockscan: "/blockscan-icon.png",
   },
 } as const satisfies PreviewAssetManifest;
 

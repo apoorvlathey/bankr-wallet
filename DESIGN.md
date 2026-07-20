@@ -1166,3 +1166,7 @@
   decision surface. Amber is limited to the warning signal and acknowledged
   state; the title, explanatory copy, and full-row risk acknowledgment follow
   Warm Midnight's neutral hierarchy instead of stacking status-colored cards.
+- 2026-07-20: grouped DeBank, Nansen, Octav, Zerion, and Blockscan into a
+  compact, logo-only address-dashboard row above the active account's chain
+  explorer list. Each 36px shortcut exposes its name on hover and keyboard
+  focus while keeping the chain-specific destinations visually primary below.

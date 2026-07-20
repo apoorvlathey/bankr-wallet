@@ -2,17 +2,22 @@ import {
   Button,
   HStack,
   IconButton,
+  Image,
   Popover,
   PopoverBody,
   PopoverContent,
   PopoverTrigger,
   Portal,
   Text,
+  Tooltip,
   VStack,
 } from "@chakra-ui/react";
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 import ChainIcon from "@/components/ChainIcon";
-import { getDefaultAccountExplorerUrl } from "@/components/accountExplorerUtils";
+import {
+  getAccountDashboardLinks,
+  getDefaultAccountExplorerUrl,
+} from "@/components/accountExplorerUtils";
 import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountExplorerMenuProps {
@@ -25,6 +30,7 @@ export default function AccountExplorerMenu({
   chains,
 }: AccountExplorerMenuProps) {
   const explorerChains = chains.filter((chain) => Boolean(chain.explorer));
+  const dashboardLinks = getAccountDashboardLinks(address);
 
   return (
     <Popover
@@ -79,7 +85,56 @@ export default function AccountExplorerMenu({
             >
               View address on
             </Text>
-            <VStack align="stretch" spacing={0.5}>
+            <HStack
+              role="group"
+              aria-label="Portfolio dashboards"
+              px={2}
+              pb={2}
+              spacing={1}
+            >
+              {dashboardLinks.map((dashboard) => (
+                <Tooltip
+                  key={dashboard.name}
+                  label={dashboard.name}
+                  placement="bottom"
+                  openDelay={160}
+                  hasArrow
+                >
+                  <IconButton
+                    as="a"
+                    href={dashboard.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`View active address on ${dashboard.name}`}
+                    icon={
+                      <Image
+                        src={dashboard.iconSrc}
+                        alt=""
+                        boxSize="22px"
+                        borderRadius="sm"
+                      />
+                    }
+                    size="sm"
+                    minW="36px"
+                    w="36px"
+                    h="36px"
+                    variant="ghost"
+                    _hover={{ bg: "surface.raisedHover" }}
+                    _focusVisible={{
+                      bg: "surface.raisedHover",
+                      boxShadow: "outline",
+                    }}
+                  />
+                </Tooltip>
+              ))}
+            </HStack>
+            <VStack
+              align="stretch"
+              spacing={0.5}
+              pt={1.5}
+              borderTop="1px solid"
+              borderColor="border.subtle"
+            >
               {explorerChains.map((chain) => (
                 <Button
                   key={chain.chainId}
