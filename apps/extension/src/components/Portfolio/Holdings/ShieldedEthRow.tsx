@@ -13,7 +13,9 @@ import {
 } from "@/components/ui";
 import type { ShieldPrivatePortfolio } from "@/components/Shield/model/shieldOperation";
 import {
+  SHIELDED_ETH_IS_TESTNET,
   SHIELDED_ETH_LOGO_URL,
+  SHIELDED_ETH_NETWORK_NAME,
   type ShieldedEthAction,
 } from "@/components/Shield/model/shieldedAsset";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
@@ -43,7 +45,7 @@ export function ShieldedEthRow({
     {
       id: "shield",
       label: "Shield ETH",
-      description: "Move Sepolia ETH into your shielded balance",
+      description: `Move ${SHIELDED_ETH_NETWORK_NAME} ETH into your shielded balance`,
       icon: <PrivacyShieldIcon boxSize="18px" />,
       isDisabled: !onAction,
     },
@@ -86,24 +88,26 @@ export function ShieldedEthRow({
       >
         <ListItemMedia position="relative">
           <Image src={SHIELDED_ETH_LOGO_URL} alt="" boxSize="30px" />
-          <Flex
-            position="absolute"
-            right="-7px"
-            bottom="-4px"
-            minW="30px"
-            h="14px"
-            px={1}
-            align="center"
-            justify="center"
-            bg="surface.raised"
-            borderWidth="1px"
-            borderColor="border.default"
-            borderRadius="full"
-          >
-            <Text fontSize="7px" fontWeight="800" letterSpacing="wide">
-              TEST
-            </Text>
-          </Flex>
+          {SHIELDED_ETH_IS_TESTNET && (
+            <Flex
+              position="absolute"
+              right="-7px"
+              bottom="-4px"
+              minW="30px"
+              h="14px"
+              px={1}
+              align="center"
+              justify="center"
+              bg="surface.raised"
+              borderWidth="1px"
+              borderColor="border.default"
+              borderRadius="full"
+            >
+              <Text fontSize="7px" fontWeight="800" letterSpacing="wide">
+                TEST
+              </Text>
+            </Flex>
+          )}
         </ListItemMedia>
         <ListItemContent>
           <ListItemTitle fontSize="sm" noOfLines={1}>
@@ -148,7 +152,7 @@ export function ShieldedEthRow({
             <Box minW={0}>
               <Text fontSize="lg" fontWeight="700">Shielded ETH</Text>
               <Text fontSize="xs" color="fg.secondary">
-                Privacy Pools · Sepolia
+                Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
               </Text>
             </Box>
           </HStack>

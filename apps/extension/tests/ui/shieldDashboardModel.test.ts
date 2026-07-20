@@ -1,10 +1,28 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { SHIELDED_ETH_CHAIN_ID } from "../../src/components/Shield/model/shieldedAsset";
+import {
+  SHIELDED_ETH_CHAIN_ID,
+  SHIELDED_ETH_IS_TESTNET,
+  SHIELDED_ETH_NETWORK_NAME,
+} from "../../src/components/Shield/model/shieldedAsset";
 
-test("Shield is pinned to Sepolia ETH", () => {
+test("direct development imports label Shield as Sepolia testnet ETH", () => {
   assert.equal(SHIELDED_ETH_CHAIN_ID, 11_155_111);
+  assert.equal(SHIELDED_ETH_NETWORK_NAME, "Sepolia");
+  assert.equal(SHIELDED_ETH_IS_TESTNET, true);
+});
+
+test("Shielded ETH row derives network copy and badge visibility from the build profile", async () => {
+  const source = await readFile(
+    new URL("../../src/components/Portfolio/Holdings/ShieldedEthRow.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /SHIELDED_ETH_IS_TESTNET &&/);
+  assert.match(source, /Privacy Pools · \{SHIELDED_ETH_NETWORK_NAME\}/);
+  assert.match(source, /Move \$\{SHIELDED_ETH_NETWORK_NAME\} ETH/);
+  assert.doesNotMatch(source, /Privacy Pools · Sepolia|Move Sepolia ETH/);
 });
 
 test("Shield opens amount entry without a blocking proof-readiness check", async () => {
