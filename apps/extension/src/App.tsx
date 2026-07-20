@@ -97,6 +97,7 @@ import {
   getVisibleChains,
 } from "@/lib/chains";
 import { playInteractionSound } from "@/sounds/soundManager";
+import { createBatchRequestSoundGate } from "@/sounds/batchRequestSoundGate";
 import { getCombinedRequests } from "@/app/requestModel";
 import {
   FailedTransactionAlert,
@@ -139,6 +140,7 @@ function App() {
   const ledgerSetupRequestedRef = useRef(
     isLedgerSetupRoute(window.location.search),
   );
+  const batchRequestSoundGateRef = useRef(createBatchRequestSoundGate());
   const [isLoading, setIsLoading] = useState(true);
   const [isApprovalRequestLoading, setIsApprovalRequestLoading] = useState(false);
   const [address, setAddress] = useState<string>("");
@@ -792,11 +794,14 @@ function App() {
         loadAccounts(),
       ]);
 
+      const hasUnannouncedBatchRequest = batchRequests.some((request) =>
+        batchRequestSoundGateRef.current.claim(request.id),
+      );
       if (
         requests.length > 0 ||
         sigRequests.length > 0 ||
         permissionRequests.length > 0 ||
-        batchRequests.length > 0 ||
+        hasUnannouncedBatchRequest ||
         watchAssetRequests.length > 0 ||
         addChainRequests.length > 0 ||
         dappConnectionRequests.length > 0 ||
@@ -1014,8 +1019,10 @@ function App() {
         return;
       }
       if (message.type === "newPendingBatchTxRequest" && message.batchRequest) {
-        void playInteractionSound("requestReceived");
         const batchReq = message.batchRequest;
+        if (batchRequestSoundGateRef.current.claim(batchReq.id)) {
+          void playInteractionSound("requestReceived");
+        }
         (async () => {
           const isUnlocked = await checkLockState();
           setIsWalletUnlocked(isUnlocked);
