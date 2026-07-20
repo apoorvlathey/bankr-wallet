@@ -106,10 +106,11 @@ test("chain totals include positive token and DeFi values without negatives", ()
       { chainId: 1, valueUsd: 7 },
       { chainId: 8453, valueUsd: 3 },
     ] as DefiPosition[],
+    { "1": 2, "8453": 1.5 },
   );
 
-  assert.equal(totals.get(1), 17);
-  assert.equal(totals.get(8453), 3);
+  assert.equal(totals.get(1), 19);
+  assert.equal(totals.get(8453), 4.5);
 });
 
 test("large holdings render one ordered page and defer later sections", () => {

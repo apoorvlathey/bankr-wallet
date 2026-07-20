@@ -41,12 +41,15 @@ message, RPC, or storage effects except the existing explorer/copy actions in
 ## State and effects
 
 - `useSellTokenData.ts` loads the cross-chain catalog and hydrates missing sell
-  balances/prices.
+  balances/prices. It retains a 200-asset interaction projection and pins
+  native/custom/recent/selected assets before live balance verification.
 - `useBuyTokenData.ts` resolves selected buy-token metadata and price.
 - `useSwapAmount.ts` owns amount-mode and balance-slider transformations.
 - `useSwapSlippage.ts` owns the `swapSlippageBps` sync-storage preference.
 - `useSwapQuotes.ts` owns debounced 0x/Bungee indicative quotes and destination
   native-token recovery metadata.
+- `useImpersonatedSwapPolicy.ts` mirrors the exact selected-RPC developer flag
+  for confirmation presentation; the background remains authoritative.
 - `usePreparedSwap.ts` stages confirmation state and coordinates preparation
   and final execution.
 
@@ -59,7 +62,8 @@ message, RPC, or storage effects except the existing explorer/copy actions in
 - `swapBatchPlan.ts` preserves the Bankr atomic, private-key/seed EIP-7702, and
   sequential fallback decision.
 - `executePreparedSwap.ts` is the irreversible runtime-message boundary for
-  Bankr batch, local EIP-7702, and sequential execution.
+  Bankr batch, local EIP-7702, sequential signed execution, and developer-RPC
+  impersonated execution.
 - `swapViewTypes.ts` and `swapViewUtils.ts` contain shared contracts and pure
   adapters (apart from the documented delegate-status runtime message).
 

@@ -18,7 +18,7 @@ import { blo } from "blo";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useAddressContactLabelMap } from "@/hooks/useAddressContacts";
-import { fetchPortfolio } from "@/chrome/portfolio/api";
+import { fetchPortfolioSummary } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { truncateAddress } from "@/lib/addressUtils";
 import { CopyButton } from "./CopyButton";
@@ -402,7 +402,7 @@ function SeedAddressPicker({
         next.set(key, { loading: true, value: null, error: false });
         return next;
       });
-      fetchPortfolio(addr, controller.signal)
+      fetchPortfolioSummary(addr, controller.signal)
         .then((res) => {
           setPortfolio((prev) => {
             const next = new Map(prev);

@@ -53,7 +53,7 @@ export async function loadPortfolioTokenCatalog(
     hiddenTokenKeys,
   ] =
     await Promise.all([
-      fetchPortfolio(address).then(
+      fetchPortfolio(address, options.signal).then(
         (data) => ({ ok: true as const, data }),
         (err) => ({ ok: false as const, err }),
       ),
@@ -64,12 +64,22 @@ export async function loadPortfolioTokenCatalog(
     ]);
 
   const apiUnavailable = !portfolioResult.ok;
+  if (apiUnavailable && options.signal?.aborted) throw portfolioResult.err;
   if (apiUnavailable) {
     console.warn("[portfolio] API unavailable, falling back to onchain native balances:", portfolioResult.err);
   }
   const data = portfolioResult.ok
     ? portfolioResult.data
-    : { tokens: [], defiPositions: [], totalValueUsd: 0 };
+    : {
+        tokens: [],
+        defiPositions: [],
+        totalValueUsd: 0,
+        tokenCount: 0,
+        omittedTokenCount: 0,
+        omittedTokenValueUsd: 0,
+        omittedTokenValueUsdByChain: {},
+        truncated: false,
+      };
 
   const customTokenKeys = new Set(
     customTokens.map((ct) =>
@@ -217,12 +227,16 @@ export async function loadPortfolioTokenCatalog(
     );
     const totalValueUsd =
       visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
-      (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0);
+      (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0) +
+      data.omittedTokenValueUsd;
 
     return {
       tokens: visibleTokens,
       defiPositions: data.defiPositions || [],
       totalValueUsd,
+      omittedTokenCount: data.omittedTokenCount,
+      omittedTokenValueUsd: data.omittedTokenValueUsd,
+      omittedTokenValueUsdByChain: data.omittedTokenValueUsdByChain,
       customTokenKeys,
       recentReceivedTokenKeys,
       allTokenKeys,
@@ -332,13 +346,18 @@ export async function loadPortfolioTokenCatalog(
     networksInfo,
   );
 
-  const totalValueUsd = visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
-    (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0);
+  const totalValueUsd =
+    visibleTokens.reduce((sum, t) => sum + t.valueUsd, 0) +
+    (data.defiPositions || []).reduce((sum, p) => sum + p.valueUsd, 0) +
+    data.omittedTokenValueUsd;
 
   return {
     tokens: visibleTokens,
     defiPositions: data.defiPositions || [],
     totalValueUsd,
+    omittedTokenCount: data.omittedTokenCount,
+    omittedTokenValueUsd: data.omittedTokenValueUsd,
+    omittedTokenValueUsdByChain: data.omittedTokenValueUsdByChain,
     customTokenKeys,
     recentReceivedTokenKeys,
     allTokenKeys,

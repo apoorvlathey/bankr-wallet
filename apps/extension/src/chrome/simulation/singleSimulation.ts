@@ -12,6 +12,7 @@ import { preflightAssetCandidates } from "../erc20CandidatePreflight";
 import { normalizeRawNftsReceived } from "./assetChangeNormalization";
 import { getSimulationClient } from "./client";
 import {
+  MAX_SIMULATION_ASSET_CHANGES,
   MULTICALL3_ADDRESS,
   SIMULATION_GAS_LIMIT,
 } from "./constants";
@@ -161,7 +162,7 @@ export async function simulateAssetChanges(
       client,
       tx.chainId,
       from,
-      candidates,
+      candidates.slice(0, MAX_SIMULATION_ASSET_CHANGES),
       MULTICALL3_ADDRESS,
     );
     console.log("[TxSim] Candidates after asset preflight:", candidates.length);
@@ -250,8 +251,6 @@ async function runSimulation(
     txSuccess,
     ethDelta: ethDelta.toString(),
     tokensCount: (tokens as Address[]).length,
-    tokens,
-    deltas: (deltas as bigint[]).map(d => d.toString()),
     nftsReceivedCount: normalizedNftsReceived.length,
   });
 

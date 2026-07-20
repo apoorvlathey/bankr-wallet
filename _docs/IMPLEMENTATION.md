@@ -567,7 +567,7 @@ Built-in chain metadata and user-customized chain state are intentionally split:
 - `src/chrome/network/networkRepository.ts` alone reads and writes `networksInfo`/`chainName`; `rpcHistoryRepository.ts` owns `networkRpcUrls`; and `networkMutations.ts` owns locked service-worker mutations and composes pure `customNetworkValidation.ts` and `networkPolicy.ts`. Every saved endpoint URL and optional name is validated before persistence. Missing history is the normal legacy shape and Edit Network resolves it as a one-item list containing the active `rpcUrl`, so no eager migration is required. Settings UI and dapp `wallet_addEthereumChain` confirmations call extension-only background messages (`addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain`) instead of writing a full popup snapshot back to storage.
 - `src/chrome/network/rpcClient.ts` is the final configured-RPC egress boundary. Direct JSON-RPC calls and every viem HTTP transport are request/streamed-response/timeout/concurrency bounded; the viem adapter also pins the validated URL against request-hook retargeting. All paths reject redirects and omit ambient credentials/referrers. New public RPC writes require HTTPS, while existing synced public-HTTP entries remain readable for upgrade compatibility and local/private Settings RPCs may use HTTP. URL userinfo and non-HTTP(S) schemes fail closed even when malformed legacy sync state reaches a read path.
 - Remote dapps cannot propose or proxy a private-network RPC unless the dapp is itself local: loopback dapps may use loopback RPCs, while LAN dapps are restricted to another port on the exact same hostname. Settings remains the explicit escape hatch for user-owned localhost/LAN RPC development and accepts local host-and-port shorthand such as `localhost:8545`, canonicalizing it to HTTP before probing and storage.
-- Edit Network exposes `This RPC allows sending txs from impersonated accounts` inside each endpoint's Add/Edit form, and manual Add Network exposes the same developer option under Advanced details. When enabled, a pinned impersonator transaction confirmation uses the standard `eth_sendTransaction` object (`from`, optional `to`, `data`, `value`, and reviewed gas fields) without a signature. The same exact selected-endpoint opt-in admits the existing bounded read-only provider proxy methods against that private RPC so dapp gas estimation and other transaction preflight can complete; it does not expand the proxy method allowlist. The fork RPC must already unlock or impersonate that address (for example Anvil auto/manual impersonation or a Tenderly Virtual TestNet admin RPC). The background rechecks the pinned account, active RPC, exact endpoint flag, provider authorization, and reset/effect lease at the irreversible boundary; endpoint changes are serialized against submission. Signatures, batches, swaps, fee-token gas, EIP-7702/ERC-7715 authority, and normal public-RPC impersonator sends remain blocked.
+- Edit Network exposes `This RPC allows sending txs from impersonated accounts` inside each endpoint's Add/Edit form, and manual Add Network exposes the same developer option under Advanced details. Send and Swap remain visible for impersonator accounts and stage their normal review screens. Without the selected endpoint's opt-in, confirmation stays disabled/reject-only. When enabled, a pinned single transaction or each reviewed sequential built-in-swap leg uses the standard `eth_sendTransaction` object (`from`, optional `to`, `data`, `value`, and reviewed gas fields) without a signature. The same exact selected-endpoint opt-in admits the existing bounded read-only provider proxy methods against that private RPC so dapp gas estimation and other transaction preflight can complete; it does not expand the proxy method allowlist. The fork RPC must already unlock or impersonate that address (for example Anvil auto/manual impersonation or a Tenderly Virtual TestNet admin RPC). The background rechecks the pinned account, active RPC, exact endpoint flag, provider authorization when applicable, and reset/effect lease at the irreversible boundary; endpoint changes are serialized against submission. Signatures, ERC-5792/cross-dapp batches, fee-token gas, EIP-7702/ERC-7715 authority, and normal public-RPC impersonator sends remain blocked.
 - Custom explorer navigation is normalized separately from RPC configuration. Dapp proposals require public HTTPS. Settings may additionally retain explicit loopback HTTP(S) for local development; unsafe legacy explorer values are ignored rather than rendered.
 - `src/contexts/NetworksContext.tsx` is a read-through mirror: it initializes via `ensureNetworksInfo` and subscribes to `chrome.storage.onChanged` for `networksInfo`, so long-lived sidepanels pick up chains added by other extension flows.
 - Registry entries may set `hiddenByDefault: true`. The default is applied only when that built-in chain has no stored `networksInfo` entry, so newly introduced low-usage chains do not trigger homepage balance RPC calls until enabled, while an existing user visibility choice remains authoritative. Blast, Mantle, Mode, Scroll, and Sonic currently use this default.
@@ -1113,12 +1113,14 @@ src/
 │   │   └── erc20CandidatePreflight.ts # Multicall3 filter and metadata cache
 │   ├── portfolio/           # Portfolio display-state audit domain (see README.md)
 │   │   ├── api.ts           # Bounded provider-agnostic portfolio client
+│   │   ├── responsePolicy.ts # Runtime schema and portfolio working-set ceilings
 │   │   ├── tokenCatalog.ts  # Shared API/custom/recent/native merge coordinator
 │   │   ├── catalogTransforms.ts # Pure metadata and visibility transforms
 │   │   ├── onchainBalances.ts # Onchain balance verification via Multicall3
 │   │   ├── hiddenTokens.ts  # Global hidden-token storage for Holdings
 │   │   ├── recentTokens.ts  # Short-lived received-token overlay
 │   │   ├── holdingsCache.ts # Best-effort Holdings first-paint cache
+│   │   ├── holdingsCachePolicy.ts # Pure cache validation/LRU/byte policy
 │   │   ├── snapshotStorage.ts # Per-address portfolio value snapshots
 │   │   ├── snapshotRefresh.ts # Catalog → onchain → forced snapshot refresh
 │   │   ├── coingeckoState.ts # Shared price cache and rate-limit state
@@ -1902,8 +1904,9 @@ TTLs, pinned-token precedence, and approval calldata. See
 Price and firm quote reads use the fixed WalletChan swap proxy through
 `network/boundedHttp.ts`: GET only, redirects rejected, ambient credentials and
 referrers omitted, a 15-second deadline, and a 2 MiB response ceiling. Token
-catalog responses use the same deadline with an 8 MiB ceiling; token-price
-responses use 10 seconds and 64 KiB. Invalid JSON and non-object top-level
+catalog responses use the same deadline with a 2 MiB ceiling and a strict
+2,000-entry runtime codec before cache or UI release; token-price responses use
+10 seconds and 64 KiB. Invalid JSON and non-object top-level
 responses retain distinct released errors, and remote error/reason strings are
 truncated to 1,000 characters.
 
@@ -2713,7 +2716,10 @@ Token holdings are fetched via a provider-agnostic website API route:
 
 - **Website route**: `apps/website/app/api/portfolio/route.ts` (GET `/api/portfolio?address=0x...`)
 - **Extension client**: `portfolio/api.ts` fetches from `https://walletchan.eth.sh/api/portfolio`
-- **Response format**: Provider-agnostic `PortfolioResponse` with `tokens[]`, `defiPositions[]`, and `totalValueUsd`
+- **Response format**: Provider-agnostic `PortfolioResponse` with bounded
+  `tokens[]`/`defiPositions[]`, complete `totalValueUsd`, and truncation metadata
+  (`tokenCount`, `omittedTokenCount`, `omittedTokenValueUsd`, and per-chain
+  omitted value)
 - **Provider order**: Zerion primary, Dune SIM temporary fallback, Alchemy final token-only fallback
 
 Zerion is queried without `filter[chain_ids]` so balances and DeFi positions on
@@ -2722,6 +2728,26 @@ The provider resolves Zerion string chain IDs to numeric EVM chain IDs using the
 Zerion `/v1/chains/` endpoint plus static fallbacks for known slugs; positions
 that cannot be represented as a numeric EVM `chainId` are skipped because the
 public `PortfolioResponse` contract uses numeric chain IDs.
+
+The website sorts provider wallet tokens by value and returns at most 1,000
+tokens, 100 DeFi positions, and 50 assets/rewards per position. The complete
+provider total and omitted token value remain in the response, so limiting dust
+does not understate the portfolio header or per-chain totals. The extension
+independently enforces a 4 MiB transport ceiling, validates/caps strings, URLs,
+numbers, addresses, token/position arrays, and rejects more than 20,000 raw
+token candidates before any response can enter React state. Legacy uncapped
+responses are reduced to the same 1,000-token value-ranked working set; native
+assets receive a bounded preservation pass. This resource policy remains
+internal; portfolio screens do not describe response truncation to users.
+
+Screens that need only an aggregate use the `summary=1` response projection.
+Send and Swap keep at most 200 ranked portfolio assets in React/RPC working
+state, while pinning native assets, custom assets, recent receipts, and an
+explicitly selected asset. Token-management screens use a 300-asset working
+set. Shared token pickers and hidden-token management mount/cache logos for 60
+rows at a time and advance with normal pagination. Swap and bridge remote token
+catalogs are independently validated and capped at 2,000 entries with 2 MiB
+transport ceilings.
 
 ### Onchain Balance Verification
 
@@ -2737,7 +2763,7 @@ API portfolio data is shown immediately, while onchain balances are verified in 
 - A failed token read does not by itself label the chain RPC unhealthy. The
   home warning is eligible only when every attempted balance read for a chain
   fails and a final `eth_blockNumber` health probe also fails.
-- `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries when selector UIs need the full token catalog instead of a non-zero-only holdings list
+- `fetchOnchainBalances(..., { preserveZeroBalanceTokens: true })` keeps zero-balance entries within a selector's bounded working projection instead of dropping them after verification
 
 ### Shared Portfolio Token Catalog
 
@@ -2761,7 +2787,19 @@ API portfolio data is shown immediately, while onchain balances are verified in 
   portfolio response. Holdings deliberately skips ERC-20 price fallback during
   enrichment to avoid fan-out/rate limits from token-price APIs; it keeps
   Portfolio API prices until the portfolio backend indexes newer values.
-- Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts. The cache is keyed by address plus the visible-chain reload key, capped to 12 entries, TTL-pruned after 24 hours, and treated as optional display data. Older `walletchan:portfolioHoldingsCache:v1` renderer-localStorage mirrors are purged and never read, preventing a replacement wallet from inheriting prior addresses/balances/token imagery. Missing/invalid entries fall back to the normal live portfolio load.
+- Fresh popup/sidepanel mounts hydrate asynchronously from the reset-aware
+  `chrome.storage.local.portfolioHoldingsCache` before the live fetch starts.
+  Cache V3 is keyed by address plus the visible-chain reload key, capped to four
+  entries, limited to 4 MiB total and 1,000 tokens per entry, TTL-pruned after
+  24 hours, and treated as optional display data. V3 invalidates older unbounded
+  snapshots. The renderer mirror uses the same four-entry LRU boundary. Older
+  `walletchan:portfolioHoldingsCache:v1` DOM-localStorage mirrors are purged and
+  never read, preventing a replacement wallet from inheriting prior
+  addresses/balances/token imagery. Missing/invalid entries fall back to the
+  normal live portfolio load.
+- Account/network reloads abort the previous portfolio HTTP request. Aborted
+  provider work is not converted into the native-only API fallback and cannot
+  publish stale state after account selection changes.
 - Cached RPC issue IDs are display metadata only and are not replayed into the
   home warning. Live issue reports wait three seconds before rendering, so a
   normal cache-to-live refresh or short-lived RPC failure clears without a
@@ -2769,6 +2807,11 @@ API portfolio data is shown immediately, while onchain balances are verified in 
   original reveal deadline and an in-renderer dismissal.
 
 After the merged catalog is built, `portfolio/tokenCatalog.ts` filters global hidden tokens from `chrome.storage.local.hiddenPortfolioTokens` before calculating `totalValueUsd`. This keeps Holdings, Send, Swap holdings, current totals, and newly-written balance snapshots aligned across every wallet address. Recently received token keys are returned alongside the catalog so Holdings can still RPC-refresh those tokens immediately even if their current USD value would normally place them in the collapsed low-value group. `AddTokenModal` removes a matching hidden entry before adding a token; if the Portfolio API already returned that token, no custom token record is created.
+
+Send, Swap, Hide Tokens, ERC-7715 asset lookup, and snapshot refresh request the
+catalog without whole-list enrichment. Exact selected-token balance/price
+fallbacks remain available, while broad metadata, pricing, and onchain balance
+fan-out is reserved for Holdings' visible-page refresh.
 
 Users can hide tokens from the Holdings row overflow menu or from More → Hide Tokens. The More screen reuses the shared portfolio catalog and onchain balance verification, lets users select multiple visible ERC-20 tokens, and writes them to the global hidden-token list in one batch. Its Currently Hidden sub-screen lists hidden tokens across all accounts and can show a token again globally. Bulk hide/show paths force-record a visibility-adjusted current snapshot without deleting existing chart history, then refresh the Holdings tab/chart.
 
@@ -2820,7 +2863,7 @@ Important constraints:
 
 ### Portfolio Snapshot Storage
 
-`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshotsV2`. The legacy `portfolioSnapshots` key is removed on read/write because its aggregate-only records cannot be repaired after the Tempo native-balance sentinel bug. Forced refreshes preserve the explicit `tokenCatalog` → `onchainBalances` → `snapshotStorage` sequence in `portfolio/snapshotRefresh.ts`.
+`portfolio/snapshotStorage.ts` silently records `totalValueUsd` snapshots per address over time in `chrome.storage.local` under the key `portfolioSnapshotsV2`. The legacy `portfolioSnapshots` key is removed on read/write because its aggregate-only records cannot be repaired after the Tempo native-balance sentinel bug. Forced visibility refreshes use the catalog's complete aggregate directly and do not re-query every token balance before `snapshotStorage`.
 
 **How it works:**
 

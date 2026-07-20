@@ -7,7 +7,7 @@ import { fetchTextBounded } from "../network/boundedHttp";
 
 export const BRIDGE_REQUEST_TIMEOUT_MS = 15_000;
 export const BRIDGE_QUOTE_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
-export const BRIDGE_CATALOG_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
+export const BRIDGE_CATALOG_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 
 /** Bounded, redirect-safe GET used by every WalletChan bridge endpoint. */
 export async function fetchBridgeJson<T>(

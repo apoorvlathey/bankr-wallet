@@ -141,7 +141,8 @@ export function TransferNotices({
           p={3}
         >
           <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
-            View-only account — transfers are disabled.
+            View-only account — you can review this transfer. Sending is only
+            available when developer mode is enabled for the selected RPC.
           </Text>
         </Box>
       )}

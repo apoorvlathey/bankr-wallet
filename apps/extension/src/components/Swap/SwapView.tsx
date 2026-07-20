@@ -11,12 +11,9 @@ import SwapConfirmation from "./SwapConfirmation";
 import { SwapFormScreen } from "./SwapFormScreen";
 import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 import type { SwapViewProps } from "./swapViewTypes";
-import {
-  buildFlippedSellToken,
-  pickDefaultSwapSellToken,
-  to0xToken,
-} from "./swapViewUtils";
+import { buildFlippedSellToken, pickDefaultSwapSellToken, to0xToken } from "./swapViewUtils";
 import { useBuyTokenData } from "./useBuyTokenData";
+import { useImpersonatedSwapPolicy } from "./useImpersonatedSwapPolicy";
 import { usePreparedSwap } from "./usePreparedSwap";
 import { useSellTokenData } from "./useSellTokenData";
 import { useSwapAmount } from "./useSwapAmount";
@@ -56,6 +53,7 @@ function SwapView({
     getResolvedChainById(sellChainId, networksInfo)?.name ||
     sellChainConfig.name ||
     initialChainName;
+  const canSendImpersonatedTransaction = useImpersonatedSwapPolicy(accountType, sellChainId);
   const resolvedBuyChainName =
     getResolvedChainById(buyChainId, networksInfo)?.name ??
     getChainConfig(buyChainId).name;
@@ -188,7 +186,6 @@ function SwapView({
       !insufficientBalance &&
       (isBridge ? bridgeRoute : quotes.quote) &&
       !quotes.quoteLoading &&
-      accountType !== "impersonator" &&
       accountType !== "ledger",
   );
   const prepared = usePreparedSwap({
@@ -258,7 +255,7 @@ function SwapView({
         isSubmitting={prepared.isSubmitting}
         onGasEstimates={prepared.setSwapGasEstimates}
         onValidityChange={prepared.setSwapGasValid}
-        isConfirmDisabled={!prepared.swapGasValid}
+        isConfirmDisabled={!prepared.swapGasValid || (accountType === "impersonator" && !canSendImpersonatedTransaction)}
         bridgeMeta={
           isBridge
             ? {

@@ -719,14 +719,19 @@ mutation. Missing history resolves to the active endpoint and requires no eager
 migration.
 
 The impersonated-transaction path remains a trusted-UI confirmation route and
-never signs. Before the irreversible RPC call, the background revalidates the
-pinned account ID/address/type, dapp or WalletConnect authorization, current
-chain RPC, and the exact selected endpoint flag under the network mutation
-lock. The flag does not authorize provider-specific admin methods, signature
-requests, batches, swaps, fee-token gas, or delegated authority. RPCs must be
-configured separately to unlock/impersonate the `from` address. A missing RPC
-response is treated as an ambiguous submission and retains the reset effect
-lease fail-closed.
+never signs. Send and built-in Swap may stage the same review UI for a
+view-only account. Single requests remain reject-only and Swap confirmation
+remains disabled unless the exact selected endpoint is opted in. Before an
+irreversible RPC call, the background revalidates the pinned account
+ID/address/type, current chain RPC, and exact selected endpoint flag under the
+network mutation lock; dapp and WalletConnect requests additionally revalidate
+their request authorization. Built-in multi-leg swaps submit reviewed legs
+sequentially and stop the unsent tail after any definite or ambiguous failure.
+The flag does not authorize provider-specific admin methods, signature
+requests, ERC-5792/cross-dapp batches, fee-token gas, or delegated authority.
+RPCs must be configured separately to unlock/impersonate the `from` address. A
+missing RPC response is treated as ambiguous and prevents later swap legs from
+being sent.
 The same exact selected-endpoint opt-in permits connected sites and
 WalletConnect peers to use the existing bounded read-only RPC allowlist against
 that configured private endpoint, so transaction preflight such as
@@ -784,9 +789,17 @@ deadline plus a caller-sized streaming byte cap. Signed sponsored-transfer
 authorizations and Bankr API keys therefore cannot follow a backend redirect
 to another origin.
 
+Portfolio egress has a 4 MiB byte ceiling plus a runtime codec that bounds raw
+candidate counts, accepted tokens/positions/assets, string and URL lengths,
+chain IDs, decimals, balances, and USD values before state or storage release.
+The website also caps its public response to 1,000 value-ranked tokens. Omitted
+value/count metadata preserves aggregate totals without retaining unbounded
+dust-token objects in the extension.
+
 Swap egress is isolated under `chrome/swap/`. `transport.ts` alone performs
-fixed-proxy HTTP reads and retains the 2 MiB quote / 8 MiB catalog / 64 KiB
-price ceilings plus bounded remote error text. `rpcClient.ts` alone resolves a
+fixed-proxy HTTP reads and retains the 2 MiB quote/catalog / 64 KiB price
+ceilings plus bounded remote error text. Token catalogs pass a strict
+2,000-entry codec before storage or caller release. `rpcClient.ts` alone resolves a
 configured chain RPC through the shared bounded transport. ERC-20 and Permit2
 read failures return zero as released UI fallback behavior; they cannot sign or
 broadcast. `erc20.ts` and `permit2.ts` contain the only approval calldata
@@ -794,6 +807,11 @@ builders, with Permit2 amount clamped to `uint160` and expiry fixed to 30 days.
 Token metadata/list/logo caches are non-secret, chain-and-address keyed, and
 best-effort on write. The root `swapApi.ts` is an export-only facade, enforced
 by architecture and behavior tests under `tests/swap/`.
+
+Transaction simulation caps access-list asset candidates and enriched asset
+changes at 128 and NFT change enrichment at 64. Portfolio-price projections
+cache only the derived price map with per-account single-flight reads, so a
+confirmation cannot repeatedly hydrate or scan complete holdings rows.
 
 Bankr remote authority is isolated under `chrome/bankr/`: `response.ts` is
 pure bounded validation, `transport.ts` owns only fixed-origin bounded HTTP,
@@ -1197,7 +1215,7 @@ accessible resources.
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `portfolioSnapshotsV2`     | No               | Aggregate USD portfolio chart points keyed by public wallet address, with one-hour deduplication and eight-day retention. Legacy `portfolioSnapshots` data is purge-only because it may contain unrecoverable Tempo sentinel totals. |
-| `portfolioHoldingsCache`   | No               | Best-effort reset-aware Holdings display snapshot (`tokens`, DeFi rows, totals, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. V2 invalidates sentinel-era V1 entries; legacy DOM-localStorage mirrors are purged and never read. |
+| `portfolioHoldingsCache`   | No               | Best-effort reset-aware Holdings display snapshot (`tokens`, DeFi rows, totals, omitted-value metadata, public token metadata, and RPC issue chain IDs). Optional and pruned; contains no credentials or signing material. V3 invalidates older unbounded entries and enforces four entries, 4 MiB total, and 1,000 tokens per snapshot; legacy DOM-localStorage mirrors are purged and never read. |
 | `ensAvatarImageCache`      | No               | Best-effort reset-aware cache containing only validated background-decoded/re-encoded raster data URLs plus timing/size metadata; original remote image bytes are not stored. Reset/onboarding invalidates in-flight old-wallet writes. |
 | `soundsEnabled`           | No               | Browser-local global interaction-sound preference. Missing values default to enabled; it does not affect authentication or signing behavior. |
 | `cs:enabled`               | No               | Clear-signing descriptor fetch opt-out flag             |

@@ -6,6 +6,7 @@ import {
   safeHexToBigInt,
   type EthSimulateLog,
 } from "../../src/chrome/simulation/ethSimulateLogs";
+import { MAX_SIMULATION_ASSET_CHANGES } from "../../src/chrome/simulation/constants";
 
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -126,4 +127,23 @@ test("untrusted malformed amounts fail closed to a zero delta", () => {
   );
   assert.deepEqual(parsed.tokens, []);
   assert.deepEqual(parsed.deltas, []);
+});
+
+test("eth_simulateV1 retains only the bounded token-change working set", () => {
+  const logs = Array.from(
+    { length: MAX_SIMULATION_ASSET_CHANGES + 20 },
+    (_, index) =>
+      transfer(
+        `0x${(index + 1).toString(16).padStart(40, "0")}`,
+        PEER,
+        WALLET,
+        1n,
+      ),
+  );
+  const parsed = parseEthSimulateV1CallResults(
+    [{ status: "0x1", logs }],
+    WALLET,
+  );
+  assert.equal(parsed.tokens.length, MAX_SIMULATION_ASSET_CHANGES);
+  assert.equal(parsed.deltas.length, MAX_SIMULATION_ASSET_CHANGES);
 });

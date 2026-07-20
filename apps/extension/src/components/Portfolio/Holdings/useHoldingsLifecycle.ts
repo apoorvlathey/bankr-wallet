@@ -42,6 +42,9 @@ export function useHoldingsLifecycle({
     setLoading,
     setLowValueLoading,
     setOnchainFetchedTokenKeys,
+    setOmittedTokenCount,
+    setOmittedTokenValueUsd,
+    setOmittedTokenValueUsdByChain,
     setPortfolioBalanceRefreshing,
     setTokens,
     setTotalValueUsd,
@@ -66,6 +69,9 @@ export function useHoldingsLifecycle({
     setTokens([]);
     setDefiPositions([]);
     setTotalValueUsd(0);
+    setOmittedTokenCount(0);
+    setOmittedTokenValueUsd(0);
+    setOmittedTokenValueUsdByChain({});
     setCustomTokenKeys(new Set());
     setAllTokenKeys(new Set());
     setHiddenTokenKeys(new Set());

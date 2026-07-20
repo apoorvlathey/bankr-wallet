@@ -49,6 +49,7 @@ test("bridge modules retain one-way effect boundaries", async () => {
   const names = [
     "bridge/types.ts",
     "bridge/client.ts",
+    "bridge/catalogPolicy.ts",
     "bridge/catalogCache.ts",
     "bridge/chainPolicy.ts",
     "bridge/chainResolver.ts",
@@ -71,6 +72,7 @@ test("bridge modules retain one-way effect boundaries", async () => {
 
   assert.match(sources["bridge/client.ts"], /from ["']\.\.\/network\/boundedHttp["']/);
   assert.doesNotMatch(sources["bridge/client.ts"], /chrome\.|pendingBridge|getTxById/);
+  assert.doesNotMatch(sources["bridge/catalogPolicy.ts"], /chrome\.|fetch\(/);
   assert.match(sources["bridge/catalogCache.ts"], /from ["']\.\/client["']/);
   assert.doesNotMatch(sources["bridge/catalogCache.ts"], /pendingBridge|getTxById/);
   assert.doesNotMatch(sources["bridge/chainPolicy.ts"], /chrome\.|fetch\(|fetchBridge/);
@@ -92,6 +94,7 @@ test("bridge facades and implementations stay audit-sized", async () => {
     "bridgeStatusPoller.ts": 15,
     "bridge/types.ts": 20,
     "bridge/client.ts": 130,
+    "bridge/catalogPolicy.ts": 50,
     "bridge/catalogCache.ts": 170,
     "bridge/chainPolicy.ts": 110,
     "bridge/chainResolver.ts": 40,

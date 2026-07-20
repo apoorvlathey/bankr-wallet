@@ -13,7 +13,11 @@ import {
 } from "../swapApi";
 import { KNOWN_TOKEN_LOGOS } from "../tokenLogoConstants";
 import { formatAmount } from "./assetChangeNormalization";
-import { MULTICALL3_ADDRESS } from "./constants";
+import {
+  MAX_SIMULATION_ASSET_CHANGES,
+  MAX_SIMULATION_NFT_CHANGES,
+  MULTICALL3_ADDRESS,
+} from "./constants";
 import { detectNftStandards, enrichReceivedNfts } from "./nftEnrichment";
 import { getPortfolioPriceMap } from "./portfolioPrices";
 import type {
@@ -30,6 +34,14 @@ export async function enrichTokenChanges(
   accountAddress: string,
   receivedNfts: RawNftReceived[] = [],
 ): Promise<{ changes: AssetChange[]; metadataComplete: boolean }> {
+  const boundedCount = Math.min(
+    tokens.length,
+    deltas.length,
+    MAX_SIMULATION_ASSET_CHANGES,
+  );
+  tokens = tokens.slice(0, boundedCount);
+  deltas = deltas.slice(0, boundedCount);
+  receivedNfts = receivedNfts.slice(0, MAX_SIMULATION_NFT_CHANGES);
   if (tokens.length === 0 && receivedNfts.length === 0) {
     return { changes: [], metadataComplete: true };
   }

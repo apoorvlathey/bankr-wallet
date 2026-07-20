@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Box,
   Button,
   HStack,
   IconButton,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { TOKEN_PICKER_PAGE_SIZE } from "@/chrome/portfolio/consumerPolicy";
 
 interface HiddenPortfolioTokensViewProps {
   address: string;
@@ -48,6 +50,7 @@ export default function HiddenPortfolioTokensView({
   const [loading, setLoading] = useState(true);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(TOKEN_PICKER_PAGE_SIZE);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -55,6 +58,7 @@ export default function HiddenPortfolioTokensView({
     try {
       const hidden = await getHiddenPortfolioTokens();
       setTokens([...hidden].sort((a, b) => b.hiddenAt - a.hiddenAt));
+      setVisibleCount(TOKEN_PICKER_PAGE_SIZE);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load hidden tokens",
@@ -68,7 +72,11 @@ export default function HiddenPortfolioTokensView({
     void loadData();
   }, [loadData]);
 
-  const logoMap = useCachedAvatarMap(tokens.map((token) => token.logoUrl));
+  const visibleTokens = useMemo(
+    () => tokens.slice(0, visibleCount),
+    [tokens, visibleCount],
+  );
+  const logoMap = useCachedAvatarMap(visibleTokens.map((token) => token.logoUrl));
   const tokenCountLabel = useMemo(() => {
     if (tokens.length === 1) return "1 token hidden across accounts";
     return `${tokens.length} tokens hidden across accounts`;
@@ -155,7 +163,7 @@ export default function HiddenPortfolioTokensView({
           </EmptyState>
         ) : (
           <ListSurface>
-            {tokens.map((token) => {
+            {visibleTokens.map((token) => {
               const key = getPortfolioTokenKey(
                 token.chainId,
                 token.contractAddress,
@@ -184,6 +192,20 @@ export default function HiddenPortfolioTokensView({
                 />
               );
             })}
+            {visibleTokens.length < tokens.length && (
+              <Box as="li" listStyleType="none" py={2} textAlign="center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setVisibleCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
+                  }
+                >
+                  Show more tokens
+                </Button>
+              </Box>
+            )}
           </ListSurface>
         )}
         </ScreenSection>

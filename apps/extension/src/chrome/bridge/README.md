@@ -7,10 +7,11 @@ dependency order:
 1. `types.ts` — additive bridge-chain display shape.
 2. `client.ts` — the only WalletChan bridge API egress. Every GET uses the
    shared redirect-safe bounded HTTP primitive, a 15-second deadline, and the
-   released 2 MiB quote/status or 8 MiB catalog ceiling.
+   released 2 MiB quote/status and catalog ceiling.
 3. `catalogCache.ts` — `bungeeChains` and `bungeeTokens:{chainId}` repositories,
    24-hour TTLs, per-resource single-flight fetches, stale fallback, and the
-   read-time Base WCHAN pin.
+   read-time Base WCHAN pin. Token rows pass a strict 2,000-entry codec before
+   cache or caller release.
 4. `chainPolicy.ts` — pure EVM filtering and source/destination eligibility.
    Source fallback preserves configured signable chains when Socket is down.
 5. `chainResolver.ts` — storage/cache composition only.

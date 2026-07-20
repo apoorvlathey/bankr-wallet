@@ -11,6 +11,9 @@ export interface PortfolioTokenCatalog {
   tokens: PortfolioToken[];
   defiPositions: DefiPosition[];
   totalValueUsd: number;
+  omittedTokenCount: number;
+  omittedTokenValueUsd: number;
+  omittedTokenValueUsdByChain: Record<string, number>;
   customTokenKeys: Set<string>;
   recentReceivedTokenKeys: Set<string>;
   allTokenKeys: Set<string>;
@@ -20,6 +23,8 @@ export interface PortfolioTokenCatalog {
 }
 
 export interface LoadPortfolioTokenCatalogOptions {
+  /** Cancel stale portfolio egress when the selected account changes. */
+  signal?: AbortSignal;
   /** Skip metadata and pricing fallback so primary holdings can paint first. */
   enrich?: boolean;
   /** Allow external ERC-20 pricing fallback for tokens without API prices. */

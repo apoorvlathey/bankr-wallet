@@ -40,6 +40,11 @@ export interface PortfolioResponse {
   tokens: PortfolioToken[];
   defiPositions: DefiPosition[];
   totalValueUsd: number;
+  tokenCount: number;
+  omittedTokenCount: number;
+  omittedTokenValueUsd: number;
+  omittedTokenValueUsdByChain: Record<string, number>;
+  truncated: boolean;
   /** Name of the provider that successfully served this response (e.g. "dune-sim"). */
   source?: string;
 }

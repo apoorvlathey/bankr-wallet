@@ -24,6 +24,7 @@ import {
 } from "./accountPolicy";
 import { processSwapTxBankr } from "./bankrLeg";
 import { broadcastSwapTxLocal } from "./localBroadcast";
+import { executeImpersonatedSwap } from "./impersonated";
 import type {
   SwapAccountLock,
   SwapExecutionResult,
@@ -58,6 +59,14 @@ export async function handleExecuteSwapDirect(
   }
 
   const account = locked.account;
+  if (account.type === "impersonator") {
+    return executeImpersonatedSwap(
+      transactions,
+      chainName,
+      account,
+      gasEstimates,
+    );
+  }
   if (account.type === "bankr") {
     if (!BANKR_SUPPORTED_CHAIN_IDS.has(chainId)) {
       return {

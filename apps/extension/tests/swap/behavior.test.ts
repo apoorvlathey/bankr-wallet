@@ -14,6 +14,10 @@ import {
 import { PERMIT2_ABI } from "../../src/chrome/swap/permit2";
 import { mergePinnedTokens } from "../../src/chrome/swap/tokenListPolicy";
 import {
+  MAX_SWAP_TOKEN_LIST_ENTRIES,
+  decodeSwapTokenList,
+} from "../../src/chrome/swap/tokenListCodec";
+import {
   tokenInfoCacheKey,
   fetchTokenInfo,
 } from "../../src/chrome/swap/tokenInfo";
@@ -401,6 +405,22 @@ test("current known-no-logo cache entries retry after six hours", async () => {
 test("pinned-token merge is a no-op for unpinned chains", () => {
   const tokens: TokenListEntry[] = [];
   assert.equal(mergePinnedTokens(1, tokens), tokens);
+});
+
+test("swap token catalogs reject malformed rows and stop at the item ceiling", () => {
+  const tokens = Array.from(
+    { length: MAX_SWAP_TOKEN_LIST_ENTRIES + 50 },
+    (_, index) => ({
+      address: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+      name: `Token ${index}`,
+      symbol: `T${index}`,
+      decimals: 18,
+      logoURI: "",
+    }),
+  );
+  const decoded = decodeSwapTokenList([null, { address: "bad" }, ...tokens]);
+  assert.equal(decoded.length, MAX_SWAP_TOKEN_LIST_ENTRIES);
+  assert.equal(decoded[0].address, tokens[0].address);
 });
 
 test("approval builders preserve target, amount, uint160 clamp, and expiry", () => {

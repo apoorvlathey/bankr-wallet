@@ -46,8 +46,13 @@ export function useHoldingsViewModel({
     [defiPositions, filterChainId],
   );
   const chainTotals = useMemo(
-    () => getChainTotals(tokens, defiPositions),
-    [defiPositions, tokens],
+    () =>
+      getChainTotals(
+        tokens,
+        defiPositions,
+        state.omittedTokenValueUsdByChain,
+      ),
+    [defiPositions, state.omittedTokenValueUsdByChain, tokens],
   );
 
   return {

@@ -112,7 +112,9 @@ export function useProgressiveBalanceRefresh({
         nextFetchedKeys,
       );
       const total =
-        getWalletTokenTotal(nextTokens) + getDefiTotal(state.defiPositions);
+        getWalletTokenTotal(nextTokens) +
+        getDefiTotal(state.defiPositions) +
+        state.omittedTokenValueUsd;
       const fetchedAt = Date.now();
 
       state.setTokens(nextTokens);
@@ -123,6 +125,9 @@ export function useProgressiveBalanceRefresh({
         tokens: nextTokens,
         defiPositions: state.defiPositions,
         totalValueUsd: total,
+        omittedTokenCount: state.omittedTokenCount,
+        omittedTokenValueUsd: state.omittedTokenValueUsd,
+        omittedTokenValueUsdByChain: state.omittedTokenValueUsdByChain,
         customTokenKeys: state.customTokenKeys,
         allTokenKeys: state.allTokenKeys,
         hiddenTokenKeys: state.hiddenTokenKeys,

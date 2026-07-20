@@ -3458,22 +3458,20 @@ function App() {
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
                 quickActions={
-                  activeAccount?.type !== "impersonator" ? (
-                    <HomeQuickActions
-                      hasConnectedApps={walletConnectSessionCount > 0}
-                      onSend={() => {
-                        setTransferToken(resolveSendEntryToken(null, networksInfo));
-                        setView("transfer");
-                      }}
-                      onSwap={() => {
-                        setSwapInitialBuyToken(undefined);
-                        setSwapInitialSellToken(undefined);
-                        setView("swap");
-                      }}
-                      onShield={() => setView("shield")}
-                      onMore={() => setView("more")}
-                    />
-                  ) : undefined
+                  <HomeQuickActions
+                    hasConnectedApps={walletConnectSessionCount > 0}
+                    onSend={() => {
+                      setTransferToken(resolveSendEntryToken(null, networksInfo));
+                      setView("transfer");
+                    }}
+                    onSwap={() => {
+                      setSwapInitialBuyToken(undefined);
+                      setSwapInitialSellToken(undefined);
+                      setView("swap");
+                    }}
+                    onShield={() => setView("shield")}
+                    onMore={() => setView("more")}
+                  />
                 }
                 activityTabTrigger={activityTabTrigger}
                 holdingsTabTrigger={holdingsTabTrigger}

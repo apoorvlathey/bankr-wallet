@@ -41,6 +41,7 @@ export function usePortfolioLoader({
     tokens,
     lastFetched,
     loadVersionRef,
+    portfolioAbortControllerRef,
     verifiedBalanceKeysRef,
     verifiedBalanceTokensRef,
     setApiUnavailable,
@@ -52,6 +53,9 @@ export function usePortfolioLoader({
     setLastFetched,
     setLoading,
     setOnchainFetchedTokenKeys,
+    setOmittedTokenCount,
+    setOmittedTokenValueUsd,
+    setOmittedTokenValueUsdByChain,
     setPortfolioBalanceRefreshing,
     setTokens,
     setTotalValueUsd,
@@ -67,6 +71,9 @@ export function usePortfolioLoader({
 
       const loadVersion = loadVersionRef.current + 1;
       loadVersionRef.current = loadVersion;
+      portfolioAbortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      portfolioAbortControllerRef.current = abortController;
       const isCurrentLoad = () => loadVersionRef.current === loadVersion;
       const hasExistingData = tokens.length > 0 || options.suppressSkeleton;
       if (!hasExistingData) setLoading(true);
@@ -75,6 +82,7 @@ export function usePortfolioLoader({
       try {
         const catalog = await loadPortfolioTokenCatalog(address, {
           enrich: false,
+          signal: abortController.signal,
         });
         if (!isCurrentLoad()) return;
 
@@ -110,6 +118,9 @@ export function usePortfolioLoader({
         setHiddenTokenKeys(catalog.hiddenTokenKeys);
         setOnchainFetchedTokenKeys(new Set(verifiedBalanceKeysRef.current));
         setApiUnavailable(catalog.apiUnavailable);
+        setOmittedTokenCount(catalog.omittedTokenCount);
+        setOmittedTokenValueUsd(catalog.omittedTokenValueUsd);
+        setOmittedTokenValueUsdByChain(catalog.omittedTokenValueUsdByChain);
 
         // Paint catalog rows immediately; detached RPC work must never hold the
         // first useful render behind a skeleton.
@@ -119,7 +130,8 @@ export function usePortfolioLoader({
         const defiPositions = catalog.defiPositions || [];
         const initialTotal =
           getWalletTokenTotal(initialDisplayTokens) +
-          getDefiTotal(defiPositions);
+          getDefiTotal(defiPositions) +
+          catalog.omittedTokenValueUsd;
         setTokens(initialDisplayTokens);
         setDefiPositions(defiPositions);
         setTotalValueUsd(initialTotal);
@@ -148,7 +160,8 @@ export function usePortfolioLoader({
             );
             const enrichedTotal =
               getWalletTokenTotal(enrichedTokens) +
-              getDefiTotal(defiPositions);
+              getDefiTotal(defiPositions) +
+              catalog.omittedTokenValueUsd;
             const enrichedAt = Date.now();
 
             setTokens(enrichedTokens);
@@ -158,6 +171,9 @@ export function usePortfolioLoader({
               tokens: enrichedTokens,
               defiPositions,
               totalValueUsd: enrichedTotal,
+              omittedTokenCount: catalog.omittedTokenCount,
+              omittedTokenValueUsd: catalog.omittedTokenValueUsd,
+              omittedTokenValueUsdByChain: catalog.omittedTokenValueUsdByChain,
               customTokenKeys: catalog.customTokenKeys,
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
@@ -198,6 +214,9 @@ export function usePortfolioLoader({
             tokens: initialDisplayTokens,
             defiPositions,
             totalValueUsd: initialTotal,
+            omittedTokenCount: catalog.omittedTokenCount,
+            omittedTokenValueUsd: catalog.omittedTokenValueUsd,
+            omittedTokenValueUsdByChain: catalog.omittedTokenValueUsdByChain,
             customTokenKeys: catalog.customTokenKeys,
             allTokenKeys: catalog.allTokenKeys,
             hiddenTokenKeys: catalog.hiddenTokenKeys,
@@ -247,12 +266,17 @@ export function usePortfolioLoader({
             setOnchainFetchedTokenKeys(verifiedKeys);
             setLoading(false);
             const total =
-              getWalletTokenTotal(displayTokens) + getDefiTotal(defiPositions);
+              getWalletTokenTotal(displayTokens) +
+              getDefiTotal(defiPositions) +
+              catalog.omittedTokenValueUsd;
             setTotalValueUsd(total);
             writeHoldingsSnapshot(cacheKey, {
               tokens: displayTokens,
               defiPositions,
               totalValueUsd: total,
+              omittedTokenCount: catalog.omittedTokenCount,
+              omittedTokenValueUsd: catalog.omittedTokenValueUsd,
+              omittedTokenValueUsdByChain: catalog.omittedTokenValueUsdByChain,
               customTokenKeys: catalog.customTokenKeys,
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
@@ -277,6 +301,9 @@ export function usePortfolioLoader({
               tokens: initialDisplayTokens,
               defiPositions,
               totalValueUsd: initialTotal,
+              omittedTokenCount: catalog.omittedTokenCount,
+              omittedTokenValueUsd: catalog.omittedTokenValueUsd,
+              omittedTokenValueUsdByChain: catalog.omittedTokenValueUsdByChain,
               customTokenKeys: catalog.customTokenKeys,
               allTokenKeys: catalog.allTokenKeys,
               hiddenTokenKeys: catalog.hiddenTokenKeys,
@@ -299,7 +326,7 @@ export function usePortfolioLoader({
           }
         });
       } catch (error) {
-        if (!isCurrentLoad()) return;
+        if (!isCurrentLoad() || abortController.signal.aborted) return;
         setError(
           error instanceof Error ? error.message : "Failed to load portfolio",
         );
@@ -312,6 +339,7 @@ export function usePortfolioLoader({
       chainReloadKey,
       lastFetched,
       loadVersionRef,
+      portfolioAbortControllerRef,
       onRpcIssuesChange,
       onSnapshotsChanged,
       setAllTokenKeys,
@@ -323,6 +351,9 @@ export function usePortfolioLoader({
       setLastFetched,
       setLoading,
       setOnchainFetchedTokenKeys,
+      setOmittedTokenCount,
+      setOmittedTokenValueUsd,
+      setOmittedTokenValueUsdByChain,
       setPortfolioBalanceRefreshing,
       setTokens,
       setTotalValueUsd,

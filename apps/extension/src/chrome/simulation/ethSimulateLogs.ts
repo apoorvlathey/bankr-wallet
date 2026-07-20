@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import { MAX_SIMULATION_ASSET_CHANGES } from "./constants";
 
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -63,7 +64,9 @@ export function parseEthSimulateV1CallResults(
 
       if (topics[0] === TRANSFER_TOPIC) {
         if (topics.length >= 4) {
-          nftAddresses.add(address);
+          if (nftAddresses.size < MAX_SIMULATION_ASSET_CHANGES) {
+            nftAddresses.add(address);
+          }
           continue;
         }
         if (topics.length < 3) continue;
@@ -78,10 +81,20 @@ export function parseEthSimulateV1CallResults(
         }
 
         if (logFrom === from) {
-          tokenDeltas.set(address, (tokenDeltas.get(address) ?? 0n) - amount);
+          if (
+            tokenDeltas.has(address) ||
+            tokenDeltas.size < MAX_SIMULATION_ASSET_CHANGES
+          ) {
+            tokenDeltas.set(address, (tokenDeltas.get(address) ?? 0n) - amount);
+          }
         }
         if (logTo === from) {
-          tokenDeltas.set(address, (tokenDeltas.get(address) ?? 0n) + amount);
+          if (
+            tokenDeltas.has(address) ||
+            tokenDeltas.size < MAX_SIMULATION_ASSET_CHANGES
+          ) {
+            tokenDeltas.set(address, (tokenDeltas.get(address) ?? 0n) + amount);
+          }
         }
         continue;
       }
@@ -91,7 +104,9 @@ export function parseEthSimulateV1CallResults(
           topics[0] === TRANSFER_BATCH_TOPIC) &&
         topics.length >= 4
       ) {
-        nftAddresses.add(address);
+        if (nftAddresses.size < MAX_SIMULATION_ASSET_CHANGES) {
+          nftAddresses.add(address);
+        }
       }
     }
   }

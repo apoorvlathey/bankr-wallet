@@ -14,6 +14,7 @@ import {
 import { getSimulationClient } from "./client";
 import {
   BATCH_SIMULATION_GAS_LIMIT,
+  MAX_SIMULATION_ASSET_CHANGES,
   SIMULATION_GAS_LIMIT,
 } from "./constants";
 import { getNativeCurrency } from "./nativeCurrency";
@@ -140,6 +141,7 @@ export async function simulateBatchAssetChanges(
         candidates.push(call.to as Address);
       }
     }
+    candidates.splice(MAX_SIMULATION_ASSET_CHANGES);
     console.log(`[batchSim] Merged ${candidates.length} candidate addresses`);
 
     // Step 2: Encode simulateBatch(calls, candidates) and run single eth_call
@@ -189,8 +191,7 @@ export async function simulateBatchAssetChanges(
     console.log("[batchSim] Step 3: Decoded result:", {
       txSuccess,
       ethDelta: ethDelta.toString(),
-      tokens: (tokens as Address[]).map((t) => t),
-      deltas: (deltas as bigint[]).map((d) => d.toString()),
+      tokenCount: (tokens as Address[]).length,
       nftsReceivedCount: nftsReceived.length,
     });
 

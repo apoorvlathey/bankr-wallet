@@ -8,11 +8,28 @@ import type { HoldingsSnapshot } from "./types";
 
 const holdingsCache = new Map<string, HoldingsSnapshot>();
 const deferredPersistenceTimers = new Map<string, number>();
+const MAX_RENDERER_HOLDINGS_CACHE_ENTRIES = 4;
 const PORTFOLIO_BACKGROUND_TASK_DELAY_MS = 250;
 const PROGRESSIVE_CACHE_WRITE_DELAY_MS = 750;
 
 export const holdingsCacheKey = (address: string, reloadKey: string) =>
   `${address.toLowerCase()}|${reloadKey}`;
+
+function rememberRendererSnapshot(
+  cacheKey: string,
+  snapshot: HoldingsSnapshot,
+): void {
+  holdingsCache.delete(cacheKey);
+  holdingsCache.set(cacheKey, snapshot);
+  while (holdingsCache.size > MAX_RENDERER_HOLDINGS_CACHE_ENTRIES) {
+    const oldestKey = holdingsCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    holdingsCache.delete(oldestKey);
+    const timer = deferredPersistenceTimers.get(oldestKey);
+    if (timer != null) window.clearTimeout(timer);
+    deferredPersistenceTimers.delete(oldestKey);
+  }
+}
 
 export function toStoredHoldingsSnapshot(
   snapshot: HoldingsSnapshot,
@@ -42,7 +59,7 @@ export function writeHoldingsSnapshot(
   cacheKey: string,
   snapshot: HoldingsSnapshot,
 ): void {
-  holdingsCache.set(cacheKey, snapshot);
+  rememberRendererSnapshot(cacheKey, snapshot);
   void savePortfolioHoldingsSnapshot(
     cacheKey,
     toStoredHoldingsSnapshot(snapshot),
@@ -67,7 +84,7 @@ export function writeProgressiveHoldingsSnapshot(
   cacheKey: string,
   snapshot: HoldingsSnapshot,
 ): void {
-  holdingsCache.set(cacheKey, snapshot);
+  rememberRendererSnapshot(cacheKey, snapshot);
   const pending = deferredPersistenceTimers.get(cacheKey);
   if (pending != null) window.clearTimeout(pending);
   deferredPersistenceTimers.set(
@@ -94,7 +111,10 @@ export function readCachedHoldingsSnapshot(
   cacheKey: string,
 ): HoldingsSnapshot | null {
   const cached = holdingsCache.get(cacheKey);
-  if (cached && hasHoldingsSnapshotContent(cached)) return cached;
+  if (cached && hasHoldingsSnapshotContent(cached)) {
+    rememberRendererSnapshot(cacheKey, cached);
+    return cached;
+  }
   if (cached) holdingsCache.delete(cacheKey);
 
   const mirrored = getPortfolioHoldingsSnapshotSync(cacheKey);
@@ -102,7 +122,7 @@ export function readCachedHoldingsSnapshot(
 
   const snapshot = fromStoredHoldingsSnapshot(mirrored);
   if (!hasHoldingsSnapshotContent(snapshot)) return null;
-  holdingsCache.set(cacheKey, snapshot);
+  rememberRendererSnapshot(cacheKey, snapshot);
   return snapshot;
 }
 
@@ -110,7 +130,7 @@ export function rememberHoldingsSnapshot(
   cacheKey: string,
   snapshot: HoldingsSnapshot,
 ): void {
-  holdingsCache.set(cacheKey, snapshot);
+  rememberRendererSnapshot(cacheKey, snapshot);
 }
 
 export function schedulePortfolioBackgroundTask(

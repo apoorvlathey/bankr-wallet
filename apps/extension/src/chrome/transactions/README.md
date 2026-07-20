@@ -27,7 +27,9 @@ This directory owns the extracted, audit-sized transaction concerns:
   address, wallet type, and chain before credentials are resolved.
 - `swaps/direct.ts` owns ordered multi-leg orchestration;
   `swaps/bankrLeg.ts` owns one ambiguity-aware remote leg and
-  `swaps/localBroadcast.ts` owns one final-account-checked local broadcast.
+  `swaps/localBroadcast.ts` owns one final-account-checked local broadcast;
+  `swaps/impersonated.ts` owns exact-endpoint-checked sequential
+  `eth_sendTransaction` submission for reviewed view-only swaps.
 - `swaps/batch.ts` owns Bankr ERC-7821 submission while `swaps/atomic.ts` owns
   PK/seed EIP-7702 + ERC-7821 submission. Shared public shapes are in
   `swaps/types.ts`.

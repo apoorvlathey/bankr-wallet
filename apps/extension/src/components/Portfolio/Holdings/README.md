@@ -7,7 +7,7 @@ changing its public `TokenHoldings` contract.
 | --- | --- |
 | `TokenHoldings.tsx` | Composes controller hooks and the holdings presentation. |
 | `types.ts` | Public props and shared domain types. |
-| `cache.ts` | Renderer-first snapshot cache, persistent codec, and coalesced progressive writes. |
+| `cache.ts` | Four-entry renderer LRU, persistent snapshot adapter, and coalesced progressive writes. |
 | `transforms.ts` | Pure token enrichment, filtering, aggregation, and totals. |
 | `progressiveRowsModel.ts` | Pure bounded page projection across ordered holdings sections. |
 | `useHoldingsState.ts` | Local state, verified-balance refs, and snapshot application. |
@@ -32,6 +32,9 @@ portfolio storage. Chrome portfolio modules remain the effect boundary.
 
 Snapshot hydration restores display data but never republishes cached RPC issue
 IDs. Only the detached live balance refresh can update the home RPC warning.
+The Chrome portfolio boundary caps remote/cache tokens before this UI receives
+them; Holdings retains omitted count/value metadata so totals remain complete
+without exposing internal response-truncation copy in the interface.
 
 `usePortfolioLoader.ts`, `useHoldingsLifecycle.ts`,
 `useProgressiveBalanceRefresh.ts`, and `useTokenManagement.ts` own Chrome/RPC,

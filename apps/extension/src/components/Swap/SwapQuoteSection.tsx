@@ -200,7 +200,8 @@ export function SwapQuoteSection({
           p={3}
         >
           <Text fontSize="sm" fontWeight="700">
-            View-only account — swaps are disabled.
+            View-only account — you can review this swap. Sending is only
+            available when developer mode is enabled for the selected RPC.
           </Text>
         </Box>
       )}

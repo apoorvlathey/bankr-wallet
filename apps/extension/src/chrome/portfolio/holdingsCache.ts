@@ -1,12 +1,16 @@
 import type { DefiPosition, PortfolioToken } from "./api";
+import {
+  PORTFOLIO_HOLDINGS_CACHE_VERSION,
+  prunePortfolioHoldingsCacheValue,
+  readPortfolioHoldingsCacheStore,
+} from "./holdingsCachePolicy";
+
+export { prunePortfolioHoldingsCacheValue } from "./holdingsCachePolicy";
 
 export const PORTFOLIO_HOLDINGS_CACHE_KEY = "portfolioHoldingsCache";
 
-// V2 invalidates V1 snapshots that may contain Tempo's eth_getBalance sentinel.
-const CACHE_VERSION = 2;
 const HOUR = 60 * 60 * 1000;
 const MAX_AGE_MS = 24 * HOUR;
-const MAX_ENTRIES = 12;
 export const PORTFOLIO_HOLDINGS_LOCAL_MIRROR_KEY =
   "walletchan:portfolioHoldingsCache:v1";
 
@@ -14,6 +18,9 @@ export interface PortfolioHoldingsCacheSnapshot {
   tokens: PortfolioToken[];
   defiPositions: DefiPosition[];
   totalValueUsd: number;
+  omittedTokenCount: number;
+  omittedTokenValueUsd: number;
+  omittedTokenValueUsdByChain: Record<string, number>;
   customTokenKeys: string[];
   allTokenKeys: string[];
   hiddenTokenKeys: string[];
@@ -23,81 +30,14 @@ export interface PortfolioHoldingsCacheSnapshot {
   timestamp: number;
 }
 
-interface PortfolioHoldingsCacheStore {
-  version: typeof CACHE_VERSION;
+export interface PortfolioHoldingsCacheStore {
+  version: typeof PORTFOLIO_HOLDINGS_CACHE_VERSION;
   entries: Record<string, PortfolioHoldingsCacheSnapshot>;
 }
 
 export interface PortfolioHoldingsCachePruneResult {
   changed: boolean;
   next?: PortfolioHoldingsCacheStore;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function sanitizeStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : [];
-}
-
-function sanitizeNumberArray(value: unknown): number[] {
-  return Array.isArray(value)
-    ? value.filter(
-        (entry): entry is number =>
-          typeof entry === "number" && Number.isFinite(entry),
-      )
-    : [];
-}
-
-function sanitizeSnapshot(
-  value: unknown,
-): PortfolioHoldingsCacheSnapshot | null {
-  if (!isRecord(value)) return null;
-  if (!Array.isArray(value.tokens) || !Array.isArray(value.defiPositions)) {
-    return null;
-  }
-
-  const totalValueUsd =
-    typeof value.totalValueUsd === "number" &&
-    Number.isFinite(value.totalValueUsd)
-      ? value.totalValueUsd
-      : 0;
-  const timestamp =
-    typeof value.timestamp === "number" && Number.isFinite(value.timestamp)
-      ? value.timestamp
-      : 0;
-  if (timestamp <= 0) return null;
-
-  return {
-    tokens: value.tokens as PortfolioToken[],
-    defiPositions: value.defiPositions as DefiPosition[],
-    totalValueUsd,
-    customTokenKeys: sanitizeStringArray(value.customTokenKeys),
-    allTokenKeys: sanitizeStringArray(value.allTokenKeys),
-    hiddenTokenKeys: sanitizeStringArray(value.hiddenTokenKeys),
-    onchainFetchedTokenKeys: sanitizeStringArray(value.onchainFetchedTokenKeys),
-    rpcIssueChainIds: sanitizeNumberArray(value.rpcIssueChainIds),
-    apiUnavailable: value.apiUnavailable === true,
-    timestamp,
-  };
-}
-
-function readStore(value: unknown): PortfolioHoldingsCacheStore {
-  if (!isRecord(value) || value.version !== CACHE_VERSION) {
-    return { version: CACHE_VERSION, entries: {} };
-  }
-  const rawEntries = isRecord(value.entries) ? value.entries : {};
-  const entries: Record<string, PortfolioHoldingsCacheSnapshot> = {};
-
-  for (const [cacheKey, entry] of Object.entries(rawEntries)) {
-    const snapshot = sanitizeSnapshot(entry);
-    if (snapshot) entries[cacheKey] = snapshot;
-  }
-
-  return { version: CACHE_VERSION, entries };
 }
 
 function isFreshSnapshot(
@@ -109,39 +49,6 @@ function isFreshSnapshot(
 
 function hasSnapshotContent(snapshot: PortfolioHoldingsCacheSnapshot): boolean {
   return snapshot.tokens.length > 0 || snapshot.defiPositions.length > 0;
-}
-
-export function prunePortfolioHoldingsCacheValue(
-  value: unknown,
-  now = Date.now(),
-  maxEntries = MAX_ENTRIES,
-): PortfolioHoldingsCachePruneResult {
-  if (value === undefined) return { changed: false };
-  const store = readStore(value);
-  const freshEntries = Object.entries(store.entries)
-    .filter(([, snapshot]) => isFreshSnapshot(snapshot, now))
-    .sort((a, b) => b[1].timestamp - a[1].timestamp)
-    .slice(0, maxEntries);
-  const next: PortfolioHoldingsCacheStore = {
-    version: CACHE_VERSION,
-    entries: Object.fromEntries(freshEntries),
-  };
-
-  const originalEntries = isRecord(value) && isRecord(value.entries)
-    ? Object.keys(value.entries)
-    : [];
-  const changed =
-    !isRecord(value) ||
-    value.version !== CACHE_VERSION ||
-    originalEntries.length !== freshEntries.length ||
-    freshEntries.some(
-      ([cacheKey], index) => cacheKey !== originalEntries[index],
-    );
-
-  return {
-    changed,
-    next: freshEntries.length > 0 ? next : undefined,
-  };
 }
 
 function getLocalStorage(): Storage | null {
@@ -174,7 +81,9 @@ clearPortfolioHoldingsLocalMirror();
 
 async function readCurrentStore(): Promise<PortfolioHoldingsCacheStore> {
   const result = await chrome.storage.local.get(PORTFOLIO_HOLDINGS_CACHE_KEY);
-  return readStore(result[PORTFOLIO_HOLDINGS_CACHE_KEY]);
+  return readPortfolioHoldingsCacheStore(
+    result[PORTFOLIO_HOLDINGS_CACHE_KEY],
+  );
 }
 
 export async function getPortfolioHoldingsSnapshot(

@@ -189,6 +189,7 @@ export function getTokensFromRows(rows: AssetDisplayRow[]): PortfolioToken[] {
 export function getChainTotals(
   tokens: PortfolioToken[],
   defiPositions: DefiPosition[],
+  omittedTokenValueUsdByChain: Readonly<Record<string, number>> = {},
 ): ReadonlyMap<number, number> {
   const totals = new Map<number, number>();
   for (const token of tokens) {
@@ -203,6 +204,13 @@ export function getChainTotals(
       (totals.get(position.chainId) ?? 0) +
         Math.max(0, position.valueUsd || 0),
     );
+  }
+  for (const [chainKey, valueUsd] of Object.entries(
+    omittedTokenValueUsdByChain,
+  )) {
+    const chainId = Number(chainKey);
+    if (!Number.isSafeInteger(chainId) || chainId <= 0) continue;
+    totals.set(chainId, (totals.get(chainId) ?? 0) + Math.max(0, valueUsd));
   }
   return totals;
 }
