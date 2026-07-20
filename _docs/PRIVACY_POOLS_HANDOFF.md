@@ -95,6 +95,15 @@ mainnet rehearsal.
   output, and slider geometry. The source amount mirrors slider movement on
   every drag frame, but that draft remains renderer-local until release, so
   dragging does not start quote requests or flash the ETH balance to zero.
+  The source field also reuses Send's in-field ETH/USD switch when an ETH price
+  is available; only canonical ETH reaches quote/review/operation messages.
+  Recoverable errors render below the route metadata rather than inside the
+  source balance row.
+- Backing out of the normal Shield transaction review leaves its request
+  pending. Tapping Shield again reopens that exact trusted confirmation instead
+  of preparing another durable operation. The queue's idempotent fallback also
+  re-announces an exact pending request without repeating deployment RPC work;
+  Confirm still revalidates deployment and authorization before submission.
 - Unshield always mirrors Shield's two-card amount grammar. When no Shielded
   ETH is privately available but ragequit is, the same cards show the fixed
   public-exit amount and original depositor. A required unchecked commitment

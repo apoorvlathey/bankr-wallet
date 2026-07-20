@@ -1,8 +1,12 @@
 import {
   Box,
+  Button,
   HStack,
   Image,
   Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
   Slider,
   SliderFilledTrack,
   SliderMark,
@@ -65,6 +69,13 @@ interface ShieldSourceCardProps {
   balanceLabel?: string;
   balanceLabelColor?: string;
   error?: string | null;
+  errorId?: string;
+  errorPlacement?: "inline" | "external";
+  amountWei?: bigint;
+  isUsdMode?: boolean;
+  conversionLabel?: string | null;
+  onToggleAmountMode?: () => void;
+  formatAmountWei?: (valueWei: bigint) => string;
   isDisabled?: boolean;
   isReadOnly?: boolean;
   onAmountChange: (value: string) => void;
@@ -79,27 +90,39 @@ export function ShieldSourceCard({
   balanceLabel,
   balanceLabelColor,
   error,
+  errorId,
+  errorPlacement = "inline",
+  amountWei: controlledAmountWei,
+  isUsdMode = false,
+  conversionLabel,
+  onToggleAmountMode,
+  formatAmountWei,
   isDisabled,
   isReadOnly,
   onAmountChange,
 }: ShieldSourceCardProps) {
   const sliderSound = useSliderValueSound();
   const [dragValue, setDragValue] = useState<number | null>(null);
-  let amountWei = 0n;
-  try {
-    amountWei = amount ? parseEther(amount) : 0n;
-  } catch {
-    amountWei = 0n;
+  let parsedAmountWei = 0n;
+  if (controlledAmountWei !== undefined) {
+    parsedAmountWei = controlledAmountWei;
+  } else {
+    try {
+      parsedAmountWei = amount ? parseEther(amount) : 0n;
+    } catch {
+      parsedAmountWei = 0n;
+    }
   }
   const sliderValue = maxWei > 0n
-    ? Math.min(100, Number((amountWei * 100n) / maxWei))
+    ? Math.min(100, Number((parsedAmountWei * 100n) / maxWei))
     : 0;
   const interactionValue = dragValue ?? sliderValue;
   const snappedValue = snapBalanceSliderValue(interactionValue);
   const amountForPercentage = (percentage: number) => {
     const snapped = snapBalanceSliderValue(percentage);
     if (snapped === 0) return "";
-    return formatEther((maxWei * BigInt(snapped)) / 100n);
+    const valueWei = (maxWei * BigInt(snapped)) / 100n;
+    return formatAmountWei?.(valueWei) ?? formatEther(valueWei);
   };
   const displayedAmount = dragValue === null
     ? amount
@@ -125,35 +148,81 @@ export function ShieldSourceCard({
         <FixedAssetIdentity shielded={shielded} />
       </HStack>
 
-      <Input
-        aria-label={`${label} ETH amount`}
-        placeholder="0.0"
-        value={displayedAmount}
-        isDisabled={isDisabled}
-        isReadOnly={isReadOnly}
-        inputMode="decimal"
-        autoComplete="off"
-        fontFamily="mono"
-        fontSize="xl"
-        fontWeight="600"
-        minH="48px"
-        bg="surface.sunken"
-        borderColor="border.default"
-        onChange={(event) => {
-          if (/^\d*\.?\d*$/.test(event.target.value)) {
-            onAmountChange(event.target.value);
-          }
-        }}
-      />
+      <InputGroup>
+        {isUsdMode && (
+          <InputLeftElement pointerEvents="none" h="full" w="30px" pl={2}>
+            <Text fontFamily="mono" fontSize="sm" fontWeight="700" color="fg.muted">
+              $
+            </Text>
+          </InputLeftElement>
+        )}
+        <Input
+          aria-label={`${label} ${isUsdMode ? "USD" : "ETH"} amount`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          placeholder="0.0"
+          value={displayedAmount}
+          isDisabled={isDisabled}
+          isReadOnly={isReadOnly}
+          inputMode="decimal"
+          autoComplete="off"
+          fontFamily="mono"
+          fontSize="xl"
+          fontWeight="600"
+          minH="48px"
+          bg="surface.sunken"
+          borderColor="border.default"
+          pl={isUsdMode ? "30px" : undefined}
+          pr={onToggleAmountMode ? (isUsdMode ? "168px" : "112px") : undefined}
+          onChange={(event) => {
+            if (/^\d*\.?\d*$/.test(event.target.value)) {
+              onAmountChange(event.target.value);
+            }
+          }}
+        />
+        {onToggleAmountMode && (
+          <InputRightElement
+            w={isUsdMode ? "164px" : "108px"}
+            h="calc(100% - 6px)"
+            top="3px"
+            right="3px"
+          >
+            <Button
+              aria-label={isUsdMode ? "Enter amount in ETH" : "Enter amount in USD"}
+              title={conversionLabel ?? (isUsdMode ? "ETH" : "USD")}
+              size="xs"
+              variant="ghost"
+              w="full"
+              h="full"
+              minW={0}
+              px={1.5}
+              justifyContent="flex-end"
+              fontFamily="mono"
+              fontSize="xs"
+              fontWeight="600"
+              color="fg.secondary"
+              onClick={onToggleAmountMode}
+              _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
+            >
+              <Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                {conversionLabel ?? (isUsdMode ? "ETH" : "USD")}
+              </Text>
+            </Button>
+          </InputRightElement>
+        )}
+      </InputGroup>
 
       <HStack justify="space-between" minH="18px" mt={1.25} spacing={3}>
         <Text
-          role={error ? "alert" : undefined}
-          color={error ? "status.error.fg" : balanceLabelColor ?? "fg.muted"}
+          id={errorPlacement === "inline" && error ? errorId : undefined}
+          role={errorPlacement === "inline" && error ? "alert" : undefined}
+          color={errorPlacement === "inline" && error
+            ? "status.error.fg"
+            : balanceLabelColor ?? "fg.muted"}
           fontSize="xs"
           noOfLines={2}
         >
-          {error ?? balanceLabel ?? ""}
+          {errorPlacement === "inline" && error ? error : balanceLabel ?? ""}
         </Text>
         <Text
           flexShrink={0}

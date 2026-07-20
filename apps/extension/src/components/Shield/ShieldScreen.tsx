@@ -36,7 +36,11 @@ export default function ShieldScreen({
   });
   const { initialization, retry } = useShieldInitialization();
   const activity = useShieldOperations();
-  const quote = useShieldQuote({ account: sourceAccount, enabled: true });
+  const quote = useShieldQuote({
+    account: sourceAccount,
+    enabled: true,
+    priceUsd: activity.series.priceUsd,
+  });
   const review = useShieldReview({ account: sourceAccount, quote });
   const operation = useShieldOperation({
     account: sourceAccount,

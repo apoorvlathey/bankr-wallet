@@ -308,12 +308,23 @@ route/fee/status detail screen. One private-home operation subscription updates
 the balance, asset, chart, eligibility, withdrawal, and recovery presentation.
 
 The Shield renderer uses a fixed Swap-style deposit grammar without internal
-mode tabs. `Review shield` prepares
+mode tabs. Its source field reuses Send's in-field ETH/USD switch when the
+encrypted private-portfolio price read has a current ETH price. USD remains a
+renderer-only denomination: the quote, review, durable operation, slider, and
+transaction paths receive canonical ETH/wei. Recoverable form and operation
+errors sit in one full-width row below the route metadata instead of competing
+with the source balance. `Review shield` prepares
 the bounded review and then queues the durable operation so the existing normal
-transaction request is the single deposit review/confirmation. Standalone
+transaction request is the single deposit review/confirmation. Backing out of
+that normal confirmation leaves it pending; the next Shield entry reopens the
+newest exact trusted Shield request instead of preparing another operation.
+The background idempotency path likewise re-announces an exact stored pending
+request without another deployment RPC read, while the eventual Confirm path
+still repeats deployment and master-authorization checks before signing.
+Standalone
 Unshield and Send screens reuse one withdrawal engine plus Send's
-recipient/contact/ENS/contract-warning controller. Unshield defaults receipt to
-the active WalletChan account; Send starts with an empty recipient. Their
+recipient/contact/ENS/contract-warning controller. Both start with an empty
+recipient and require an explicit address/contact choice. Their
 intent-aware review uses a normal `Unshield` or `Send privately` press action. No renderer
 password, biometric, or hold gesture is added; background master authorization
 is still required. Private send spends the wallet-wide privacy identity and is

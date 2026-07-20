@@ -19,8 +19,11 @@ effects remain background responsibilities.
 - `ShieldAssetCards.tsx`: Swap-aligned fixed-asset amount cards, live-display
   percentage slider, and direction marker. The amount field follows each drag
   frame, while the value stays renderer-local and triggers a quote only on
-  release. Neither side exposes an asset/network picker.
-- `ShieldAmountPanel.tsx`: public active-chain ETH source and Shielded ETH outcome.
+  release. Shield reuses Send's in-field ETH/USD conversion control while all
+  quotes and operations remain canonical ETH. Neither side exposes an
+  asset/network picker.
+- `ShieldAmountPanel.tsx`: public active-chain ETH source and Shielded ETH
+  outcome, with full-width recoverable errors below the route metadata.
 - `UnshieldAmountPanel.tsx`: Shielded ETH source, public ETH outcome, shared
   recipient controls, and intent-aware Unshield/Send copy.
 - `PrivateSendReview.tsx`: concise relayed-withdrawal review with a normal
@@ -39,6 +42,8 @@ effects remain background responsibilities.
   and the renderer-only Send-selector sentinel.
 - `model/shieldQuote.ts`, `shieldReview.ts`, `shieldOperation.ts`,
   `unshield.ts`, and `recovery.ts`: exact bounded public response models.
+- `model/pendingShield.ts`: exact trusted pending-confirmation resumption when
+  the user returns to Shield after backing out of transaction review.
 - `model/shieldActivity.ts` and `shieldProgress.ts`: pure status presentation.
 
 ## Effects and dependency direction
@@ -52,6 +57,19 @@ only arithmetic-consistent responses. `Review shield` obtains a bounded intent
 review and immediately persists the encrypted operation so the existing normal
 transaction request becomes the single review/confirmation screen. React never
 receives calldata or note material and never signs or submits.
+Backing out of that confirmation does not reject it. The next Shield entry
+resumes the newest exact trusted Privacy Pools transaction request instead of
+re-running preparation. The background queue path is also idempotent: an exact
+existing pending request is re-announced without another deployment RPC check;
+the eventual Confirm path still revalidates deployment and authorization.
+
+The Shield amount field uses the private portfolio's current ETH price for the
+same in-field ETH/USD switch as Send. USD is a renderer-only denomination:
+validation, quotes, durable operation IDs, encrypted intent, slider math, and
+the submitted transaction remain wei/ETH-bound. If price is unavailable, the
+toggle is absent and ETH entry continues normally. Request, quote, validation,
+and operation failures render below the Privacy Pools/network-fee metadata so
+the balance row remains readable and the retained amount stays editable.
 
 The private home exposes Shield, Unshield, and Send as three sibling quick
 actions. Shield is its own public-deposit screen. Unshield and Send are separate

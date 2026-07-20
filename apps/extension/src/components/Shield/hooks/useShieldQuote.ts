@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_SHIELD_AMOUNT,
+  convertShieldAmountInputMode,
+  formatShieldAmountConversion,
+  formatShieldAmountInput,
   parseShieldQuoteError,
   parseShieldQuoteResponse,
-  shieldMaximumInput,
+  shieldAmountInputInEth,
   validateShieldAmountInput,
   type ShieldAmountValidation,
   type ShieldQuote,
@@ -22,31 +25,53 @@ const QUOTE_FALLBACK_ERROR = "Quote unavailable. Try again.";
 
 export interface ShieldQuoteController {
   amount: string;
+  ethAmount: string;
   validation: ShieldAmountValidation;
   state: ShieldQuoteState;
+  isUsdMode: boolean;
+  hasPrice: boolean;
+  conversionLabel: string | null;
   setAmount: (amount: string) => void;
   useMaximum: () => void;
+  toggleAmountMode: () => void;
+  formatAmountWei: (valueWei: bigint) => string;
 }
 
 export function useShieldQuote(input: {
   account: ShieldSourceAccount | null;
   enabled: boolean;
+  priceUsd: number | null;
 }): ShieldQuoteController {
-  const { account, enabled } = input;
+  const { account, enabled, priceUsd } = input;
   const [amount, setAmount] = useState(DEFAULT_SHIELD_AMOUNT);
+  const [isUsdMode, setIsUsdMode] = useState(false);
   const [state, setState] = useState<ShieldQuoteState>({
     status: "idle",
     quote: null,
     error: null,
   });
   const generation = useRef(0);
+  const hasPrice = priceUsd !== null && Number.isFinite(priceUsd) && priceUsd > 0;
+  const ethAmount = useMemo(
+    () => shieldAmountInputInEth(amount, isUsdMode, priceUsd),
+    [amount, isUsdMode, priceUsd],
+  );
   const validation = useMemo(
-    () => validateShieldAmountInput(amount),
-    [amount],
+    () => validateShieldAmountInput(ethAmount),
+    [ethAmount],
+  );
+  const conversionLabel = useMemo(
+    () => formatShieldAmountConversion(amount, isUsdMode, priceUsd),
+    [amount, isUsdMode, priceUsd],
+  );
+  const formatAmountWei = useCallback(
+    (valueWei: bigint) => formatShieldAmountInput(valueWei, isUsdMode, priceUsd),
+    [isUsdMode, priceUsd],
   );
 
   useEffect(() => {
     setAmount(DEFAULT_SHIELD_AMOUNT);
+    setIsUsdMode(false);
     setState({ status: "idle", quote: null, error: null });
   }, [account?.id]);
 
@@ -78,7 +103,7 @@ export function useShieldQuote(input: {
           accountId: account.id,
           accountAddress: account.address,
           accountType: account.type,
-          amount,
+          amount: ethAmount,
         })
         .then((response) => {
           if (generation.current !== requestGeneration) return;
@@ -111,17 +136,27 @@ export function useShieldQuote(input: {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [account, amount, enabled, validation]);
+  }, [account, enabled, ethAmount, validation]);
 
   return {
     amount,
+    ethAmount,
     validation,
     state,
+    isUsdMode,
+    hasPrice,
+    conversionLabel,
     setAmount,
     useMaximum: () => {
       if (state.quote) {
-        setAmount(shieldMaximumInput(state.quote));
+        setAmount(formatAmountWei(state.quote.maxShieldableWei));
       }
     },
+    toggleAmountMode: () => {
+      if (!hasPrice) return;
+      setAmount(convertShieldAmountInputMode(amount, isUsdMode, priceUsd));
+      setIsUsdMode((current) => !current);
+    },
+    formatAmountWei,
   };
 }

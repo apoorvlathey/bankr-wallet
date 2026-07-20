@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  convertShieldAmountInputMode,
+  formatShieldAmountConversion,
+  formatShieldAmountInput,
   formatShieldUsdValue,
   formatShieldWei,
   parseShieldQuoteResponse,
+  shieldAmountInputInEth,
   shieldMaximumInput,
   validateShieldAmountInput,
 } from "../../src/components/Shield/model/shieldQuote";
@@ -81,4 +85,19 @@ test("Shield balance USD formatting handles zero, current prices, and unavailabl
   );
   assert.equal(formatShieldUsdValue(1_000_000_000_000_000n, null), null);
   assert.equal(formatShieldUsdValue(1_000_000_000_000_000n, 0), null);
+});
+
+test("Shield amount entry converts between ETH and USD without changing the intended value", () => {
+  assert.equal(convertShieldAmountInputMode("0.01", false, 3_600), "36.00");
+  assert.equal(convertShieldAmountInputMode("36.00", true, 3_600), "0.01");
+  assert.equal(shieldAmountInputInEth("36.00", true, 3_600), "0.01");
+  assert.equal(formatShieldAmountInput(10_000_000_000_000_000n, true, 3_600), "36.00");
+  assert.equal(formatShieldAmountConversion("0.01", false, 3_600), "$36.00");
+  assert.equal(formatShieldAmountConversion("36.00", true, 3_600), "0.01 ETH");
+});
+
+test("Shield USD entry fails closed when a current ETH price is unavailable", () => {
+  assert.equal(shieldAmountInputInEth("36.00", true, null), "");
+  assert.equal(formatShieldAmountConversion("0.01", false, null), null);
+  assert.equal(convertShieldAmountInputMode("0.01", false, null), "0.01");
 });

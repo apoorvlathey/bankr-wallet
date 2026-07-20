@@ -1,4 +1,5 @@
 import { HStack, Spinner, Text, VStack } from "@chakra-ui/react";
+import { useEffect, useRef } from "react";
 import type { ShieldQuoteController } from "./hooks/useShieldQuote";
 import type { ShieldReviewController } from "./hooks/useShieldReview";
 import type { ShieldOperationController } from "./hooks/useShieldOperation";
@@ -27,6 +28,8 @@ export default function ShieldAmountPanel({
   review,
   operation,
 }: ShieldAmountPanelProps) {
+  const errorId = "shield-amount-error";
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const visibleQuote = quote.state.quote;
   const readyQuote = quote.state.status === "ready" ? quote.state.quote : null;
   const error = operation.state.status === "failed"
@@ -39,6 +42,10 @@ export default function ShieldAmountPanel({
           ? `Not enough ${SHIELDED_ETH_NETWORK_NAME} ETH for this amount and network fee.`
           : quote.validation.message;
 
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
+
   return (
     <VStack align="stretch" spacing={0}>
       <ShieldSourceCard
@@ -48,6 +55,13 @@ export default function ShieldAmountPanel({
         balanceWei={visibleQuote?.balanceWei ?? 0n}
         maxWei={visibleQuote?.maxShieldableWei ?? 0n}
         error={error}
+        errorId={errorId}
+        errorPlacement="external"
+        amountWei={quote.validation.amountWei ?? 0n}
+        isUsdMode={quote.isUsdMode}
+        conversionLabel={quote.conversionLabel}
+        onToggleAmountMode={quote.hasPrice ? quote.toggleAmountMode : undefined}
+        formatAmountWei={quote.formatAmountWei}
         isDisabled={!account || account.type === "impersonator"}
         onAmountChange={quote.setAmount}
       />
@@ -66,7 +80,7 @@ export default function ShieldAmountPanel({
           <Text fontSize="xs" color="fg.secondary">Updating quote…</Text>
         </HStack>
       )}
-      {readyQuote && (
+      {visibleQuote && (
         <HStack justify="space-between" pt={3} spacing={3}>
           <Text fontSize="xs" color="fg.secondary">
             Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
@@ -75,6 +89,20 @@ export default function ShieldAmountPanel({
             Network fee shown in review
           </Text>
         </HStack>
+      )}
+      {error && (
+        <Text
+          ref={errorRef}
+          id={errorId}
+          role="alert"
+          px={1}
+          pt={3}
+          color="status.error.fg"
+          fontSize="sm"
+          fontWeight="600"
+        >
+          {error}
+        </Text>
       )}
     </VStack>
   );

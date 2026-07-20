@@ -42,7 +42,7 @@ export function useShieldOperation(input: {
     generation.current += 1;
     requestId.current = crypto.randomUUID();
     setState({ status: "idle", operation: null, error: null });
-  }, [account?.id, account?.address, account?.type, quote.amount]);
+  }, [account?.id, account?.address, account?.type, quote.ethAmount]);
 
   const save = useCallback(() => {
     if (
@@ -66,7 +66,7 @@ export function useShieldOperation(input: {
         accountId: account.id,
         accountAddress: account.address,
         accountType: account.type,
-        amount: quote.amount,
+        amount: quote.ethAmount,
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;
@@ -91,7 +91,7 @@ export function useShieldOperation(input: {
           setState({ status: "failed", operation: null, error: FALLBACK_ERROR });
         }
       });
-  }, [account, onSaved, quote.amount, quote.state, quote.validation, review.state]);
+  }, [account, onSaved, quote.ethAmount, quote.state, quote.validation, review.state]);
 
   return {
     state,

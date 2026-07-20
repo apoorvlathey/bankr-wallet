@@ -33,7 +33,10 @@ test("Shield opens amount entry without a blocking proof-readiness check", async
 
   assert.doesNotMatch(source, /privacyRunShieldReadinessCheck/);
   assert.doesNotMatch(source, /useShieldReadinessCheck/);
-  assert.match(source, /useShieldQuote\(\{ account: sourceAccount, enabled: true \}\)/);
+  assert.match(
+    source,
+    /useShieldQuote\(\{[\s\S]*?account: sourceAccount,[\s\S]*?enabled: true,[\s\S]*?priceUsd: activity\.series\.priceUsd/,
+  );
   assert.doesNotMatch(source, /PrivateSendReview|UnshieldAmountPanel|role="tablist"/);
 });
 
@@ -196,6 +199,15 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.doesNotMatch(dashboardSource, /confirmedBalanceWei|readyBalanceWei|pendingBalanceWei/);
   assert.match(cardsSource, /minH="48px"/);
   assert.doesNotMatch(cardsSource, /minH="58px"/);
+  assert.match(amountSource, /errorPlacement="external"/);
+  assert.match(amountSource, /scrollIntoView\(\{ block: "nearest" \}\)/);
+  assert.match(amountSource, /onToggleAmountMode=\{quote\.hasPrice \? quote\.toggleAmountMode : undefined\}/);
+  assert.match(cardsSource, /Enter amount in USD/);
+  assert.match(cardsSource, /InputRightElement/);
+  const routeMetadataIndex = amountSource.indexOf("Privacy Pools ·");
+  const externalErrorIndex = amountSource.indexOf('id={errorId}');
+  assert.ok(routeMetadataIndex >= 0);
+  assert.ok(externalErrorIndex > routeMetadataIndex);
 });
 
 test("Shield details and Activity use the same durable lifecycle projection", async () => {

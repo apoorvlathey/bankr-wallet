@@ -228,6 +228,18 @@
 
 ## Slop audit
 
+- 2026-07-20 Shield amount/re-entry audit: Shield now matches Send's compact
+  in-field denomination pattern: ETH entry shows the converted dollar value at
+  the trailing edge, and that same 44px keyboard-operable control switches to
+  explicit dollar entry while showing ETH as the inverse value. No new token,
+  detached mode control, picker, or decorative surface was introduced. The
+  canonical amount remains wei-bound. Recoverable form/operation errors keep
+  the entered value and move to one untruncated, color-independent alert below
+  the route metadata, preserving source balance legibility. Returning from the
+  normal transaction review resumes the exact pending commitment instead of
+  making the primary Shield action appear to fail. The focused audit passes
+  visible label, focus, 44px target, retained-input error, one-primary-action,
+  defined-edge, compact financial hierarchy, and no-decorative-motion gates.
 - 2026-07-20 Privacy action consistency audit: Shield, Unshield, and Send keep
   one route identity from page title through recipient selection, review,
   loading, failure, and final commitment. Unshield and Send both begin with an
@@ -623,6 +635,10 @@
 
 ## Changelog
 
+- 2026-07-20: resumed exact pending Shield confirmations after review Back,
+  made the queue re-announcement idempotent without redundant deployment RPC
+  work, moved Shield errors below route metadata, and added Send-style in-field
+  ETH/USD amount entry backed by the current private-portfolio ETH price.
 - 2026-07-20: made Unshield and Send keep intent-correct labels through empty,
   input, review, loading, error, and confirmation states; both require an
   explicit recipient, and an empty balance disables the current route action

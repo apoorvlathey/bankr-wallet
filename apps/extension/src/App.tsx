@@ -53,18 +53,8 @@ import {
   WatchAssetConfirmation,
 } from "@/app/lazyScreens";
 import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
-
-/** Detect Arc from its injected palette title variable. */
-function isArcBrowser(): boolean {
-  try {
-    const arcPaletteTitle = getComputedStyle(
-      document.documentElement,
-    ).getPropertyValue("--arc-palette-title");
-    return !!arcPaletteTitle && arcPaletteTitle.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
+import { findPendingShieldConfirmation } from "@/components/Shield/model/pendingShield";
+import { isArcBrowser } from "@/lib/arcBrowser";
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -313,7 +303,17 @@ function App() {
     { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined>();
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
   const [privacyActionMode, setPrivacyActionMode] = useState<"shield" | "unshield" | "send">("shield");
-  const openPrivacyAction = (mode: "shield" | "unshield" | "send") => { setPrivacyActionMode(mode); setView("shield"); };
+  const openPrivacyAction = (mode: "shield" | "unshield" | "send") => {
+    if (mode === "shield") {
+      const pendingShield = findPendingShieldConfirmation(pendingRequests);
+      if (pendingShield) {
+        setSelectedTxRequest(pendingShield);
+        setView("txConfirm");
+        return;
+      }
+    }
+    setPrivacyActionMode(mode); setView("shield");
+  };
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
   const { establishKeepalivePort, sendMessageWithRetry } =

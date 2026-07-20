@@ -37,7 +37,7 @@ export function useShieldReview(input: {
   useEffect(() => {
     generation.current += 1;
     setState({ status: "idle", review: null, error: null });
-  }, [account?.id, account?.address, account?.type, quote.amount]);
+  }, [account?.id, account?.address, account?.type, quote.ethAmount]);
 
   const prepare = useCallback(() => {
     if (
@@ -58,7 +58,7 @@ export function useShieldReview(input: {
         accountId: account.id,
         accountAddress: account.address,
         accountType: account.type,
-        amount: quote.amount,
+        amount: quote.ethAmount,
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;
@@ -86,7 +86,7 @@ export function useShieldReview(input: {
           });
         }
       });
-  }, [account, quote.amount, quote.state, quote.validation]);
+  }, [account, quote.ethAmount, quote.state, quote.validation]);
 
   return {
     state,

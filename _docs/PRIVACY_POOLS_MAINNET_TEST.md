@@ -74,14 +74,11 @@ The implementation is covered by:
 - UI labels, explorer links, minimums, protocol fees, maximum relay fees, and
   account choices derived from the active manifest.
 
-Latest run on 2026-07-20: `181/181` privacy tests, `222/222` UI tests, `6/6`
-architecture guards, all three typechecks, changed-file lint, and `12/12`
+Latest run on 2026-07-20: `189/189` privacy tests, `230/230` UI tests, `6/6`
+architecture guards, all three typechecks, changed-file lint, and `14/14`
 Shield preview states passed. The full production extension build and frozen
-budgets passed at 46,239,514 bytes total, 23,690,342 artifact bytes, a
-336,397-byte prover worker, and a 3,525,783-byte background bundle. Packaged
-prover QA passed before/restart in 9.205/8.988 seconds with a 261,128,192-byte
-peak process-tree RSS delta. The final bounded live RPC assertion returned
-chain `1`, active implementation
+bundle budgets passed. The final bounded live RPC assertion returned chain `1`,
+active implementation
 `0x15e355024de1CDc74ADdea7EBDf98418Ba5B1a2c`, the pinned pool/scope, `0.01 ETH`
 minimum, `50` bps vetting fee, and `1,000` bps maximum relay fee.
 
@@ -112,10 +109,15 @@ controlled rollout, use disposable, explicitly funded accounts and pre-agreed
 spend/fee caps:
 
 1. Inspect the normal production UI: Ethereum labels, Etherscan links,
-   `0.01 ETH` minimum, `0.5%` fee, and no Sepolia selection or copy.
+   `0.01 ETH` minimum, `0.5%` fee, ETH/USD amount switching, full-width form
+   errors below the route metadata, and no Sepolia selection or copy.
 2. Exercise quote/review without submitting for Bankr, private-key, and seed
    accounts. Confirm impersonator, agent, below-minimum, insufficient-funds,
    deployment-drift, ASP/root, expired-quote, and relayer-substitution failures.
+   From each Shield transaction review, use Back and then tap Shield again;
+   confirm the exact existing request reopens without a second operation or
+   `operation-unavailable` error. Explicit Reject must still terminalize that
+   request and allow a later Shield attempt to create a fresh operation.
 3. For each of Bankr, private-key, and seed accounts, complete a capped Shield
    and observe confirmation, pool indexing, ASP classification, and Private
    Activity/balance transitions across UI and service-worker restarts.

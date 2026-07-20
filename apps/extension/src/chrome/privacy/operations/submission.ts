@@ -170,9 +170,12 @@ export async function queuePrivacyShieldConfirmation(
   const expectedAuthEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new PrivacyShieldSubmissionError("auth-required");
   });
-  await dependencies.verifyDeployment().catch(() => {
-    throw new PrivacyShieldSubmissionError("operation-unavailable");
-  });
+  const pendingBeforeVerification = await dependencies.getPending(operationId);
+  if (!pendingBeforeVerification) {
+    await dependencies.verifyDeployment().catch(() => {
+      throw new PrivacyShieldSubmissionError("operation-unavailable");
+    });
+  }
 
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     try {
@@ -198,7 +201,13 @@ export async function queuePrivacyShieldConfirmation(
       if (!isExactPrivacyPending(existing, operation, details.callData)) {
         throw new PrivacyShieldSubmissionError("operation-unavailable");
       }
+      void dependencies
+        .sendRuntimeMessage({ type: "newPendingTxRequest", txRequest: existing })
+        .catch(() => undefined);
       return privacyShieldOperationPublicSummary(operation);
+    }
+    if (pendingBeforeVerification) {
+      throw new PrivacyShieldSubmissionError("operation-unavailable");
     }
     const pending = pinnedTxRequest(account, {
       id: operationId,

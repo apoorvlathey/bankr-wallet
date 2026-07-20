@@ -122,6 +122,33 @@ test("durable Shield operations queue one exact normal confirmation for both loc
       assert.equal(JSON.stringify(queued).includes("nullifier"), false);
       assert.equal(JSON.stringify(queued).includes("secret"), false);
       assert.equal(runtimeMessages.length, 1);
+
+      let repeatedVerificationCalls = 0;
+      let repeatedSaveCalls = 0;
+      const repeatedRuntimeMessages: unknown[] = [];
+      const resumed = await submission.queuePrivacyShieldConfirmation(prepared.id, {
+        getOperation: async () => stored,
+        getAccountById: async () => selected,
+        getPending: async () => queued,
+        verifyDeployment: async () => {
+          repeatedVerificationCalls += 1;
+          throw new Error("existing confirmations must not recheck the RPC");
+        },
+        savePending: async () => {
+          repeatedSaveCalls += 1;
+        },
+        sendRuntimeMessage: async (message) => {
+          repeatedRuntimeMessages.push(message);
+        },
+      });
+      assert.equal(resumed.id, prepared.id);
+      assert.equal(repeatedVerificationCalls, 0);
+      assert.equal(repeatedSaveCalls, 0);
+      assert.equal(repeatedRuntimeMessages.length, 1);
+      assert.equal(
+        (repeatedRuntimeMessages[0] as any).txRequest.id,
+        prepared.id,
+      );
     } finally {
       session.clearInMemoryAuthCache();
       harness.restore();

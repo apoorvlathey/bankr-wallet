@@ -12,6 +12,16 @@ const MAX_UINT256 = (1n << 256n) - 1n;
 const ETH_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/;
 const SERIALIZED_WEI_PATTERN = /^(?:0|[1-9]\d{0,79})$/;
 
+function validUsdPrice(priceUsd: number | null): priceUsd is number {
+  return priceUsd !== null && Number.isFinite(priceUsd) && priceUsd > 0;
+}
+
+function trimDecimal(value: string): string {
+  return value.includes(".")
+    ? value.replace(/0+$/, "").replace(/\.$/, "")
+    : value;
+}
+
 export type ShieldSourceAccountType =
   | "bankr"
   | "privateKey"
@@ -235,6 +245,61 @@ export function formatShieldUsdValue(
   ) return null;
   const valueUsd = Number(formatEther(valueWei)) * nativePriceUsd;
   return Number.isFinite(valueUsd) ? formatUsd(valueUsd) : null;
+}
+
+/** Convert the renderer's active ETH/USD amount field into canonical ETH. */
+export function shieldAmountInputInEth(
+  amount: string,
+  isUsdMode: boolean,
+  nativePriceUsd: number | null,
+): string {
+  if (!isUsdMode) return amount;
+  if (!validUsdPrice(nativePriceUsd) || amount.length === 0) return "";
+  const usdAmount = Number(amount);
+  if (!Number.isFinite(usdAmount) || usdAmount < 0) return "";
+  return trimDecimal((usdAmount / nativePriceUsd).toFixed(18));
+}
+
+/** Format a canonical wei amount for the currently selected input unit. */
+export function formatShieldAmountInput(
+  valueWei: bigint,
+  isUsdMode: boolean,
+  nativePriceUsd: number | null,
+): string {
+  const ethAmount = formatEther(valueWei);
+  if (!isUsdMode || !validUsdPrice(nativePriceUsd)) return ethAmount;
+  return (Number(ethAmount) * nativePriceUsd).toFixed(2);
+}
+
+/** Preserve the entered economic value while switching ETH/USD input modes. */
+export function convertShieldAmountInputMode(
+  amount: string,
+  isUsdMode: boolean,
+  nativePriceUsd: number | null,
+): string {
+  if (!validUsdPrice(nativePriceUsd) || amount.length === 0) return amount;
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 0) return amount;
+  return isUsdMode
+    ? trimDecimal((numericAmount / nativePriceUsd).toFixed(18))
+    : (numericAmount * nativePriceUsd).toFixed(2);
+}
+
+export function formatShieldAmountConversion(
+  amount: string,
+  isUsdMode: boolean,
+  nativePriceUsd: number | null,
+): string | null {
+  if (!validUsdPrice(nativePriceUsd) || amount.length === 0) return null;
+  const ethAmount = shieldAmountInputInEth(amount, isUsdMode, nativePriceUsd);
+  if (!ETH_AMOUNT_PATTERN.test(ethAmount)) return null;
+  try {
+    return isUsdMode
+      ? `${formatShieldWei(parseEther(ethAmount))} ETH`
+      : formatUsd(Number(ethAmount) * nativePriceUsd);
+  } catch {
+    return null;
+  }
 }
 
 export function shieldMaximumInput(quote: ShieldQuote): string {
