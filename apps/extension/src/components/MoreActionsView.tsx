@@ -6,12 +6,10 @@ import {
   ChevronRightIcon,
   ExternalLinkIcon,
   LinkIcon,
-  AtSignIcon,
 } from "@chakra-ui/icons";
 import {
   REVOKE_CASH_URL,
   revokeCashAddressUrl,
-  WALLETCHAN_MIGRATE_URL,
   WALLETCHAN_STAKE_URL,
   WALLETCHAN_VAULT_DATA_API,
 } from "@/constants/externalUrls";
@@ -50,7 +48,9 @@ interface MoreAction {
   iconBg: string;
   iconColor: string;
   badge?: string;
-  highlighted?: boolean;
+  detailColor?: string;
+  metaColor?: string;
+  activeIndicator?: boolean;
   external?: boolean;
   onClick?: () => void;
 }
@@ -70,23 +70,6 @@ const StakeIcon = () => (
   </Icon>
 );
 
-const MigrateIcon = () => (
-  <Icon
-    viewBox="0 0 24 24"
-    boxSize={5}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 7h11" />
-    <path d="M13 4l3 3-3 3" />
-    <path d="M19 17H8" />
-    <path d="M11 14l-3 3 3 3" />
-  </Icon>
-);
-
 const RevokeIcon = () => (
   <Icon
     viewBox="0 0 24 24"
@@ -99,6 +82,23 @@ const RevokeIcon = () => (
   >
     <path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-3z" />
     <path d="M8 12h8" />
+  </Icon>
+);
+
+const BookUserIcon = () => (
+  <Icon
+    viewBox="0 0 24 24"
+    boxSize={5}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M15 13a3 3 0 1 0-6 0" />
+    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
+    <circle cx="12" cy="8" r="2" />
   </Icon>
 );
 
@@ -129,7 +129,6 @@ function ActionListRow({ action }: { action: MoreAction }) {
   return (
     <ListItem
       interactive
-      tone={action.highlighted ? "highlight" : "default"}
       onClick={action.onClick}
     >
       <ListItemMedia>
@@ -139,15 +138,29 @@ function ActionListRow({ action }: { action: MoreAction }) {
       </ListItemMedia>
       <ListItemContent>
         <ListItemTitle>{action.title}</ListItemTitle>
-        <ListItemDescription
-          color={action.highlighted ? "accentFg.highlight" : undefined}
-        >
-          {action.detail}
+        <ListItemDescription>
+          <Box
+            as="span"
+            display="inline-flex"
+            alignItems="center"
+            gap={2}
+            color={action.detailColor}
+          >
+            {action.activeIndicator && (
+              <Box
+                as="span"
+                boxSize="7px"
+                flexShrink={0}
+                borderRadius="full"
+                bg="accent.highlight"
+                aria-hidden="true"
+              />
+            )}
+            {action.detail}
+          </Box>
         </ListItemDescription>
       </ListItemContent>
-      <ListItemMeta
-        color={action.highlighted ? "accentFg.highlight" : undefined}
-      >
+      <ListItemMeta color={action.metaColor}>
         {action.badge ? (
           <ActionBadge>{action.badge}</ActionBadge>
         ) : action.external === false ? (
@@ -212,21 +225,13 @@ export default function MoreActionsView({
       badge: stakeApy !== null ? `${stakeApy.toFixed(1)}% APY` : undefined,
       onClick: () => openExternal(WALLETCHAN_STAKE_URL),
     },
-    {
-      title: "Migrate tokens",
-      detail: "walletchan.eth.sh/migrate",
-      icon: <MigrateIcon />,
-      iconBg: "accent.secondary",
-      iconColor: "accentFg.secondary",
-      onClick: () => openExternal(WALLETCHAN_MIGRATE_URL),
-    },
   ];
 
   const secondaryActions: MoreAction[] = [
     {
       title: "Address book",
       detail: "Label frequently used addresses",
-      icon: <AtSignIcon boxSize={5} />,
+      icon: <BookUserIcon />,
       iconBg: "accent.secondary",
       iconColor: "accentFg.secondary",
       external: false,
@@ -248,12 +253,13 @@ export default function MoreActionsView({
           ? `${walletConnectSessionCount} active ${walletConnectSessionCount === 1 ? "session" : "sessions"}`
           : "Connect dapps by URI",
       icon: <WalletConnectLogoIcon />,
-      iconBg: walletConnectSessionCount > 0 ? "surface.base" : "accent.secondary",
-      iconColor:
-        walletConnectSessionCount > 0
-          ? "accent.highlight"
-          : "accentFg.secondary",
-      highlighted: walletConnectSessionCount > 0,
+      iconBg: "accent.secondary",
+      iconColor: "accentFg.secondary",
+      detailColor:
+        walletConnectSessionCount > 0 ? "accent.highlight" : undefined,
+      metaColor:
+        walletConnectSessionCount > 0 ? "accent.highlight" : undefined,
+      activeIndicator: walletConnectSessionCount > 0,
       external: false,
       onClick: onWalletConnect,
     },
@@ -297,7 +303,7 @@ export default function MoreActionsView({
         onBack={onBack}
         trailing={fromAddress ? <FromAccountDisplay address={fromAddress} /> : undefined}
       />
-      <ScreenBody pb={6}>
+      <ScreenBody pt={4} pb={6}>
         <ScreenSection title="WalletChan">
           <ListSurface>
             {primaryActions.map((action) => (

@@ -68,8 +68,12 @@ function subscribe(onStoreChange: () => void): () => void {
   subscribers.add(onStoreChange);
   if (subscribers.size === 1) {
     chrome.storage.onChanged.addListener(handleStorageChange);
-    void refreshDisplayState();
   }
+  // A long-lived surface (for example the home dock) may keep this shared
+  // store subscribed after missing a storage event. Re-read durable display
+  // metadata whenever another identity surface mounts so late-opened screens
+  // do not inherit a stale CID-only projection.
+  void refreshDisplayState();
   return () => {
     subscribers.delete(onStoreChange);
     if (subscribers.size === 0) {
