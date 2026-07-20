@@ -158,6 +158,8 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.doesNotMatch(pickerSource, />\s*Pay with\s*</);
   assert.doesNotMatch(pickerSource, /SHIELDED_ETH_NETWORK_NAME|Ethereum|Sepolia/);
   assert.doesNotMatch(amountSource, /Available after the network-fee reserve/);
+  assert.doesNotMatch(amountSource, /Net of the/);
+  assert.match(amountSource, /% protocol fee/);
   assert.doesNotMatch(dashboardSource, /confirmedBalanceWei|readyBalanceWei|pendingBalanceWei/);
   assert.match(cardsSource, /minH="48px"/);
   assert.doesNotMatch(cardsSource, /minH="58px"/);

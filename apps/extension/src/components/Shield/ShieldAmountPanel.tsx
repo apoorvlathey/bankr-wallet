@@ -57,7 +57,7 @@ export default function ShieldAmountPanel({
         amount={visibleQuote ? formatShieldWei(visibleQuote.shieldedAmountWei) : null}
         detail={visibleQuote
           ? `${formatShieldWei(visibleQuote.protocolFeeWei)} ETH protocol fee`
-          : `Net of the ${Number(SHIELD_VETTING_FEE_BPS) / 100}% protocol fee`}
+          : `${Number(SHIELD_VETTING_FEE_BPS) / 100}% protocol fee`}
       />
 
       {quote.state.status === "loading" && (
