@@ -4,6 +4,9 @@
   including native transfers, net ERC-20 deltas, and NFT exclusion.
 - `stateOverrides.test.ts` freezes ERC-20 slot discovery and Permit2's
   nonce-preserving packed allowance override.
+- `simulatorOverride.test.ts` freezes full storage replacement for injected
+  EOA, Safe, and other contract-account simulations so slot zero cannot inherit
+  unrelated live account state.
 - `normalization.test.ts` freezes amount formatting, native-change direction,
   and decoded NFT result normalization.
 - `portfolioPrices.test.ts` freezes positive-price filtering and canonical

@@ -14,7 +14,7 @@ export interface DelegationRequestInput {
 }
 
 export function buildDelegationRequest(
-  account: Account,
+  account: Extract<Account, { type: "privateKey" | "seedPhrase" }>,
   input: DelegationRequestInput,
 ): PinnedTxRequest {
   const fromAddress = account.address as Address;

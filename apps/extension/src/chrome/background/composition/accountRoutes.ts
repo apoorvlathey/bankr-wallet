@@ -76,12 +76,16 @@ import { createBackgroundAccountManagementMessageRouter } from "../accountManage
 import { createBackgroundDappPermissionMessageRouter } from "../dappPermissionRouter";
 import { createBackgroundSecretManagementMessageRouter } from "../secretManagementRouter";
 import { createBackgroundWalletConnectSessionMessageRouter } from "../walletConnectSessionRouter";
+import { createBackgroundSafeAccountMessageRouter } from "../safeAccountRouter";
+import { routeBackgroundSafeProposalMessage } from "../safeProposalRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
 import { getEnsContenthashLastUpdated } from "../../ensBrowsing/contenthashHistory";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
 ) {
+  const routeBackgroundSafeAccountMessage =
+    createBackgroundSafeAccountMessageRouter();
   const routeBackgroundDappPermissionMessage =
     createBackgroundDappPermissionMessageRouter({
       handleGetDappAccounts,
@@ -164,6 +168,8 @@ export function composeAccountRoutes(
     });
 
   return {
+    routeBackgroundSafeAccountMessage,
+    routeBackgroundSafeProposalMessage,
     routeBackgroundDappPermissionMessage,
     routeBackgroundWalletConnectSessionMessage,
     routeBackgroundAccountManagementMessage,

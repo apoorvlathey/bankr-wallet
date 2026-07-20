@@ -18,6 +18,7 @@ function createDependencies(
     resolvePasswordType: async () => "master",
     handleUnlockWallet: async () => ({ success: true }),
     hasUnresolvedSponsoredTransferIntent: async () => false,
+    hasUnresolvedSafeEffects: async () => false,
     invalidateAuthCeremonies: () => {},
     invalidateAvatarImageCacheForWalletReset: () => {},
     clearAllAuthState: async () => {},
@@ -180,6 +181,20 @@ test("restored non-master and unresolved sponsored state fail before cleanup", a
   assert.deepEqual(blockedSponsored.response, {
     success: false,
     error: "Check pending sponsored transfers before resetting WalletChan",
+  });
+  assert.equal(cleanup, false);
+
+  const blockedSafe = await dispatch(
+    createDependencies({
+      hasUnresolvedSafeEffects: async () => true,
+      invalidateAuthCeremonies: () => {
+        cleanup = true;
+      },
+    }),
+  );
+  assert.deepEqual(blockedSafe.response, {
+    success: false,
+    error: "Reconcile pending Safe publications or executions before resetting WalletChan",
   });
   assert.equal(cleanup, false);
 });

@@ -14,7 +14,8 @@ export type ChainAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 export interface ResolvedChain {
   name: string;

@@ -36,6 +36,7 @@ import BridgeChainTokenModal from "@/components/Swap/BridgeChainTokenModal";
 import ComponentLab from "./ComponentLab";
 import MobilePrimitivesPreview from "./MobilePrimitivesPreview";
 import DecisionPrimitivesPreview from "./DecisionPrimitivesPreview";
+import SafePreview from "./SafePreview";
 import {
   createPreviewBatchScenario,
   createPreviewCrossDappBatchScenario,
@@ -306,12 +307,12 @@ function UnlockScenarioPreview({ scenario }: { scenario: string }) {
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const noop = () => {};
 
-  if (scenario === "pending-requests" || scenario === "empty") {
+  if (["pending-requests", "pending-safe-request", "empty"].includes(scenario)) {
     const pendingCount = scenario === "empty" ? 0 : 1;
     return (
       <UnlockScreen
         onUnlock={noop}
-        pendingTxCount={pendingCount}
+        pendingTxCount={scenario === "pending-safe-request" ? 0 : pendingCount}
         pendingSignatureCount={0}
         pendingBatchCount={0}
         pendingPermissionCount={0}
@@ -740,6 +741,8 @@ export function PreviewScreen({
       );
     case "token-management":
       return <TokenManagementPreview wallet={wallet} scenario={scenario} />;
+    case "safe":
+      return <PreviewShell><SafePreview scenario={scenario} /></PreviewShell>;
     case "all": return null;
   }
 }

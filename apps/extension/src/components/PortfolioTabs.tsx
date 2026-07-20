@@ -59,6 +59,10 @@ interface PortfolioTabsProps {
   onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onTransactionClick?: (tx: CompletedTransaction) => void;
   quickActions?: ReactNode;
+  activitySupplement?: (
+    filterChainId: number | null,
+    onVisibilityChange: (visible: boolean) => void,
+  ) => ReactNode;
   onChainBalancesChange?: (
     totals: ReadonlyMap<number, number>,
     hidden: boolean,
@@ -86,7 +90,7 @@ const PORTFOLIO_VALUE_TIMING = {
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
 };
 
-export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, activitySupplement, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -117,9 +121,14 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const selectedChain = filterChainId !== null ? visibleChains.find((c) => c.chainId === filterChainId) : null;
   const [isChainMenuOpen, setIsChainMenuOpen] = useState(false);
   const [isAssetSearchOpen, setIsAssetSearchOpen] = useState(false);
+  const [hasSupplementalActivity, setHasSupplementalActivity] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
   const { unifyBalances, setUnifyBalances } = useUnifyPortfolioBalances();
+
+  useEffect(() => {
+    if (!activitySupplement) setHasSupplementalActivity(false);
+  }, [activitySupplement]);
 
   const selectTab = useCallback(
     (nextIndex: number) => {
@@ -592,12 +601,14 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
             display={tabIndex === 2 ? "block" : "none"}
             aria-hidden={tabIndex !== 2}
           >
+            {activitySupplement?.(filterChainId, setHasSupplementalActivity)}
             <TxStatusList
               maxItems={10}
               address={address}
               accounts={accounts}
               hideHeader
               hideCard
+              hideEmptyState={hasSupplementalActivity}
               filterChainId={filterChainId}
               onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}

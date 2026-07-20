@@ -23,8 +23,8 @@ import { buildSimulationResult } from "./resultBuilder";
 import { buildRetryOverrides } from "./stateOverrides";
 import {
   SIMULATOR_ABI,
-  SIMULATOR_BYTECODE,
 } from "./simulatorContract";
+import { buildIsolatedSimulatorOverride } from "./simulatorOverride";
 import type {
   RawSimulationResult as RawSimResult,
   SimulationResult,
@@ -225,11 +225,7 @@ async function runSimulation(
     data: callData,
     gas: SIMULATION_GAS_LIMIT,
     stateOverride: [
-      {
-        address: from,
-        code: SIMULATOR_BYTECODE,
-        balance: parseEther("100000"),
-      },
+      buildIsolatedSimulatorOverride(from, parseEther("100000")),
       ...extraOverrides,
     ],
   });

@@ -36,6 +36,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
       "portfolio-empty",
       "portfolio-error",
       "stress",
+      "safe-account",
     ],
     wallets: ALL_WALLETS,
     fidelity: "production",
@@ -52,6 +53,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     defaultScenario: "pending-requests",
     scenarios: [
       "pending-requests",
+      "pending-safe-request",
       "empty",
       "invalid-password",
       "submitting",
@@ -313,6 +315,27 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     scenarios: ["add", "edit", "hide", "hidden"],
     wallets: SIGNING_WALLETS,
     fidelity: "production",
+  },
+  safe: {
+    label: "Safe accounts",
+    defaultScenario: "approval-needed",
+    scenarios: [
+      "import-scanning",
+      "import-partial-failure",
+      "observe-only",
+      "approval-needed",
+      "waiting-external",
+      "quorum-ready",
+      "nonce-conflict",
+      "configuration-changed",
+      "rejection-signing",
+      "rejection-ready",
+      "execution-success",
+      "replaced",
+      "execution-failure",
+    ],
+    wallets: ALL_WALLETS,
+    fidelity: "composed",
   },
 };
 

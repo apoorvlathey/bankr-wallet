@@ -3,6 +3,7 @@ import { Box, HStack, Image, Text, VStack } from "@chakra-ui/react";
 import SafeImage from "@/components/SafeImage";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
+import { useIconChipFg } from "@/theme";
 
 interface RequestIdentityProps {
   origin: string;
@@ -25,6 +26,7 @@ export function RequestIdentity({
   onOpenOrigin,
 }: RequestIdentityProps) {
   const formatOrigin = useDappOriginFormatter();
+  const iconChipFg = useIconChipFg();
   const displayOrigin = formatOrigin(origin);
   const displayLabel = displayOrigin.label;
   const displayFavicon = displayOrigin.faviconSrc || favicon;
@@ -71,13 +73,13 @@ export function RequestIdentity({
             alt=""
             boxSize="22px"
             fallback={
-              <Text fontSize="xs" fontWeight="700" color="text.secondary">
+              <Text fontSize="xs" fontWeight="700" color={iconChipFg}>
                 {displayInitials}
               </Text>
             }
           />
         ) : (
-          <Text fontSize="xs" fontWeight="700" color="text.secondary">
+          <Text fontSize="xs" fontWeight="700" color={iconChipFg}>
             {displayInitials}
           </Text>
         )}

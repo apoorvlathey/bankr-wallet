@@ -182,7 +182,7 @@ function TokenTransfer({
         search={recipientState.recipientSearch}
         onSearchChange={recipientState.setRecipientSearch}
         getAccountDisplayName={recipientState.getAccountDisplayName}
-        getAccountAvatar={recipientState.getAccountAvatar}
+        getAccountEnsAvatar={recipientState.getAccountEnsAvatar}
         onSelect={recipientState.selectRecipientAccount}
         onSelectAddress={recipientState.selectRecipientAddress}
         onRemoveContact={recipientState.removeContact}

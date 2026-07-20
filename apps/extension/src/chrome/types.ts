@@ -2,7 +2,12 @@
  * Account types and vault structures for multi-account support
  */
 
-export type AccountType = "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+export type AccountType =
+  | "bankr"
+  | "privateKey"
+  | "seedPhrase"
+  | "impersonator"
+  | "safe";
 
 /**
  * Password type for unlock sessions
@@ -37,7 +42,21 @@ export interface ImpersonatorAccount extends BaseAccount {
   type: "impersonator";
 }
 
-export type Account = BankrAccount | PrivateKeyAccount | SeedPhraseAccount | ImpersonatorAccount;
+/**
+ * A Safe account has no WalletChan-owned secret. Current owner capabilities
+ * and chain-specific authority live in the Safe domain and are revalidated
+ * before every approval or execution effect.
+ */
+export interface SafeAccount extends BaseAccount {
+  type: "safe";
+}
+
+export type Account =
+  | BankrAccount
+  | PrivateKeyAccount
+  | SeedPhraseAccount
+  | ImpersonatorAccount
+  | SafeAccount;
 
 /**
  * Seed group metadata (stored alongside accounts)

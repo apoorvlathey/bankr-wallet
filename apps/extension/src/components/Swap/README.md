@@ -44,11 +44,15 @@ message, RPC, or storage effects except the existing explorer/copy actions in
   balances/prices.
 - `useBuyTokenData.ts` resolves selected buy-token metadata and price.
 - `useSwapAmount.ts` owns amount-mode and balance-slider transformations.
+- `useSwapPairSelection.ts` owns initial sell-token selection plus flip and
+  token-picker transitions, keeping the composition root below its size gate.
 - `useSwapSlippage.ts` owns the `swapSlippageBps` sync-storage preference.
 - `useSwapQuotes.ts` owns debounced 0x/Bungee indicative quotes and destination
   native-token recovery metadata.
 - `usePreparedSwap.ts` stages confirmation state and coordinates preparation
-  and final execution.
+  and final execution. For a Safe, the staged same-chain calls create a draft
+  proposal and open the shared Safe request screen instead of entering an EOA
+  or Bankr submission path.
 
 ## Transaction boundaries
 
@@ -60,6 +64,13 @@ message, RPC, or storage effects except the existing explorer/copy actions in
   sequential fallback decision.
 - `executePreparedSwap.ts` is the irreversible runtime-message boundary for
   Bankr batch, local EIP-7702, and sequential execution.
+- `safeSwapProposal.ts` maps the already reviewed swap calls into ordered Safe
+  calls and creates the wallet-origin proposal. The Safe transaction builder
+  owns canonical MultiSend wrapping when an approval and swap must be atomic.
+- `swapSubmissionModel.ts` keeps Bankr, private-key, seed-phrase, Safe, and
+  view-only routing explicit and pure. Same-chain Safe swaps are supported;
+  cross-chain Safe bridges remain guarded until destination deployment
+  verification is part of the flow.
 - `swapViewTypes.ts` and `swapViewUtils.ts` contain shared contracts and pure
   adapters (apart from the documented delegate-status runtime message).
 

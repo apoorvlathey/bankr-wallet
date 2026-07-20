@@ -18,6 +18,12 @@ test("Address Book and Send share contact identity enrichment and contact-list c
   assert.match(recipientHook, /useAddressResolver\(localRecipientIdentity \? "" : recipient\)/u);
   assert.match(recipientHook, /isResolving: false/u);
   assert.match(recipientPicker, /AddressContactList/u);
+  assert.match(recipientPicker, /import \{ AccountAvatar \} from "@\/components\/AccountIdentity"/u);
+  assert.match(
+    recipientPicker,
+    /<AccountAvatar[\s\S]*?account=\{account\}[\s\S]*?ensAvatar=\{account\.type === "safe" \? null : ensAvatar\}/u,
+  );
+  assert.doesNotMatch(recipientPicker, /<Image/u);
   assert.match(contactList, /AddressContactAvatar/u);
   assert.match(contactList, /AddressContactEditorModal/u);
   assert.match(contactList, /onRemoveContact/u);

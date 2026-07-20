@@ -35,7 +35,8 @@ test("batch confirmation renders and simulates the account pinned with the store
   );
   assert.match(
     batchView,
-    /selectedBatchRequest\.accountType \?\?[\s\S]*storedBatchAccount\?\.type \?\?[\s\S]*\(selectedBatchRequest\.accountId \? undefined : activeAccount\?\.type\)/,
+    /selectedBatchRequest\.accountType \?\?[\s\S]*toLegacyAccountType\(storedBatchAccount\?\.type\) \?\?[\s\S]*toLegacyAccountType\(activeAccount\?\.type\)/,
+    "a Safe account must never fall through the legacy EOA/API batch renderer",
   );
   assert.match(batchView, /accountAddress=\{batchAccountAddress\}/);
   assert.match(batchView, /accountType=\{batchAccountType\}/);

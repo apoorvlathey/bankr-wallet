@@ -1,6 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { formatUnits } from "viem";
-import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { NATIVE_TOKEN_ADDRESS } from "@/chrome/swapApi";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
@@ -11,13 +10,15 @@ import SwapConfirmation from "./SwapConfirmation";
 import { SwapFormScreen } from "./SwapFormScreen";
 import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 import type { SwapViewProps } from "./swapViewTypes";
-import { pickDefaultSwapSellToken, to0xToken } from "./swapViewUtils";
+import { to0xToken } from "./swapViewUtils";
 import { useBuyTokenData } from "./useBuyTokenData";
 import { usePreparedSwap } from "./usePreparedSwap";
 import { useSellTokenData } from "./useSellTokenData";
 import { useSwapAmount } from "./useSwapAmount";
 import { useSwapQuotes } from "./useSwapQuotes";
 import { useSwapSlippage } from "./useSwapSlippage";
+import { getSwapSubmissionKind } from "./swapSubmissionModel";
+import { useSwapPairSelection } from "./useSwapPairSelection";
 
 function SwapView({
   fromAddress,
@@ -27,6 +28,7 @@ function SwapView({
   chainName: initialChainName,
   onBack,
   onSwapInitiated,
+  onSafeProposalCreated,
   // The swap surface deliberately keeps its chain pair independent from the
   // global/per-tab dapp chain. Keep this prop for the stable public shape.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -63,23 +65,6 @@ function SwapView({
     isSwapSupported: SWAP_SUPPORTED_CHAIN_IDS.has(sellChainId),
     initialSellToken,
   });
-  const autoSelectedSellRef = useRef(Boolean(initialSellToken));
-  useEffect(() => {
-    if (
-      autoSelectedSellRef.current ||
-      initialSellToken ||
-      sellToken ||
-      holdingsAllChains.length === 0
-    ) {
-      return;
-    }
-    const cachedTopToken = pickDefaultSwapSellToken(holdingsAllChains);
-    if (!cachedTopToken) return;
-    autoSelectedSellRef.current = true;
-    setSellChainId(cachedTopToken.chainId);
-    setBuyChainId(cachedTopToken.chainId);
-    setSellToken(cachedTopToken);
-  }, [holdingsAllChains, initialSellToken, sellToken, setSellToken]);
   const amount = useSwapAmount(sellToken);
   const buyToken = useBuyTokenData({
     buyChainId,
@@ -98,76 +83,20 @@ function SwapView({
     isBridge,
   });
   const bridgeRoute = getExecutableBridgeRoute(quotes.bridgeQuote);
-
-  const handleFlip = () => {
-    const address = buyToken.buyTokenAddress.trim();
-    const isNative =
-      Boolean(address) &&
-      address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-    const heldBuyToken =
-      buyToken.buyTokenInfo && address
-        ? holdingsAllChains.find(
-            (token) =>
-              token.chainId === buyChainId &&
-              (token.contractAddress.toLowerCase() === address.toLowerCase() ||
-                (isNative && token.contractAddress === "native")),
-          )
-        : undefined;
-    const nextSellToken: PortfolioToken | null = buyToken.buyTokenInfo && address
-      ? heldBuyToken ?? {
-          symbol: buyToken.buyTokenInfo.symbol,
-          name: buyToken.buyTokenInfo.name,
-          contractAddress: isNative ? "native" : address,
-          chainId: buyChainId,
-          decimals: buyToken.buyTokenInfo.decimals,
-          balance: "0",
-          balanceFormatted: "0",
-          priceUsd: buyToken.buyTokenPriceUsd,
-          valueUsd: 0,
-          logoUrl: buyToken.buyTokenLogoURI,
-        }
-      : null;
-    const previousSellToken = sellToken;
-    const previousSellChainId = sellChainId;
-    setSellChainId(buyChainId);
-    setBuyChainId(previousSellChainId);
-    setSellToken(nextSellToken);
-    if (previousSellToken) {
-      buyToken.setKnownBuyToken(
-        to0xToken(previousSellToken),
-        {
-          name: previousSellToken.name,
-          symbol: previousSellToken.symbol,
-          decimals: previousSellToken.decimals,
-        },
-        previousSellToken.logoUrl,
-      );
-    } else {
-      buyToken.clearBuyToken();
-    }
-    amount.resetAmount();
-    quotes.clearQuotes();
-  };
-
-  const handleTokenSelect = (pickedChainId: number, picked: PortfolioToken) => {
-    if (picker?.side === "sell") {
-      const previousSellChainId = sellChainId;
-      setSellChainId(pickedChainId);
-      const buyWasImplicit =
-        buyChainId === previousSellChainId && !buyToken.buyTokenAddress;
-      if (buyWasImplicit && pickedChainId !== previousSellChainId) {
-        setBuyChainId(pickedChainId);
-      }
-      setSellToken(picked);
-      amount.resetAmount();
-      amount.setIsUsdMode(false);
-      quotes.setQuote(null);
-    } else if (picker?.side === "buy") {
-      if (pickedChainId !== buyChainId) setBuyChainId(pickedChainId);
-      buyToken.setSelectedBuyToken(picked);
-      quotes.setQuote(null);
-    }
-  };
+  const { handleFlip, handleTokenSelect } = useSwapPairSelection({
+    initialSellToken,
+    holdingsAllChains,
+    sellToken,
+    setSellToken,
+    sellChainId,
+    setSellChainId,
+    buyChainId,
+    setBuyChainId,
+    pickerSide: picker?.side,
+    buyToken,
+    amount,
+    quotes,
+  });
 
   const sellAmountNumber = parseFloat(amount.sellTokenAmount) || 0;
   const insufficientBalance = sellAmountNumber > amount.sellBalance;
@@ -200,6 +129,7 @@ function SwapView({
     !quotes.quoteLoading && inputUsd > 0 && outputUsd > 0
       ? ((inputUsd - outputUsd) / inputUsd) * 100
       : null;
+  const submissionKind = getSwapSubmissionKind(accountType, isBridge);
   const canSwap = Boolean(
     sellToken &&
       /^0x[a-fA-F0-9]{40}$/.test(buyToken.buyTokenAddress.trim()) &&
@@ -208,7 +138,7 @@ function SwapView({
       !insufficientBalance &&
       (isBridge ? bridgeRoute : quotes.quote) &&
       !quotes.quoteLoading &&
-      accountType !== "impersonator",
+      submissionKind !== "unsupported",
   );
 
   const prepared = usePreparedSwap({
@@ -228,6 +158,7 @@ function SwapView({
     resolvedBuyChainName,
     slippageBps,
     onSwapInitiated,
+    onSafeProposalCreated,
   });
 
   if (

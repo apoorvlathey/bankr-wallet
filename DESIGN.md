@@ -225,6 +225,168 @@
 
 ## Slop audit
 
+- 2026-07-20 locked Safe-request visibility audit: passes. The established
+  graphite unlock notice now includes every unresolved Safe proposal without
+  adding a second banner or rendering request details before authentication.
+  Safe-only queues name the request type explicitly; mixed queues retain the
+  concise aggregate label. The existing bell, count text, and reduced-motion
+  behavior keep the status understandable without hue or animation. Scoped
+  score: 10/10; 320px reflow and Bankr/private-key/seed preview contexts pass.
+- 2026-07-20 Safe terminal-detail audit: passes. Settled Activity records now
+  use the receipt-oriented **Transaction details** hierarchy rather than
+  replaying the live request surface. Historical records keep origin, calls,
+  signer evidence, hashes, explorer access, and a color-independent status;
+  they remove current-state simulation, connected-site waiting copy, authority
+  refresh, decision controls, rejection, route detachment, and the redundant
+  sticky Back footer. Executed pairs its green pill with a check, while
+  Replaced and Cancelled remain neutral. Scoped slop/accessibility score:
+  10/10; the 320px rendered states have no serious or critical axe findings,
+  preserve logical keyboard order, and communicate status with text plus icon
+  rather than hue alone.
+- 2026-07-20 Safe Activity-actionability audit: passes. Executable proposals
+  retain the compact shared ledger but gain a 4px horizontal inset, one
+  complete amber boundary, and a restrained amber surface tint. Their inner
+  padding tightens by 2px to preserve content width, making the next action visible without
+  returning to card-per-record chrome. Their explicit **Ready to execute**
+  label uses an hourglass rather than the settled green check; completed rows
+  alone keep the green check. The distinction therefore survives without
+  relying on hue. Safe fallback marks move from the generic bright favicon
+  canvas to a dark green-tinted chip in Midnight, while real dapp artwork keeps
+  the light contrast canvas it needs.
+- 2026-07-20 Safe Activity-ledger audit: passes. Proposal history now reuses
+  ordinary Activity's single defined-edge list, shared date headers, compact
+  interactive rows, dapp identity with chain badge, resolved counterparty,
+  semantic inline status, and restrained age metadata. Descending nonce replaces
+  hidden actionability ordering; muted **Nonce** plus primary **#N** stays
+  scannable without another badge. Card-per-record buttons, count chrome, gray
+  lifecycle pills, and misleading conflict-yellow metadata are removed. Back
+  from an Activity-opened detail returns to Activity, preserving spatial origin;
+  its passive footer says **Back to Activity** rather than naming the inbox.
+- 2026-07-20 Safe-request ordering audit: passes. The inbox now follows its
+  visible nonce labels from highest to lowest instead of silently grouping by
+  lifecycle state. Same-nonce originals, replacements, and rejections stay
+  adjacent with the newer proposal first, while explicit status text continues
+  to communicate actionability without changing row position. The quiet
+  **Nonce** label keeps metadata hierarchy, while its white **#N** value makes
+  the scan order immediately legible. The screen is strictly an action queue:
+  terminal records stay in Activity, while direct Activity links retain
+  read-only access to their request details.
+- 2026-07-20 Safe-swap audit: passes. The canonical Swap action is enabled
+  whenever the active chain has proposal-capable Safe ownership. Review creates
+  a draft and moves directly into the established Safe transaction-request
+  hierarchy; no Safe-only confirmation styling or EOA signer language was
+  introduced. Cross-chain selection carries an explicit semantic-warning
+  explanation beside the disabled commitment, so the restriction is not
+  encoded by disabled state or color alone.
+- 2026-07-20 Send recipient-identity audit: passes. The full-screen **My
+  contacts** wallet list now uses the same account-type-aware avatar primitive
+  as the selected-recipient identity chip. Safe rows retain the official green
+  Safe mark instead of falling back to an address blockie, while named EOAs
+  may still use resolved avatars and all wallet types keep explicit text labels.
+- 2026-07-20 Safe execution-reconciliation audit: passes. After broadcast, the
+  decision footer becomes passive **Confirming onchain…** state and the compact
+  request pill carries progress. Routine confirmation no longer adds a green
+  submitted panel, a red ambiguity panel, or a manual reconcile CTA. Durable
+  execution evidence prevents the primary Execute action from returning while
+  background receipt polling owns the outcome. A single semantic-yellow RPC
+  notice appears only when every trusted receipt endpoint is unavailable; its
+  explicit retry copy keeps the state color-independent and distinguishes
+  infrastructure delay from transaction failure.
+- 2026-07-20 Safe rejection-density audit: passes. The rejection review removes
+  redundant explanatory sentences, carries the nonce directly in **Reject
+  pending transaction #N**, renders both one-line card summaries as quiet
+  secondary text, and aligns the semantic yellow **Needs approval** pill with
+  the **Request details** heading. Locally **Available** signer states use the
+  same warning treatment. The text labels remain explicit, so status meaning
+  does not depend on color alone.
+- 2026-07-20 Safe onchain-rejection audit: passes. Reject remains the quiet
+  secondary beside the amber approval/execution commitment, including after
+  quorum. Once any signer has approved, its explicit **Reject onchain** label
+  opens a distinct same-nonce review with truthful no-asset-change copy,
+  signer progress, and **Sign rejection** / **Execute rejection** verbs. Back
+  remains navigation; there is no competing dismiss action or false local
+  cancellation state for signed work.
+- 2026-07-20 Warm Midnight Safe signer-status audit: passes. Safe request calls
+  and signer progress are now separated by one quiet graphite rule instead of
+  another nested section surface. A compact **Signers** heading pairs with a
+  right-aligned, tabular `n/m signed` summary. Quorum and signer completion use
+  the shared translucent-green success pill with a check icon and explicit
+  **Ready to execute** / **Signed** text, preserving color-independent status
+  meaning and keeping the financial request hierarchy dominant.
+- 2026-07-20 Safe-request confirmation audit: passes by removing the prototype
+  Safe-shaped detail form and projecting validated proposals through the
+  established transaction/batch confirmation hierarchy. Requesting identity,
+  chain-qualified estimated changes, read-only call cards, advanced technical
+  disclosure, sticky action geometry, and the local-account gas editor now use
+  the same production components and state language as ordinary requests.
+  Owner progress remains visible in Request details without duplicating Safe
+  address, network, or proposal metadata. Before quorum, the decision row says
+  **Signing with**; at quorum it says **Execute with**, defaults to a local Safe
+  owner, and makes the identity an accessible account dropdown when alternatives
+  exist. The dropdown explicitly labels Safe-linked choices **Owner**, while
+  leaving other eligible gas-paying accounts available. Password fields are
+  absent; the action stays one 44px amber commitment
+  backed by the unlocked session. Both themes retain their existing tokens,
+  focus treatment, defined-edge surfaces, and reduced-motion behavior.
+- 2026-07-20 Safe-request transition audit: passes. Sign offchain and Execute
+  retain the clicked amber action and loader across intermediate background
+  storage writes, so neither can flash the unrelated Back action before its
+  next stable state. A confirmed execution closes the review and lands on the
+  account's Activity tab; opening an existing Activity record remains
+  read-only, and its Back action returns directly to Activity.
+- 2026-07-20 Safe-request inbox audit: renamed the destination **Safe Requests**
+  and paired its title with the official Safe mark. The screen now reuses the
+  account-settings identity/address row, removes raw proposal creation, and
+  replaces standalone button cards with one separator-owned list. Each request
+  leads with chain identity, describes its action and wallet/contact-resolved
+  counterparty in plain language, and uses a compact labeled lifecycle state
+  instead of an oversized pill, raw call target, and nonce-first metadata.
+  Network and Safe-service origin are not duplicated in row copy. A header
+  reload action and active-Safe mount share one targeted refresh path.
+  Rows now carry muted upper-left request numbers, and verified future-nonce
+  blocks use those numbers in the actionable status
+  **Blocked · Execute #N first**. Other blocked causes keep the shorter label.
+- 2026-07-20 Safe-home consistency audit: Safe accounts now reuse the canonical
+  Send, Swap, Shield, and More icon-tile row with identical geometry, motion,
+  and connected-app state. Capability restrictions use disabled states rather
+  than replacing familiar controls. Safe-specific homepage buttons are omitted;
+  one compact amber Safe-marked pending-request banner is itself the View action,
+  keeps its title on one line, and exposes one unresolved-request total shared
+  with the Chrome action badge. Blocked requests count until hidden or terminal.
+  Proposal Activity rows bound action, origin,
+  chain, and status independently and never compete with a false empty state.
+- 2026-07-20 verified-Safe reveal audit: newly resolved review content scrolls
+  its heading to the start of the nearest scroll area, matching the established
+  transaction-disclosure behavior and switching to instant movement for
+  reduced-motion users.
+- 2026-07-20 manual Safe-loading audit: address scanning now uses the same
+  centered, polite live-status geometry as owner discovery, removing the
+  inconsistent left-anchored progress treatment.
+- 2026-07-20 discovered-Safe utility audit: candidate addresses now pair with
+  independent copy and first-verified-chain explorer actions while preserving
+  a large native selection target. The split avoids invalid nested controls,
+  provides named 24px utilities, and keeps verified-chain marks at the trailing
+  edge without allowing utility clicks to select the Safe.
+- 2026-07-20 Safe-discovery feedback audit: owner selection now paints a
+  centered spinner and concise status immediately, before the network-count
+  preflight returns. The same stable status row then carries exact batch
+  progress, avoiding a blank latency beat and layout ambiguity while remaining
+  exposed as a polite live status.
+- 2026-07-20 Safe-path focus audit: removed duplicate owner-search helper copy,
+  moved **or** into a quiet separator between the two idle paths, and hides the
+  manual-address path immediately after owner selection. The selected flow now
+  exposes only owner discovery, progressive feedback, candidates, and review.
+- 2026-07-20 Safe-review audit: removed the repeated Safe address and the
+  implementation-shaped “verified at exact blocks” count. Verified-chain marks
+  now provide section context, while each chain card uses a clear identity,
+  labeled threshold/balance pair, quiet version metadata, and plain-language
+  owner rows. The card retains one defined edge, tabular balance numerals,
+  named explorer access, and color-independent capability text.
+- 2026-07-20 Safe-entry audit: replaced the invented multisig glyph with Safe's
+  official packaged monogram and removed the redundant introductory masthead.
+  The entry screen now presents two compact paths with one supporting line each,
+  while progress, empty, and error details remain contextual. Native controls,
+  visible input labeling, focus treatment, and 44px targets are unchanged.
 - 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
   now gates ENS-friendly rewriting across every request surface. With browsing
   disabled, the literal gateway hostname remains the primary security identity
@@ -505,6 +667,87 @@
 
 ## Changelog
 
+- 2026-07-20: included unresolved Safe proposals in the locked-wallet pending
+  notice, with a Safe-specific label for Safe-only queues and live inbox
+  updates while the unlock screen remains open.
+- 2026-07-20: separated terminal Safe Activity details from pending request
+  review, preventing old nonces from being simulated against current chain
+  state and removing request-only route, authority, action, and footer UI.
+  Executed details now carry the semantic green checked status.
+- 2026-07-20: rebuilt Safe proposal Activity on the ordinary Warm Midnight
+  date-grouped ledger, sorted rows by descending nonce, removed status pills and
+  conflict noise, and restored Activity-origin Back navigation.
+- 2026-07-20: limited Safe Requests to canonical pending states; executed,
+  cancelled, replaced, and failed proposals now remain exclusively in Activity.
+- 2026-07-20: sorted Safe Requests by descending nonce with stable, newer-first
+  ordering for proposals that share a nonce, and promoted each **#N** value
+  from muted metadata to primary text.
+- 2026-07-20: renamed the Safe owner action **Sign offchain** and aligned its
+  inline completion notice to **Signed offchain.**
+- 2026-07-20: enabled same-chain swaps for Safe accounts through ordered Safe
+  proposal calls and the shared request screen, while retaining a visible guard
+  against unverified cross-chain Safe recipients.
+- 2026-07-20: stabilized Safe approval/execution loading states across live
+  proposal writes and routed newly confirmed executions directly to Home →
+  Activity.
+- 2026-07-20: aligned Send's **My contacts** wallet rows with the canonical
+  account avatar treatment and pinned Safe recipients to the official Safe
+  mark instead of an address blockie.
+- 2026-07-20: made pending Safe execution resilient to MV3 worker suspension
+  with a dedicated 30-second alarm and visible-review wake-up, added trusted
+  receipt RPC fallback, and exposed an automatic-retry warning only when every
+  endpoint fails instead of silently treating RPC errors as an unmined receipt.
+- 2026-07-20: made Safe execution reconciliation automatic and duplicate-safe;
+  stale service refreshes preserve local effect/hash/signed-byte authority,
+  immediate polling resumes across worker restarts, and pending execution uses
+  passive **Confirming onchain…** UI instead of Execute/Reconcile actions or
+  contradictory success/error panels.
+- 2026-07-20: tightened the Safe rejection review to one-line summary cards,
+  moved the nonce into **Reject pending transaction #N**, made both summaries
+  secondary text, aligned approval status with the details heading, and gave
+  pending and available approval states the shared semantic yellow warning
+  treatment.
+- 2026-07-20: added canonical same-nonce Safe rejection proposals for every
+  signed request, kept unsigned rejection local, and terminalized the original
+  request only after the rejection receipt confirms onchain.
+- 2026-07-20: replaced the prototype Safe request detail with the shared
+  transaction confirmation composition, moved owner/executor identity into the
+  sticky decision row, defaulted execution to a local Safe owner, exposed
+  alternate supported local executors through the account dropdown, reused the
+  standard gas estimator/editor for the exact outer Safe transaction, and
+  removed repeated password entry.
+- 2026-07-20: numbered Safe request rows and connected verified future-nonce
+  blocks to the earlier visible request with **Blocked · Execute #N first**.
+- 2026-07-20: unified Safe pending counts across the homepage banner and Chrome
+  action badge; unresolved blocked/stale requests now count, and the banner uses
+  the concise total **N pending requests**.
+- 2026-07-20: added targeted Safe request refresh on popup/sidepanel open,
+  Safe-account switch, and manual header reload; request rows now resolve known
+  wallet/contact names and omit duplicate network/origin text.
+- 2026-07-20: redesigned the Safe proposal inbox as **Safe Requests** with the
+  official Safe mark, standard account identity utilities, human-readable
+  chain-led rows, and no standalone raw proposal form.
+- 2026-07-20: made the complete Safe pending-request banner one keyboard- and
+  pointer-accessible action instead of limiting navigation to its View label.
+- 2026-07-20: compressed the Safe pending-request banner into a single-line
+  title treatment and promoted it to WalletChan amber so it separates cleanly
+  from the neutral account selector.
+- 2026-07-20: restored Safe home to the shared account action layout, made the
+  pending banner the single approvals entry point, and repaired Safe Activity
+  origin/empty-state rendering.
+- 2026-07-20: added reduced-motion-aware reveal scrolling for verified Safe
+  review content.
+- 2026-07-20: centered manual Safe-address loading to match owner discovery.
+- 2026-07-20: added copy and explorer utilities beside every discovered Safe
+  address without coupling those actions to Safe selection.
+- 2026-07-20: made Safe owner discovery loading immediate, centered, and
+  accessible through the count-preflight and progressive batch phases.
+- 2026-07-20: made Add Safe's two entry paths explicit only at rest; owner
+  selection now focuses the screen by removing manual entry and duplicate copy.
+- 2026-07-20: redesigned Safe import review around chain identity and labeled
+  facts; removed redundant address/count copy and clarified owner capability.
+- 2026-07-20: compacted Add Safe into owner-search and address-entry paths and
+  adopted Safe's official monogram from its wallet repository.
 - 2026-07-19: added a quiet, theme-token-driven contenthash provenance pill to
   ENS/IPFS connection requests. It appears only for exact hosted or configured
   local/custom gateway identities and keeps stable loading, resolved, and
@@ -1032,3 +1275,8 @@
   signing, activity, and detail surfaces. Local IPFS/onchain marks now reuse
   the browser launcher's safe raster/remap/Chrome-processed fallback order and
   existing light contrast canvas instead of collapsing to a CID letter tile.
+- 2026-07-20: distinguished actionable Safe Activity rows from settled history
+  with an amber hourglass, a restrained amber boundary inset 4px from each list
+  edge, and a faint amber wash. Inner horizontal padding tightens by 2px so the
+  content alignment remains compact. Midnight Safe fallback marks now use a
+  dark green-tinted chip; executed proposals retain the quiet green check treatment.

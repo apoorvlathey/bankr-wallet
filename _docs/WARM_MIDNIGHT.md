@@ -189,7 +189,11 @@ The unlock screen is the first completed Warm Midnight brand surface.
   spacing and placement mirror the homepage pending-request banner: a bare
   ringing bell at left, one centered label, and a bare chevron at right. The
   unlock version stays graphite instead of using the homepage's full amber
-  fill, and stays still when reduced motion is requested.
+  fill, and stays still when reduced motion is requested. The count includes
+  unresolved Safe proposals as well as ordinary transaction, signature, batch,
+  and permission prompts. A Safe-only queue reads **N Pending Safe Requests**;
+  mixed queues retain the generic **N Pending Requests** label. Proposal
+  details remain hidden until the wallet is unlocked.
 - `Forgot password?` appears only after an incorrect password.
 - An incorrect-password label occupies a reserved position at the input's top
   right so the rest of the layout does not move.
@@ -216,6 +220,8 @@ Relevant files:
 - `components/UnlockMascot.tsx`
 - `components/UnlockMascot.css`
 - `components/unlockMascotState.ts`
+- `components/pendingUnlockRequestLabel.ts`
+- `components/SafeAccount/usePendingSafeProposalCount.ts`
 - `sounds/soundManager.ts`
 
 ### 5.2 App header
@@ -284,7 +290,7 @@ See the Account Selection and Address Synchronization sections of
 ### 5.5 Portfolio balance and quick actions
 
 - Portfolio balance is the primary homepage value.
-- Keep one stable four-column row: Receive, Send, Swap, More.
+- Keep one stable four-column row: Send, Swap, Shield, More.
 - Every action owns an equal column and a consistent compact target; expansion
   to popup-window or sidepanel width must not produce large uneven gaps.
 - The Send shortcut is the amber Warm Midnight emphasis.
@@ -292,6 +298,56 @@ See the Account Selection and Address Synchronization sections of
 - WalletConnect activity is represented by a small notification dot on More,
   not a promotional card above the account.
 - The WalletConnect submenu entry carries the corresponding highlighted state.
+- Safe accounts reuse this exact row. Capability may disable Send, while Swap
+  and Shield stay visible but disabled until Safe proposal flows exist.
+- Do not add Approvals or Security buttons beneath the shared row. Pending Safe
+  proposals use one compact amber banner near the account identity: official
+  Safe mark, **Pending Safe Requests**, one total such as **2 pending
+  requests**, and a quiet **View** cue. The complete banner is the action
+  target. Account settings remains the security destination.
+- Safe Activity rows truncate action and origin context independently, convert
+  serialized service-origin JSON into a human app label, and suppress the
+  ordinary empty-transaction state whenever proposal activity is visible.
+- Terminal Safe Activity rows open as receipt-style **Transaction details**,
+  not live request reviews. Keep the originating dapp identity, Safe calls,
+  signer record, status, hashes, and explorer route; do not re-run simulation,
+  refresh approval authority, claim that a connected site is still waiting,
+  expose signing/execution/rejection controls, or render a sticky action footer.
+  Executed uses the semantic green checked pill, while Replaced and Cancelled
+  remain quiet neutral outcomes. Pending Activity rows may still open the live
+  request flow because they remain actionable.
+- Safe Requests uses an official Safe-marked app header, the standard account
+  identity/address utilities, a quiet header reload action, and one
+  separator-owned list. Rows use a chain logo, plain-language action, a
+  wallet/contact-resolved counterparty, and a compact color-independent
+  lifecycle label. Give each row a muted upper-left **Nonce #N** label using the
+  transaction's actual Safe nonce; same-nonce alternatives deliberately repeat
+  that value. Future Safe nonces may reference it with **Blocked · Execute nonce
+  #N first**; use a centered middle dot and do not show this copy for
+  non-sequencing failures. Do
+  not repeat the chain name or Safe-service origin in the row. There is no
+  standalone raw proposal form; reviewed wallet and dapp actions create
+  requests.
+- Keep unsigned **Reject** as the neutral secondary beside approval or
+  execution. If no signature exists it rejects locally; after any signature it
+  reads **Reject onchain**, uses the shared red danger treatment from signature
+  rejection, and opens a separately reviewed same-nonce rejection proposal.
+  That proposal uses **Sign rejection** and **Execute rejection** as its amber
+  commitment verbs. Its review keeps the no-asset-change summary to one
+  subdued, normal-weight line, titles the action **Reject pending transaction
+  #N** in the same secondary treatment, and places the semantic yellow **Needs
+  approval** pill at the right edge of the **Request details** heading row.
+  Locally **Available** signers use the same warning treatment. Back performs
+  navigation only, and no pending signed row receives a dismiss/hide shortcut.
+- Once execution crosses the broadcast boundary, replace the commitment action
+  with passive **Confirming onchain…** copy. Do not show Execute again, a normal
+  **Reconcile status** action, a green submitted-success panel, or a red error
+  panel for ordinary broadcast uncertainty. The state pill and footer carry
+  progress while background receipt reconciliation runs; deterministic failure
+  remains a labeled error only after reconciliation proves it. When every
+  trusted receipt RPC is unavailable, add one semantic-yellow notice reading
+  **RPC unavailable. WalletChan will keep checking automatically.** This is a
+  retrying infrastructure condition, not a red execution failure.
 
 Relevant file: `components/HomeQuickActions.tsx`.
 
@@ -528,6 +584,32 @@ Relevant files:
   showing an empty interstitial.
 - Final account-creation actions use the amber brand treatment. Validation,
   encryption, and background account handlers remain unchanged.
+- Safe setup is a compact two-path flow: Find by owner or enter a Safe address.
+  Use Safe's official monogram for Safe identity. Owner discovery needs no
+  permanent helper copy; manual entry keeps one short supporting line.
+  Discovery mechanics belong in progress and error states.
+- In the untouched state, a quiet horizontal divider with centered **or**
+  separates owner discovery from manual entry. Owner discovery has no helper
+  copy inside or above its selector. Selecting an owner removes the divider and
+  complete manual-address path, leaving discovery and Safe results in focus.
+- Owner selection or change immediately shows a horizontally centered spinner
+  and **Finding Safes…** status. Once the visible-network total resolves, the
+  same stable status row reports **Checked 0 of N networks…** and advances with
+  each batch; there is no empty transition between selection and progress.
+- Manual Safe-address scanning centers its **Checking networks…** spinner and
+  status in the same way, keeping progress treatment consistent across paths.
+- When a selected or manually entered Safe resolves, bring the **Verified
+  Safe** heading to the start of the scroll area. Match transaction Advanced
+  details: smooth movement normally and instant movement under reduced motion.
+- Discovered Safe rows keep the address as a large independent selection
+  target. Copy and first-verified-chain explorer controls sit beside it as
+  separate 24px actions, followed by the verified-chain marks; utility actions
+  never select the Safe.
+- Safe import review does not repeat the address or a verified-network count.
+  Verified-chain logos sit beside the section heading; each defined-edge chain
+  card leads with network identity, then labeled threshold and balance facts,
+  followed by plain-language owner rows. Safe version is quiet metadata and
+  the explorer remains attached to its chain.
 
 ### 5.15 Transaction review
 

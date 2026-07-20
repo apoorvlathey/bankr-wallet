@@ -40,6 +40,7 @@ export function shouldUseSponsoredTransfer({
     isCandidate &&
       premiumStatus?.isPremium &&
       premiumStatus.sponsoredTransfersEnabled &&
-      accountType !== "impersonator",
+      accountType !== "impersonator" &&
+      accountType !== "safe",
   );
 }

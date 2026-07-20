@@ -1085,9 +1085,17 @@ export function isForceInclusionSupported(chainId: number): boolean {
  */
 export function isForceInclusionSupportedForAccount(
   l2ChainId: number,
-  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | undefined,
+  accountType:
+    | "bankr"
+    | "privateKey"
+    | "seedPhrase"
+    | "impersonator"
+    | "safe"
+    | undefined,
 ): boolean {
-  if (!accountType || accountType === "impersonator") return false;
+  if (!accountType || accountType === "impersonator" || accountType === "safe") {
+    return false;
+  }
   const info = FORCE_INCLUSION_CHAINS.get(l2ChainId);
   if (!info) return false;
   if (info.protocol === "arbitrum") {

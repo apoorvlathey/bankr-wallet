@@ -17,6 +17,7 @@ export interface PendingDappConnectionRequest {
   favicon?: string | null;
   tabId?: number;
   frameId?: number;
+  chainId?: number;
   timestamp: number;
 }
 

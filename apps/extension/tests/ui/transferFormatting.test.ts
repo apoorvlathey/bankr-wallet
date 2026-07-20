@@ -20,4 +20,5 @@ test("transfer account labels keep every supported wallet type distinct", () => 
   assert.equal(label("privateKey"), "Private Key");
   assert.equal(label("seedPhrase"), "Seed Phrase");
   assert.equal(label("impersonator"), "View Only");
+  assert.equal(label("safe"), "Safe");
 });

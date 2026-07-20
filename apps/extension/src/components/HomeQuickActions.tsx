@@ -8,6 +8,9 @@ interface HomeQuickActionsProps {
   onShield: () => void;
   onMore: () => void;
   hasConnectedApps?: boolean;
+  disabledActions?: Partial<
+    Record<"send" | "swap" | "shield" | "more", string>
+  >;
 }
 
 const SendIcon = () => (
@@ -91,6 +94,7 @@ export default function HomeQuickActions({
   onShield,
   onMore,
   hasConnectedApps = false,
+  disabledActions = {},
 }: HomeQuickActionsProps) {
   const { themeId } = useTheme();
   const isWarmMidnight = isDarkThemeId(themeId);
@@ -124,10 +128,14 @@ export default function HomeQuickActions({
           gap={2}
           color="fg.primary"
           aria-label={
-            action.id === "more" && hasConnectedApps
+            disabledActions[action.id]
+              ? `${action.label}, ${disabledActions[action.id]}`
+              : action.id === "more" && hasConnectedApps
               ? "More, connected app active"
               : action.label
           }
+          isDisabled={Boolean(disabledActions[action.id])}
+          title={disabledActions[action.id]}
           onClick={handlers[action.id]}
           onMouseEnter={() => void playInteractionSound("quickActionHover")}
           _hover={{ bg: "surface.raisedHover" }}

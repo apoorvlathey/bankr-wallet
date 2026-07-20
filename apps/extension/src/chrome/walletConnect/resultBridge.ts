@@ -14,12 +14,15 @@ export async function completeWalletConnectRequestIfNeeded(
   const txPrefix = "txResult:";
   const sigPrefix = "sigResult:";
   const erc7715Prefix = "erc7715PermissionResult:";
+  const batchPrefix = "batchTxAck:";
   const id = key.startsWith(txPrefix)
     ? key.slice(txPrefix.length)
     : key.startsWith(sigPrefix)
       ? key.slice(sigPrefix.length)
       : key.startsWith(erc7715Prefix)
         ? key.slice(erc7715Prefix.length)
+        : key.startsWith(batchPrefix)
+          ? key.slice(batchPrefix.length)
         : null;
   if (!id) return;
 
@@ -35,11 +38,17 @@ export async function completeWalletConnectRequestIfNeeded(
         : pending.kind === "signature"
           ? result.signature
           : result.result;
+    const validBatchResult = pending.kind === "batch" &&
+      typeof result.id === "string" && result.id === pending.id;
     if (
       result.success === true &&
-      (typeof payload === "string" || Array.isArray(payload))
+      (validBatchResult || typeof payload === "string" || Array.isArray(payload))
     ) {
-      await respondRoutedSessionRequest(kit, args, payload);
+      await respondRoutedSessionRequest(
+        kit,
+        args,
+        validBatchResult ? { id: result.id } : payload,
+      );
     } else {
       const error =
         typeof result.error === "string" ? result.error : "Request failed";

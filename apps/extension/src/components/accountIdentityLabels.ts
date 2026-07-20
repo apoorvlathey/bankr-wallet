@@ -18,5 +18,6 @@ export function getWalletTypeLabel(
   if (account.type === "seedPhrase") {
     return getSeedAccountLabel(account, seedGroupMap) || "Seed phrase";
   }
+  if (account.type === "safe") return "Safe multisig";
   return "View only";
 }

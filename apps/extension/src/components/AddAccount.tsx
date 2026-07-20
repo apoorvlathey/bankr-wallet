@@ -33,6 +33,7 @@ import { PrivateKeyAccountSection } from "@/components/AddAccount/PrivateKeyAcco
 import { SeedPhraseAccountSection } from "@/components/AddAccount/SeedPhraseAccountSection";
 import { useLocalAccountBiometricGate } from "@/components/AddAccount/useLocalAccountBiometricGate";
 import type { AccountType } from "@/components/AddAccountTypeGrid";
+import { SafeEntryScreen } from "@/components/SafeAccount/SafeEntryScreen";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { isResolvableName } from "@/lib/ensUtils";
@@ -42,10 +43,9 @@ import {
   ScreenBody,
   ScreenSection,
 } from "@/components/ui";
-
 interface Account {
   id: string;
-  type: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  type: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | "safe";
   address: string;
   displayName?: string;
   seedGroupId?: string;
@@ -69,6 +69,7 @@ const accountTypeTitles: Record<AccountType, string> = {
   seedPhrase: "Seed phrase",
   bankr: "Bankr API",
   impersonator: "View-only account",
+  safe: "Safe",
 };
 
 function AddAccount({
@@ -469,7 +470,6 @@ function AddAccount({
       />
     );
   }
-
   if (!accountType) {
     return (
       <AddAccountTypeSelectionScreen
@@ -480,6 +480,7 @@ function AddAccount({
     );
   }
 
+  if (accountType === "safe") return <SafeEntryScreen onBack={() => setAccountType(null)} onAccountAdded={onAccountAdded} />;
   const isLocalAccount =
     accountType === "privateKey" || accountType === "seedPhrase";
 

@@ -26,6 +26,8 @@ import { pinnedBatchTxRequest } from "../requests/pinnedRequest";
 import { validateWalletSendCallsPayload } from "../provider/batchValidation";
 import type { Account } from "../types";
 import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
+import { createReviewedSafeProposal } from "../safe/proposalLifecycle";
+import { requireSafeFeature } from "../safe/featurePolicy";
 
 export async function handleWalletSendCalls(
   params: WalletSendCallsParams,
@@ -64,7 +66,8 @@ export async function handleWalletSendCalls(
     const isBankrAccount = account?.type === "bankr";
     const isPKOrSP = account?.type === "privateKey" || account?.type === "seedPhrase";
     const isImpersonator = account?.type === "impersonator";
-    if (!account || (!isBankrAccount && !isPKOrSP && !isImpersonator)) {
+    const isSafe = account?.type === "safe";
+    if (!account || (!isBankrAccount && !isPKOrSP && !isImpersonator && !isSafe)) {
       await writeResultToStorage(`batchTxAck:${bundleId}`, {
         success: false,
         error: "Active account does not support batch transactions",
@@ -103,6 +106,30 @@ export async function handleWalletSendCalls(
       return;
     }
     const normalizedParams: WalletSendCallsParams = { ...params, calls: normalizedCalls.calls };
+
+    if (isSafe) {
+      requireSafeFeature("erc5792");
+      if (params.from && params.from.toLowerCase() !== account.address.toLowerCase()) {
+        await writeResultToStorage(`batchTxAck:${bundleId}`, { success: false, error: "From address does not match active Safe", code: ERC5792_ERRORS.UNAUTHORIZED });
+        return;
+      }
+      const calls = normalizedParams.calls.map((call) => ({
+        to: call.to!,
+        value: BigInt(call.value || "0x0").toString() as `${bigint}`,
+        data: call.data || "0x" as `0x${string}`,
+        operation: 0 as const,
+      }));
+      const proposal = await createReviewedSafeProposal({
+        safeAccountId: account.id,
+        chainId,
+        calls,
+        route: { kind: "erc5792", origin: senderOrigin ?? origin, tabId, frameId, bundleId, topic: walletConnect?.topic, requestId: walletConnect ? String(walletConnect.requestId) : undefined },
+      });
+      clearProviderRequestSurfaceHint(senderWindowId);
+      chrome.runtime.sendMessage({ type: "newSafeProposalRequest", proposalId: proposal.id }).catch(() => {});
+      openExtensionPopup(senderWindowId);
+      return;
+    }
 
     const eoa = account.address.toLowerCase();
     const offending = normalizedParams.calls.findIndex((call) => {

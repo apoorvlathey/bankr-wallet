@@ -5,7 +5,7 @@ import {
   type Address,
 } from "viem";
 import { secureHttpTransport } from "../network/rpcClient";
-import { SIMULATOR_BYTECODE } from "../txSimulation";
+import { buildIsolatedSimulatorOverride } from "../simulation/simulatorOverride";
 import type { BatchGasCall, RawBatchGasResult } from "./types";
 
 const RPC_TIMEOUT = 15_000;
@@ -61,7 +61,7 @@ export async function tryBatchGasInjection(
       to: fromAddress as Address,
       data: calldata,
       stateOverride: [
-        { address: fromAddress as Address, code: SIMULATOR_BYTECODE },
+        buildIsolatedSimulatorOverride(fromAddress as Address),
       ],
     });
     if (!result.data) {

@@ -79,14 +79,14 @@ test("keeps view-only signing fixtures separate from the three signer types", ()
 
 test("every documented core scenario is accepted as reload-stable URL state", () => {
   const expected: Record<string, readonly string[]> = {
-    home: ["default", "portfolio-loading", "portfolio-empty", "portfolio-error", "stress"],
-    unlock: ["pending-requests", "empty", "invalid-password", "submitting", "success", "biometric-configured"],
+    home: ["default", "portfolio-loading", "portfolio-empty", "portfolio-error", "stress", "safe-account"],
+    unlock: ["pending-requests", "pending-safe-request", "empty", "invalid-password", "submitting", "success", "biometric-configured"],
     tx: ["default", "loading", "simulation-error", "malformed-disabled", "stress", "impersonator-disabled"],
     signature: ["personal-sign", "typed-data-long", "siwe-blocked", "submitting", "impersonator-disabled"],
     portfolio: ["populated", "loading", "empty", "error", "stress", "activity-selected"],
     swap: ["default", "portfolio-loading", "portfolio-error", "quoted", "bridge-quoted", "disabled"],
-    "swap-picker": ["sell", "buy", "search", "loading", "empty", "missing-logo", "stress"],
-    batch: ["default", "loading", "simulation-error", "malformed-disabled", "stress", "impersonator-disabled"],
+    "swap-picker": ["sell", "buy", "chains", "search", "loading", "empty", "missing-logo", "stress"],
+    batch: ["default", "loading", "simulation-error", "malformed-disabled", "unsafe-self-call", "stress", "impersonator-disabled"],
     "cross-batch": ["default", "loading", "error", "stress", "impersonator-disabled"],
     permission: ["default", "metadata-loading", "metadata-unverified", "draft-invalid", "submitting", "advanced-stress"],
   };

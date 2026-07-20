@@ -33,16 +33,20 @@ export async function getTxHistory(): Promise<CompletedTransaction[]> {
 
 export async function addTxToHistory(
   tx: CompletedTransaction,
-): Promise<void> {
+): Promise<CompletedTransaction> {
   return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
     const history = await getTxHistory();
+    const existing = history.find((item) => item.id === tx.id);
+    if (existing) return existing;
     history.unshift(tx);
     const trimmed = history.slice(0, MAX_HISTORY_SIZE);
     await chrome.storage.local.set({ [TX_HISTORY_KEY]: trimmed });
     notifyTxHistoryUpdated(tx);
+    return tx;
   });
 }
-
+/** Recovery-facing name for the repository's idempotent add primitive. */
+export const addTxToHistoryIfAbsent = addTxToHistory;
 export async function updateTxInHistory(
   txId: string,
   updates: Partial<CompletedTransaction>,
@@ -79,9 +83,7 @@ export async function getProcessingTxs(): Promise<CompletedTransaction[]> {
   return history.filter((tx) => tx.status === "processing");
 }
 
-export async function getPendingConfirmationTxs(): Promise<
-  CompletedTransaction[]
-> {
+export async function getPendingConfirmationTxs(): Promise<CompletedTransaction[]> {
   const history = await getTxHistory();
   return history.filter((tx) => tx.status === "pending" && tx.txHash);
 }

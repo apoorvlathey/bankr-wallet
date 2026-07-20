@@ -5,7 +5,8 @@ export type TransferAccountType =
   | "bankr"
   | "privateKey"
   | "seedPhrase"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 export interface TokenTransferProps {
   token?: PortfolioToken | null;

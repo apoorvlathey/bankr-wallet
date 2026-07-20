@@ -11,8 +11,9 @@ Review this domain in dependency order:
 3. `assetTransferParser.ts` — pure ERC-20 Transfer-log recognition and numeric
    coercion. It excludes NFT-shaped four-topic logs.
 4. `repository.ts` — the sole `txHistory` read/add/update authority, the
-   `local:txHistory` mutation lock, newest-first ordering, 50-entry cap, and
-   `txHistoryUpdated` broadcasts.
+   `local:txHistory` mutation lock, newest-first ordering, 50-entry cap,
+   deterministic add-if-absent recovery primitive, and `txHistoryUpdated`
+   broadcasts.
 5. `maintenance.ts` — stale-processing failure and full/per-address cleanup.
    Force-inclusion entries remain owned by receipt-based recovery.
 6. `rpc.ts` — bounded receipt/balance/block reads, balance retry policy, and

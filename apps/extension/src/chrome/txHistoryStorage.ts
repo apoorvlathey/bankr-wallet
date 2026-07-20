@@ -20,6 +20,7 @@ export type {
 } from "./history/types";
 export {
   addTxToHistory,
+  addTxToHistoryIfAbsent,
   getPendingConfirmationTxs,
   getProcessingTxs,
   getTxById,

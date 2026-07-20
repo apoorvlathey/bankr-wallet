@@ -362,6 +362,7 @@ configured auto-lock boundary.
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
+| Safe discovery/import and request refresh | `probeSafeAddress`, `findSafesByOwner`, `importSafeAccount`, `getSafeAccounts`, `refreshSafeAccount`, `getSafeProposals`, `syncSafeRequests` | Safe authority snapshots and proposal records remain background-owned. Discovery/probing returns opaque, unguessable, 30-minute in-memory verification receipt IDs; import must bind those receipts to the exact address and requested chains. Review refresh accepts one current Safe account ID plus an optional previously imported chain ID and re-verifies the stored address directly through the configured RPC; it never trusts renderer-supplied authority or requires Transaction Service discovery. Expired, missing, mismatched, worker-lost, non-Safe account IDs, and unimported chain IDs fail closed. |
 
 `getActiveAccount` is the narrow exception: `inject.ts` uses it during content
 script initialization to correct stale synced address state before emitting
@@ -1616,6 +1617,104 @@ Quick reference for which files to examine based on what area of security you're
   `nftMetadata.ts`, `calldataAddressCandidates.ts`, and
   `erc20CandidatePreflight.ts` - custom-token privacy/storage, remote metadata,
   and bounded simulation candidate discovery
+- `simulation/simulatorOverride.ts` - read-only TxSimulator bytecode injection
+  with full replacement storage, preventing live Safe proxy or other contract
+  state from being interpreted through the simulator's storage layout
+
+### Safe multisig boundaries
+
+1. **Contract authority, not address equivalence.** Import and every
+   irreversible Safe action verify a pinned canonical proxy runtime/singleton,
+   supported Safe version, owners, threshold, nonce, modules, guard, fallback
+   handler, and owner code at an exact block. The configuration epoch binds
+   review to effect. Unknown deployments/extensions, contract or nested
+   owners, arbitrary delegatecall, and unknown confirmation types fail closed.
+
+2. **No account-type fallthrough.** A Safe row cannot enter an EOA, Bankr,
+   delegated-permission, sponsored, swap, bridge, force-inclusion, or message-
+   signature path through a default branch. Unsupported Safe features are
+   centrally denied, and staged rollout can disable each effect tier.
+
+3. **Service data is coordination only.** Safe reads and writes go directly to
+   Safe's official gateway; there is no WalletChan backend route or server
+   credential. The bounded Config Service registry accepts transaction targets
+   only under `https://api.safe.global/tx-service/*`, rejects redirects,
+   duplicate/malformed chain IDs, unsafe public RPC fallbacks, and non-EVM
+   networks, and is cached only in service-worker memory. Hidden and custom
+   WalletChan chains are matched only by numeric chain ID. The extension
+   reconstructs every transaction, recomputes `safeTxHash`, recovers each EOA
+   confirmation, binds it to a distinct current owner, and excludes unsupported
+   types from quorum. A service refresh may add validated confirmations or an
+   execution hash, but it cannot downgrade a locally claimed/prepared/broadcast
+   effect, discard an unpublished local confirmation, or erase deterministic
+   outer transaction evidence. Terminal execution still passes through receipt
+   reconciliation so provider/ERC-5792 results and same-nonce competitors are
+   settled exactly once.
+
+4. **Owner discovery is one-address opt-in.** The trusted UI sends one selected
+   local account ID. The background resolves it afresh and accepts only a
+   Bankr/private-key/seed record before disclosing that one address to Safe.
+   It never batches all wallet addresses. Progressive discovery batches the
+   intersection of visible WalletChan networks and Safe's live registry, not
+   owners: hidden chains cause no owner disclosure, and each bounded page
+   re-resolves the same selected account ID and returns verified results
+   incrementally. The initial count-only page performs no Safe owner request;
+   it only computes the visible Safe-supported total. Manual Safe-address
+   probing is separate and does not disclose owner accounts.
+
+   Foreground proposal refresh is also exact-account and exact-chain scoped.
+   The trusted UI supplies one Safe account ID and the proposal's chain ID; the
+   background resolves both against the stored Safe record, then directly
+   re-verifies that address through the configured RPC. It does not repeat
+   Transaction Service discovery, broaden owner discovery, or disclose a local
+   owner address. Safe security may omit the chain ID to re-verify every
+   previously imported snapshot.
+
+5. **One pinned owner per authorization.** Each approval chooses one current
+   Bankr/private-key/seed record and repeats live authority checks immediately
+   before releasing its signature. Impersonator and Safe records cannot sign.
+   Agent passwords may approve ordinary proposals but cannot reveal PK/seed
+   secrets or make future authority changes. The confirmation renderer does
+   not collect another password: Bankr credentials and local keys are resolved
+   only from the live expiry-checked cache or the same bounded native-session
+   restoration used by ordinary transaction/signature confirmation. A missing
+   capability fails closed as locked. The auth epoch is captured only after
+   restoration and is rechecked after asynchronous signing and immediately
+   before outer execution broadcast.
+
+6. **Ambiguity is durable.** First-action claims own approval, publication,
+   and execution effects. Exact signed outer execution bytes and their
+   deterministic hash are persisted before broadcast. Lost RPC responses are
+   reconciled immediately by a bounded poller and resumed by a dedicated
+   30-second MV3 alarm plus startup recovery. Read-only reconciliation tries
+   the configured RPC before pinned built-in/canonical endpoints. It
+   distinguishes a valid null receipt from transport/RPC failure; only the
+   former is evidence that a healthy endpoint has not indexed the transaction.
+   Receipt and Safe nonce are authoritative, and only identical signed bytes
+   may be resent. Any durable execute claim, hash, or serialized envelope
+   rejects a second prepare/send path even when display state is stale. Reset
+   and Safe removal fail while effects are unresolved. `safeTxHash` is proposal
+   identity only and is never returned as an onchain transaction result.
+
+7. **Executor selection is explicit and bounded.** The UI defaults outer
+   execution to a WalletChan-controlled private-key/seed owner when one is
+   available, but may select another local private-key/seed account to pay gas.
+   Bankr, impersonator, and Safe records never fall through to the local outer
+   signer. The background resolves the selected account ID afresh, validates
+   the shared gas override quantities, rechecks live quorum/configuration, and
+   simulates the exact immutable `execTransaction` envelope immediately before
+   the serialized transaction crosses the RPC boundary.
+
+8. **Signed rejection is onchain only.** Local cancellation rejects only a
+   proposal with zero supported and zero unsupported collected confirmations.
+   Once any signature exists, the trusted-UI-only
+   `startSafeProposalRejection` route verifies the live configuration and exact
+   executable nonce, then constructs only the canonical zero-value, empty-data
+   Safe self-call at that nonce. It reuses the ordinary per-owner signature,
+   publication, threshold, executor, auth-epoch, simulation, and ambiguity
+   gates. The original proposal is not marked cancelled and provider/ERC-5792
+   outcomes are not failed until the rejection execution receipt confirms.
+   Pending signed proposals cannot be hidden as a substitute for rejection.
 
 ### Extension permissions
 

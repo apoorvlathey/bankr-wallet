@@ -5,6 +5,7 @@ import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
+import { previewSafeAccountRecords, previewSafeProposals } from "./safeHomePreview";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
 import {
   createPreviewEnvironment,
@@ -314,6 +315,8 @@ export function responseForPreviewMessage(
       return { ...activeAccount(environment) };
     case "getTabAccount":
       return { ...activeAccount(environment) };
+    case "getProviderRequestSurfaceHint":
+      return null;
     case "getPendingDappConnectionRequests":
       return [];
     case "getDappConnectionContext":
@@ -329,6 +332,21 @@ export function responseForPreviewMessage(
     case "getPendingWatchAssetRequests":
     case "getPendingAddChainRequests":
       return [];
+    case "getSafeAccounts":
+      return structuredClone(previewSafeAccountRecords);
+    case "refreshSafeAccount":
+      return { success: true, record: structuredClone(previewSafeAccountRecords[0]) };
+    case "getSafeProposals":
+      return {
+        success: true,
+        result: structuredClone(
+          route === "unlock"
+            ? scenario === "pending-safe-request" ? previewSafeProposals.slice(0, 1) : []
+            : previewSafeProposals,
+        ),
+      };
+    case "syncSafeRequests":
+      return { success: true, result: structuredClone(previewSafeProposals) };
     case "getTxHistory":
       return environment.txHistory;
     case "getFailedTxResult":

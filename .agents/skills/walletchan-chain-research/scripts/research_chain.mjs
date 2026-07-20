@@ -9,6 +9,8 @@ const ZEROX_DOCS_MD = "https://docs.0x.org/docs/introduction/supported-chains.md
 const COINGECKO_PLATFORMS = "https://api.coingecko.com/api/v3/asset_platforms";
 const GECKOTERMINAL_NETWORKS = "https://api.geckoterminal.com/api/v2/networks";
 const CHAINID_NETWORK = "https://chainid.network/chains.json";
+const SAFE_CONFIG_CHAINS = "https://safe-config.safe.global/api/v1/chains/?limit=100";
+const WALLETCHAN_SAFE_NON_EVM_CHAIN_IDS = new Set([324]);
 
 function usage() {
   console.error(`Usage:
@@ -155,6 +157,58 @@ async function checkBridge(chainId) {
     explorers: chain.explorers,
     dexes: chain.dexes,
     bridges: chain.bridges,
+  };
+}
+
+function isOfficialSafeTransactionService(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "api.safe.global" &&
+      /^\/tx-service\/[a-z0-9-]+\/?$/.test(url.pathname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+async function checkSafe(chainId) {
+  const json = await fetchJson(SAFE_CONFIG_CHAINS);
+  const chains = Array.isArray(json?.results) ? json.results : [];
+  const entry = chains.find((item) => Number(item?.chainId) === chainId) || null;
+  const transactionServiceOfficial = isOfficialSafeTransactionService(
+    entry?.transactionService,
+  );
+  const excludedAsNonEvm = WALLETCHAN_SAFE_NON_EVM_CHAIN_IDS.has(chainId);
+  const walletchanSafeAccountsSupported = Boolean(entry) &&
+    transactionServiceOfficial &&
+    !excludedAsNonEvm;
+
+  return {
+    configUrl: SAFE_CONFIG_CHAINS,
+    supportedNetworksDocs: "https://docs.safe.global/advanced/smart-account-supported-networks",
+    multiChainDeploymentDocs: "https://docs.safe.global/advanced/smart-account-multi-chain-deployment",
+    chainId,
+    listedInSafeConfig: Boolean(entry),
+    chainName: entry?.chainName || null,
+    shortName: entry?.shortName || null,
+    isTestnet: entry?.isTestnet ?? null,
+    transactionService: entry?.transactionService || null,
+    transactionServiceOfficial,
+    recommendedMasterCopyVersion: entry?.recommendedMasterCopyVersion || null,
+    excludedAsNonEvm,
+    walletchanSafeAccountsSupported,
+    note: !entry
+      ? "Exact chain ID is absent from Safe Config; treat Safe accounts as unsupported."
+      : excludedAsNonEvm
+        ? "Safe Config lists this chain, but WalletChan excludes its documented non-EVM Safe deployment."
+        : transactionServiceOfficial
+          ? "Exact chain ID and official Safe Transaction Service are present; still review the linked Safe docs for new EVM-compatibility exceptions."
+          : "Safe Config entry does not expose an accepted official Transaction Service; treat Safe accounts as unsupported.",
   };
 }
 
@@ -311,6 +365,7 @@ const report = {
   rpc: null,
   testnets: [],
   bridge: null,
+  safe: null,
   zerox: null,
   coinGecko: [],
   geckoTerminal: [],
@@ -323,6 +378,7 @@ const report = {
 for (const [key, task] of [
   ["rpc", () => checkRpc(rpcUrl)],
   ["bridge", () => checkBridge(chainId)],
+  ["safe", () => checkSafe(chainId)],
   ["zerox", () => check0x(chainId)],
   ["coinGecko", () => checkCoinGecko(chainId, name)],
   ["chainidNetwork", () => checkChainIdNetwork(chainId)],

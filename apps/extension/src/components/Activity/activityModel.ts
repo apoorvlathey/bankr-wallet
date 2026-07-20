@@ -13,9 +13,9 @@ import {
   getLiveActivityAddressLabel,
 } from "./activityIdentityModel";
 
-export interface ActivityDateGroup {
+export interface ActivityDateGroup<T = CompletedTransaction> {
   label: string;
-  txs: CompletedTransaction[];
+  txs: T[];
 }
 
 export interface ActivityStatusModel {
@@ -39,11 +39,11 @@ export interface ActivityPresentation {
 }
 
 /** Group transactions by date label. */
-export function groupActivityByDate(
-  txs: CompletedTransaction[],
+export function groupActivityByDate<T extends { createdAt: number }>(
+  txs: readonly T[],
   today: Date,
-): ActivityDateGroup[] {
-  const groups: Map<string, CompletedTransaction[]> = new Map();
+): ActivityDateGroup<T>[] {
+  const groups: Map<string, T[]> = new Map();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 

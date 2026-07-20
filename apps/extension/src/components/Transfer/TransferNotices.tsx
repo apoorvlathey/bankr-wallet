@@ -22,6 +22,7 @@ export function SponsorshipEligibilityNotice({
     !premiumStatus ||
     premiumStatus.isPremium ||
     accountType === "impersonator"
+    || accountType === "safe"
   ) {
     return null;
   }
@@ -80,7 +81,7 @@ export function TransferNotices({
       {isUsdcOnBase &&
         !premiumLoading &&
         premiumStatus?.isPremium &&
-        accountType !== "impersonator" && (
+        accountType !== "impersonator" && accountType !== "safe" && (
           <Box
             bg="status.success.bg"
             borderWidth="1px"
@@ -140,6 +141,22 @@ export function TransferNotices({
         >
           <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
             View-only account — transfers are disabled.
+          </Text>
+        </Box>
+      )}
+      {accountType === "safe" && (
+        <Box
+          bg="status.info.bg"
+          border={tokens.borders.thin}
+          borderColor="status.info.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text fontSize="sm" color="status.info.fg" fontWeight="700">
+            This creates a Safe proposal.
+          </Text>
+          <Text fontSize="xs" color="fg.secondary" mt={1}>
+            An owner approval is recorded first. Assets move only after quorum and a separate execution.
           </Text>
         </Box>
       )}

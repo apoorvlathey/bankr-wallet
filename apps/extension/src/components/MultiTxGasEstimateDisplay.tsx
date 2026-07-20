@@ -67,7 +67,7 @@ interface TxGasInput {
 
 interface MultiTxGasEstimateDisplayProps {
   transactions: TxGasInput[];
-  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator";
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator" | "safe";
   /** If provided, estimate gas for this single batch tx instead of individual txs */
   batchedTx?: TxGasInput;
   /** Use sequential gas estimation (eth_simulateV1 → Tevm fallback) for non-atomic batches */

@@ -1,6 +1,6 @@
 ---
 name: walletchan-chain-research
-description: Research and verify EVM chain metadata and notification-safe icon assets for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, map official testnet chain IDs to a mainnet logo, verify RPC/explorer/native currency/icon, determine Bankr support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
+description: Research and verify EVM chain metadata and notification-safe icon assets for WalletChan chain additions or updates. Use when Codex is asked to add a new WalletChan chain, update chain params, map official testnet chain IDs to a mainnet logo, verify RPC/explorer/native currency/icon, determine Bankr support, Safe multisig account support, 0x swap support, Bungee/Socket bridge support, CoinGecko/GeckoTerminal IDs, or MetaMask EIP-7702 default delegate support.
 ---
 
 # WalletChan Chain Research
@@ -49,9 +49,17 @@ description: Research and verify EVM chain metadata and notification-safe icon a
 6. Treat EIP-7702 separately from “the chain supports type-4 txs”. WalletChan's
    automatic atomic path requires the configured default delegate contract to be
    deployed and non-empty on the chain.
-7. Report uncertainty explicitly. If a source cannot verify a field, leave the
+7. Treat Safe support as a live capability, not a WalletChan chain-registry
+   flag. Match the exact numeric chain ID in Safe's Config Service and require
+   a valid official Transaction Service URL. Separately confirm that the chain
+   is EVM-compatible for WalletChan's Safe integration. Safe lists zkSync Era
+   (324), but WalletChan deliberately excludes it because Safe documents its
+   deployment as non-EVM-compatible. Do not infer Safe support from contract
+   deployment addresses, a Safe brand mention, or another chain in the same
+   ecosystem.
+8. Report uncertainty explicitly. If a source cannot verify a field, leave the
    risky flag false or omit the optional ID instead of guessing.
-8. Research current public testnets from the chain operator's documentation and
+9. Research current public testnets from the chain operator's documentation and
    verify every candidate with `eth_chainId` when an RPC is available. Add the
    resulting IDs to the mainnet entry's `testnetChainIds` array so custom-added
    testnets reuse its icon and testnet overlay. Exclude local/dev networks and
@@ -66,6 +74,11 @@ Prefer these sources, in this order:
 - Chain-operator network documentation for the set of current public testnets;
   confirm each numeric ID against its live RPC where possible.
 - WalletChan/Bungee bridge endpoint: `/api/bridge/chains`.
+- Safe Config Service: exact chain ID in
+  `https://safe-config.safe.global/api/v1/chains/?limit=100`, plus the official
+  Safe supported-networks and multi-chain-deployment documentation for EVM
+  compatibility. Require the Transaction Service to remain under the exact
+  `https://api.safe.global/tx-service/*` boundary.
 - 0x official supported-chains docs for Swap API support.
 - `@metamask/delegation-deployments` plus `eth_getCode` at WalletChan's
   `EIP_7702_DEFAULT_DELEGATE` for default 7702 support.
@@ -88,6 +101,8 @@ When finishing a chain research task, include:
 - Proposed `ChainEntry` values, including explicit true/false support flags.
 - Verified `testnetChainIds`, including the reason for any retained legacy ID.
 - Which swap/bridge/7702 facts were verified and from where.
+- Safe account support: exact Config Service match, official Transaction
+  Service URL, recommended singleton version, and any WalletChan EVM exclusion.
 - Icon source and local UI path, if downloaded. For an SVG, also report the
   generated notification PNG path and its 128x128 validation.
 - Files changed and validation commands run.

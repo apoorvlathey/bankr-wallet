@@ -33,6 +33,12 @@ export async function handleSponsoredTransfer(message: {
         error: "View-only accounts cannot send transactions",
       };
     }
+    if (account.type === "safe") {
+      return {
+        success: false,
+        error: "Safe accounts cannot use sponsored transfers",
+      };
+    }
     const intent = validateSponsoredTransferIntent(account.address, {
       fromAddress,
       to,

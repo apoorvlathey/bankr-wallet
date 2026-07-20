@@ -21,7 +21,7 @@ export type WalletConnectTerminalResponseInput =
 
 export interface WalletConnectPendingRequest {
   id: string;
-  kind: "claim" | "transaction" | "signature" | "erc7715Permission";
+  kind: "claim" | "transaction" | "signature" | "erc7715Permission" | "batch";
   topic: string;
   requestId: number;
   method: string;
@@ -44,7 +44,8 @@ function isPendingRequest(value: unknown): value is WalletConnectPendingRequest 
     (candidate.kind === "claim" ||
       candidate.kind === "transaction" ||
       candidate.kind === "signature" ||
-      candidate.kind === "erc7715Permission") &&
+      candidate.kind === "erc7715Permission" ||
+      candidate.kind === "batch") &&
     typeof candidate.topic === "string" &&
     candidate.topic.length > 0 &&
     candidate.topic.length <= MAX_WALLETCONNECT_TOPIC_CHARS &&

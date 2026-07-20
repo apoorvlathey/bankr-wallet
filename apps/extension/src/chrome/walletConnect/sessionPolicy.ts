@@ -36,7 +36,11 @@ export function sanitizeWalletConnectMetadataUrl(value: unknown): string {
   }
 }
 
-export type SigningAccount = Exclude<Account, { type: "impersonator" }>;
+export type SigningAccount = Extract<
+  Account,
+  { type: "bankr" | "privateKey" | "seedPhrase" }
+>;
+export type SessionAccount = SigningAccount | Extract<Account, { type: "safe" }>;
 
 export const WALLETCONNECT_SUPPORTED_METHODS = [
   "eth_sendTransaction",
@@ -57,6 +61,25 @@ export const WALLETCONNECT_SUPPORTED_METHODS = [
   "eth_chainId",
   "net_version",
 ];
+
+const SAFE_UNSUPPORTED_SESSION_METHODS = new Set([
+  "personal_sign",
+  "eth_signTypedData_v3",
+  "eth_signTypedData_v4",
+  "wallet_getSupportedExecutionPermissions",
+  "wallet_requestExecutionPermissions",
+  "wallet_getGrantedExecutionPermissions",
+]);
+
+export function getWalletConnectMethodsForAccount(
+  account: SessionAccount,
+): string[] {
+  return account.type === "safe"
+    ? WALLETCONNECT_SUPPORTED_METHODS.filter(
+        (method) => !SAFE_UNSUPPORTED_SESSION_METHODS.has(method),
+      )
+    : [...WALLETCONNECT_SUPPORTED_METHODS];
+}
 
 export const WALLETCONNECT_SUPPORTED_EVENTS = [
   "chainChanged",
@@ -87,7 +110,15 @@ export const WALLETCONNECT_SAFE_RPC_METHODS = new Set([
 export function isSigningAccount(
   account: Account | null,
 ): account is SigningAccount {
-  return !!account && account.type !== "impersonator";
+  return !!account && (
+    account.type === "bankr" ||
+    account.type === "privateKey" ||
+    account.type === "seedPhrase"
+  );
+}
+
+export function isSessionAccount(account: Account | null): account is SessionAccount {
+  return isSigningAccount(account) || account?.type === "safe";
 }
 
 export function chainIdFromCaip2(value: string | undefined): number | null {
@@ -180,13 +211,32 @@ export async function resolveSessionSigningAccount(
     throw new Error("Requested account is not authorized for this session");
   }
 
-  const account = (await getAccounts()).find(
+  const matching = (await getAccounts()).filter(
     (entry) => entry.address.toLowerCase() === address.toLowerCase(),
   );
-  if (!account || !isSigningAccount(account)) {
+  if (matching.some((entry) => entry.type === "safe")) {
+    throw new Error("Safe smart-account message signing is not supported");
+  }
+  const signers = matching.filter(isSigningAccount);
+  if (signers.length !== 1) {
     throw new Error("No signing account found for this session");
   }
-  return account;
+  return signers[0];
+}
+
+export async function resolveSessionAccount(
+  session: any,
+  chainId: number,
+  requestedAddress: string | null,
+): Promise<SessionAccount> {
+  const authorized = getSessionAccounts(session, chainId);
+  const requested = requestedAddress || authorized[0];
+  if (!isAddress(requested) || !authorized.some((entry) => entry.toLowerCase() === requested.toLowerCase())) {
+    throw new Error("Requested account is not authorized for this session");
+  }
+  const matching = (await getAccounts()).filter((entry) => entry.address.toLowerCase() === requested.toLowerCase() && isSessionAccount(entry));
+  if (matching.length !== 1) throw new Error(matching.length > 1 ? "Session account identity is ambiguous" : "No supported account found for this session");
+  return matching[0] as SessionAccount;
 }
 
 export function sessionSupportsChain(session: any, chainId: number): boolean {

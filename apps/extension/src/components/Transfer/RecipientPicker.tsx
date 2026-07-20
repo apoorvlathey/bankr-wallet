@@ -1,7 +1,7 @@
 import { CheckIcon } from "@chakra-ui/icons";
-import { Image } from "@chakra-ui/react";
 import type { AddressContact } from "@/chrome/contactBook/repository";
 import type { Account } from "@/chrome/types";
+import { AccountAvatar } from "@/components/AccountIdentity";
 import {
   FullScreenPicker,
   FullScreenPickerGroup,
@@ -26,7 +26,7 @@ interface RecipientPickerProps {
   search: string;
   onSearchChange: (value: string) => void;
   getAccountDisplayName: (account: Account) => string;
-  getAccountAvatar: (account: Account) => string;
+  getAccountEnsAvatar: (account: Account) => string | null;
   onSelect: (account: Account) => void;
   onSelectAddress: (address: string) => void;
   onRemoveContact: (address: string) => Promise<AddressContact[]>;
@@ -42,7 +42,7 @@ export function RecipientPicker({
   search,
   onSearchChange,
   getAccountDisplayName,
-  getAccountAvatar,
+  getAccountEnsAvatar,
   onSelect,
   onSelectAddress,
   onRemoveContact,
@@ -68,7 +68,7 @@ export function RecipientPicker({
           description="Choose another WalletChan account as the recipient."
         >
           {accounts.map((account) => {
-            const avatar = getAccountAvatar(account);
+            const ensAvatar = getAccountEnsAvatar(account);
             const isSelected =
               recipient.toLowerCase() === account.address.toLowerCase();
             return (
@@ -79,11 +79,10 @@ export function RecipientPicker({
                 onClick={() => onSelect(account)}
               >
                 <ListItemMedia>
-                  <Image
-                    src={avatar}
-                    alt=""
-                    boxSize="32px"
-                    borderRadius={avatar === "/bankr-icon.png" ? "sm" : "full"}
+                  <AccountAvatar
+                    account={account}
+                    ensAvatar={account.type === "safe" ? null : ensAvatar}
+                    size={32}
                   />
                 </ListItemMedia>
                 <ListItemContent>

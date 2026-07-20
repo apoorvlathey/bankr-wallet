@@ -68,6 +68,7 @@ import {
   runSerializedAuthTransition,
 } from "../../authTransition";
 import { hasUnresolvedSponsoredTransferIntent } from "../../sponsoredTransfers/intentStorage";
+import { hasUnresolvedSafeEffects } from "../../safe/proposalRepository";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -140,6 +141,7 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
     resolvePasswordType,
     handleUnlockWallet,
     hasUnresolvedSponsoredTransferIntent,
+    hasUnresolvedSafeEffects,
     invalidateAuthCeremonies,
     invalidateAvatarImageCacheForWalletReset,
     clearAllAuthState,

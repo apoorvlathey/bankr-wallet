@@ -15,6 +15,7 @@ export type BackgroundResetDependencies = {
   resolvePasswordType: (unlock: any, allowRestore: boolean) => Promise<any>;
   handleUnlockWallet: (...args: any[]) => Promise<any>;
   hasUnresolvedSponsoredTransferIntent: () => Promise<boolean>;
+  hasUnresolvedSafeEffects: () => Promise<boolean>;
   invalidateAuthCeremonies: () => void;
   invalidateAvatarImageCacheForWalletReset: () => void;
   clearAllAuthState: () => Promise<void>;
@@ -58,6 +59,12 @@ async function resetWallet(
       return {
         success: false,
         error: "Check pending sponsored transfers before resetting WalletChan",
+      };
+    }
+    if (await dependencies.hasUnresolvedSafeEffects()) {
+      return {
+        success: false,
+        error: "Reconcile pending Safe publications or executions before resetting WalletChan",
       };
     }
 

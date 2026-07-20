@@ -64,7 +64,7 @@ import { fetchPortfolio } from "@/chrome/portfolio/api";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
 import { getAccountRemovalCopy } from "./accountRemovalModel";
-
+import { SafeSecurityScreen } from "./SafeAccount/SafeSecurityScreen";
 interface AccountSettingsProps {
   account: Account | null;
   onClose: () => void;
@@ -582,7 +582,7 @@ function AccountSettings({
   };
 
   if (!account) return null;
-
+  if (account.type === "safe") return <SafeSecurityScreen account={account} onBack={onClose} onRemoved={async () => { await onAccountUpdated(); onClose(); }} />;
   if (view === "revealPrivateKey") {
     return <RevealPrivateKey account={account} onBack={() => setView("settings")} />;
   }

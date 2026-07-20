@@ -9,9 +9,10 @@ and must not accumulate rendering or state-management policy.
 | File | Responsibility | Effects / dependencies |
 | --- | --- | --- |
 | `ActivityList.tsx` | Loads, filters, groups, expands, selects, and live-enriches transaction-history rows. | Chrome history messages, receipt polling, contact subscriptions, avatar-cache prewarming, detail-modal state. |
+| `ActivityDateHeader.tsx` | Shared Warm Midnight date separator for transaction and Safe proposal ledgers. | Presentation only. |
 | `ActivityItem.tsx` | Composes one accessible activity row from the focused presentation modules. | Theme selection and click delegation only. |
 | `ActivityMedia.tsx` | Renders rounded-square website identities and circular token/chain arrangements, including adaptive token tandems and collapsed same-asset bridges. | Image loading through the existing safe-image and cached-logo paths. |
-| `ActivityStatus.tsx` | Renders the transaction, force-inclusion, and bridge status language. | Presentation only. |
+| `ActivityStatus.tsx` | Renders the transaction, force-inclusion, and bridge status language and exports their shared compact semantic status label. | Presentation only. |
 | `ActivityExplorerActions.tsx` | Renders first-line trailing explorer controls, including bridge source/destination actions. | Presentation only; delegates effects to the explorer hook. |
 | `useActivityExplorers.ts` | Resolves exact source, L1, and destination transaction links. | Network context and `chrome.tabs.create`. |
 | `activityModel.ts` | Pure grouping, formatting, status, and row-label derivation helpers. | No React, Chakra, storage, or network dependencies. |

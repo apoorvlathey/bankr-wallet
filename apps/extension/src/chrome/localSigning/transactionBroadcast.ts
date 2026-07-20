@@ -95,7 +95,10 @@ export async function prepareSignAndBroadcastTransaction(
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     const prepared = await client.prepareTransactionRequest(txParams as any);
     const serializedTransaction = await client.signTransaction(prepared as any);
-    await options.beforeBroadcast?.();
+    await options.beforeBroadcast?.({
+      serializedTransaction,
+      transactionHash: keccak256(serializedTransaction),
+    });
     const result = await broadcastSerializedTransaction(
       client,
       serializedTransaction,

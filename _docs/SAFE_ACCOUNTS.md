@@ -10,6 +10,8 @@
 > WalletConnect compatibility, Safe Transaction Service, ERC-4337, gas UX,
 > Ambire and Rabby behavior, security, and rollout gates
 
+> Implementation PRD: [`SAFE_ACCOUNTS_PRD.md`](./SAFE_ACCOUNTS_PRD.md)
+
 ## Executive recommendation
 
 WalletChan should support Safe as a **shared account with an approval
@@ -112,12 +114,12 @@ safeAccountId -> chainId -> verified Safe configuration
 Never copy the owner list or threshold learned on Base to Ethereum, even when
 the address is identical.
 
-As of the verification date, Safe's supported-network registry documents Safe
-contracts, Safe{Core}, Safe{Wallet}, Transaction Service, and Event Service for
-all five current WalletChan chains: Ethereum (1), Unichain (130), Polygon
-(137), MegaETH (4326), and Base (8453). Version and module availability are not
-identical across them and must be resolved from the live registry rather than
-hardcoded from this research.
+Safe's supported-network registry spans far beyond WalletChan's built-in chain
+list and changes independently. Safe support must therefore resolve the live
+official Config Service by chain ID rather than hardcode WalletChan networks.
+Hidden built-ins and user-added custom EVM chains receive the same Safe support
+when the official registry advertises a Transaction Service for that chain.
+Version and module availability remain chain-specific.
 
 Official reference:
 
@@ -256,10 +258,10 @@ Offer two complementary paths.
 
 #### Automatic discovery
 
-For every WalletChan Bankr, private-key, and seed-phrase address, query
-`getSafesByOwner` on each Safe-supported WalletChan chain. Deduplicate by Safe
-address and chain, fetch live configuration, then show a non-destructive
-review:
+For one explicitly selected WalletChan Bankr, private-key, or seed-phrase
+address, query `getSafesByOwner` on every EVM chain advertised by Safe's live
+Config Service. Deduplicate by Safe address and chain, fetch live configuration,
+then show a non-destructive review:
 
 > We found 3 Safes you can approve from this wallet.
 
@@ -268,15 +270,32 @@ and chains to WalletChan/Safe infrastructure. Make it user-initiated during
 the first release, explain the lookup, batch conservatively, and provide manual
 import without discovery.
 
+WalletChan returns owner discovery progressively in bounded four-chain pages.
+It first intersects Safe's live EVM registry with the user's visible WalletChan
+networks, so hidden chains make no request and do not appear in the progress
+total. When visible, Ethereum, Base, Arbitrum, and OP Mainnet lead; later pages
+use a DefiLlama activity snapshot (24-hour fees with TVL fallback). This
+ordering only improves time-to-first-result; eligibility remains the visible
+Safe intersection. Verified results append as each page finishes and show chain
+logos with hover names. Users can include another Safe-supported built-in or
+custom chain by showing/adding it in Network settings before scanning.
+
+Activity references used for the 2026-07-20 ordering snapshot:
+
+- [DefiLlama fees by chain](https://defillama.com/fees/chains)
+- [DefiLlama chain TVL API](https://api.llama.fi/v2/chains)
+
 Official reference:
 
 - [`getSafesByOwner`](https://docs.safe.global/reference-sdk-api-kit/getsafesbyowner)
 
 #### Manual import
 
-Accept an EIP-3770 chain-prefixed address or ordinary address. Probe all enabled
-Safe-supported WalletChan chains, but do not accept “has contract code” as
-sufficient proof. Verify Safe behavior and deployment lineage, read live
+Accept a numeric chain-prefixed address or ordinary address. Preflight against
+every EVM chain advertised by Safe, then verify only candidates onchain. User
+RPC configuration—including hidden/custom chains—takes precedence over a
+validated no-auth Safe public RPC fallback. Do not accept “has contract code”
+as sufficient proof: verify Safe behavior and deployment lineage, read live
 owners/threshold/nonce, and show where it was found.
 
 Ambire probes enabled supported networks, then uses Safe creation and info data.
@@ -408,14 +427,17 @@ core integration has proven itself.
 
 For each discovered Safe show:
 
-- name or deterministic fallback such as `Safe 0x1234…abcd`;
-- full address with copy and explorer actions;
-- chains where verified;
-- live balance summary;
-- threshold such as `2 of 3`;
-- linked WalletChan owners such as `You can approve with 1 owner`;
+- verified-chain logos beside the review heading;
+- one chain-led card with labeled balance and approval threshold;
+- linked owners as named WalletChan accounts or **Your owner account**;
+- unlinked owners as **External owner** and contract owners as unsupported;
 - unsupported contract owners or security-critical extensions;
-- capability: Observe, Approve, or Quorum available.
+- capability: View only, Can approve, or Ready to use.
+
+Do not repeat the Safe address or a verified-network count in this review. The
+address was just selected or entered, and each chain card already communicates
+where the Safe was verified. Full security configuration remains available
+after import.
 
 If the same address has materially different configuration across chains, say
 so before grouping it.
@@ -424,9 +446,20 @@ so before grouping it.
 
 A Safe account row should use the Safe mark and a capability badge. When
 selected, the primary balance is the Safe balance, not the linked owner's
-balance. Add a compact approval rail above Activity:
+balance. The home action row must remain the same Send, Swap, Shield, and More
+component used by signing accounts. Safe capability controls whether Send is
+enabled and now gates same-chain Swap as well. Swap preparation creates ordered
+Safe proposal calls and opens the shared request screen; it never enters a
+Bankr/local EOA swap execution handler. Cross-chain Safe bridge and Shield
+remain visible but disabled. Do not add Safe-specific buttons beneath the
+action row. When proposals need attention,
+show one compact approval banner below the account identity with the Safe mark,
+**Pending Safe Requests**, one unresolved-request total, and a quiet **View**
+cue. Blocked and stale requests remain pending until hidden or terminal. The
+entire banner is the clickable, keyboard-accessible single homepage entry
+point:
 
-> 3 need your approval · 1 ready to execute
+> 2 pending requests
 
 The Safe detail screen should have:
 
@@ -437,6 +470,36 @@ The Safe detail screen should have:
 
 Avoid exposing “owners,” “nonce,” and “modules” on the home screen unless they
 change what the user can do.
+
+Safe proposal rows in Activity must resolve custom/built-in chain identity,
+normalize Safe service JSON origin metadata into a compact app label, and reuse
+the standard date-grouped Warm Midnight transaction ledger. Rows use the same
+dapp-media/chain-badge, plain-language intent/context, inline semantic status,
+and compact age hierarchy as ordinary Activity. Sort by Safe nonce descending
+and show **Nonce** as muted metadata with **#N** in primary text. Do not show
+card-per-record buttons, lifecycle badges, or same-nonce conflict warnings in
+history; the terminal states already explain the outcome. When proposal
+activity exists, do not render the ordinary transaction list's **No activity
+yet** state beneath it. Opening a proposal from Activity makes Back return to
+Activity, never the pending Safe Requests inbox.
+
+The proposal inbox is titled **Safe Requests** and pairs the official Safe mark
+with the title. It reuses the account-settings identity row so the Safe name,
+type, address, copy action, and current-chain explorer remain familiar. Requests
+use one separator-based list rather than independent button cards: each row
+shows a muted **Nonce** label with a high-emphasis **#N** at the upper left,
+leads with the chain mark,
+describes native sends, token transfers/approvals, batches, and contract
+interactions in plain language, then shows a
+wallet/contact-resolved counterparty and compact labeled lifecycle state. The
+chain name and Safe-service origin are not repeated beside the chain mark.
+Future-nonce requests name the dependency directly as
+**Blocked · Execute #N first**; other blocked causes do not show this sequencing
+copy. A
+header reload action refreshes the selected Safe immediately; selecting a Safe
+or opening the wallet with that Safe active starts the same refresh without
+waiting for the periodic alarm. The inbox does not expose a raw **New
+proposal** form; reviewed Send and dapp flows are the proposal entry points.
 
 ### New transaction flow
 
@@ -455,35 +518,42 @@ Safe nonce           14
 Primary action by state:
 
 - no linked owner: **View only**;
-- can add one signature: **Approve & share**;
+- can add one signature: **Sign offchain**;
 - controls enough owners: **Review approvals** then individually authorize
   each distinct owner; do not silently sign all keys from one click;
 - threshold reached: **Execute now**;
 - threshold reached and sponsorship eligible: **Execute free** with fee
-  details beneath it.
+  details beneath it;
+- outer execution prepared or broadcast: passive **Confirming onchain…** while
+  automatic receipt/nonce reconciliation runs. Durable execution evidence must
+  suppress Execute even if Safe Transaction Service still reports the proposal
+  as ready, and only identical signed bytes may be retried in the background.
+  A dedicated MV3 alarm keeps the check alive after worker suspension; if all
+  trusted receipt RPCs fail, show the explicit yellow retrying RPC notice rather
+  than implying the transaction is merely unmined.
 
-After the first approval, show a real completion screen:
+After the first signature, show an inline success notice:
 
-> Approval added
->
-> Waiting for 1 more owner. You can close WalletChan; we will notify you when
-> it is ready.
+> Signed offchain.
 
 Never show the ordinary “Transaction submitted” state at this point.
 
 ### Approvals inbox
 
-Group by chain and nonce, but sort primarily by actionability:
+Sort requests by Safe nonce from highest to lowest. Requests that share a nonce
+stay adjacent, with the newer proposal first so replacements and onchain
+rejections read as one sequence. Lifecycle state remains explicit on every row
+instead of silently controlling list position.
 
-1. Ready to execute
-2. Needs your approval
-3. Waiting for others
-4. Conflicting/replaced/stale
+This inbox contains pending requests only. Executed, cancelled, replaced, and
+failed proposals remain available through Activity and never appear in the Safe
+Requests list.
 
-Each row should show the humanized action, value, origin/proposer, age,
-approval avatars/count, nonce conflict warning, and whether WalletChan has
-revalidated it. Opening a row always re-fetches and revalidates current Safe
-state.
+Each row should show the chain logo, humanized action, resolved counterparty,
+compact approval/execution state, and a nonce-conflict warning only when
+needed. Origin, chain-name text, nonce, threshold detail, and validation state
+belong on the detail screen. Opening a row always re-fetches and revalidates
+current Safe state.
 
 ### Notifications
 
@@ -630,11 +700,21 @@ open source and self-hostable, but production API access requires a backend
 API key and quota planning. The official API Kit constructor supports a custom
 Transaction Service URL.
 
-Never embed a production Safe API key in the extension. Put authenticated
-requests behind a bounded WalletChan backend or negotiate a suitable public
-client architecture. Apply response byte limits, deadlines, redirect policy,
-schema validation, pagination caps, and rate limiting consistent with
-WalletChan's other remote boundaries.
+The implemented privacy model uses credential-free official Safe Transaction
+Service origins directly from the extension, matching Ambire's client-side
+coordination model. WalletChan does not proxy owner discovery, proposal reads,
+or writes. The extension pins origins and operations and applies response byte
+limits, deadlines, schema validation, pagination caps, and local authority
+verification. An extension-bundled API key would be public and must never be
+treated as a secret.
+
+Import confirmation does not repeat that network work. The background retains
+the already verified onchain snapshots behind short-lived opaque receipt IDs;
+the trusted wallet UI returns those IDs when the user presses Add Safe. Import
+binds every receipt to the exact address and selected chains, refreshes only
+the local-account capability projection, and writes the account. Missing or
+expired receipts require a fresh probe rather than trusting renderer-provided
+authority data.
 
 Official references:
 
@@ -805,6 +885,12 @@ transaction, never “edit” a signed proposal, and mark same-nonce competitors
 
 - PK and seed owners use the same master/agent-password rules and session
   restoration as their normal signatures.
+- Safe confirmation never adds a second password form. The trusted request UI
+  submits the selected account identity only; Bankr and local owner/executor
+  paths consume the existing expiry-checked session, attempt the same native
+  session restoration as ordinary confirmations, and fail closed when the
+  wallet is locked. Passwordless passkey sessions remain valid because a null
+  cached plaintext password is not treated as a missing capability.
 - A Bankr owner needs the same pending credential-generation binding and final
   account/tag gate as other Bankr signing effects.
 - Agent password may authorize an ordinary Safe transaction approval only if
@@ -883,12 +969,14 @@ wrong cached password/API key/private key can never approve for another owner.
 
 ### Required flow matrix
 
-- manual import and owner discovery on all five WalletChan chains;
+- manual import and owner discovery across every visible Safe-supported EVM
+  chain, including user-added custom networks, plus hidden-chain exclusion and
+  re-inclusion after the user shows the network;
 - portfolio, receive, Send, token send, dapp transaction, WalletConnect;
 - ERC-5792 single and multi-call;
 - create proposal, add approval, threshold reached, execute;
-- rejection before publication, local hide after publication, nonce
-  replacement, service proposal removal;
+- zero-signature local rejection, signed same-nonce onchain rejection, nonce
+  races, terminal-only hiding, and service proposal removal;
 - outer execution success, revert, timeout, dropped response, and receipt poll;
 - popup close, service-worker restart, browser restart, dapp reload, session
   termination, account switch/removal;
@@ -916,8 +1004,8 @@ wrong cached password/API key/private key can never approve for another owner.
 
 ### Phase 0: read-only spike
 
-- Resolve Safe's live supported-chain and deployment registry for all five
-  WalletChan chains.
+- Resolve Safe's live Config Service for every supported EVM chain without a
+  WalletChan allowlist.
 - Discover/import Safes and verify chain-scoped state.
 - Display owners, threshold, nonce, extensions, balances, and pending queue.
 - Recompute service transaction hashes and validate confirmations.
@@ -1009,16 +1097,17 @@ core “bring your existing Safe” value proposition.
 
 ## Open decisions
 
-1. Should Safe discovery be opt-in every time, enabled as a periodic lookup, or
-   proxied through WalletChan to reduce direct metadata leakage?
+1. **Resolved:** Safe discovery is opt-in every time and sends only one
+   user-selected owner address directly to Safe infrastructure. Manual address
+   import remains separate.
 2. Should a Safe with a linked Bankr owner be enabled in the first signing
    release, or held until Bankr documents raw Safe hash/EIP-712 compatibility?
 3. When WalletChan controls enough owners for quorum, should “approve all” ever
    exist, or should every owner always require a separate explicit action?
 4. How long can an injected dapp request remain pending while awaiting external
    approvals, and what exact detach/cancel UX avoids hidden side effects?
-5. Should WalletChan operate a Safe API proxy initially or contract for direct
-   client access with Safe infrastructure?
+5. **Resolved:** WalletChan does not operate a Safe API proxy. Reads and writes
+   use Safe's official Config and Transaction Service gateway directly.
 6. Which Safe versions and contract-owner signature schemes are in the first
    supported allowlist?
 7. Should a Safe with an unknown module remain approvable with a critical

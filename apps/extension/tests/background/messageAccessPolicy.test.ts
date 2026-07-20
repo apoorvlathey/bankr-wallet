@@ -36,6 +36,8 @@ import { BACKGROUND_TOKEN_DATA_MESSAGE_TYPES } from "../../src/chrome/background
 import { BACKGROUND_CHAT_MESSAGE_TYPES } from "../../src/chrome/background/chatRouter";
 import { BACKGROUND_CLEAR_SIGNING_MESSAGE_TYPES } from "../../src/chrome/background/clearSigningRouter";
 import { BACKGROUND_RESET_MESSAGE_TYPES } from "../../src/chrome/background/resetRouter";
+import { BACKGROUND_SAFE_ACCOUNT_MESSAGE_TYPES } from "../../src/chrome/background/safeAccountRouter";
+import { BACKGROUND_SAFE_PROPOSAL_MESSAGE_TYPES } from "../../src/chrome/background/safeProposalRouter";
 import {
   deliverProviderRequestRejection,
   mapProviderRequestRejection,
@@ -101,6 +103,8 @@ test("every main background route has exactly one explicit audience", async () =
     BACKGROUND_CHAT_MESSAGE_TYPES,
     BACKGROUND_CLEAR_SIGNING_MESSAGE_TYPES,
     BACKGROUND_RESET_MESSAGE_TYPES,
+    BACKGROUND_SAFE_ACCOUNT_MESSAGE_TYPES,
+    BACKGROUND_SAFE_PROPOSAL_MESSAGE_TYPES,
   ] as const;
   const delegatedTypes = delegatedRouteGroups.flatMap((types) => [...types]);
   const routedTypes = [...mainRouterTypes, ...delegatedTypes];

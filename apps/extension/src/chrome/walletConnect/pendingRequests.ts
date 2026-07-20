@@ -22,8 +22,11 @@ import {
   parseWalletChainId,
   requestSignerAddress,
   resolveSessionSigningAccount,
+  resolveSessionAccount,
 } from "./sessionPolicy";
 import type { WalletKitLike } from "./protocol";
+import { createReviewedSafeProposal } from "../safe/proposalLifecycle";
+import { requireSafeFeature } from "../safe/featurePolicy";
 
 export async function createPendingTransactionRequest(
   kit: WalletKitLike,
@@ -33,7 +36,7 @@ export async function createPendingTransactionRequest(
   remoteClaimId: string,
 ): Promise<void> {
   const rawTx = requestParams[0] || {};
-  const account = await resolveSessionSigningAccount(
+  const account = await resolveSessionAccount(
     kit.getActiveSessions()?.[args.topic],
     chainId,
     isAddress(rawTx.from) ? rawTx.from : null,
@@ -73,6 +76,32 @@ export async function createPendingTransactionRequest(
       ? { maxPriorityFeePerGas: rawTx.maxPriorityFeePerGas }
       : {}),
   };
+
+  if (account.type === "safe") {
+    requireSafeFeature("walletConnect");
+    requireSafeFeature("sendProposal");
+    if (!tx.to) throw new Error("Safe contract creation is unsupported");
+    const proposal = await withWalletConnectPendingRoute(
+      {
+        id: txId,
+        kind: "transaction",
+        topic: args.topic,
+        requestId: args.id,
+        method: "eth_sendTransaction",
+        timestamp: Date.now(),
+      },
+      () => createReviewedSafeProposal({
+        safeAccountId: account.id,
+        chainId,
+        calls: [{ to: tx.to as `0x${string}`, value: tx.value as `${bigint}`, data: tx.data as `0x${string}`, operation: 0 }],
+        route: { kind: "walletConnect", origin: peer.url || peer.name, topic: args.topic, requestId: txId },
+      }),
+      remoteClaimId,
+    );
+    chrome.runtime.sendMessage({ type: "newSafeProposalRequest", proposalId: proposal.id }).catch(() => {});
+    await openExtensionPopup().catch(() => undefined);
+    return;
+  }
 
   const pendingRequest = pinnedTxRequest(account, {
     id: txId,

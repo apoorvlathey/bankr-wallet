@@ -41,6 +41,34 @@ test("history storage preserves ordering, locking, cleanup, and notifications", 
       updatedTx: history[0],
     });
 
+    harness.clearObservations();
+    const existing = await repository.addTxToHistoryIfAbsent(
+      transaction("tx-50", { status: "failed" }),
+    );
+    assert.equal(existing.status, "processing");
+    assert.equal(
+      (await repository.getTxHistory()).filter((entry) => entry.id === "tx-50")
+        .length,
+      1,
+    );
+    assert.equal(harness.writes.length, 0);
+    assert.equal(harness.runtimeMessages.length, 0);
+
+    const recovered = transaction("recovered-broadcast", {
+      status: "pending",
+      txHash: `0x${"1".repeat(64)}`,
+    });
+    assert.equal(
+      (await repository.addTxToHistoryIfAbsent(recovered)).id,
+      recovered.id,
+    );
+    history = await repository.getTxHistory();
+    assert.equal(history[0].id, recovered.id);
+    assert.deepEqual(harness.runtimeMessages.at(-1), {
+      type: "txHistoryUpdated",
+      updatedTx: recovered,
+    });
+
     await Promise.all([
       repository.updateTxInHistory("tx-50", {
         status: "pending",
@@ -58,7 +86,7 @@ test("history storage preserves ordering, locking, cleanup, and notifications", 
       await repository.getPendingConfirmationTxs().then((entries) =>
         entries.map((entry) => entry.id),
       ),
-      ["tx-50", "tx-49"],
+      ["recovered-broadcast", "tx-50", "tx-49"],
     );
     assert.deepEqual(harness.runtimeMessages.at(-1), {
       type: "txHistoryUpdated",

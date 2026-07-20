@@ -22,6 +22,8 @@ import {
 } from "@/components/passkeyPromptGate";
 import { playInteractionSound } from "@/sounds/soundManager";
 import { detectExtensionSurface } from "@/app/extensionSurface";
+import { usePendingSafeProposalCount } from "@/components/SafeAccount/usePendingSafeProposalCount";
+import { formatPendingUnlockRequestLabel } from "@/components/pendingUnlockRequestLabel";
 
 interface UnlockScreenProps {
   onUnlock: () => void;
@@ -65,6 +67,7 @@ function UnlockScreen({
   const [isPasskeyUnlocking, setIsPasskeyUnlocking] = useState(false);
   const passkeyPromptGateRef = useRef(createPasskeyPromptGate());
   const passwordInputRef = useRef<HTMLInputElement>(null);
+  const pendingSafeCount = usePendingSafeProposalCount();
   const {
     isOpen: isResetModalOpen,
     onOpen: onResetModalOpen,
@@ -342,14 +345,11 @@ function UnlockScreen({
     );
   }
 
-  const pendingRequestCount =
-    pendingTxCount +
-    pendingSignatureCount +
-    pendingBatchCount +
-    pendingPermissionCount;
-  const pendingRequestLabel = pendingRequestCount > 0
-    ? `${pendingRequestCount} Pending ${pendingRequestCount === 1 ? "Request" : "Requests"}`
-    : undefined;
+  const pendingRequestLabel = formatPendingUnlockRequestLabel(
+    pendingTxCount + pendingSignatureCount + pendingBatchCount +
+      pendingPermissionCount + pendingSafeCount,
+    pendingSafeCount,
+  );
   const mascotState = getUnlockMascotState({
     password,
     error,

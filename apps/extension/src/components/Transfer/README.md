@@ -18,7 +18,9 @@ existing direct and lazy imports retain the same default-export contract.
   notices.
 - `NetworkPicker.tsx` adapts Send's catalog balances and selection callback to
   the shared `NetworkSelector`; `RecipientPicker.tsx` owns recipient-only
-  search/rendering. The Contacts group mounts shared `AddressContactList`, so
+  search/rendering. Wallet rows use the canonical `AccountAvatar`, with Safe
+  accounts pinned to the official Safe mark just like the selected-recipient
+  identity chip. The Contacts group mounts shared `AddressContactList`, so
   Send and More expose the same identity row, edit/delete dialogs, and sortable
   controls rather than maintaining Send-specific contact UI. Search results
   remain selection/edit/delete only until the filter is cleared.

@@ -1,8 +1,7 @@
-import { blo } from "blo";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Account } from "@/chrome/types";
 import { useAddressResolver } from "@/hooks/useAddressResolver";
-import { useCachedAvatarMap, useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
+import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useRecipientAddressKind } from "@/hooks/useRecipientAddressKind";
 import { truncateAddress } from "@/lib/addressUtils";
@@ -50,14 +49,6 @@ export function useTransferRecipient({
     [otherAccounts],
   );
   const { identities } = useEnsIdentities(otherAccountAddresses);
-  const avatarUrls = useMemo(
-    () =>
-      otherAccounts
-        .map((account) => identities.get(account.address.toLowerCase())?.avatar)
-        .filter((url): url is string => Boolean(url)),
-    [identities, otherAccounts],
-  );
-  const cachedAvatars = useCachedAvatarMap(avatarUrls);
   const contactLabels = useMemo(
     () => new Map(contacts.map((contact) => [contact.address.toLowerCase(), contact.label])),
     [contacts],
@@ -74,14 +65,10 @@ export function useTransferRecipient({
     [contactLabels, identities],
   );
 
-  const getAccountAvatar = useCallback(
-    (account: Account): string => {
-      const avatar = identities.get(account.address.toLowerCase())?.avatar;
-      if (avatar) return cachedAvatars.get(avatar) || avatar;
-      if (account.type === "bankr") return "/bankr-icon.png";
-      return blo(account.address as `0x${string}`);
-    },
-    [cachedAvatars, identities],
+  const getAccountEnsAvatar = useCallback(
+    (account: Account): string | null =>
+      identities.get(account.address.toLowerCase())?.avatar ?? null,
+    [identities],
   );
   const accountsByAddress = useMemo(
     () => new Map(otherAccounts.map((account) => [account.address.toLowerCase(), account])),
@@ -226,7 +213,7 @@ export function useTransferRecipient({
     filteredRecipientContacts,
     suggestions,
     getAccountDisplayName,
-    getAccountAvatar,
+    getAccountEnsAvatar,
     selectRecipientAccount,
     selectRecipientAddress,
     removeContact,

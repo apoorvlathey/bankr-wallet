@@ -6,9 +6,11 @@ import type { WalletConnectProposalRejection } from "@/types/walletConnect";
 import { getActiveAccount } from "../accountStorage";
 import {
   WALLETCONNECT_SUPPORTED_EVENTS,
-  WALLETCONNECT_SUPPORTED_METHODS,
-  isSigningAccount,
+  getWalletConnectMethodsForAccount,
+  isSessionAccount,
 } from "./sessionPolicy";
+import { getSafeAccountRecord } from "../safe/accountRepository";
+import { requireSafeFeature } from "../safe/featurePolicy";
 import {
   buildProposalRejection,
   hasApprovedNamespaces,
@@ -23,7 +25,7 @@ export async function handleWalletConnectSessionProposal(
   onProposalRejected: (rejection: WalletConnectProposalRejection) => void,
 ): Promise<void> {
   const account = await getActiveAccount();
-  if (!isSigningAccount(account)) {
+  if (!isSessionAccount(account)) {
     await kit.rejectSession({
       id: proposal.id,
       reason: { code: 4001, message: "No signing account is active" },
@@ -34,13 +36,22 @@ export async function handleWalletConnectSessionProposal(
   try {
     const networksInfo = await getStoredNetworksInfo();
     const visibleChains = getVisibleChains(networksInfo, account.type);
-    const chains = visibleChains.map((chain) => `eip155:${chain.chainId}`);
+    let eligibleChains = visibleChains;
+    if (account.type === "safe") {
+      requireSafeFeature("walletConnect");
+      const record = await getSafeAccountRecord(account.id);
+      eligibleChains = visibleChains.filter((chain) => {
+        const snapshot = record?.chains[String(chain.chainId)];
+        return !!snapshot && ["approve", "quorumAvailable", "readyToExecute"].includes(snapshot.capability);
+      });
+    }
+    const chains = eligibleChains.map((chain) => `eip155:${chain.chainId}`);
     const accounts = chains.map((chain) => `${chain}:${account.address}`);
     const supportedNamespaces: WalletConnectSupportedNamespaces = {
       eip155: {
         chains,
         accounts,
-        methods: WALLETCONNECT_SUPPORTED_METHODS,
+        methods: getWalletConnectMethodsForAccount(account),
         events: WALLETCONNECT_SUPPORTED_EVENTS,
       },
     };

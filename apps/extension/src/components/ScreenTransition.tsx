@@ -16,9 +16,7 @@ import {
 } from "./screenTransitionModel";
 import { createScreenAnimationCompletionGate } from "./screenAnimationCompletionGate";
 import { useScreenScrollRestoration } from "./useScreenScrollRestoration";
-
 const ScreenEnteredContext = createContext<boolean>(true);
-
 // eslint-disable-next-line react-refresh/only-export-components
 export function useScreenEntered(): boolean {
   return useContext(ScreenEnteredContext);
@@ -40,6 +38,7 @@ export type AppView =
   | "waitingForOnboarding"
   | "chat"
   | "addAccount"
+  | "safeApprovals"
   | "transfer"
   | "swap"
   | "shield"
@@ -71,6 +70,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   walletConnect: { kind: "slide", depth: 1 },
   chat: { kind: "slide", depth: 1 },
   addAccount: { kind: "slide", depth: 1 },
+  safeApprovals: { kind: "slide", depth: 1 },
   pendingTxList: { kind: "slide", depth: 1 },
   txDetail: { kind: "slide", depth: 2 },
   txConfirm: { kind: "slide", depth: 1 },
@@ -84,7 +84,6 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   unlock: { kind: "fade", depth: 0 },
   waitingForOnboarding: { kind: "fade", depth: 0 },
 };
-
 interface Snapshot {
   view: AppView;
   children: ReactNode;

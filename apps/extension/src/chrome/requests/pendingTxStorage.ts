@@ -6,6 +6,7 @@
 import type { TransactionParams } from "../bankr/submission";
 import { bindPendingBankrCredential } from "../bankr/credentialBinding";
 import { assertCurrentMasterAuthorization } from "../masterAuthorization";
+import { isPendingSafeProposal } from "../safe/proposalStatus";
 import { withStorageLock } from "../storageLock";
 
 export interface Erc7715PermissionRevokeMeta {
@@ -172,6 +173,7 @@ export async function updateBadge(): Promise<void> {
   const { getPendingSignatureRequests } = await import("./pendingSignatureStorage");
   const { getPendingBatchTxRequests } = await import("./pendingBatchTxStorage");
   const { getCrossDappBatch } = await import("../crossDappBatch/storage");
+  const { getSafeProposals } = await import("../safe/proposalRepository");
   const { getPendingDappConnectionRequests } = await import(
     "./dappPermissionStorage"
   );
@@ -183,13 +185,16 @@ export async function updateBadge(): Promise<void> {
   const permissionRequests = await getPendingErc7715PermissionRequests();
   const crossDappBatch = await getCrossDappBatch();
   const dappConnectionRequests = await getPendingDappConnectionRequests();
+  const safeProposals = await getSafeProposals().catch(() => []);
+  const safePendingCount = safeProposals.filter(isPendingSafeProposal).length;
   const crossDappBatchCount = crossDappBatch?.entries.length ? 1 : 0;
   const approvalCount =
     txRequests.length +
     sigRequests.length +
     batchRequests.length +
     permissionRequests.length +
-    crossDappBatchCount;
+    crossDappBatchCount +
+    safePendingCount;
   // A connection prompt should make an otherwise-idle extension noticeable,
   // but it must never inflate or obscure the actionable approval count.
   const count = approvalCount || (dappConnectionRequests.length > 0 ? 1 : 0);

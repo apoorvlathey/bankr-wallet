@@ -123,7 +123,7 @@ export function useSponsoredTransfer({
   }, [acknowledgeTransfer, fromAddress, onTransferInitiated]);
 
   useEffect(() => {
-    if (!isUsdcOnBase || accountType === "impersonator") return;
+    if (!isUsdcOnBase || accountType === "impersonator" || accountType === "safe") return;
     const key = `${fromAddress.toLowerCase()}:8453:usdc`;
     if (statusCheckedRef.current === key) return;
     statusCheckedRef.current = key;

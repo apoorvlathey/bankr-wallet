@@ -22,12 +22,21 @@ import type {
 } from "./pendingSignatureStorage";
 import type { PinnedBatchTxRequest, PendingBatchTxRequest } from "../erc5792Types";
 
-export type SigningAccount = Exclude<Account, { type: "impersonator" }>;
+export type SigningAccount = Extract<
+  Account,
+  { type: "bankr" | "privateKey" | "seedPhrase" }
+>;
+
+export type ProviderRequestAccount = Exclude<Account, { type: "safe" }>;
 
 export function isRequestSigningAccount(
   account: Account,
 ): account is SigningAccount {
-  return account.type !== "impersonator";
+  return (
+    account.type === "bankr" ||
+    account.type === "privateKey" ||
+    account.type === "seedPhrase"
+  );
 }
 
 type TxBase = Omit<
@@ -44,7 +53,7 @@ type BatchBase = Omit<
 >;
 
 export function pinnedTxRequest(
-  account: Account,
+  account: ProviderRequestAccount,
   base: TxBase,
 ): PinnedTxRequest {
   return {
@@ -56,7 +65,7 @@ export function pinnedTxRequest(
 }
 
 export function pinnedSignatureRequest(
-  account: Account,
+  account: ProviderRequestAccount,
   base: SigBase,
 ): PinnedSignatureRequest {
   return {
@@ -68,7 +77,7 @@ export function pinnedSignatureRequest(
 }
 
 export function pinnedBatchTxRequest(
-  account: Account,
+  account: ProviderRequestAccount,
   base: BatchBase,
 ): PinnedBatchTxRequest {
   return {

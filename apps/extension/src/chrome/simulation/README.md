@@ -23,6 +23,9 @@ simulation modules:
 - `metadataRetry.ts` owns the stable token/NFT/native enrichment retry flow.
 - `resultBuilder.ts` converts raw simulator output into the public result shape.
 - `simulatorContract.ts` owns the canonical simulator bytecode and ABIs.
+- `simulatorOverride.ts` installs that bytecode with full replacement storage,
+  preventing Safe proxy or other contract-account slots from colliding with
+  the simulator's slot-zero NFT receipt array.
 - `erc7715Preview.ts` decodes the narrow safe ERC-7715 redemption preview.
 - `singleSimulation.ts` owns access-list discovery, retry overrides, and the
   single-call `eth_call` execution order.

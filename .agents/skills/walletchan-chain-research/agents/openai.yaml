@@ -1,4 +1,4 @@
 interface:
   display_name: "WalletChan Chain Research"
-  short_description: "Research EVM chain support for WalletChan"
-  default_prompt: "Use $walletchan-chain-research to research a new EVM chain for WalletChan."
+  short_description: "Verify WalletChan chain, Safe, swap, bridge, and 7702 support"
+  default_prompt: "Use $walletchan-chain-research to research a new EVM chain for WalletChan, including Safe multisig account support."
