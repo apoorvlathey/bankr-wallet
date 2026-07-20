@@ -19,7 +19,9 @@ transaction.
 - `submission.ts`: converts only an exact encrypted operation into the trusted,
   account-pinned normal WalletChan confirmation; it does not sign or broadcast.
 - `lifecycle.ts`: receipt, exact pool-event, ASP, rejection, revert, and restart
-  state transitions.
+  state transitions. Rejected and other terminal records remain available to
+  activity history but no longer participate in account/amount dedupe, so a new
+  request UUID can safely prepare the same amount again.
 - `historyProjection.ts`: exact operation/transaction/account/chain/value
   binding before the public lifecycle subset is mirrored onto `txHistory`.
 

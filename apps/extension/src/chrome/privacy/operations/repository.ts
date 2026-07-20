@@ -95,6 +95,28 @@ function validatedOperation(value: unknown): StoredPrivacyShieldOperationV1 | nu
   return value;
 }
 
+/**
+ * Dedupe only operations that can still be resumed. Terminal records remain in
+ * activity history, but must not prevent a fresh user intent for the same
+ * account and amount.
+ */
+export function newestActivePrivacyShieldOperation(
+  operations: readonly StoredPrivacyShieldOperationV1[],
+): StoredPrivacyShieldOperationV1 | null {
+  let newest: StoredPrivacyShieldOperationV1 | null = null;
+  for (const operation of operations) {
+    const state = (operation.tracking ??
+      defaultPrivacyShieldOperationTracking(operation.summary)).state;
+    if (
+      !isTerminalPrivacyShieldState(state) &&
+      (newest === null || operation.summary.createdAt > newest.summary.createdAt)
+    ) {
+      newest = operation;
+    }
+  }
+  return newest;
+}
+
 export async function findPrivacyShieldOperation(input: {
   requestId: string;
   dedupeKey: string;
@@ -114,16 +136,12 @@ export async function findPrivacyShieldOperation(input: {
     store.index(DEDUPE_INDEX).getAll(input.dedupeKey),
   );
   await completion;
-  const active = (Array.isArray(byDedupe) ? byDedupe : [])
+  const candidates = (Array.isArray(byDedupe) ? byDedupe : [])
     .map(validatedOperation)
     .filter((operation): operation is StoredPrivacyShieldOperationV1 =>
-      operation !== null && !isTerminalPrivacyShieldState(
-        (operation.tracking ??
-          defaultPrivacyShieldOperationTracking(operation.summary)).state,
-      ),
-    )
-    .sort((left, right) => right.summary.createdAt - left.summary.createdAt);
-  return active[0] ?? null;
+      operation !== null
+    );
+  return newestActivePrivacyShieldOperation(candidates);
 }
 
 export async function getPrivacyShieldOperationById(
@@ -278,11 +296,18 @@ export async function commitPrivacyShieldOperation(
         operations.index(REQUEST_ID_INDEX).get(operation.summary.requestId),
       ),
       requestResult(
-        operations.index(DEDUPE_INDEX).get(operation.summary.dedupeKey),
+        operations.index(DEDUPE_INDEX).getAll(operation.summary.dedupeKey),
       ),
       requestResult(operations.count()),
     ]);
-    const existing = validatedOperation(byRequest ?? byDedupe);
+    const existingByRequest = validatedOperation(byRequest);
+    const dedupeCandidates = (Array.isArray(byDedupe) ? byDedupe : [])
+      .map(validatedOperation)
+      .filter((candidate): candidate is StoredPrivacyShieldOperationV1 =>
+        candidate !== null
+      );
+    const existing = existingByRequest ??
+      newestActivePrivacyShieldOperation(dedupeCandidates);
     if (existing) {
       await completion;
       return { status: "existing", operation: existing };

@@ -10,11 +10,14 @@ import {
   createPrivacyShieldOperationIntent,
   decodePrivacyShieldOperationIntent,
 } from "../../src/chrome/privacy/operations/intent";
+import { newestActivePrivacyShieldOperation } from "../../src/chrome/privacy/operations/repository";
 import {
+  defaultPrivacyShieldOperationTracking,
   isValidStoredPrivacyShieldOperation,
   privacyShieldOperationDedupeKey,
   type PrivacyShieldOperationDetailsV1,
   type PrivacyShieldOperationSummaryV1,
+  type StoredPrivacyShieldOperationV1,
 } from "../../src/chrome/privacy/operations/types";
 
 const OPERATION_ID = "00000000-0000-4000-8000-000000000001";
@@ -115,5 +118,59 @@ test("operation details encrypt with summary-bound AAD", async () => {
       stored.encryptedDetails,
     ),
     null,
+  );
+});
+
+test("terminal Shield records do not dedupe a fresh intent for the same amount", async () => {
+  const key = await importVaultKey(generateVaultKey());
+  const operationSummary = summary();
+  const details: PrivacyShieldOperationDetailsV1 = {
+    version: 1,
+    operationId: OPERATION_ID,
+    depositIndex: "7",
+    precommitment: "123456789",
+    callData: `0xb6b55f25${123_456_789n.toString(16).padStart(64, "0")}`,
+  };
+  const encryptedDetails = await encryptPrivacyShieldOperationDetails(
+    key,
+    "privacy-key-1",
+    operationSummary,
+    details,
+  );
+  const base: StoredPrivacyShieldOperationV1 = {
+    summary: operationSummary,
+    keyId: "privacy-key-1",
+    encryptedDetails,
+    tracking: defaultPrivacyShieldOperationTracking(operationSummary),
+  };
+  const initialTracking = defaultPrivacyShieldOperationTracking(operationSummary);
+  const rejected: StoredPrivacyShieldOperationV1 = {
+    ...base,
+    tracking: {
+      ...initialTracking,
+      revision: 1,
+      state: "wallet_rejected",
+      updatedAt: 2,
+      errorCode: "wallet-rejected",
+    },
+  };
+
+  assert.equal(newestActivePrivacyShieldOperation([rejected]), null);
+
+  const activeSummary = {
+    ...operationSummary,
+    id: "00000000-0000-4000-8000-000000000003",
+    requestId: "00000000-0000-4000-8000-000000000004",
+    createdAt: 3,
+    updatedAt: 3,
+  };
+  const active: StoredPrivacyShieldOperationV1 = {
+    ...base,
+    summary: activeSummary,
+    tracking: defaultPrivacyShieldOperationTracking(activeSummary),
+  };
+  assert.equal(
+    newestActivePrivacyShieldOperation([rejected, active])?.summary.id,
+    active.summary.id,
   );
 });
