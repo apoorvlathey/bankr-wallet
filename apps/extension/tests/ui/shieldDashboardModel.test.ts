@@ -241,8 +241,14 @@ test("Shield review presents the chosen amount with the protocol fee added on to
   assert.match(source, />Amount to shield</);
   assert.match(source, /Protocol fee \(\{feePercent\}%, added on top\)/);
   assert.match(source, /privacyShieldNetAmountWei\(amountWei, feeBPS\)/);
-  assert.match(reviewHook, /grossAmountWei: quote\.state\.quote\.amountWei/);
-  assert.match(operationHook, /grossAmountWei: quote\.state\.quote\.amountWei/);
+  assert.match(
+    reviewHook,
+    /grossAmountWei: quote\.state\.quote\.amountWei\.toString\(\)/,
+  );
+  assert.match(
+    operationHook,
+    /grossAmountWei: quote\.state\.quote\.amountWei\.toString\(\)/,
+  );
 });
 
 test("Shield details and Activity use the same durable lifecycle projection", async () => {

@@ -67,7 +67,7 @@ export function useShieldOperation(input: {
         accountAddress: account.address,
         accountType: account.type,
         amount: quote.ethAmount,
-        grossAmountWei: quote.state.quote.amountWei,
+        grossAmountWei: quote.state.quote.amountWei.toString(),
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;
