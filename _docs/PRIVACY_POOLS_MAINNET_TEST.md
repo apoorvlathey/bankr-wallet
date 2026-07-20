@@ -74,7 +74,7 @@ The implementation is covered by:
 - UI labels, explorer links, minimums, protocol fees, maximum relay fees, and
   account choices derived from the active manifest.
 
-Latest run on 2026-07-20: `189/189` privacy tests, `230/230` UI tests, `6/6`
+Latest run on 2026-07-20: `189/189` privacy tests, `231/231` UI tests, `6/6`
 architecture guards, all three typechecks, changed-file lint, and `14/14`
 Shield preview states passed. The full production extension build and frozen
 bundle budgets passed. The final bounded live RPC assertion returned chain `1`,

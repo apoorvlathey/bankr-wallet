@@ -57,7 +57,7 @@ export default function ShieldAmountPanel({
         error={error}
         errorId={errorId}
         errorPlacement="external"
-        amountWei={quote.validation.amountWei ?? 0n}
+        amountWei={quote.inputAmountWei ?? 0n}
         isUsdMode={quote.isUsdMode}
         conversionLabel={quote.conversionLabel}
         onToggleAmountMode={quote.hasPrice ? quote.toggleAmountMode : undefined}

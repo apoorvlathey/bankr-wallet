@@ -7,6 +7,7 @@ import {
   formatShieldAmountInput,
   parseShieldQuoteError,
   parseShieldQuoteResponse,
+  parseShieldAmountInputWei,
   shieldAmountInputInEth,
   validateShieldAmountInput,
   type ShieldAmountValidation,
@@ -26,6 +27,7 @@ const QUOTE_FALLBACK_ERROR = "Quote unavailable. Try again.";
 export interface ShieldQuoteController {
   amount: string;
   ethAmount: string;
+  inputAmountWei: bigint | null;
   validation: ShieldAmountValidation;
   state: ShieldQuoteState;
   isUsdMode: boolean;
@@ -55,6 +57,10 @@ export function useShieldQuote(input: {
   const ethAmount = useMemo(
     () => shieldAmountInputInEth(amount, isUsdMode, priceUsd),
     [amount, isUsdMode, priceUsd],
+  );
+  const inputAmountWei = useMemo(
+    () => parseShieldAmountInputWei(ethAmount),
+    [ethAmount],
   );
   const validation = useMemo(
     () => validateShieldAmountInput(ethAmount),
@@ -141,6 +147,7 @@ export function useShieldQuote(input: {
   return {
     amount,
     ethAmount,
+    inputAmountWei,
     validation,
     state,
     isUsdMode,

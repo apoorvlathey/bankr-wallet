@@ -7,6 +7,7 @@ import {
   formatShieldAmountInput,
   formatShieldUsdValue,
   formatShieldWei,
+  parseShieldAmountInputWei,
   parseShieldQuoteResponse,
   shieldAmountInputInEth,
   shieldMaximumInput,
@@ -44,6 +45,20 @@ test("Shield amount input rejects ambiguous, sub-minimum, and uint256-overflow v
       "115792089237316195423570985008687907853269984665640564039457.584007913129639936",
     ).status,
     "invalid",
+  );
+});
+
+test("Shield slider parsing retains amounts below the policy minimum", () => {
+  assert.equal(
+    parseShieldAmountInputWei("0.0009"),
+    900_000_000_000_000n,
+  );
+  assert.equal(parseShieldAmountInputWei(".0009"), null);
+  assert.equal(
+    parseShieldAmountInputWei(
+      "115792089237316195423570985008687907853269984665640564039457.584007913129639936",
+    ),
+    null,
   );
 });
 

@@ -70,6 +70,9 @@ the submitted transaction remain wei/ETH-bound. If price is unavailable, the
 toggle is absent and ETH entry continues normally. Request, quote, validation,
 and operation failures render below the Privacy Pools/network-fee metadata so
 the balance row remains readable and the retained amount stays editable.
+Slider position parses the canonical amount independently from the protocol
+minimum, so a sub-minimum amount stays reflected while its corrective error is
+shown and the quote/review path remains unavailable.
 
 The private home exposes Shield, Unshield, and Send as three sibling quick
 actions. Shield is its own public-deposit screen. Unshield and Send are separate

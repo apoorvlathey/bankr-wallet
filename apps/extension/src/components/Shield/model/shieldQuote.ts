@@ -57,23 +57,25 @@ export interface ShieldQuote {
   readonly canAfford: boolean;
 }
 
+/** Parse a syntactically valid amount without applying the Shield minimum. */
+export function parseShieldAmountInputWei(amount: string): bigint | null {
+  if (!ETH_AMOUNT_PATTERN.test(amount)) return null;
+  try {
+    const amountWei = parseEther(amount);
+    return amountWei <= MAX_UINT256 ? amountWei : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateShieldAmountInput(
   amount: string,
 ): ShieldAmountValidation {
   if (amount.length === 0) {
     return { status: "empty", amountWei: null, message: null };
   }
-  if (!ETH_AMOUNT_PATTERN.test(amount)) {
-    return {
-      status: "invalid",
-      amountWei: null,
-      message: "Enter a valid ETH amount.",
-    };
-  }
-  let amountWei: bigint;
-  try {
-    amountWei = parseEther(amount);
-  } catch {
+  const amountWei = parseShieldAmountInputWei(amount);
+  if (amountWei === null) {
     return {
       status: "invalid",
       amountWei: null,
@@ -85,13 +87,6 @@ export function validateShieldAmountInput(
       status: "below-minimum",
       amountWei: null,
       message: `Minimum is ${formatEther(SHIELD_MINIMUM_WEI)} ETH.`,
-    };
-  }
-  if (amountWei > MAX_UINT256) {
-    return {
-      status: "invalid",
-      amountWei: null,
-      message: "Enter a valid ETH amount.",
     };
   }
   return { status: "valid", amountWei, message: null };

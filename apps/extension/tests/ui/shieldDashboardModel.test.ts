@@ -200,6 +200,8 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.match(cardsSource, /minH="48px"/);
   assert.doesNotMatch(cardsSource, /minH="58px"/);
   assert.match(amountSource, /errorPlacement="external"/);
+  assert.match(amountSource, /amountWei=\{quote\.inputAmountWei \?\? 0n\}/);
+  assert.doesNotMatch(amountSource, /amountWei=\{quote\.validation\.amountWei/);
   assert.match(amountSource, /scrollIntoView\(\{ block: "nearest" \}\)/);
   assert.match(amountSource, /onToggleAmountMode=\{quote\.hasPrice \? quote\.toggleAmountMode : undefined\}/);
   assert.match(cardsSource, /Enter amount in USD/);
