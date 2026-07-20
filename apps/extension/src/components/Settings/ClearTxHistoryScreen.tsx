@@ -47,6 +47,8 @@ function accountTypeLabel(account: Account): string {
       return `Ledger · Account ${account.hdIndex + 1}`;
     case "impersonator":
       return "View-Only";
+    case "safe":
+      return "Safe";
   }
 }
 

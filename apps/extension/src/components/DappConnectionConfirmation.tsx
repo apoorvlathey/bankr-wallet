@@ -209,6 +209,7 @@ export default function DappConnectionConfirmation({
             accounts={accounts}
             account={account}
             onAccountSelect={onAccountSelect}
+            chainId={request.chainId}
           />
 
           <VStack as="section" aria-label="Site permissions" align="stretch" spacing={3} px={1}>
@@ -219,11 +220,15 @@ export default function DappConnectionConfirmation({
               See this account address
             </PermissionRow>
             <PermissionRow icon={<RequestPermissionIcon />}>
-              Request transactions and signatures
+              {account.type === "safe"
+                ? "Request Safe transaction proposals (message signing is unavailable)"
+                : "Request transactions and signatures"}
             </PermissionRow>
             <Box pt={3}>
               <PermissionRow icon={<PrivatePermissionIcon />} fontSize="xs">
-                Keys stay private. You approve every request.
+                {account.type === "safe"
+                  ? "Owner keys stay private. Proposals and execution are separate approvals."
+                  : "Keys stay private. You approve every request."}
               </PermissionRow>
             </Box>
           </VStack>

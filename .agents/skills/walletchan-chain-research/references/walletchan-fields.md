@@ -20,6 +20,10 @@ Use this reference after collecting live facts.
 - `isOpStack`: true only when the chain is actually OP Stack/Superchain. Do not infer from ETH gas token.
 - `supportsFlashblocks`, `supportsSyncSend`, `usesNonStandardGasModel`: set only when the chain-specific behavior is known and the repo already has logic for it.
 - `isBankrSupported`: true only when the user confirms Bankr support or Bankr/API docs prove it. Bankr support is independent of 0x/Bungee support.
+- Safe account support is intentionally **not** a `ChainEntry` boolean. The
+  extension resolves it dynamically by exact chain ID through Safe's live
+  Config Service, so adding a built-in/custom WalletChan chain must not create
+  a second Safe allowlist in `chainRegistry.ts`.
 - `isSwapSupported`: true only when the exact chain ID has a checked Swap API
   cell in 0x's **Swap and Gasless APIs** table. `ZEROX_SUPPORTED_CHAIN_IDS` is
   derived from these registry flags.
@@ -61,6 +65,40 @@ curl -sS 'https://walletchan.eth.sh/api/bridge/chains'
 Accept the chain as bridge-supported when the endpoint reports the chain ID and
 `sendingEnabled` or `receivingEnabled` as true. Save the endpoint's icon locally
 for built-in WalletChan chains when it is the best available source.
+
+## Safe multisig account support
+
+Primary source: Safe's live Config Service:
+
+```bash
+curl -sS 'https://safe-config.safe.global/api/v1/chains/?limit=100'
+```
+
+Match only the exact numeric chain ID. A WalletChan chain is eligible for Safe
+accounts when all of these are true:
+
+1. The chain appears in Safe Config.
+2. `transactionService` is HTTPS on the exact `api.safe.global` host and its
+   path starts with `/tx-service/`.
+3. The chain is compatible with WalletChan's standard EVM Safe deployment and
+   runtime verification.
+
+Also record `chainName`, `shortName`, `isTestnet`, and
+`recommendedMasterCopyVersion`. Presence of Safe singleton addresses alone is
+not support proof: discovery and proposal coordination require the official
+Transaction Service entry. Conversely, do not add a static WalletChan Safe
+allowlist when a Config entry is present; hidden and custom chains are matched
+dynamically by chain ID.
+
+Review Safe's official supported-network and multi-chain-deployment docs for
+exceptions. Current explicit exception: Safe Config lists zkSync Era (324), but
+WalletChan excludes it because Safe documents that deployment as non-EVM
+compatible. Report this as unsupported even though the Config lookup succeeds.
+
+Primary references:
+
+- `https://docs.safe.global/advanced/smart-account-supported-networks`
+- `https://docs.safe.global/advanced/smart-account-multi-chain-deployment`
 
 ## EIP-7702 support
 

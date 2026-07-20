@@ -21,8 +21,8 @@ import { getNativeCurrency } from "./nativeCurrency";
 import { getPortfolioPriceMap } from "./portfolioPrices";
 import {
   BATCH_SIMULATOR_ABI,
-  SIMULATOR_BYTECODE,
 } from "./simulatorContract";
+import { buildIsolatedSimulatorOverride } from "./simulatorOverride";
 import { enrichTokenChanges } from "./tokenEnrichment";
 import type { SimulationResult } from "./types";
 
@@ -165,11 +165,7 @@ export async function simulateBatchAssetChanges(
       data: callData,
       gas: BATCH_SIMULATION_GAS_LIMIT,
       stateOverride: [
-        {
-          address: from,
-          code: SIMULATOR_BYTECODE,
-          balance: parseEther("100000"),
-        },
+        buildIsolatedSimulatorOverride(from, parseEther("100000")),
       ],
     });
 

@@ -55,7 +55,7 @@ test("provider account reads preserve the exact sender binding", async () => {
   const capture = responseCapture();
   const route = createBackgroundDappPermissionMessageRouter(
     dependencies({
-      handleGetDappAccounts: async (value: unknown) => {
+      handleGetDappAccounts: async (_message: unknown, value: unknown) => {
         receivedSender = value;
         return { success: true, accounts: ["0xabc"] };
       },

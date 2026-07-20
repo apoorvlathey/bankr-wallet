@@ -35,7 +35,7 @@ export interface ConfirmationScreenProps
   advancedLabel?: string;
   actionSummary?: ReactNode;
   actionNotice?: ReactNode;
-  confirmAction: ReactNode;
+  confirmAction?: ReactNode;
   rejectAction?: ReactNode;
 }
 
@@ -110,12 +110,14 @@ export const ConfirmationScreen = forwardRef<
         </VStack>
       </ScreenBody>
 
-      <StickyActionBar
-        summary={actionSummary}
-        notice={actionNotice}
-        primaryAction={confirmAction}
-        secondaryAction={rejectAction}
-      />
+      {confirmAction && (
+        <StickyActionBar
+          summary={actionSummary}
+          notice={actionNotice}
+          primaryAction={confirmAction}
+          secondaryAction={rejectAction}
+        />
+      )}
     </AppScreen>
   );
 });

@@ -1,5 +1,6 @@
 import {
   Badge,
+  Flex,
   HStack,
   IconButton,
   Image,
@@ -16,12 +17,13 @@ import { getAccountSettingsTypeLabel } from "@/components/accountIdentityLabels"
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useAddressContact } from "@/hooks/useAddressContacts";
 import { truncateAddress } from "@/lib/addressUtils";
+import { SafeIcon } from "@/components/shared/AccountTypeIcons";
 
 interface AccountSettingsIdentityProps {
   account: Account;
   resolvedName: string | null;
   resolvedAvatar: string | null;
-  explorerUrl: string;
+  explorerUrl?: string;
 }
 
 function AccountIdentityAvatar({
@@ -57,6 +59,21 @@ function AccountIdentityAvatar({
         alt="Bankr account"
         borderRadius="sm"
       />
+    );
+  }
+
+  if (account.type === "safe") {
+    return (
+      <Flex
+        {...commonProps}
+        align="center"
+        justify="center"
+        borderRadius="sm"
+        bg="status.success.bg"
+        color="status.success.fg"
+      >
+        <SafeIcon boxSize="24px" />
+      </Flex>
     );
   }
 
@@ -120,21 +137,23 @@ export default function AccountSettingsIdentity({
           )}
           <MiddleTruncatedAddress address={account.address} />
           <CopyButton value={account.address} />
-          <IconButton
-            as="a"
-            href={explorerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="View account on explorer"
-            icon={<ExternalLinkIcon />}
-            size="xs"
-            minW="24px"
-            w="24px"
-            h="24px"
-            variant="ghost"
-            color="fg.secondary"
-            _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
-          />
+          {explorerUrl && (
+            <IconButton
+              as="a"
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View account on explorer"
+              icon={<ExternalLinkIcon />}
+              size="xs"
+              minW="24px"
+              w="24px"
+              h="24px"
+              variant="ghost"
+              color="fg.secondary"
+              _hover={{ color: "accent.highlight", bg: "surface.raisedHover" }}
+            />
+          )}
         </HStack>
       </VStack>
     </HStack>

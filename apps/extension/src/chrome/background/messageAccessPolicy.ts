@@ -100,6 +100,17 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "removeAddressContact",
   "reorderAddressContacts",
   "saveBankrApiKeyAndAddress",
+  "probeSafeAddress", "findSafesByOwner",
+  "importSafeAccount", "getSafeAccounts",
+  "refreshSafeAccount", "removeSafeAccount",
+  "getSafeProposals", "getSafeProposal",
+  "syncSafeRequests", "createSafeProposal",
+  "changeSafeProposalNonce", "approveSafeProposal",
+  "publishSafeProposal", "retrySafePublication",
+  "cancelSafeProposal", "startSafeProposalRejection",
+  "hideSafeProposal", "detachSafeProposalRoute",
+  "reconcileSafeProposal", "estimateSafeExecution",
+  "executeSafeProposal", "reconcileSafeExecution",
 
   // Credential, passkey, and session management
   "unlockWallet",
@@ -250,6 +261,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "simulateAssetChanges",
   "simulateBatchAssetChanges",
   "simulateBatchAssetChangesNonAtomic",
+  "simulateSafeAssetChanges",
   "retryTokenMetadata",
 
   // Chat

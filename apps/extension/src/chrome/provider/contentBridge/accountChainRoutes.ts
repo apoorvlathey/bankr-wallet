@@ -19,7 +19,7 @@ async function handleDappAccounts(msg: any): Promise<void> {
   if (method !== "eth_accounts" && method !== "eth_requestAccounts") return;
   if (method === "eth_accounts") {
     chrome.runtime
-      .sendMessage({ type: "getDappAccounts" })
+      .sendMessage({ type: "getDappAccounts", chainId: bridgeState.chainId })
       .then((result) => {
         bridgeState.dappConnected =
           result?.success === true &&
@@ -74,12 +74,13 @@ async function handleDappAccounts(msg: any): Promise<void> {
     requestId,
     title: document.title?.trim().slice(0, 120) || undefined,
     favicon: pageFaviconUrl(),
+    chainId: bridgeState.chainId,
   });
 }
 
 async function hasConnectedAccount(): Promise<boolean> {
   const permission = await chrome.runtime
-    .sendMessage({ type: "getDappAccounts" })
+    .sendMessage({ type: "getDappAccounts", chainId: bridgeState.chainId })
     .catch(() => null);
   return Array.isArray(permission?.accounts) && permission.accounts.length > 0;
 }

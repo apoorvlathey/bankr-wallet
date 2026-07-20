@@ -24,6 +24,7 @@ import {
 import type { Account } from "../types";
 import { addKeyToVault, removeKeyFromVault } from "../vaultCrypto";
 import { removeLedgerDeviceIfUnused } from "../ledger/storage";
+import { removeSafeAccountRecord } from "../safe/accountRepository";
 
 /** Adds one locally encrypted private-key account. */
 export async function handleAddPrivateKeyAccount(
@@ -127,7 +128,11 @@ export async function handleRemoveAccount(
         );
       }
 
-      await removeAccount(accountId, expectedAuthEpoch);
+      if (account.type === "safe") {
+        await removeSafeAccountRecord(accountId, { walletSecretLockHeld: true });
+      } else {
+        await removeAccount(accountId, expectedAuthEpoch);
+      }
 
       if (account.type === "privateKey" || account.type === "seedPhrase") {
         clearNoncesForAddress(account.address);

@@ -26,6 +26,7 @@ export type PreviewRoute =
   | "chat"
   | "account-management"
   | "token-management"
+  | "safe"
   | "all";
 
 export type FrameMode =

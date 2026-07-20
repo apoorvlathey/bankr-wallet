@@ -128,6 +128,8 @@ import {
   type AddChainReturnTarget,
   type UnlockReturnTarget,
 } from "@/app/unlockRouting";
+import { SafeApprovalsSurface, SafeFeatureUnavailable, SafeHomeActivity, SafeHomeApprovalRail, SafeHomeQuickActions } from "@/app/SafeAppSurfaces";
+import { toLegacyAccountType } from "@/app/safeAccountType";
 
 function App() {
   const { themeId } = useTheme();
@@ -283,6 +285,13 @@ function App() {
   const [transferToken, setTransferToken] = useState<PortfolioToken | null>(
     null,
   );
+  const [selectedSafeProposalId, setSelectedSafeProposalId] = useState<string | null>(null);
+  const [safeProposalEntryPoint, setSafeProposalEntryPoint] = useState<"requests" | "activity">("requests");
+  const openSafeApprovals = (proposalId: string | null, entryPoint: "requests" | "activity" = "requests") => {
+    setSelectedSafeProposalId(proposalId);
+    setSafeProposalEntryPoint(entryPoint);
+    setView("safeApprovals");
+  };
   const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
     { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
   >();
@@ -953,6 +962,7 @@ function App() {
         activeChainId?: number | null;
         chainId?: number;
         tabId?: number;
+        proposalId?: string;
       },
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void,
@@ -978,6 +988,11 @@ function App() {
             setView("unlock");
           }
         })();
+        return;
+      }
+      if (message.type === "newSafeProposalRequest" && message.proposalId) {
+        void playInteractionSound("requestReceived");
+        openSafeApprovals(message.proposalId);
         return;
       }
       if (message.type === "newPendingSignatureRequest" && message.sigRequest) {
@@ -2402,6 +2417,21 @@ function App() {
     );
   }
 
+  // Safe approvals view
+  if (view === "safeApprovals") {
+    if (activeAccount?.type !== "safe") {
+      return <SafeFeatureUnavailable title="Safe account is no longer selected" onBack={() => setView("main")} />;
+    }
+    const returnToActivity = safeProposalEntryPoint === "activity";
+    const leaveSafeApprovals = () => {
+      setSelectedSafeProposalId(null);
+      setSafeProposalEntryPoint("requests");
+      if (returnToActivity) setActivityTabTrigger((current) => current + 1);
+      setView("main");
+    };
+    return <SafeApprovalsSurface account={activeAccount} chainId={selectedChain?.chainId ?? 8453} accounts={accounts} proposalId={selectedSafeProposalId} fullscreen={isFullscreenTab} onBack={leaveSafeApprovals} onProposalBack={returnToActivity ? leaveSafeApprovals : undefined} onExecutionConfirmed={() => { setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} />;
+  }
+
   // Transfer view
   if (view === "transfer") {
     return (
@@ -2452,6 +2482,11 @@ function App() {
                 setSwapInitialSellToken(undefined);
                 setView("main");
                 setActivityTabTrigger((t) => t + 1);
+              }}
+              onSafeProposalCreated={(proposalId) => {
+                setSwapInitialBuyToken(undefined);
+                setSwapInitialSellToken(undefined);
+                openSafeApprovals(proposalId);
               }}
               onChainChange={(name) => {
                 setChainName(name);
@@ -2711,7 +2746,10 @@ function App() {
                 currentIndex={currentIndex >= 0 ? currentIndex : 0}
                 totalCount={totalCount}
                 isInSidePanel={isInSidePanel || isFullscreenTab}
-                accountType={selectedTxRequest.accountType ?? activeAccount?.type}
+                accountType={
+                  selectedTxRequest.accountType ??
+                  toLegacyAccountType(activeAccount?.type)
+                }
                 crossDappBatch={crossDappBatch}
                 onBack={() => {
                   if (selectedTxRequest.replacement) {
@@ -2786,8 +2824,10 @@ function App() {
       (selectedBatchRequest.accountId ? "" : address);
     const batchAccountType =
       selectedBatchRequest.accountType ??
-      storedBatchAccount?.type ??
-      (selectedBatchRequest.accountId ? undefined : activeAccount?.type);
+      toLegacyAccountType(storedBatchAccount?.type) ??
+      (selectedBatchRequest.accountId
+        ? undefined
+        : toLegacyAccountType(activeAccount?.type));
     return (
       <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
         <Box
@@ -3092,7 +3132,8 @@ function App() {
               totalCount={totalCount}
               isInSidePanel={isInSidePanel || isFullscreenTab}
               accountType={
-                selectedSignatureRequest.accountType ?? activeAccount?.type
+                selectedSignatureRequest.accountType ??
+                toLegacyAccountType(activeAccount?.type)
               }
               onBack={() => {
                 setSelectedSignatureRequest(null);
@@ -3429,6 +3470,13 @@ function App() {
               onAccountsReordered={setAccounts}
             />
 
+            {activeAccount?.type === "safe" && (
+              <SafeHomeApprovalRail
+                accountId={activeAccount.id}
+                onOpen={() => openSafeApprovals(null)}
+              />
+            )}
+
             {/* Portfolio balance, primary actions, assets, positions, and activity */}
             {address && (
               <PortfolioTabs
@@ -3448,23 +3496,43 @@ function App() {
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
                 quickActions={
-                  <HomeQuickActions
-                    hasConnectedApps={walletConnectSessionCount > 0}
-                    onSend={() => {
-                      setTransferToken(resolveSendEntryToken(null, networksInfo));
-                      setView("transfer");
-                    }}
-                    onSwap={() => {
-                      setSwapInitialBuyToken(undefined);
-                      setSwapInitialSellToken(undefined);
-                      setView("swap");
-                    }}
-                    // onShield={() => setView("shield")}
-                    onReceive={onQROpen}
-                    onMore={() => setView("more")}
-                  />
+                  activeAccount?.type !== "safe" ? (
+                    <HomeQuickActions
+                      hasConnectedApps={walletConnectSessionCount > 0}
+                      onSend={() => {
+                        setTransferToken(resolveSendEntryToken(null, networksInfo));
+                        setView("transfer");
+                      }}
+                      onSwap={() => {
+                        setSwapInitialBuyToken(undefined);
+                        setSwapInitialSellToken(undefined);
+                        setView("swap");
+                      }}
+                      onReceive={onQROpen}
+                      onMore={() => setView("more")}
+                    />
+                  ) : activeAccount?.type === "safe" ? (
+                    <SafeHomeQuickActions
+                      accountId={activeAccount.id}
+                      chainId={selectedChain?.chainId ?? 8453}
+                      hasConnectedApps={walletConnectSessionCount > 0}
+                      onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
+                      onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
+                      onReceive={onQROpen}
+                      onMore={() => setView("more")}
+                    />
+                  ) : undefined
                 }
                 activityTabTrigger={activityTabTrigger}
+                activitySupplement={activeAccount?.type === "safe" ? (filterChainId, onVisibilityChange) => (
+                  <SafeHomeActivity
+                    accountId={activeAccount.id}
+                    accounts={accounts}
+                    chainId={filterChainId}
+                    onVisibilityChange={onVisibilityChange}
+                    onOpen={(proposalId) => openSafeApprovals(proposalId, "activity")}
+                  />
+                ) : undefined}
                 holdingsTabTrigger={holdingsTabTrigger}
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={reportRpcIssues}

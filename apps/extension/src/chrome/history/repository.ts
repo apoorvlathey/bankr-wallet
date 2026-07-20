@@ -7,15 +7,12 @@ import {
   updateHistoryTransaction,
 } from "./database";
 import { selectHistoryGasData } from "./gasDataPolicy";
-import type {
-  CompletedTransaction,
-} from "./types";
+import type { CompletedTransaction } from "./types";
 import type { TxHistoryCursor, TxHistoryPage } from "./queryTypes";
 
 /** Legacy key retained only as the idempotent IndexedDB migration source. */
 export const TX_HISTORY_KEY = "txHistory";
 export const TX_HISTORY_LOCK_KEY = `history:indexeddb`;
-
 export function notifyTxHistoryUpdated(
   updatedTx?: CompletedTransaction,
   changedKeys?: string[],
@@ -46,13 +43,19 @@ export async function getTxHistoryPage(options: {
   return queryHistoryPage(options);
 }
 
-export async function addTxToHistory(tx: CompletedTransaction): Promise<void> {
+export async function addTxToHistory(
+  tx: CompletedTransaction,
+): Promise<CompletedTransaction> {
   return withStorageLock(TX_HISTORY_LOCK_KEY, async () => {
+    const existing = await readHistoryTransaction(tx.id, true);
+    if (existing) return existing;
     await putHistoryTransaction(tx);
     notifyTxHistoryUpdated(tx);
+    return tx;
   });
 }
-
+/** Recovery-facing name for the repository's idempotent add primitive. */
+export const addTxToHistoryIfAbsent = addTxToHistory;
 export async function updateTxInHistory(
   txId: string,
   updates: Partial<CompletedTransaction>,
@@ -71,9 +74,7 @@ export async function updateTxInHistory(
   });
 }
 
-export async function getTxById(
-  txId: string,
-): Promise<CompletedTransaction | null> {
+export async function getTxById(txId: string): Promise<CompletedTransaction | null> {
   return readHistoryTransaction(txId, true);
 }
 

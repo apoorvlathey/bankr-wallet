@@ -12,6 +12,8 @@ import {
 import { getActiveAccount } from "../accountStorage";
 import { getAllDelegatesForAccount } from "../delegationStorage";
 import type { Account } from "../types";
+import { getSafeAccountRecord } from "../safe/accountRepository";
+import { isSafeFeatureEnabled } from "../safe/featurePolicy";
 
 const ATOMIC_SUPPORTED_CAP = {
   atomic: { status: "supported" },
@@ -107,6 +109,20 @@ export async function handleWalletGetCapabilities(
   // all signing paths still reject this account type.
   if (account?.type === "impersonator") {
     emitSupportedChains(capabilities, ALLOWED_CHAIN_IDS, shouldEmit);
+  }
+  if (account?.type === "safe" && isSafeFeatureEnabled("erc5792")) {
+    const safe = await getSafeAccountRecord(account.id);
+    if (safe) {
+      for (const snapshot of Object.values(safe.chains)) {
+        const hexChainId = toHexChainId(snapshot.chainId);
+        if (
+          ["approve", "quorumAvailable", "readyToExecute"].includes(snapshot.capability) &&
+          shouldEmit(snapshot.chainId, hexChainId)
+        ) {
+          capabilities[hexChainId] = { ...ATOMIC_SUPPORTED_CAP };
+        }
+      }
+    }
   }
   return capabilities;
 }

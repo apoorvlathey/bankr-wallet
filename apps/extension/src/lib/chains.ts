@@ -16,7 +16,8 @@ export type ChainAccountType =
   | "privateKey"
   | "seedPhrase"
   | "ledger"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 export interface ResolvedChain {
   name: string;

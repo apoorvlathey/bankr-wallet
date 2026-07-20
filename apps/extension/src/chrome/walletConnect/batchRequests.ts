@@ -10,13 +10,14 @@ import {
   getSessionMetadata,
   isAddress,
   parseWalletChainId,
-  resolveSessionSigningAccount,
 } from "./sessionPolicy";
+import { resolveSessionAccount } from "./sessionAccountPolicy";
 import {
   rejectSessionRequest,
   respondSessionRequest,
   type WalletKitLike,
 } from "./protocol";
+import { withWalletConnectPendingRoute } from "./storage";
 
 export async function handleWalletConnectGetCapabilities(
   kit: WalletKitLike,
@@ -42,7 +43,7 @@ export async function handleWalletConnectGetCapabilities(
   if (!isAddress(address)) {
     throw new Error("No authorized account for this session");
   }
-  const account = await resolveSessionSigningAccount(
+  const account = await resolveSessionAccount(
     kit.getActiveSessions()?.[args.topic],
     chainId,
     address,
@@ -60,6 +61,7 @@ export async function handleWalletConnectSendCalls(
   args: any,
   params: any[],
   chainId: number,
+  remoteClaimId?: string,
 ): Promise<void> {
   const request = (params[0] || params) as WalletSendCallsParams;
   const requestChainId = parseWalletChainId(request?.chainId);
@@ -72,7 +74,7 @@ export async function handleWalletConnectSendCalls(
   if (request.from && !isAddress(request.from)) {
     throw new Error("Invalid from address");
   }
-  const account = await resolveSessionSigningAccount(
+  const account = await resolveSessionAccount(
     kit.getActiveSessions()?.[args.topic],
     chainId,
     request.from || null,
@@ -82,7 +84,7 @@ export async function handleWalletConnectSendCalls(
   const peer = getSessionMetadata(kit.getActiveSessions()?.[args.topic]);
   const peerOrigin = peer.url || peer.name;
 
-  await handleWalletSendCalls(
+  const intake = () => handleWalletSendCalls(
     request,
     bundleId,
     peerOrigin,
@@ -98,6 +100,20 @@ export async function handleWalletConnectSendCalls(
       method: "wallet_sendCalls",
     },
   );
+
+  if (account.type === "safe") {
+    await withWalletConnectPendingRoute({
+      id: bundleId,
+      kind: "batch",
+      topic: args.topic,
+      requestId: args.id,
+      method: "wallet_sendCalls",
+      timestamp: Date.now(),
+    }, intake, remoteClaimId);
+    return;
+  }
+
+  await intake();
 
   const ackKey = `batchTxAck:${bundleId}`;
   const storedAck = await chrome.storage.local.get(ackKey);

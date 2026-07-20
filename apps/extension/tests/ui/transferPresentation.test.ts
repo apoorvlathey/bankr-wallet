@@ -49,10 +49,12 @@ test("home quick actions remain visible for view-only accounts", async () => {
     "utf8",
   );
   const quickActions = source.match(
-    /quickActions=\{[\s\S]*?<HomeQuickActions[\s\S]*?\/>\s*\}/u,
+    /quickActions=\{[\s\S]*?\n\s*\}\n\s*activityTabTrigger=/u,
   )?.[0];
 
   assert.ok(quickActions);
+  assert.match(quickActions, /<HomeQuickActions/u);
+  assert.match(quickActions, /activeAccount\?\.type !== "safe"/u);
   assert.doesNotMatch(quickActions, /impersonator/u);
 });
 

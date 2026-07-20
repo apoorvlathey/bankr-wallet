@@ -23,6 +23,7 @@ import {
 } from "./fixtures";
 import { previewAssets } from "./previewAssets";
 import { parsePreviewState, type ParsedPreviewState } from "./previewState";
+import { resolveSafeHomePreviewAccount } from "./safeHomePreview";
 import type { PreviewWalletType } from "./types";
 import { getPreviewActivityTransactions } from "./completedTransactionFixture";
 export type PreviewStorageAreaName = "local" | "sync" | "session";
@@ -56,8 +57,9 @@ function accountForWallet(
 export function createPreviewEnvironment(href: string): PreviewEnvironment {
   const parsed = parsePreviewState(href);
   const accounts = previewAccounts.map((account) => ({ ...account }));
-  const activeAccount = accountForWallet(accounts, parsed.state.wallet);
   const { route, scenario } = parsed.state;
+  const activeAccount = resolveSafeHomePreviewAccount(accounts, route, scenario) ??
+    accountForWallet(accounts, parsed.state.wallet);
   const scenarioWallet = scenario === "impersonator-disabled"
     ? "viewOnly"
     : parsed.state.wallet;
@@ -289,10 +291,8 @@ export function getPreviewPortfolioResponse(scenario: string): PortfolioResponse
       ),
     };
   }
-
   return previewPortfolioResponse;
 }
-
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,

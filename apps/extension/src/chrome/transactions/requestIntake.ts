@@ -20,6 +20,8 @@ import { extractSignerParam } from "../signatures/requestSigner";
 import { normalizeTransactionValue } from "../transactionValidation";
 import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 import { writeResultToStorage } from "./runtime";
+import { createReviewedSafeProposal } from "../safe/proposalLifecycle";
+import { requireSafeFeature } from "../safe/featurePolicy";
 
 const CHAIN_BY_ID_TX = new Map(
   CHAIN_REGISTRY.map((chain) => [chain.chainId, chain]),
@@ -52,6 +54,50 @@ export function handleTransactionRequest(
         success: false,
         error: "No active account",
       });
+      return;
+    }
+    if (activeAccount.type === "safe") {
+      requireSafeFeature("injectedDapp");
+      requireSafeFeature("sendProposal");
+      if (
+        typeof tx.from === "string" &&
+        tx.from.length > 0 &&
+        tx.from.toLowerCase() !== activeAccount.address.toLowerCase()
+      ) {
+        await writeResultToStorage(`txResult:${txId}`, {
+          success: false,
+          error: "Transaction 'from' does not match active Safe",
+        });
+        return;
+      }
+      const normalizedValue = normalizeTransactionValue(tx.value);
+      if (!normalizedValue.ok || !tx.to) {
+        await writeResultToStorage(`txResult:${txId}`, {
+          success: false,
+          error: normalizedValue.ok ? "Safe contract creation is unsupported" : normalizedValue.error,
+        });
+        return;
+      }
+      const proposal = await createReviewedSafeProposal({
+        safeAccountId: activeAccount.id,
+        chainId: tx.chainId,
+        calls: [{
+          to: tx.to as `0x${string}`,
+          value: normalizedValue.value as `${bigint}`,
+          data: (tx.data || "0x") as `0x${string}`,
+          operation: 0,
+        }],
+        route: {
+          kind: "injected",
+          origin,
+          tabId,
+          frameId,
+          requestId: txId,
+        },
+      });
+      clearProviderRequestSurfaceHint(senderWindowId);
+      chrome.runtime.sendMessage({ type: "newSafeProposalRequest", proposalId: proposal.id }).catch(() => {});
+      openExtensionPopup(senderWindowId);
       return;
     }
 
@@ -141,6 +187,13 @@ export function handleSignatureRequest(
       await writeResultToStorage(`sigResult:${sigId}`, {
         success: false,
         error: "No active account",
+      });
+      return;
+    }
+    if (activeAccount.type === "safe") {
+      await writeResultToStorage(`sigResult:${sigId}`, {
+        success: false,
+        error: "Safe message signing is not supported yet",
       });
       return;
     }

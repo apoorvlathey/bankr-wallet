@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
-import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { NATIVE_TOKEN_ADDRESS } from "@/chrome/swapApi";
+import type { PortfolioToken } from "@/chrome/portfolio/api";
 import { SWAP_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
 import { getChainConfig } from "@/constants/chainConfig";
 import { useNetworks } from "@/contexts/NetworksContext";
@@ -19,6 +19,7 @@ import { useSellTokenData } from "./useSellTokenData";
 import { useSwapAmount } from "./useSwapAmount";
 import { useSwapQuotes } from "./useSwapQuotes";
 import { useSwapSlippage } from "./useSwapSlippage";
+import { getSwapSubmissionKind } from "./swapSubmissionModel";
 function SwapView({
   fromAddress,
   accountId,
@@ -27,6 +28,7 @@ function SwapView({
   chainName: initialChainName,
   onBack,
   onSwapInitiated,
+  onSafeProposalCreated,
   // The swap surface deliberately keeps its chain pair independent from the
   // global/per-tab dapp chain. Keep this prop for the stable public shape.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,14 +67,8 @@ function SwapView({
   });
   const autoSelectedSellRef = useRef(Boolean(initialSellToken));
   useEffect(() => {
-    if (
-      autoSelectedSellRef.current ||
-      initialSellToken ||
-      sellToken ||
-      holdingsAllChains.length === 0
-    ) {
-      return;
-    }
+    if (autoSelectedSellRef.current || initialSellToken || sellToken ||
+      holdingsAllChains.length === 0) return;
     const cachedTopToken = pickDefaultSwapSellToken(holdingsAllChains);
     if (!cachedTopToken) return;
     autoSelectedSellRef.current = true;
@@ -178,6 +174,7 @@ function SwapView({
     !quotes.quoteLoading && inputUsd > 0 && outputUsd > 0
       ? ((inputUsd - outputUsd) / inputUsd) * 100
       : null;
+  const submissionKind = getSwapSubmissionKind(accountType, isBridge);
   const canSwap = Boolean(
     sellToken &&
       /^0x[a-fA-F0-9]{40}$/.test(buyToken.buyTokenAddress.trim()) &&
@@ -186,7 +183,7 @@ function SwapView({
       !insufficientBalance &&
       (isBridge ? bridgeRoute : quotes.quote) &&
       !quotes.quoteLoading &&
-      accountType !== "ledger",
+      submissionKind !== "unsupported",
   );
   const prepared = usePreparedSwap({
     sellToken,
@@ -205,6 +202,7 @@ function SwapView({
     resolvedBuyChainName,
     slippageBps,
     onSwapInitiated,
+    onSafeProposalCreated,
   });
   if (
     prepared.showConfirmation &&

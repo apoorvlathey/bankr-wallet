@@ -7,7 +7,8 @@ export type SwapAccountType =
   | "privateKey"
   | "seedPhrase"
   | "ledger"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 export interface SwapViewProps {
   fromAddress: string;
@@ -18,6 +19,8 @@ export interface SwapViewProps {
   chainName: string;
   onBack: () => void;
   onSwapInitiated: () => void;
+  /** Opens the Safe request created from a reviewed same-chain swap. */
+  onSafeProposalCreated?: (proposalId: string) => void;
   onChainChange: (chainName: string) => void;
   initialBuyToken?: {
     address: string;

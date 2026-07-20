@@ -220,6 +220,22 @@ export function SwapQuoteSection({
           </Text>
         </Box>
       )}
+
+      {accountType === "safe" && isBridge && (
+        <Box
+          bg="status.warning.bg"
+          color="status.warning.fg"
+          border="1px solid"
+          borderColor="status.warning.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text fontSize="sm" fontWeight="700">
+            Safe swaps currently stay on one network. Choose the same network
+            for both tokens.
+          </Text>
+        </Box>
+      )}
     </>
   );
 }

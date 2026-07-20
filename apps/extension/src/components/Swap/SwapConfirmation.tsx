@@ -69,7 +69,7 @@ interface SwapConfirmationProps {
   chainId: number;
   chainName: string;
   fromAddress: string;
-  accountType: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator";
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator" | "safe";
   isBatched: boolean;
   batchedTx?: { to: string; data: string; value: string };
   /**

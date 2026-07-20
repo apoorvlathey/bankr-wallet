@@ -15,9 +15,14 @@ import {
 } from "../transactions/runtime";
 import { extractSignerParam } from "./requestSigner";
 
+type SignatureSigningAccount = Extract<
+  Account,
+  { type: "bankr" | "privateKey" | "seedPhrase" | "ledger" }
+>;
+
 export type PreparedSignatureConfirmation = {
   pending: PendingSignatureRequest;
-  account: Exclude<Account, { type: "impersonator" }>;
+  account: SignatureSigningAccount;
 };
 
 export type SignatureConfirmationPreflight =
@@ -45,6 +50,16 @@ export async function prepareSignatureConfirmation(
     return { ok: false, result: { success: false, error: pinned.error } };
   }
   const account = pinned.account;
+
+  if (account.type === "safe") {
+    return {
+      ok: false,
+      result: {
+        success: false,
+        error: "Safe message signing is not supported yet",
+      },
+    };
+  }
 
   if (
     isRawErc7710DelegationSignatureRequest(

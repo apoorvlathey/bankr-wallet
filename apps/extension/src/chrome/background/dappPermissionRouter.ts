@@ -24,7 +24,7 @@ export type BackgroundDappPermissionRouteResult =
   | { handled: true; keepChannelOpen: boolean };
 
 type Dependencies = {
-  handleGetDappAccounts: (sender: chrome.runtime.MessageSender) => Promise<any>;
+  handleGetDappAccounts: (message: any, sender: chrome.runtime.MessageSender) => Promise<any>;
   handleRequestDappConnection: (
     message: any,
     sender: chrome.runtime.MessageSender,
@@ -67,7 +67,7 @@ export function createBackgroundDappPermissionMessageRouter(
   return (message, sender, sendResponse) => {
     switch (message?.type) {
       case "getDappAccounts": {
-        dependencies.handleGetDappAccounts(sender).then(sendResponse);
+        dependencies.handleGetDappAccounts(message, sender).then(sendResponse);
         return HANDLED_ASYNC;
       }
 

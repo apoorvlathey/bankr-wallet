@@ -22,7 +22,8 @@ export function SponsorshipEligibilityNotice({
     !premiumStatus ||
     premiumStatus.isPremium ||
     accountType === "impersonator" ||
-    accountType === "ledger"
+    accountType === "ledger" ||
+    accountType === "safe"
   ) {
     return null;
   }
@@ -82,7 +83,8 @@ export function TransferNotices({
         !premiumLoading &&
         premiumStatus?.isPremium &&
         accountType !== "impersonator" &&
-        accountType !== "ledger" && (
+        accountType !== "ledger" &&
+        accountType !== "safe" && (
           <Box
             bg="status.success.bg"
             borderWidth="1px"
@@ -143,6 +145,22 @@ export function TransferNotices({
           <Text fontSize="sm" color="accentFg.highlight" fontWeight="700">
             View-only account — you can review this transfer. Sending is only
             available when developer mode is enabled for the selected RPC.
+          </Text>
+        </Box>
+      )}
+      {accountType === "safe" && (
+        <Box
+          bg="status.info.bg"
+          border={tokens.borders.thin}
+          borderColor="status.info.border"
+          borderRadius="lg"
+          p={3}
+        >
+          <Text fontSize="sm" color="status.info.fg" fontWeight="700">
+            This creates a Safe proposal.
+          </Text>
+          <Text fontSize="xs" color="fg.secondary" mt={1}>
+            An owner approval is recorded first. Assets move only after quorum and a separate execution.
           </Text>
         </Box>
       )}

@@ -4218,6 +4218,8 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
 | `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API or PK/SP EIP-7702 local signing |
+| `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked Bankr, private-key, or seed-phrase owner |
+| `executeSafeProposal`              | Submit the exact reviewed Safe envelope with a private-key or seed-phrase gas payer |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; custom/non-default Set is master-only at queue and confirm/broadcast, while canonical default and revoke retain routine agent-capable signing; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |
 
 The stable `delegationHandlers.ts`, `delegationStorage.ts`, and
@@ -5321,7 +5323,7 @@ stays available in the batch detail.
 
 ## Cross-Chain Bridging
 
-The Swap surface doubles as a Bridge surface when `sellChainId !== buyChainId`. There is no separate Bridge entry point — same UI, same confirmation screen, same wallet-type routing. See `_docs/BRIDGE.md` → "Extension support" for the full breakdown.
+The Swap surface doubles as a Bridge surface when `sellChainId !== buyChainId`. There is no separate Bridge entry point — Bankr/private-key/seed accounts use the same UI, confirmation screen, and wallet-type routing. Safe accounts use this surface only for same-chain proposals until destination Safe deployment verification is available. See `_docs/BRIDGE.md` → "Extension support" for the full breakdown.
 
 ### Architecture
 
@@ -5358,3 +5360,270 @@ SwapView (internal sellChainId, buyChainId — never updates the global chain)
 | Browser notification | `bridge/statusNotification.ts` maps terminal copy and stores the **destination** explorer URL under `notification-<id>` before using the shared Chrome notification effect |
 
 The bridge poller uses the same in-memory model as `txReceiptPoller` (no `chrome.alarms`). Tradeoff: destination updates only progress while the SW is alive. The resume hook covers SW death — the next popup-open eventually catches the terminal state and fires the notification.
+
+## Safe multisig accounts
+
+Safe support is a separate authority and transaction domain under
+`apps/extension/src/chrome/safe/`; a `type: "safe"` account is never passed to
+Bankr, private-key, seed, impersonator, message-signing, swap-execution,
+bridge, delegation, sponsored-transfer, or force-inclusion fallbacks. The staged
+`VITE_SAFE_ROLLOUT_PHASE` policy can stop at `disabled`, `readOnly`,
+`approvals`, `execution`, or `provider`; features absent from the central map
+remain denied.
+
+Import resolves every EVM network in Safe's live Config Service, validates
+proxy runtime and singleton lineage against exact released Safe artifacts, and
+reads owners, contract-owner code, threshold, nonce, modules, guard, and
+fallback at one exact block. Each chain has its own configuration epoch and
+capability. Contract/nested owners and unknown authority extensions remain
+visible but block signing; EIP-7702 delegated EOAs remain EOA owners.
+
+There is no WalletChan Safe-chain allowlist. Discovery intersects Safe's live
+registry with WalletChan's shared visible-network policy: visible built-ins and
+visible user-added custom networks participate by exact chain ID, while hidden
+networks are skipped until the user shows them in Settings. The user's
+configured RPC takes precedence; a public no-auth RPC from Safe Config is a
+validated fallback. An unprefixed address scans that visible intersection, and
+a numeric `<chainId>:<address>` prefix targets one visible network. Safe
+documents zkSync Era as non-EVM compatible, so the EVM integration excludes
+chain 324. Transaction Service paths always use EIP-55 checksum addresses
+because the upstream rejects lowercase address path parameters.
+
+The durable repositories are `safeAccounts`, `safeProposals`, and
+`safeSyncState`. Proposal IDs bind chain, Safe address, and `safeTxHash`, and
+records contain immutable calls/transaction fields, reviewed configuration,
+validated confirmations, optional provider/WC/ERC-5792 route, and first-action
+effect claims. Proposal and outer execution hashes are always distinct. Safe
+Transaction Service state is coordination data: sync merges validated remote
+confirmations but cannot downgrade a locally claimed, prepared, or broadcast
+effect or erase its deterministic hash/signed bytes. An opportunistic in-memory
+receipt poller starts immediately after outer execution, while a dedicated
+30-second Chrome alarm and every service-worker startup reconcile unresolved
+executions independently of the slower Transaction Service sync. Receipt reads
+try the selected RPC first and then WalletChan's pinned built-in/canonical
+endpoints. A provider exception is never collapsed into “receipt not found”:
+if every trusted endpoint fails, the durable request carries an explicit
+retrying RPC warning until any endpoint responds. Safe sync also recovers stale
+claims and deduplicates privacy-safe notifications.
+New wallet, injected, WalletConnect, ERC-5792, and Safe-swap proposals first
+refresh the Safe directly onchain, then reserve the lowest unused nonce at or
+above that value while holding the `safeProposals` storage lock. Pending local
+and service-verified records reserve their nonce; confirmed executed/replaced
+evidence advances a stale local floor without reserving the old nonce. This makes concurrent
+dapp intake deterministic and prevents an ordinary request from silently
+becoming a same-nonce replacement. A future-nonce request remains visibly
+blocked until account refresh or Safe sync observes that nonce onchain, then
+returns to draft/approval/readiness state. If a competitor consumed its nonce,
+the queued request and its provider/ERC-5792 route are terminalized.
+Selecting a Safe or opening the popup/sidepanel while one is active also sends
+the trusted-UI-only `syncSafeRequests` message. It runs the same validated sync
+for that exact Safe immediately; the Safe Requests header exposes the same
+targeted path as a manual reload. Full and per-Safe work is serialized and
+deduplicated so alarm, open, account-switch, and manual triggers cannot race.
+Request review uses the trusted-UI `refreshSafeAccount` route to re-verify the
+stored Safe directly through the configured RPC on the proposal's exact chain.
+It does not repeat Safe discovery or require a Transaction Service info lookup,
+so a transient service miss cannot misreport a deployed Safe as unavailable;
+RPC or authority-verification failure still blocks signing until a fresh review
+succeeds. The Safe security screen may omit the chain ID to refresh every
+previously imported chain.
+
+Owner authorization selects one concrete WalletChan record. Bankr signs via
+the pinned credential/session-restoring typed-data path; private-key and seed
+owners use requested-account-only local key resolution. Every signature is
+recovered against locally rebuilt Safe EIP-712 data and the current owner set
+before persistence/publication. Impersonators, Safe accounts, contract owners,
+duplicate/removed owners, and unknown Safe signature types never count toward
+quorum. Agent passwords may approve or execute ordinary Safe transactions but
+cannot reveal secrets or authorize future configuration changes.
+
+Safe Transaction Service traffic goes directly from the extension to Safe's
+official gateway. There is no WalletChan Safe API route, server credential, or
+telemetry hop. `safe/serviceRegistry.ts` fetches and memory-caches the official
+Config Service, rejects duplicate/malformed chain IDs, excludes non-EVM
+networks, and accepts Transaction Service URLs only under the exact
+`https://api.safe.global/tx-service/*` boundary. `safe/serviceClient.ts`
+restricts operation paths and methods, checksums address parameters, rejects
+redirects and ambient credentials, and bounds response size/time. Proposal and
+confirmation writes use the same direct boundary.
+
+Broad owner/address discovery is start-rate-limited below Safe gateway's
+per-second quota and retries one explicit `429` with bounded backoff. This
+prevents a broad visible-network scan from silently dropping later chains.
+Owner discovery paginates the visible Safe intersection in four-chain batches and the
+renderer appends each verified batch immediately rather than waiting for the
+complete scan. When visible, Ethereum, Base, Arbitrum, and OP Mainnet lead;
+the remaining mainnets follow a checked-in DefiLlama activity snapshot (24-hour
+fees with TVL fallback), followed by the other visible networks and testnets.
+The activity snapshot affects latency only, not eligibility. The UI progress
+total therefore matches the user's visible Safe-supported chain count. It
+renders each verified chain as its resolved network logo with the chain name in
+a hover tooltip. The trusted handler bounds batch offsets/limits and resolves
+the same selected account ID afresh on every page. Before the first batch, a
+zero-chain count-only page resolves that total without making a Safe owner
+query. The centered loading state appears synchronously as `Finding Safes…`
+while that local count preflight resolves, then becomes
+`Checked 0 of N networks` rather than displaying
+an unknown/zero total.
+
+Owner discovery is scoped to one exact account ID selected in the Add Safe UI.
+Selecting that owner starts the progressive lookup immediately; there is no
+second submit action. Selecting a discovered Safe reuses its already verified
+snapshots and suppresses the manual-address auto-probe, avoiding duplicate Safe
+service and RPC traffic.
+Both owner discovery and manual address probing register their exact verified
+snapshots in a bounded, 30-minute, service-worker-memory receipt cache. The
+renderer receives only opaque receipt IDs. `importSafeAccount` requires those
+IDs to match the requested Safe address and every selected chain, recomputes
+local-owner capability against current accounts, and persists the cached
+snapshots without repeating Safe-service or RPC verification. Receipts are
+discarded after a successful import; worker restart, expiry, address mismatch,
+or chain mismatch fails closed and requires a fresh check. No verification
+receipt is written to Chrome storage.
+The background resolves that ID against current Bankr/private-key/seed records
+and passes only that one address to `findSafesOwnedByAccount`; view-only, Safe,
+missing, or stale IDs fail before network access. Direct Safe-address import is
+a separate Safe-service preflight followed by exact onchain verification and
+discloses no local owner address.
+
+On the homepage, Safe accounts reuse the same `HomeQuickActions` component as
+Bankr, private-key, and seed-phrase accounts so Send, Swap, Shield, and More
+retain identical order, icon geometry, sound, focus, and hover behavior. Safe
+chain capability gates Send and Swap; Shield stays visible but disabled. No
+Safe-only action row is added. Pending proposals surface through one compact approval banner whose
+View action opens the approvals inbox; Safe security remains in account
+settings. The banner and Chrome action badge share `safe/proposalStatus.ts`:
+all unresolved records, including blocked/stale requests, count as pending;
+executed, cancelled, replaced, failed, and hidden records do not. Activity
+normalizes Safe service JSON origin metadata before display,
+bounds each proposal row, and hides the transaction empty state whenever Safe
+proposal activity is present.
+
+The approval inbox is presented as **Safe Requests**. Its header uses the
+official Safe mark, and its account block directly reuses
+`AccountSettingsIdentity` so name/type/address/copy/explorer behavior stays
+identical to account settings. `SafeProposalRow.tsx` composes the shared
+separator-list primitives and `safeProposalPresentation.ts` projects validated
+records into human action, a wallet/contact-resolved counterparty, and lifecycle
+status. The leading chain logo owns network context; rows do not repeat the
+chain name or Safe-service origin in text. Each visible row shows its actual
+Safe nonce as **Nonce #N**; same-nonce alternatives deliberately repeat it. For
+verified future-nonce records, `safeProposalSequence.ts` resolves
+the earliest pending lower nonce for the same Safe and chain, allowing the row
+to say **Blocked · Execute nonce #N first**. Configuration-blocked rows remain simply
+**Blocked**, so the UI never invents a nonce dependency.
+There is no raw proposal-creation form in this inbox; reviewed wallet, provider,
+WalletConnect, and batch intake remain the proposal creation boundaries.
+
+The wallet Swap surface is also a reviewed Safe proposal boundary for
+same-chain swaps. It obtains the same firm quote and ordered approval/Permit2/
+swap calls as the legacy wallet paths, but `swapSubmissionModel.ts` routes a
+Safe to `safeSwapProposal.ts` before any Bankr or local EOA execution handler.
+That adapter normalizes call values and creates a wallet-origin draft through
+`createSafeProposal`; the Safe transaction builder performs canonical
+MultiSend wrapping when multiple calls must be atomic. The renderer opens that
+proposal in the shared Safe request screen, where Bankr/private-key/seed owners
+approve and a selected EOA later pays execution gas. Impersonators remain
+blocked. Cross-chain Safe bridge selection remains disabled because reusing a
+Safe address on another network is unsafe until WalletChan verifies that the
+destination Safe deployment exists there.
+
+Opening a Safe row now uses the same `ConfirmationScreen` information order as
+single and batch transaction requests: requesting-app identity, chain-qualified
+estimated changes, read-only reviewed call cards, progressive advanced details,
+and one sticky decision bar. Safe lifecycle state and validated owner progress
+stay inside Request details instead of creating a separate Safe-shaped approval
+form. Advanced details permits changing the nonce only while a request is
+unsigned. The trusted-UI `changeSafeProposalNonce` route re-verifies live Safe
+configuration and the minimum onchain nonce, then atomically replaces the
+proposal identity without changing its calls or dapp route. Advanced details
+keeps this exceptional action behind a pencil beside the nonce; its inline
+editor accepts an already reserved nonce as a deliberate competing replacement,
+while automatic intake never does so. Before quorum the footer says
+**Signing with** and defaults to the first
+available linked owner. At `readyToExecute` it changes to **Execute with**,
+defaults to a locally controlled Safe owner, and exposes the other supported
+private-key/seed accounts through the identity dropdown. The exact outer
+`execTransaction` request is passed through the normal local-account gas tier
+and custom-fee component. Safe approval and execution never render an inline
+password field: like ordinary transaction/signature confirmation, they consume
+the current expiry-checked master/agent/passkey session and fail closed with an
+unlock instruction if no coherent signing capability can be restored. The
+renderer also pins the action the user pressed for the lifetime of that UI
+operation. Intermediate `authorizing`, `publishing`, and execution-claim
+storage writes therefore retain the Approve/Execute loader instead of briefly
+falling through to a Back action.
+
+Reject remains available beside the primary action through quorum. With no
+collected signature it terminalizes the unsigned request locally. Once any EOA
+or visible unsupported confirmation exists, `startSafeProposalRejection`
+creates or reuses Safe Protocol Kit's canonical rejection envelope: an empty,
+zero-value call from the Safe to itself at the original nonce. The replacement
+is a distinct durable proposal, collects a fresh threshold through the normal
+Bankr/private-key/seed approval path, and uses the normal local executor and
+exact-envelope gas flow. Back is navigation only; pending signed proposals
+cannot be hidden. The original record and its injected/WalletConnect/ERC-5792
+result route become cancelled/failed only after the rejection transaction has
+a successful onchain receipt. If the original wins the nonce race, the
+rejection proposal is instead marked replaced.
+
+Execution refreshes authority, packs sorted confirmations, and estimates and
+simulates the exact `execTransaction` envelope for the selected local executor.
+Once an executor is selected, the estimated-change preview runs two read-only
+simulations in parallel. The underlying-call pass executes the reviewed calls
+directly from the Safe address and owns Safe token/native deltas. Its isolated
+TxSimulator override fully replaces the Safe proxy code and storage, preventing
+proxy slot 0 from colliding with the simulator's slot-zero NFT receipt array.
+Because that replacement cannot faithfully execute a Safe self-call such as
+`addOwnerWithThreshold`, a second pass invokes the exact signed
+`execTransaction` envelope from the selected executor without replacing the
+Safe. That exact outer pass owns the success/revert verdict; an unavailable
+outer pass is reported as unavailable rather than inheriting a false revert
+from the underlying pass. The same isolated override remains used by single,
+batch, and injected batch-gas simulation paths for every account type.
+The shared transaction fee control supplies bounded gas-limit and EIP-1559
+overrides; the background validates them and repeats the exact envelope
+simulation immediately before RPC submission. A revert keeps execution blocked
+by default, but the shared likely-to-fail confirmation lets the user explicitly
+proceed; that literal boolean acknowledgement is forwarded to the background,
+which may tolerate only the simulation error while retaining every live Safe,
+executor, auth-epoch, gas, serialization, and duplicate-submit gate. The
+broadcaster persists the
+exact serialized outer transaction and its deterministic hash before crossing
+the RPC boundary. Any durable execution claim, hash, or signed-byte record
+blocks both renderer and background from preparing another outer transaction,
+even if a stale service response says the proposal is ready. Lost responses
+become `ambiguous`; reconciliation starts automatically, checks receipt and
+Safe nonce, and may resend only those identical signed bytes with bounded
+backoff. At that same irreversible boundary, WalletChan adds one deterministic
+normal transaction-history record for the private-key or seed-phrase executor
+that pays gas. Its `from` is the executor, its `to` is the Safe, and its data is
+the exact outer `execTransaction` envelope, so only the executor account's
+Activity list receives the standard contract-interaction row. The ordinary
+receipt poller owns pending, confirmed, reverted, gas, asset-change, and details
+behavior; Safe reconciliation only repairs and resumes that same row after an
+MV3 restart. A visible review wakes this same background route every ten seconds;
+it does not own or infer terminal state. The confirmation footer becomes a
+passive **Confirming onchain…** state rather than offering another Execute or
+routine manual reconcile action. If every receipt RPC is unavailable, a yellow
+**RPC unavailable. WalletChan will keep checking automatically.** notice makes
+the delay explicit without treating it as execution failure. Reset and account
+removal are blocked while a Safe effect is unresolved. When the selected record
+transitions to `executed`, the request surface closes automatically and Home
+opens the Safe account's Activity tab; loading an already-terminal Activity
+record does not retrigger that navigation. Safe Activity retains all visible
+proposal records, sorts them by descending Safe nonce, and projects them through
+the same date-grouped ledger, origin identity, chain badge, and inline status
+grammar as ordinary transaction Activity. The app records whether a proposal
+detail was opened from Activity; its Back action then returns directly to the
+Activity tab instead of entering the pending-only Safe Requests inbox.
+
+Injected dapps and WalletConnect expose a Safe only on an exact verified,
+actionable chain. Safe message signing/EIP-1271 remains disabled. Transaction
+requests reuse the durable proposal state, and `eth_sendTransaction` receives
+only the real outer transaction hash after execution; `safeTxHash` is never an
+Ethereum transaction result. ERC-5792 tracks the proposal under a WalletChan
+bundle ID, releases that ID to injected/WalletConnect callers only after the
+first explicit owner authorization, and attaches the execution receipt after
+success. WalletConnect retains the pre-authorization request in its durable
+terminal outbox, so a worker restart cannot turn the draft into an early ACK.

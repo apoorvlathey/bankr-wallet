@@ -3,6 +3,9 @@ import type { TransactionParams } from "../bankr/submission";
 import { savePendingTxRequest } from "../requests/pendingTxStorage";
 import { pinnedTxRequest } from "../requests/pinnedRequest";
 import { getRpcUrl } from "./rpcConfig";
+import { normalizeTransactionValue } from "../transactionValidation";
+import { createReviewedSafeProposal } from "../safe/proposalLifecycle";
+import { requireSafeFeature } from "../safe/featurePolicy";
 
 /** Creates a pinned confirmation request for an extension-initiated transfer. */
 export async function handleInitiateTransfer(message: {
@@ -25,6 +28,30 @@ export async function handleInitiateTransfer(message: {
   if (!activeAccount) {
     return { success: false, error: "No active account" };
   }
+  if (activeAccount.type === "safe") {
+    try {
+      requireSafeFeature("sendProposal");
+      const normalizedValue = normalizeTransactionValue(tx.value);
+      if (!normalizedValue.ok) return { success: false, error: normalizedValue.error };
+      if (!tx.to) return { success: false, error: "Safe contract creation is unsupported" };
+      const proposal = await createReviewedSafeProposal({
+        safeAccountId: activeAccount.id,
+        chainId: tx.chainId,
+        calls: [{
+          to: tx.to as `0x${string}`,
+          value: normalizedValue.value as `${bigint}`,
+          data: (tx.data || "0x") as `0x${string}`,
+          operation: 0,
+        }],
+        route: { kind: "wallet", origin: tokenName ? `Send ${tokenName}` : "WalletChan" },
+      });
+      chrome.runtime.sendMessage({ type: "newSafeProposalRequest", proposalId: proposal.id }).catch(() => {});
+      return { success: true, txId: proposal.id };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Could not create Safe proposal" };
+    }
+  }
+
   const txId = crypto.randomUUID();
   const pendingRequest = pinnedTxRequest(activeAccount, {
     id: txId,

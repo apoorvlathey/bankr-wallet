@@ -67,7 +67,9 @@ export function validateExternalProviderMessage(
         : failProviderValidation("Invalid provider side-panel request");
 
     case "requestDappConnection":
-      return isProviderRequestId(candidate.requestId)
+      return isProviderRequestId(candidate.requestId) &&
+        (candidate.chainId === undefined ||
+          (typeof candidate.chainId === "number" && Number.isSafeInteger(candidate.chainId) && candidate.chainId > 0))
         ? { valid: true }
         : failProviderValidation("Invalid connection request id");
 

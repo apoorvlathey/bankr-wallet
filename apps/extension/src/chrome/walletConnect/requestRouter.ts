@@ -175,7 +175,7 @@ export async function handleWalletConnectSessionRequest(
       return;
     }
     if (method === "wallet_sendCalls") {
-      await handleWalletConnectSendCalls(kit, args, requestParams, chainId);
+      await handleWalletConnectSendCalls(kit, args, requestParams, chainId, remoteClaimId);
       return;
     }
     if (method === "wallet_getCallsStatus") {

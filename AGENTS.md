@@ -201,6 +201,8 @@ apps/extension/src/
 │   │   ├── signatureValidation.ts # Provider signature/EIP-712 intake validation
 │   │   ├── chainSwitchNotification.ts # Connected-site chain-change effects/cooldown
 │   │   ├── resetRouter.ts # Master-only reset barrier and destructive ordering
+│   │   ├── safeAccountRouter.ts # Safe discovery/import/refresh transport
+│   │   ├── safeProposalRouter.ts # Safe proposal/approval/execution transport
 │   │   ├── lifecycle/      # Chrome registration/startup audit domain (see README.md)
 │   │   ├── watchAssetRouter.ts # EIP-747 prompt transport
 │   │   ├── chainPromptRouter.ts # EIP-3085 and chain notices
@@ -220,6 +222,9 @@ apps/extension/src/
 │   │   ├── pendingBatchTxStorage.ts # Persistent ERC-5792 prompts
 │   │   ├── dappPermissionStorage.ts # Approved and pending dapp connections
 │   │   └── pendingWalletConnectLifecycle.ts # Topic termination gates
+│   ├── safe/                # Verified Safe authority, proposals, sync, and execution
+│   │   ├── serviceRegistry.ts # Dynamic pinned Safe Config/Transaction Service registry
+│   │   ├── discovery.ts     # Activity-prioritized Safe probing and bounded owner batches
 │   ├── authHandlers.ts      # Stable factor/credential/password-management facade
 │   ├── auth/                # Authentication audit domain (see README.md)
 │   │   ├── walletUnlock.ts  # Modern master/agent and legacy unlock routing
@@ -569,6 +574,7 @@ apps/extension/src/
 │   ├── ClearSigning/          # Clear-signing descriptor/rendering UI domain
 │   ├── Ledger/                # Hardware pairing/address selection/signing status
 │   ├── Portfolio/Holdings/    # Portfolio loading and holdings UI domain
+│   ├── SafeAccount/           # Safe import, progressive discovery, and authority UI
 │   ├── TransactionConfirmation/ # Single-tx review/decision UI domain
 │   ├── TransactionDetails/    # Activity detail UI domain
 │   ├── Transfer/              # Send/transfer UI domain

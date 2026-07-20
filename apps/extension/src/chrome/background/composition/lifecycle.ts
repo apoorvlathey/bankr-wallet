@@ -59,6 +59,7 @@ import { startRecoveryLifecycle } from "../lifecycle/startupRecovery";
 import { registerStorageAuthLockLifecycle } from "../lifecycle/storageAuthLock";
 import { registerTabAccountLifecycle } from "../lifecycle/tabAccounts";
 import { registerTrustedUiPortLifecycle } from "../lifecycle/trustedUiPorts";
+import { startSafeSync } from "../../safe/sync";
 
 export type BackgroundMessageListener = (
   message: any,
@@ -69,6 +70,7 @@ export type BackgroundMessageListener = (
 export function registerBackgroundLifecycle(
   onMessage: BackgroundMessageListener,
 ): void {
+  startSafeSync();
   registerStorageAuthLockLifecycle({
     storageOnChanged: chrome.storage.onChanged as any,
     autoLockStorageKey: AUTO_LOCK_STORAGE_KEY,

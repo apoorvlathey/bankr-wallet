@@ -6,7 +6,8 @@ export type TransferAccountType =
   | "privateKey"
   | "seedPhrase"
   | "ledger"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 export interface TokenTransferProps {
   token?: PortfolioToken | null;

@@ -176,6 +176,13 @@ export async function prepareTransactionReplacement(
       if (freshHistory?.status !== "pending" || freshHistory.txHash !== history.txHash) {
         return { success: false, error: "Transaction status changed. Reopen activity." };
       }
+      if (
+        account.type !== "privateKey" &&
+        account.type !== "seedPhrase" &&
+        account.type !== "ledger"
+      ) {
+        return { success: false, error: "Transaction account cannot be replaced" };
+      }
       const request = pinnedTxRequest(account, {
         id: crypto.randomUUID(),
         tx: replacementTransaction(source, account, kindValue, fees),

@@ -79,8 +79,8 @@ test("keeps view-only signing fixtures separate from the three signer types", ()
 
 test("every documented core scenario is accepted as reload-stable URL state", () => {
   const expected: Record<string, readonly string[]> = {
-    home: ["default", "portfolio-loading", "portfolio-empty", "portfolio-error", "stress"],
-    unlock: ["pending-requests", "empty", "invalid-password", "submitting", "success", "biometric-configured"],
+    home: ["default", "portfolio-loading", "portfolio-empty", "portfolio-error", "stress", "safe-account"],
+    unlock: ["pending-requests", "pending-safe-request", "empty", "invalid-password", "submitting", "success", "biometric-configured"],
     tx: ["default", "loading", "simulation-error", "malformed-disabled", "stress", "impersonator-disabled"],
     signature: ["personal-sign", "typed-data-long", "siwe-blocked", "submitting", "impersonator-disabled"],
     portfolio: ["populated", "loading", "empty", "error", "stress", "activity-selected"],

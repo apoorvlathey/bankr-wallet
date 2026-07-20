@@ -19,7 +19,7 @@ export { useStripTokens } from "./useStripTokens";
 export type { StripTokens, StripVariant } from "./useStripTokens";
 export { useChainBadgeStyle, resolveChainBadgeStyle } from "./useChainBadgeStyle";
 export type { ChainBadgeStyle } from "./useChainBadgeStyle";
-export { useIconChipBg } from "./useIconChipBg";
+export { useIconChipBg, useIconChipFg } from "./useIconChipBg";
 
 // Phase 2 primitives — see _docs/THEMING_PRD.md
 export {

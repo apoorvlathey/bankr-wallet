@@ -1,8 +1,9 @@
-import { Image } from "@chakra-ui/react";
+import { Flex, Image } from "@chakra-ui/react";
 import { blo } from "blo";
 import type { Account } from "@/chrome/types";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { LedgerAvatar } from "@/components/Ledger/LedgerAvatar";
+import { SafeIcon } from "@/components/shared/AccountTypeIcons";
 
 function BlockieAvatar({ address, size }: { address: string; size: number }) {
   return (
@@ -52,6 +53,24 @@ export function AccountAvatar({
   }
   if (account.type === "ledger") {
     return <LedgerAvatar size={size} />;
+  }
+
+  if (account.type === "safe") {
+    return (
+      <Flex
+        boxSize={`${size}px`}
+        minW={`${size}px`}
+        align="center"
+        justify="center"
+        borderRadius="md"
+        bg="status.success.bg"
+        color="status.success.fg"
+        border="1px solid"
+        borderColor="status.success.border"
+      >
+        <SafeIcon boxSize={`${Math.round(size * 0.62)}px`} />
+      </Flex>
+    );
   }
   return <BlockieAvatar address={account.address} size={size} />;
 }

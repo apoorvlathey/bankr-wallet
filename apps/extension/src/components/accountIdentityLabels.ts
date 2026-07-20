@@ -19,6 +19,7 @@ export function getWalletTypeLabel(
     return getSeedAccountLabel(account, seedGroupMap) || "Seed phrase";
   }
   if (account.type === "ledger") return `Ledger · Account ${account.hdIndex + 1}`;
+  if (account.type === "safe") return "Safe multisig";
   return "View only";
 }
 
@@ -34,5 +35,7 @@ export function getAccountSettingsTypeLabel(account: Account): string {
       return "Ledger";
     case "impersonator":
       return "View-Only";
+    case "safe":
+      return "Safe";
   }
 }

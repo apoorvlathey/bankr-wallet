@@ -18,13 +18,10 @@ export type {
   TxCallOrigin,
   TxStatus,
 } from "./history/types";
-export type {
-  AssetChangeLeg,
-  TxHistoryCursor,
-  TxHistoryPage,
-} from "./history/queryTypes";
+export type { AssetChangeLeg, TxHistoryCursor, TxHistoryPage } from "./history/queryTypes";
 export {
   addTxToHistory,
+  addTxToHistoryIfAbsent,
   getPendingConfirmationTxs,
   getProcessingTxs,
   getTxById,

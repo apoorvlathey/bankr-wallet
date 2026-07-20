@@ -7,6 +7,7 @@ export const BACKGROUND_GAS_SIMULATION_MESSAGE_TYPES = [
   "simulateAssetChanges",
   "simulateBatchAssetChanges",
   "simulateBatchAssetChangesNonAtomic",
+  "simulateSafeAssetChanges",
   "retryTokenMetadata",
 ] as const;
 
@@ -21,6 +22,7 @@ export type BackgroundGasSimulationDependencies = {
   simulateAssetChanges: (...args: any[]) => Promise<any>;
   simulateBatchAssetChanges: (...args: any[]) => Promise<any>;
   simulateBatchAssetChangesNonAtomic: (...args: any[]) => Promise<any>;
+  simulateSafeAssetChanges: (...args: any[]) => Promise<any>;
   retryTokenMetadata: (...args: any[]) => Promise<any>;
 };
 
@@ -78,6 +80,16 @@ export function createBackgroundGasSimulationMessageRouter(
           .simulateBatchAssetChangesNonAtomic(
             message.calls,
             message.fromAddress,
+            message.chainId,
+          )
+          .then(sendResponse);
+        return HANDLED_ASYNC;
+      case "simulateSafeAssetChanges":
+        dependencies
+          .simulateSafeAssetChanges(
+            message.calls,
+            message.safeAddress,
+            message.executionTx,
             message.chainId,
           )
           .then(sendResponse);

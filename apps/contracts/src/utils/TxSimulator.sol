@@ -66,9 +66,9 @@ contract TxSimulator {
     // Sentinel meaning "this candidate doesn't expose nextTokenId()".
     uint256 private constant NO_NEXT_TOKEN_ID = type(uint256).max;
 
-    /// @dev Slot 0. Storage at the user's EOA address starts empty for every
-    ///      eth_call invocation, so this dynamic array always begins at
-    ///      length = 0 and accumulates NFT receipts during the simulated call.
+    /// @dev Slot 0. The caller must replace the injected account's storage for
+    ///      every eth_call invocation, so this dynamic array begins at length
+    ///      zero for EOAs, Safe proxies, and other contract senders alike.
     NftReceived[] private receivedNfts;
 
     /**

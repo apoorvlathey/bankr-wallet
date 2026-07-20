@@ -5,7 +5,7 @@
  * not select accounts, mutate credentials, or touch seed/private-key vaults.
  */
 
-import type { Account } from "../types";
+import type { Account, AccountType } from "../types";
 import {
   WALLET_SECRET_STORAGE_LOCK_KEY,
   withStorageLock,
@@ -82,7 +82,7 @@ export async function updateAccountDisplayName(
 }
 
 export async function getAccountsByType(
-  type: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator",
+  type: AccountType,
 ): Promise<Account[]> {
   const accounts = await getAccounts();
   return accounts.filter((account) => account.type === type);

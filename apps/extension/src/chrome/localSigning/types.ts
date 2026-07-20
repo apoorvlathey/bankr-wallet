@@ -47,4 +47,7 @@ export type PrepareAndSignClient = Pick<
   "prepareTransactionRequest" | "signTransaction" | "request"
 >;
 
-export type BeforeLocalTransactionBroadcast = () => Promise<void>;
+export type BeforeLocalTransactionBroadcast = (prepared: {
+  serializedTransaction: `0x${string}`;
+  transactionHash: `0x${string}`;
+}) => Promise<void>;

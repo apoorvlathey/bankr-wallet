@@ -41,6 +41,7 @@ export function shouldUseSponsoredTransfer({
       premiumStatus?.isPremium &&
       premiumStatus.sponsoredTransfersEnabled &&
       accountType !== "impersonator" &&
-      accountType !== "ledger",
+      accountType !== "ledger" &&
+      accountType !== "safe",
   );
 }

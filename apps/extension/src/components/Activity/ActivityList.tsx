@@ -20,6 +20,7 @@ import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { useAddressContacts } from "@/hooks/useAddressContacts";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import ActivityItem from "./ActivityItem";
+import { ActivityDateHeader } from "./ActivityDateHeader";
 import { buildActivityAddressLabels } from "./activityIdentityModel";
 import { groupActivityByDate } from "./activityModel";
 
@@ -31,6 +32,8 @@ interface ActivityListProps {
   hideCard?: boolean;
   filterChainId?: number | null;
   onShowAllNetworks?: () => void;
+  hideEmptyState?: boolean;
+  /** When provided, the parent owns screen-level transaction detail navigation. */
   onSelectTx?: (tx: CompletedTransaction) => void;
   /** Activity remains mounted behind other portfolio tabs. */
   isActive?: boolean;
@@ -66,6 +69,7 @@ function TxStatusList({
   hideCard,
   filterChainId,
   onShowAllNetworks,
+  hideEmptyState = false,
   onSelectTx,
   isActive = true,
 }: ActivityListProps) {
@@ -229,6 +233,7 @@ function TxStatusList({
   }
 
   if (history.length === 0) {
+    if (hideEmptyState) return <>{modal}</>;
     return (
       <Box pt={hideCard ? 0 : 4}>
         <EmptyState minH="152px">
@@ -260,15 +265,7 @@ function TxStatusList({
       <ListSurface aria-label="Transaction activity">
         {dateGroups.map((group) => (
           <Fragment key={group.label}>
-            <Box as="li" role="presentation" minH="36px" px={3} py={2}
-              listStyleType="none" bg="surface.sunken" borderTopWidth="1px"
-              borderTopStyle="solid" borderTopColor="border.subtle"
-              borderBottomWidth="1px" borderBottomStyle="solid"
-              borderBottomColor="border.subtle" _first={{ borderTopWidth: 0 }}>
-              <Text fontSize="xs" fontWeight="600" color="fg.secondary" lineHeight="1.4">
-                {group.label}
-              </Text>
-            </Box>
+            <ActivityDateHeader label={group.label} />
             {group.txs.map((tx) => (
               <ActivityItem key={tx.id} tx={tx} originDisplay={formatOrigin(tx.origin)}
                 addressLabels={addressLabels}

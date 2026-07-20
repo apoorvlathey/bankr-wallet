@@ -19,7 +19,10 @@ function jsonSafeTypedData(value: unknown): unknown {
 
 export type FeePaymentSigner =
   | {
-      account: Exclude<Account, { type: "impersonator" }>;
+      account: Extract<
+        Account,
+        { type: "privateKey" | "seedPhrase" | "ledger" }
+      >;
       privateKey: Hex;
       apiKey?: never;
     }

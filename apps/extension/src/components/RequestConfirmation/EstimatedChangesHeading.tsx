@@ -58,10 +58,13 @@ export function EstimatedChangesHeading({
           placement="top"
         >
           <Box
-            as="span"
-            tabIndex={0}
+            as="button"
+            type="button"
             aria-label="About estimated changes"
             boxSize="24px"
+            p={0}
+            bg="transparent"
+            border={0}
             display="inline-flex"
             alignItems="center"
             justifyContent="center"

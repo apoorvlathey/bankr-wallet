@@ -200,6 +200,7 @@ const budgets: Record<string, number> = {
   "simulation/metadataRetry.ts": 260,
   "simulation/resultBuilder.ts": 130,
   "simulation/simulatorContract.ts": 100,
+  "simulation/simulatorOverride.ts": 40,
   "simulation/erc7715Preview.ts": 280,
   "simulation/singleSimulation.ts": 300,
   "simulation/batchSimulation.ts": 280,

@@ -27,7 +27,8 @@ import {
 } from "../requests/pendingRequestLifecycle";
 import { clearProviderRequestSurfaceHint } from "../windowing/providerRequestSurface";
 import { withDappAccountBinding } from "./accountRemovalPrivacy";
-
+import { getSafeAccountRecord } from "../safe/accountRepository";
+import { isSafeFeatureEnabled } from "../safe/featurePolicy";
 function trustedOrigin(sender: chrome.runtime.MessageSender): string | null {
   return normalizeDappOrigin(sender.origin || sender.url || sender.tab?.url);
 }
@@ -50,6 +51,20 @@ async function accountForTab(tabId?: number) {
     ? await getTabAccount(tabId)
     : await getActiveAccount();
 }
+async function isProviderSupportedAccount(
+  account: Awaited<ReturnType<typeof accountForTab>>,
+  chainId?: number,
+): Promise<boolean> {
+  if (!account) return false;
+  if (account.type !== "safe") return true;
+  if (!isSafeFeatureEnabled("injectedDapp")) return false;
+  const safe = await getSafeAccountRecord(account.id);
+  const snapshots = chainId && Number.isSafeInteger(chainId)
+    ? [safe?.chains[String(chainId)]].filter(Boolean)
+    : Object.values(safe?.chains || {});
+  return snapshots.some((snapshot) => !!snapshot &&
+    ["approve", "quorumAvailable", "readyToExecute"].includes(snapshot.capability));
+}
 
 async function writeConnectionResult(
   request: PendingDappConnectionRequest,
@@ -70,6 +85,7 @@ function broadcastPermissionsChanged(origin?: string) {
 }
 
 export async function handleGetDappAccounts(
+  message: { chainId?: unknown },
   sender: chrome.runtime.MessageSender,
 ) {
   if (sender.frameId !== undefined && sender.frameId !== 0) {
@@ -80,7 +96,10 @@ export async function handleGetDappAccounts(
     return { success: true, accounts: [] as string[] };
   }
   const account = await accountForTab(sender.tab?.id);
-  return { success: true, accounts: account ? [account.address] : [] };
+  return {
+    success: true,
+    accounts: account && await isProviderSupportedAccount(account, Number(message.chainId)) ? [account.address] : [],
+  };
 }
 
 export async function handleRequestDappConnection(
@@ -88,6 +107,7 @@ export async function handleRequestDappConnection(
     requestId?: unknown;
     title?: unknown;
     favicon?: unknown;
+    chainId?: unknown;
   },
   sender: chrome.runtime.MessageSender,
 ) {
@@ -112,6 +132,15 @@ export async function handleRequestDappConnection(
       success: false,
       error: "No active account",
       code: 4100,
+    });
+    return;
+  }
+  const requestChainId = Number(message.chainId);
+  if (!(await isProviderSupportedAccount(account, requestChainId))) {
+    await writeResultToStorage(`dappConnectionResult:${requestId}`, {
+      success: false,
+      error: "Safe dapp support is not available yet",
+      code: 4200,
     });
     return;
   }
@@ -148,6 +177,7 @@ export async function handleRequestDappConnection(
     favicon,
     tabId: sender.tab?.id,
     frameId: sender.frameId,
+    chainId: Number.isSafeInteger(requestChainId) && requestChainId > 0 ? requestChainId : undefined,
     timestamp: Date.now(),
   };
   await savePendingDappConnectionRequest(request);
@@ -196,6 +226,17 @@ async function confirmDappConnectionUnderBindingLock(requestId: string) {
     });
     return { success: false, error: "No active account" };
   }
+  if (!(await isProviderSupportedAccount(account, pending.chainId))) {
+    await removePendingDappConnectionRequests(
+      (request) => request.origin === pending.origin,
+    );
+    await writeConnectionResult(pending, {
+      success: false,
+      error: "Safe dapp support is not available yet",
+      code: 4200,
+    });
+    return { success: false, error: "Safe dapp support is not available yet" };
+  }
 
   await grantDappPermission(pending);
   const matching = await removePendingDappConnectionRequests(
@@ -206,7 +247,7 @@ async function confirmDappConnectionUnderBindingLock(requestId: string) {
       const requestAccount = await accountForTab(request.tabId);
       await writeConnectionResult(request, {
         success: true,
-        accounts: requestAccount ? [requestAccount.address] : [account.address],
+        accounts: requestAccount && await isProviderSupportedAccount(requestAccount, request.chainId) ? [requestAccount.address] : [],
       });
     }),
   );

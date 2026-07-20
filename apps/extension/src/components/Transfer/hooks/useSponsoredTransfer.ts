@@ -126,7 +126,8 @@ export function useSponsoredTransfer({
     if (
       !isUsdcOnBase ||
       accountType === "impersonator" ||
-      accountType === "ledger"
+      accountType === "ledger" ||
+      accountType === "safe"
     ) return;
     const key = `${fromAddress.toLowerCase()}:8453:usdc`;
     if (statusCheckedRef.current === key) return;

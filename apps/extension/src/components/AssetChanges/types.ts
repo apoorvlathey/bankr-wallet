@@ -8,6 +8,8 @@ export interface BatchAssetChangeCall {
 
 export interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
+  /** Exact outer Safe execution request used to determine the revert verdict. */
+  safeExecutionRequest?: PendingTxRequest;
   /** Remove the panel's duplicate disclosure header inside a titled parent section. */
   embedded?: boolean;
   /** For batch transactions: simulate each call individually instead of the encoded batch. */

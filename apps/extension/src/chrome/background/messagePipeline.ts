@@ -181,6 +181,20 @@ export function createBackgroundMessagePipeline(
     );
     if (ledgerRoute.handled) return ledgerRoute.keepChannelOpen;
 
+    const safeAccountRoute = routes.routeBackgroundSafeAccountMessage(
+      message,
+      sender,
+      sendResponse,
+    );
+    if (safeAccountRoute.handled) return safeAccountRoute.keepChannelOpen;
+
+    const safeProposalRoute = routes.routeBackgroundSafeProposalMessage(
+      message,
+      sender,
+      sendResponse,
+    );
+    if (safeProposalRoute.handled) return safeProposalRoute.keepChannelOpen;
+
     const secretManagementRoute =
       routes.routeBackgroundSecretManagementMessage(
         message,

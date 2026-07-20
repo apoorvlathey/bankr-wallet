@@ -10,6 +10,7 @@ import {
   EyeIcon,
   KeyIcon,
   SeedIcon,
+  SafeIcon,
 } from "@/components/shared/AccountTypeIcons";
 import { LedgerLogo } from "@/components/Ledger/LedgerLogo";
 
@@ -18,7 +19,8 @@ export type AccountType =
   | "privateKey"
   | "seedPhrase"
   | "ledger"
-  | "impersonator";
+  | "impersonator"
+  | "safe";
 
 interface AddAccountTypeGridProps {
   hasBankrAccount: boolean;
@@ -49,6 +51,14 @@ const accountTypes = [
     icon: null,
     iconBg: "transparent",
     iconColor: "fg.primary",
+  },
+  {
+    type: "safe" as const,
+    title: "Safe",
+    description: "Use an existing multisig",
+    icon: SafeIcon,
+    iconBg: "status.success.bg",
+    iconColor: "status.success.fg",
   },
   {
     type: "impersonator" as const,

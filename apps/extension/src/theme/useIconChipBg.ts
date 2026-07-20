@@ -21,3 +21,9 @@ export function useIconChipBg(): string {
   const { tokens } = useTheme();
   return tokens.colorMode === "dark" ? "whiteAlpha.900" : "bg.muted";
 }
+
+/** Foreground paired with the intentionally light icon-chip background. */
+export function useIconChipFg(): string {
+  const { tokens } = useTheme();
+  return tokens.colorMode === "dark" ? "fg.inverse" : "fg.primary";
+}

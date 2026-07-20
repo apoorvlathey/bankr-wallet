@@ -1,5 +1,5 @@
 import { CheckIcon, WarningIcon } from "@chakra-ui/icons";
-import { HStack, Spinner, Text } from "@chakra-ui/react";
+import { Box, HStack, Icon, Spinner, Text } from "@chakra-ui/react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import type { ActivityStatusModel } from "./activityModel";
 
@@ -8,26 +8,48 @@ interface ActivityStatusProps {
   model: ActivityStatusModel;
 }
 
-interface StatusLabelProps {
+interface ActivityStatusLabelProps {
   label: string;
-  tone: "success" | "info" | "warning" | "error";
+  tone: "success" | "info" | "warning" | "error" | "muted";
   isPending?: boolean;
+  icon?: "hourglass";
 }
 
-function StatusLabel({ label, tone, isPending }: StatusLabelProps) {
+function HourglassIcon() {
+  return (
+    <Icon viewBox="0 0 24 24" boxSize="10px" flexShrink={0} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 15v3H8v-3l4-4 4 4zm-4-6L8 7V4h8v3l-4 4z"
+      />
+    </Icon>
+  );
+}
+
+export function ActivityStatusLabel({
+  label,
+  tone,
+  isPending,
+  icon,
+}: ActivityStatusLabelProps) {
+  const color = tone === "muted" ? "fg.muted" : `status.${tone}.emphasis`;
   return (
     <HStack
       as="span"
       spacing={1}
       minW={0}
-      color={`status.${tone}.emphasis`}
+      color={color}
     >
-      {isPending ? (
+      {icon === "hourglass" ? (
+        <HourglassIcon />
+      ) : isPending ? (
         <Spinner size="xs" color="currentColor" boxSize="8px" />
       ) : tone === "error" || tone === "warning" ? (
         <WarningIcon boxSize="9px" flexShrink={0} />
-      ) : (
+      ) : tone === "success" ? (
         <CheckIcon boxSize="8px" flexShrink={0} />
+      ) : (
+        <Box as="span" boxSize="5px" borderRadius="full" bg="currentColor" />
       )}
       <Text
         as="span"
@@ -45,38 +67,38 @@ function StatusLabel({ label, tone, isPending }: StatusLabelProps) {
 
 export default function ActivityStatus({ tx, model }: ActivityStatusProps) {
   if (model.isBridgePendingDest) {
-    return <StatusLabel label="Bridging" tone="info" isPending />;
+    return <ActivityStatusLabel label="Bridging" tone="info" isPending />;
   }
   if (model.isBridge && model.bridgeFulfilled) {
-    return <StatusLabel label="Complete" tone="success" />;
+    return <ActivityStatusLabel label="Complete" tone="success" />;
   }
   if (model.isBridge && model.bridgeRefunded) {
-    return <StatusLabel label="Refunded" tone="error" />;
+    return <ActivityStatusLabel label="Refunded" tone="error" />;
   }
   if (model.isBridge && model.bridgeFailedTerminal) {
     return (
-      <StatusLabel
+      <ActivityStatusLabel
         label={model.bridgeCode === 5 ? "Expired" : "Cancelled"}
         tone="error"
       />
     );
   }
   if (model.isForcePendingL1) {
-    return <StatusLabel label="L1 pending" tone="info" isPending />;
+    return <ActivityStatusLabel label="L1 pending" tone="info" isPending />;
   }
   if (model.isForcePendingL2) {
-    return <StatusLabel label="L2 pending" tone="info" isPending />;
+    return <ActivityStatusLabel label="L2 pending" tone="info" isPending />;
   }
 
   switch (tx.status) {
     case "processing":
-      return <StatusLabel label="Processing" tone="info" isPending />;
+      return <ActivityStatusLabel label="Processing" tone="info" isPending />;
     case "pending":
-      return <StatusLabel label="Pending" tone="info" isPending />;
+      return <ActivityStatusLabel label="Pending" tone="info" isPending />;
     case "success":
-      return <StatusLabel label="Confirmed" tone="success" />;
+      return <ActivityStatusLabel label="Confirmed" tone="success" />;
     case "dropped":
-      return <StatusLabel label="Dropped" tone="warning" />;
+      return <ActivityStatusLabel label="Dropped" tone="warning" />;
     case "failed": {
       let label = "Failed";
       if (model.isForceInclusion) {
@@ -84,7 +106,7 @@ export default function ActivityStatus({ tx, model }: ActivityStatusProps) {
         const hasDistinctL2Hash = !!(tx.txHash && tx.txHash !== l1Hash);
         label = hasDistinctL2Hash ? "L2 failed" : "L1 failed";
       }
-      return <StatusLabel label={label} tone="error" />;
+      return <ActivityStatusLabel label={label} tone="error" />;
     }
   }
 }
