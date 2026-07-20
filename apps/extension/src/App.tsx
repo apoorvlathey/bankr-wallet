@@ -2489,7 +2489,7 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <ShieldView key={privacyActionMode} mode={privacyActionMode} onBack={() => setView("main")} onNavigate={openPrivacyAction} account={activeAccount} accounts={accounts} />
+            <ShieldView key={privacyActionMode} mode={privacyActionMode} onBack={() => setView("main")} account={activeAccount} accounts={accounts} />
           </Suspense>
         </Box>
       </Box>

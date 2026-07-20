@@ -76,7 +76,7 @@ export function shieldOperationStatusCopy(
   }
   if (state === "awaiting_event") return "Finding the confirmed deposit";
   if (state === "awaiting_asp") return "Waiting for eligibility";
-  if (state === "private_ready") return "Available to Unshield";
+  if (state === "private_ready") return "Available to unshield";
   if (state === "wallet_rejected") return "Cancelled in wallet";
   if (state === "public_reverted") return "Transaction reverted";
   if (state === "submission_failed") return "Transaction was not submitted";

@@ -64,6 +64,38 @@ test("Private home exposes Shield, Unshield, and Send as separate entry screens"
   assert.doesNotMatch(dashboardSource, /role="tablist"|onTabChange/);
   assert.match(withdrawalSource, /initialRecipient: ""/);
   assert.doesNotMatch(withdrawalSource, /initialRecipient:[^\n]*account\?\.address/);
+  assert.match(withdrawalSource, /getPrivateWithdrawalCopy\(intent\)/);
+  assert.match(withdrawalSource, /isDisabled=\{!canReview\}/);
+  assert.doesNotMatch(withdrawalSource, />\s*Shield ETH\s*</);
+});
+
+test("Unshield and Send consume shared intent copy without stale route language", async () => {
+  const [amountSource, reviewSource, hookSource, recoverySource] = await Promise.all([
+    readFile(
+      new URL("../../src/components/Shield/UnshieldAmountPanel.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/components/Shield/PrivateSendReview.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/components/Shield/hooks/useUnshield.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/components/Shield/PublicRecoveryPanel.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(amountSource, /getPrivateWithdrawalCopy\(intent\)/);
+  assert.match(reviewSource, /getPrivateWithdrawalCopy\(intent\)/);
+  assert.doesNotMatch(amountSource, /Receive in|Recipient gets/);
+  assert.doesNotMatch(reviewSource, /You unshield|You send privately|Recipient gets/);
+  assert.doesNotMatch(hookSource, /Unshield quote|Unshield didn.t complete/);
+  assert.match(recoverySource, /Withdraw publicly/);
+  assert.doesNotMatch(recoverySource, /Exit publicly/);
 });
 
 test("Unshield keeps the inverse asset form and folds public exit into that route", async () => {

@@ -42,10 +42,10 @@ export function useUnshield(input: {
         recipient: validation.recipient,
       });
       const operation = parseUnshieldResponse(response);
-      if (!operation) throw new Error(parseUnshieldError(response) ?? "Couldn’t get an Unshield quote.");
+      if (!operation) throw new Error(parseUnshieldError(response) ?? "Couldn’t get a relay quote.");
       setState({ status: "quoted", operation, error: null });
     } catch (error) {
-      setState({ status: "error", operation: null, error: error instanceof Error ? error.message : "Couldn’t get an Unshield quote." });
+      setState({ status: "error", operation: null, error: error instanceof Error ? error.message : "Couldn’t get a relay quote." });
     }
   }, [validation]);
 
@@ -59,11 +59,11 @@ export function useUnshield(input: {
         operationId: quoted.id,
       });
       const operation = parseUnshieldResponse(response);
-      if (!operation) throw new Error(parseUnshieldError(response) ?? "Unshield didn’t complete.");
+      if (!operation) throw new Error(parseUnshieldError(response) ?? "Private transfer didn’t complete.");
       setState({ status: "submitted", operation, error: null });
       input.onComplete();
     } catch (error) {
-      setState({ status: "error", operation: quoted, error: error instanceof Error ? error.message : "Unshield didn’t complete." });
+      setState({ status: "error", operation: quoted, error: error instanceof Error ? error.message : "Private transfer didn’t complete." });
       input.onComplete();
     }
   }, [input, state]);

@@ -8,6 +8,53 @@ const UINT = /^(?:0|[1-9]\d{0,79})$/;
 
 export type PrivateWithdrawalIntent = "unshield" | "send";
 
+export interface PrivateWithdrawalCopy {
+  readonly title: string;
+  readonly recipientLabel: string;
+  readonly recipientPickerTitle: string;
+  readonly recipientChooserLabel: string;
+  readonly reviewLabel: string;
+  readonly sourceAmountLabel: string;
+  readonly outcomeAmountLabel: string;
+  readonly availableBalanceLabel: string;
+  readonly confirmLabel: string;
+  readonly recipientContextLabel: string;
+}
+
+const PRIVATE_WITHDRAWAL_COPY: Readonly<Record<PrivateWithdrawalIntent, PrivateWithdrawalCopy>> =
+  Object.freeze({
+    unshield: Object.freeze({
+      title: "Unshield",
+      recipientLabel: "Receive at",
+      recipientPickerTitle: "Choose address",
+      recipientChooserLabel: "Choose address",
+      reviewLabel: "Review unshield",
+      sourceAmountLabel: "From private balance",
+      outcomeAmountLabel: "You receive",
+      availableBalanceLabel: "Available to unshield",
+      confirmLabel: "Unshield",
+      recipientContextLabel: "unshield recipient",
+    }),
+    send: Object.freeze({
+      title: "Send privately",
+      recipientLabel: "Recipient",
+      recipientPickerTitle: "My contacts",
+      recipientChooserLabel: "My contacts",
+      reviewLabel: "Review private send",
+      sourceAmountLabel: "From private balance",
+      outcomeAmountLabel: "Recipient receives",
+      availableBalanceLabel: "Available to send privately",
+      confirmLabel: "Send privately",
+      recipientContextLabel: "private-send recipient",
+    }),
+  });
+
+export function getPrivateWithdrawalCopy(
+  intent: PrivateWithdrawalIntent,
+): PrivateWithdrawalCopy {
+  return PRIVATE_WITHDRAWAL_COPY[intent];
+}
+
 export interface UnshieldOperation {
   readonly id: string;
   readonly state:

@@ -12,9 +12,11 @@ export function ShieldPreview({
 }) {
   const previewWallet = getPreviewWallet(wallet);
   const account = toAccount(previewWallet);
-  const mode: PrivacyActionMode = scenario === "unshield" || scenario === "unshield-pending"
+  const mode: PrivacyActionMode = scenario === "unshield" ||
+      scenario === "unshield-empty" ||
+      scenario === "unshield-pending"
     ? "unshield"
-    : scenario === "send"
+    : scenario === "send" || scenario === "send-empty"
       ? "send"
       : "shield";
   return (
@@ -22,7 +24,6 @@ export function ShieldPreview({
       key={mode}
       mode={mode}
       onBack={() => {}}
-      onNavigate={() => {}}
       account={account}
       accounts={[account]}
     />

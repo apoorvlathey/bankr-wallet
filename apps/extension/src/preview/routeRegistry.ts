@@ -177,7 +177,15 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
   shield: {
     label: "Shield",
     defaultScenario: "default",
-    scenarios: ["default", "pending-eligibility", "unshield", "unshield-pending", "send"],
+    scenarios: [
+      "default",
+      "pending-eligibility",
+      "unshield",
+      "unshield-empty",
+      "unshield-pending",
+      "send",
+      "send-empty",
+    ],
     wallets: SIGNING_WALLETS,
     fidelity: "production",
   },

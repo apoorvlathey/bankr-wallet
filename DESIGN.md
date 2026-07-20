@@ -228,6 +228,17 @@
 
 ## Slop audit
 
+- 2026-07-20 Privacy action consistency audit: Shield, Unshield, and Send keep
+  one route identity from page title through recipient selection, review,
+  loading, failure, and final commitment. Unshield and Send both begin with an
+  empty recipient; `Receive at` replaces the awkward `Receive in`; outcome and
+  public-withdrawal verbs no longer drift between surfaces. With no ready
+  Shielded ETH, the amber action retains the current route's review label and
+  stays disabled beside the existing text explanation instead of unexpectedly
+  navigating to Shield. A pure two-intent copy model and explicit empty preview
+  states enforce the contract without adding a new token, surface, or control.
+  The focused audit passes the one-primary-action, plain-language, 44px target,
+  color-independent state, defined-edge, and no-decorative-motion gates.
 - 2026-07-20 public/private wallet-mode audit: one compact two-state control
   at the right edge of the balance heading separates the account-scoped public wallet from the
   wallet-wide Privacy Pools identity. Both selected modes use the existing
@@ -612,6 +623,10 @@
 
 ## Changelog
 
+- 2026-07-20: made Unshield and Send keep intent-correct labels through empty,
+  input, review, loading, error, and confirmation states; both require an
+  explicit recipient, and an empty balance disables the current route action
+  instead of presenting a cross-route `Shield ETH` button.
 - 2026-07-20: kept Private Assets/Activity state above Shield confirmation
   remounts, routed successful Shield and public-recovery confirmations to
   Activity, and unified every WalletChan Shield-origin row on the privacy mark.
@@ -631,9 +646,9 @@
   to the existing sticky commitment action.
 - 2026-07-20: replaced Shield's nested Shield/Unshield tabs with three sibling
   Private-home actions: Shield, vertical-arrow Unshield, and Send. Shield now
-  mounts only the deposit controller; Unshield defaults its relay recipient to
-  the active wallet, while Send starts recipient-first over the same audited
-  withdrawal engine and uses intent-specific titles and review copy.
+  mounts only the deposit controller; Unshield and Send both start with an
+  empty recipient over the same audited withdrawal engine and use one shared
+  intent-copy contract through review and confirmation.
 - 2026-07-20: moved the smaller tooltip-free wallet-mode control into the
   balance heading below the Public account selector. Tightened Shield into a
   compact deposit form with `Deposit from`, 48px amount fields, a smaller

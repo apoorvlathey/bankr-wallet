@@ -11,7 +11,10 @@ import {
 } from "./ShieldAssetCards";
 import { formatShieldWei } from "./model/shieldQuote";
 import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
-import type { PrivateWithdrawalIntent } from "./model/unshield";
+import {
+  getPrivateWithdrawalCopy,
+  type PrivateWithdrawalIntent,
+} from "./model/unshield";
 
 interface Props {
   intent: PrivateWithdrawalIntent;
@@ -42,6 +45,7 @@ export default function UnshieldAmountPanel({
   explorerUrl,
   publicExit,
 }: Props) {
+  const copy = getPrivateWithdrawalCopy(intent);
   const operation = controller.state.operation;
   const usesPublicExit = intent === "unshield" && availableWei === 0n && Boolean(publicExit);
   const publicExitAmount = publicExit ? formatShieldWei(publicExit.amountWei) : null;
@@ -60,7 +64,7 @@ export default function UnshieldAmountPanel({
       : totalReadyWei > availableWei
         ? `${formatShieldWei(totalReadyWei)} ETH ready · withdraw up to ${formatShieldWei(availableWei)} at a time`
         : availableWei > 0n
-          ? intent === "unshield" ? "Available to unshield" : "Available to send privately"
+          ? copy.availableBalanceLabel
           : confirmedWei > 0n
             ? "No private balance is ready yet"
             : "No Shielded ETH yet";
@@ -84,7 +88,7 @@ export default function UnshieldAmountPanel({
         <ShieldDirectionMarker />
         <ShieldDestinationCard
           shielded={false}
-          label={intent === "unshield" ? "You receive" : "Recipient gets"}
+          label={copy.outcomeAmountLabel}
           amount={usesPublicExit ? publicExitAmount : operation ? formatShieldWei(operation.netRecipientAmountWei) : null}
           detail={usesPublicExit
             ? "Returns to the original deposit account"
@@ -97,7 +101,7 @@ export default function UnshieldAmountPanel({
       {usesPublicExit && publicExit ? (
         <Box>
           <Text mb={1} fontSize="sm" fontWeight="600" color="fg.secondary">
-            Receive in
+            {copy.recipientLabel}
           </Text>
           <HStack
             minH="48px"
@@ -122,8 +126,8 @@ export default function UnshieldAmountPanel({
         <RecipientSection
           recipientState={recipientState}
           explorerUrl={explorerUrl}
-          label={intent === "unshield" ? "Receive in" : "Recipient"}
-          chooserLabel={intent === "unshield" ? "Choose address" : "My contacts"}
+          label={copy.recipientLabel}
+          chooserLabel={copy.recipientChooserLabel}
         />
       )}
 

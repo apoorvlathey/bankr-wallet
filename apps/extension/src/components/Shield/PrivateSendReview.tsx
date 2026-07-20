@@ -9,7 +9,10 @@ import {
   SHIELDED_ETH_NETWORK_NAME,
 } from "./model/shieldedAsset";
 import { formatShieldWei } from "./model/shieldQuote";
-import type { PrivateWithdrawalIntent } from "./model/unshield";
+import {
+  getPrivateWithdrawalCopy,
+  type PrivateWithdrawalIntent,
+} from "./model/unshield";
 
 interface PrivateSendReviewProps {
   intent: PrivateWithdrawalIntent;
@@ -57,11 +60,11 @@ export default function PrivateSendReview({
   const isSubmitting = controller.state.status === "proving";
   const submitted = controller.state.status === "submitted";
   const error = controller.state.status === "error" ? controller.state.error : null;
-  const isUnshield = intent === "unshield";
+  const copy = getPrivateWithdrawalCopy(intent);
 
   return (
     <ConfirmationScreen
-      title={isUnshield ? "Review unshield" : "Review private send"}
+      title={copy.reviewLabel}
       onBack={onBack}
       outcome={(
         <Box
@@ -76,7 +79,7 @@ export default function PrivateSendReview({
             <Image src={SHIELDED_ETH_LOGO_URL} alt="" boxSize="38px" />
             <Box minW={0}>
               <Text fontSize="xs" color="fg.secondary">
-                {isUnshield ? "You unshield" : "You send privately"}
+                {copy.sourceAmountLabel}
               </Text>
               <Text fontFamily="mono" fontSize="2xl" fontWeight="700">
                 {formatShieldWei(operation.amountWei)} ETH
@@ -87,7 +90,7 @@ export default function PrivateSendReview({
           <HStack justify="space-between" spacing={3} align="center">
             <Box minW={0}>
               <Text fontSize="xs" color="fg.secondary">
-                {isUnshield ? "You receive" : "Recipient gets"}
+                {copy.outcomeAmountLabel}
               </Text>
               <Text fontFamily="mono" fontSize="xl" fontWeight="700">
                 {formatShieldWei(operation.netRecipientAmountWei)} ETH
@@ -95,7 +98,7 @@ export default function PrivateSendReview({
             </Box>
             <LabeledAddressPopover
               address={operation.recipient}
-              contextLabel={isUnshield ? "unshield recipient" : "private-send recipient"}
+              contextLabel={copy.recipientContextLabel}
               explorer={explorerUrl}
               label={recipientLabel || `${operation.recipient.slice(0, 6)}…${operation.recipient.slice(-4)}`}
               maxW="160px"
@@ -107,7 +110,7 @@ export default function PrivateSendReview({
         <ListSurface>
           <DetailRow label="Private balance debit" value={`${formatShieldWei(operation.amountWei)} ETH`} />
           <DetailRow label="Relayer fee" value={`${formatShieldWei(operation.relayFeeWei)} ETH`} />
-          <DetailRow label="Recipient receives" value={`${formatShieldWei(operation.netRecipientAmountWei)} ETH`} />
+          <DetailRow label={copy.outcomeAmountLabel} value={`${formatShieldWei(operation.netRecipientAmountWei)} ETH`} />
         </ListSurface>
       )}
       context={(
@@ -155,7 +158,7 @@ export default function PrivateSendReview({
           isLoading={isSubmitting}
           loadingText="Preparing proof…"
         >
-          {isUnshield ? "Unshield" : "Send privately"}
+          {copy.confirmLabel}
         </Button>
       )}
       rejectAction={!submitted ? (

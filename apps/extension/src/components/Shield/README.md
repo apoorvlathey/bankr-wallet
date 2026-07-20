@@ -55,8 +55,8 @@ receives calldata or note material and never signs or submits.
 
 The private home exposes Shield, Unshield, and Send as three sibling quick
 actions. Shield is its own public-deposit screen. Unshield and Send are separate
-screens backed by the same exact withdrawal controller: Unshield defaults the
-recipient to the active WalletChan account, while Send starts recipient-first.
+screens backed by the same exact withdrawal controller. Both start with an
+empty recipient and require an explicit address or contact choice.
 Both reuse Send's contact, ENS, and contract-warning controls, then open one
 compact intent-aware review. The background generates and verifies the proof
 and submits through the pinned relay. The already-unlocked master capability is
@@ -72,6 +72,12 @@ transaction; the sticky `Withdraw publicly` action remains disabled until the
 user checks it. While the ASP compliance check is still pending, a compact
 amber information panel above that acknowledgment explains that the deposit
 can already be recovered to its original account.
+
+Unshield and Send consume one pure intent-copy contract for screen, recipient,
+review, outcome, and final-action labels. Their normal sticky action always
+describes the current route and stays disabled when no Shielded ETH is ready;
+it never turns into a cross-route Shield action. Public recovery is the only
+intentional label override because it is a distinct public transaction.
 
 The private home reports ready and compliance-pending ETH; the pending amount
 uses the shared amber privacy-status accent. Quote refreshes

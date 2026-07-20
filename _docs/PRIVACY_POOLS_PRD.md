@@ -156,7 +156,7 @@ Shield
 ├── Confirmed Shield balance + USD value
 │   └── Waiting-for-ASP subset when non-zero
 ├── Shield ETH
-├── Unshield to my wallet
+├── Unshield to an explicit address
 ├── Send privately to a recipient
 ├── Withdraw publicly when eligible
 └── Activity

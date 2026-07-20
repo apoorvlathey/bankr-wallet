@@ -15,7 +15,10 @@ import { useUnshield } from "./hooks/useUnshield";
 import { usePublicRecovery } from "./hooks/usePublicRecovery";
 import PublicRecoveryPanel from "./PublicRecoveryPanel";
 import { getPublicWithdrawalOffer } from "./model/recovery";
-import type { PrivateWithdrawalIntent } from "./model/unshield";
+import {
+  getPrivateWithdrawalCopy,
+  type PrivateWithdrawalIntent,
+} from "./model/unshield";
 import {
   SHIELDED_ETH_CHAIN_ID,
   SHIELDED_ETH_EXPLORER_URL,
@@ -24,7 +27,6 @@ import {
 interface PrivateWithdrawalScreenProps {
   intent: PrivateWithdrawalIntent;
   onBack: () => void;
-  onOpenShield: () => void;
   account: ShieldSourceAccount | null;
   accounts?: Account[];
 }
@@ -39,10 +41,10 @@ function isRecoveryCapableAccount(account: Pick<Account, "type">): boolean {
 export default function PrivateWithdrawalScreen({
   intent,
   onBack,
-  onOpenShield,
   account,
   accounts = [],
 }: PrivateWithdrawalScreenProps) {
+  const copy = getPrivateWithdrawalCopy(intent);
   const [recoveryAccount, setRecoveryAccount] = useState<ShieldSourceAccount | null>(() => {
     if (account && isRecoveryCapableAccount(account)) {
       return account;
@@ -116,7 +118,7 @@ export default function PrivateWithdrawalScreen({
   if (recipientState.isRecipientPickerOpen) {
     return (
       <RecipientPicker
-        title={intent === "unshield" ? "Receive in" : "My contacts"}
+        title={copy.recipientPickerTitle}
         accounts={recipientState.filteredRecipientAccounts}
         contacts={recipientState.filteredRecipientContacts}
         allContacts={recipientState.allAddressContacts}
@@ -145,7 +147,6 @@ export default function PrivateWithdrawalScreen({
     recipientGatesPass &&
     withdrawal.state.status !== "quoting",
   );
-  const title = intent === "unshield" ? "Unshield" : "Send privately";
   const selectPublicExitDepositAccount = () => {
     if (!publicWithdrawalOffer) return;
     const matching = accounts.find((candidate) =>
@@ -158,7 +159,7 @@ export default function PrivateWithdrawalScreen({
 
   return (
     <ShieldDashboard
-      title={title}
+      title={copy.title}
       onBack={onBack}
       initialization={initialization}
       onRetryInitialization={retry}
@@ -253,10 +254,6 @@ export default function PrivateWithdrawalScreen({
         >
           {publicWithdrawalOffer.activeAccountMatches ? "Withdraw publicly" : "Use deposit account"}
         </Button>
-      ) : activity.portfolio.maxPrivateSendWei === 0n ? (
-        <Button variant="brand" onClick={onOpenShield}>
-          Shield ETH
-        </Button>
       ) : (
         <Button
           variant="brand"
@@ -265,7 +262,7 @@ export default function PrivateWithdrawalScreen({
           loadingText="Checking relay…"
           isDisabled={!canReview}
         >
-          {intent === "unshield" ? "Review unshield" : "Review private send"}
+          {copy.reviewLabel}
         </Button>
       )}
     />

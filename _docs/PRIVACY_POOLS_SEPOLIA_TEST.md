@@ -108,8 +108,8 @@ Use Settings -> Shield recovery on a disposable test wallet.
 ## Unshield
 
 1. With a ready Shield balance, switch to Private and open Unshield, then Send.
-   Verify each has its own screen title and no token selector; Unshield defaults
-   receipt to the active WalletChan account while Send starts recipient-first.
+   Verify each has its own screen title, no token selector, and an empty recipient
+   that requires an explicit address or contact choice.
 2. Enter a partial amount and a fresh recipient through the shared Send
    contact/ENS controls. Verify contract-recipient acknowledgement still gates
    review.

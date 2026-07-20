@@ -72,7 +72,7 @@ export default function PublicRecoveryPanel({
             isDisabled={status === "queued"}
             onClick={activeAccountMatches ? onRecover : onUseDepositAccount}
           >
-            {activeAccountMatches ? "Exit publicly" : "Use deposit account"}
+            {activeAccountMatches ? "Withdraw publicly" : "Use deposit account"}
           </Button>
         )}
       </HStack>

@@ -8,7 +8,6 @@ export type PrivacyActionMode = "shield" | "unshield" | "send";
 interface PrivacyActionScreenProps {
   mode: PrivacyActionMode;
   onBack: () => void;
-  onNavigate: (mode: PrivacyActionMode) => void;
   account: ShieldSourceAccount | null;
   accounts?: Account[];
 }
@@ -16,7 +15,6 @@ interface PrivacyActionScreenProps {
 export default function PrivacyActionScreen({
   mode,
   onBack,
-  onNavigate,
   account,
   accounts,
 }: PrivacyActionScreenProps) {
@@ -28,7 +26,6 @@ export default function PrivacyActionScreen({
     <PrivateWithdrawalScreen
       intent={mode}
       onBack={onBack}
-      onOpenShield={() => onNavigate("shield")}
       account={account}
       accounts={accounts}
     />

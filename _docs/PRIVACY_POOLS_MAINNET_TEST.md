@@ -119,8 +119,9 @@ spend/fee caps:
 3. For each of Bankr, private-key, and seed accounts, complete a capped Shield
    and observe confirmation, pool indexing, ASP classification, and Private
    Activity/balance transitions across UI and service-worker restarts.
-4. Complete partial and full private Unshield with expiry/restart/ambiguous-
-   result handling and confirm the exact replacement/nullifier lineage.
+4. Complete partial and full private Unshield to explicitly entered fresh
+   addresses with expiry/restart/ambiguous-result handling and confirm the
+   exact replacement/nullifier lineage.
 5. Reveal/verify the separate Shield recovery phrase, clear rebuildable state,
    restore/rescan from a clean extension profile, and reproduce the balance.
 6. Complete public recovery from the exact original depositor for every

@@ -64,8 +64,8 @@ mainnet rehearsal.
   the shielded amount and amber processing ETH still waiting for the ASP
   compliance check.
 - Private Unshield and **Send privately** are separate entries over the same
-  relayed withdrawal engine. Unshield defaults receipt to the active WalletChan
-  account; Send begins with an empty recipient. Shielded ETH is debited and
+  relayed withdrawal engine. Both begin with an empty recipient and require an
+  explicit address or contact choice. Shielded ETH is debited and
   public active-chain ETH is delivered through the shared Send recipient/contact/ENS
   flow through the pinned relay. Its concise review uses a normal button press,
   explains there is no direct onchain link to the deposit, and makes no claim
