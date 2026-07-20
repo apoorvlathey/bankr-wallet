@@ -130,11 +130,12 @@ Socket V3 returns string statuses (`PENDING`, `IN_PROGRESS`, `COMPLETED`, `FAILE
 
 ## Fee Collection
 
-- **Same tiering as `/swap`** — `resolveFeeBps(taker)` from `apps/website/app/api/swap/feeResolver.ts` is reused server-side. Default 0.8%, premium 0.3% for ≥ 20M sWCHAN holders.
+- **Same flat fee as `/swap`** — `resolveFeeBps(taker)` from `apps/website/app/api/swap/feeResolver.ts` is reused server-side and returns 0.1% (10 bps) without an indexer or onchain lookup.
+- The previous staking-tier resolver remains available behind the disabled `STAKING_FEE_TIERS_ENABLED` flag for possible future use.
 - **`BUNGEE_FEE_RECIPIENT` is its own env var** — separate from `SWAP_FEE_RECIPIENT` because bridge/swap API fee recipients are whitelisted per affiliate id.
 - Fee params only attached when `BUNGEE_FEE_RECIPIENT` is set. Leaving it blank disables integrator fees on bridges entirely.
 - Socket returns output amounts already net of applicable fees.
-- The proxy adds `isPremiumFee` + `feeBps` to the response so the UI can show a "Premium" badge.
+- The proxy adds `isPremiumFee` + `feeBps` to the response. `isPremiumFee` remains false while staking tiers are disabled.
 
 ## File Structure
 

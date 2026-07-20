@@ -33,11 +33,11 @@ Uses **0x Swap API v2** with the **AllowanceHolder** flow (single-signature UX, 
 - `0x-version`: `v2`
 
 ### Fee Collection
-- **Default fee**: 0.8% (80 bps) charged on the sell token
-- **Premium fee**: 0.3% (30 bps) for users staking >= 20M sWCHAN
+- **Flat fee**: 0.1% (10 bps) charged on the sell token
 - **Recipient**: `process.env.SWAP_FEE_RECIPIENT`
 - **Params**: `swapFeeRecipient`, `swapFeeBps` (resolved per-request), `swapFeeToken` = sellToken
-- Fee tier resolved server-side in `feeResolver.ts` by checking the taker's sWCHAN balance via the WCHAN vault indexer API. Falls back to default fee on any error.
+- Fee resolution is local and does not require an indexer or onchain call.
+- The previous staking-tier resolver is retained behind the disabled `STAKING_FEE_TIERS_ENABLED` flag for possible future use.
 - Fee params only added if `SWAP_FEE_RECIPIENT` env var is set
 - `swapFeeToken` is hardcoded to `sellToken` server-side (not from client)
 
@@ -169,8 +169,8 @@ Both defined in `apps/website/.env.local` (see `.env.local.example`).
 | Constant | Value | Location | Purpose |
 |---|---|---|---|
 | `SWAP_CHAIN_ID` | `8453` | `swap/constants.ts` | Base chain |
-| `DEFAULT_FEE_BPS` | `"80"` | `api/swap/feeResolver.ts` | 0.8% default fee |
-| `PREMIUM_FEE_BPS` | `"30"` | `api/swap/feeResolver.ts` | 0.3% premium fee (>= 20M sWCHAN) |
+| `FLAT_FEE_BPS` | `"10"` | `api/swap/feeResolver.ts` | Active 0.1% swap and bridge fee |
+| `STAKING_FEE_TIERS_ENABLED` | `false` | `api/swap/feeResolver.ts` | Keeps dormant staking tiers off and avoids indexer calls |
 | `NATIVE_TOKEN_ADDRESS` | `0xEeee...eEEeE` | `swap/constants.ts` | Native ETH placeholder for 0x |
 | `WETH_ADDRESS` | `0x4200...0006` | `swap/constants.ts` | WETH on Base |
 | `DEFAULT_SLIPPAGE_BPS` | `500` | `swap/constants.ts` | 5% default slippage |

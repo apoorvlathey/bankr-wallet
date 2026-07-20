@@ -1,11 +1,15 @@
 /**
- * Resolves the integrator fee BPS based on the taker's sWCHAN staking balance.
+ * Resolves the integrator fee BPS shared by swaps and bridges.
  *
- * Premium users (>= 20M sWCHAN) pay 0.3%; everyone else pays 0.8%.
+ * Staking tiers are retained behind a disabled flag for future use. While the
+ * flag is disabled, resolution is local and never calls the staking indexer.
  */
 import { WCHAN_VAULT_INDEXER_API_URL } from "../../constants";
 
-const DEFAULT_FEE_BPS = "80"; // 0.8%
+const FLAT_FEE_BPS = "10"; // 0.1%
+
+const STAKING_FEE_TIERS_ENABLED = false;
+const DEFAULT_FEE_BPS = "80"; // 0.8% (dormant staking-tier default)
 const PREMIUM_FEE_BPS = "30"; // 0.3%
 
 /** 20 million sWCHAN (18 decimals) */
@@ -18,11 +22,18 @@ export interface FeeResult {
 
 /**
  * Returns the fee BPS and premium status for a given taker address.
- * Falls back to the default fee on any error so swaps are never blocked.
+ *
+ * The active flat-fee path performs no network or onchain lookup. If staking
+ * tiers are re-enabled, lookup failures fall back to the tier default so a
+ * fee-resolution dependency cannot block swaps or bridges.
  */
 export async function resolveFeeBps(
   taker: string | undefined,
 ): Promise<FeeResult> {
+  if (!STAKING_FEE_TIERS_ENABLED) {
+    return { feeBps: FLAT_FEE_BPS, isPremiumFee: false };
+  }
+
   if (!taker) return { feeBps: DEFAULT_FEE_BPS, isPremiumFee: false };
 
   try {
