@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { generateVaultKey, importVaultKey } from "../../src/chrome/crypto";
+import type { PendingTxRequest } from "../../src/chrome/requests/pendingTxStorage";
 import {
   decryptPrivacyShieldOperationDetails,
   encryptPrivacyShieldOperationDetails,
@@ -10,7 +12,11 @@ import {
   createPrivacyShieldOperationIntent,
   decodePrivacyShieldOperationIntent,
 } from "../../src/chrome/privacy/operations/intent";
-import { newestActivePrivacyShieldOperation } from "../../src/chrome/privacy/operations/repository";
+import {
+  newestActivePrivacyShieldOperation,
+} from "../../src/chrome/privacy/operations/repository";
+import { isRejectedPrivacyShieldOperation } from "../../src/chrome/privacy/operations/rejectionRepository";
+import { cleanupRejectedPrivacyShieldOperations } from "../../src/chrome/privacy/operations/rejectionLifecycle";
 import {
   defaultPrivacyShieldOperationTracking,
   isValidStoredPrivacyShieldOperation,
@@ -156,6 +162,8 @@ test("terminal Shield records do not dedupe a fresh intent for the same amount",
   };
 
   assert.equal(newestActivePrivacyShieldOperation([rejected]), null);
+  assert.equal(isRejectedPrivacyShieldOperation(rejected), true);
+  assert.equal(isRejectedPrivacyShieldOperation(base), false);
 
   const activeSummary = {
     ...operationSummary,
@@ -173,4 +181,81 @@ test("terminal Shield records do not dedupe a fresh intent for the same amount",
     newestActivePrivacyShieldOperation([rejected, active])?.summary.id,
     active.summary.id,
   );
+});
+
+test("Shield rejection removes pending state before deleting encrypted operation data", async () => {
+  const requestActions = await readFile(
+    new URL("../../src/chrome/transactions/requestActions.ts", import.meta.url),
+    "utf8",
+  );
+  const rejection = requestActions.indexOf(
+    "await recordPrivacyShieldWalletRejected(pending)",
+  );
+  const pendingRemoval = requestActions.indexOf(
+    "await removePendingTxRequest(txId)",
+  );
+  const operationDeletion = requestActions.indexOf(
+    "await discardRejectedPrivacyShieldOperation(pending)",
+  );
+  assert.ok(rejection >= 0 && rejection < pendingRemoval);
+  assert.ok(pendingRemoval < operationDeletion);
+
+  const rejectionRepository = await readFile(
+    new URL(
+      "../../src/chrome/privacy/operations/rejectionRepository.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const deleteStart = rejectionRepository.indexOf(
+    "export async function deleteRejectedPrivacyShieldOperation",
+  );
+  const deleteEnd = rejectionRepository.indexOf(
+    "export async function deleteRejectedPrivacyShieldOperations",
+  );
+  const deleteSource = rejectionRepository.slice(deleteStart, deleteEnd);
+  assert.match(deleteSource, /store\.delete\(operationId\)/);
+  assert.doesNotMatch(deleteSource, /PRIVACY_OPERATIONS_METADATA_STORE/);
+});
+
+test("startup finishes an interrupted Shield rejection before pruning it", async () => {
+  const operationSummary = summary();
+  const tracking = defaultPrivacyShieldOperationTracking(operationSummary);
+  const rejected = {
+    summary: operationSummary,
+    keyId: "privacy-key-1",
+    encryptedDetails: {
+      version: 1 as const,
+      scheme: "privacy-operation-key" as const,
+      ciphertext: "unused-by-cleanup",
+      iv: "unused-by-cleanup",
+    },
+    tracking: {
+      ...tracking,
+      revision: 1,
+      state: "wallet_rejected" as const,
+      updatedAt: 2,
+      errorCode: "wallet-rejected" as const,
+    },
+  } satisfies StoredPrivacyShieldOperationV1;
+  const events: string[] = [];
+  const remaining = await cleanupRejectedPrivacyShieldOperations([rejected], {
+    getPending: async () => [{
+      id: OPERATION_ID,
+      privacyShieldMeta: { version: 1, operationId: OPERATION_ID },
+    } as PendingTxRequest],
+    removePending: async (id) => {
+      events.push(`pending:${id}`);
+    },
+    deleteRejectedBatch: async (ids) => {
+      events.push(`operations:${ids.join(",")}`);
+      return ids.length;
+    },
+  });
+
+  assert.deepEqual(events, [
+    `pending:${OPERATION_ID}`,
+    `operations:${OPERATION_ID}`,
+  ]);
+  assert.deepEqual(remaining, []);
 });

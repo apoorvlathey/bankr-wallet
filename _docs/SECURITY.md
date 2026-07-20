@@ -1297,7 +1297,7 @@ accessible resources.
 
 | Database / store | Contains Secrets | Description |
 | --- | --- | --- |
-| Active operations DB (`walletchan-privacy-v1` Sepolia / `walletchan-privacy-mainnet-v1` mainnet) | Yes (encrypted) | At most 100 exact pending Shield records plus the atomic `nextDepositIndex`. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. |
+| Active operations DB (`walletchan-privacy-v1` Sepolia / `walletchan-privacy-mainnet-v1` mainnet) | Yes (encrypted) | At most 100 exact Shield lifecycle records plus the atomic `nextDepositIndex`. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. A pre-effect wallet rejection is marked before pending-request removal, then its encrypted record is deleted without rewinding the derivation cursor; startup performs the same ordered cleanup for rejected rows left by older or interrupted builds. |
 | Active commitments DB (`walletchan-privacy-commitments-*-v1`) | Yes (encrypted) | Current commitment hash/value lineage, depositor recovery dependency, status, and derivation indexes with revision-bound AAD. Only aggregate balances leave the background. |
 | Active withdrawals DB (`walletchan-privacy-withdrawals-*-v1`) | Yes (encrypted) | At most 256 restart-safe Unshield intents; commitment linkage, expected nullifier/replacement, signed quote, and relayer payload remain encrypted. |
 | Active ragequits DB (`walletchan-privacy-ragequits-*-v1`) | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
@@ -1593,8 +1593,10 @@ These must always hold true. Violations indicate a security bug.
     shieldedAmountWei}` onto the normal transaction-history row so main
     Activity can render the current stage. Matching transaction-history
     notifications only trigger a bounded reload/sync and convey no Shield
-    secret. A user-rejected public-withdrawal record remains encrypted in the
-    background long enough to release its commitment claim safely, but
+    secret. A pre-effect Shield rejection removes the pending request before
+    deleting its encrypted operation, while its already-advanced derivation
+    cursor is never rewound. A user-rejected public-withdrawal record remains
+    encrypted in the background long enough to release its commitment claim safely, but
     `privacyListShieldOperations` omits that `wallet_rejected` projection from
     user-facing Activity. This presentation filter does not delete or disguise
     genuine proof, submission, revert, ambiguity, or recovery failures.

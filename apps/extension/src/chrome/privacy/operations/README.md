@@ -12,16 +12,23 @@ transaction.
   AAD binds the complete public summary and privacy key ID.
 - `intent.ts`: distinct, independently decoded operation intent fixed to
   `submittable: false`.
-- `repository.ts`: native IndexedDB schema, atomic operation/index commit,
-  idempotent lookup, bounded activity reads, and reset deletion.
+- `database.ts`: shared IndexedDB connection, schema, validated record reads,
+  transaction completion, and reset deletion.
+- `repository.ts`: atomic operation/index commit, idempotent lookup, and bounded
+  activity reads.
+- `rejectionRepository.ts`: exact rejected-record deletion without derivation
+  metadata access.
+- `rejectionLifecycle.ts`: post-pending deletion and interrupted-rejection
+  startup reconciliation.
 - `prepare.ts`: master-authorized deployment/account/quote revalidation,
   derivation, encryption, and commit orchestration.
 - `submission.ts`: converts only an exact encrypted operation into the trusted,
   account-pinned normal WalletChan confirmation; it does not sign or broadcast.
 - `lifecycle.ts`: receipt, exact pool-event, ASP, rejection, revert, and restart
-  state transitions. Rejected and other terminal records remain available to
-  activity history but no longer participate in account/amount dedupe, so a new
-  request UUID can safely prepare the same amount again.
+  state transitions. A rejection is marked before its pending request is
+  removed, then its encrypted operation is deleted without rewinding the
+  derivation cursor. Other terminal records remain available to activity
+  history but do not participate in account/amount dedupe.
 - `historyProjection.ts`: exact operation/transaction/account/chain/value
   binding before the public lifecycle subset is mirrored onto `txHistory`.
 

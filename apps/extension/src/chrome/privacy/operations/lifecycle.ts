@@ -11,6 +11,7 @@ import {
   listAllPrivacyShieldOperations,
   updatePrivacyShieldOperationTracking as updateStoredPrivacyShieldOperationTracking,
 } from "./repository";
+import { cleanupRejectedPrivacyShieldOperations } from "./rejectionLifecycle";
 import { mirrorPrivacyShieldHistoryProjection } from "./historyProjection";
 import type {
   PrivacyShieldOperationTrackingV1,
@@ -364,7 +365,9 @@ export async function recordPrivacyShieldRagequitRecovered(
 }
 
 export async function resumePrivacyShieldTracking(): Promise<void> {
-  const operations = await listAllPrivacyShieldOperations();
+  const operations = await cleanupRejectedPrivacyShieldOperations(
+    await listAllPrivacyShieldOperations(),
+  );
   for (const operation of operations) {
     await mirrorPrivacyShieldHistoryProjection(operation).catch((error) =>
       console.warn("[privacy-shield] activity projection restore failed", error)

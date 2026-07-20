@@ -244,9 +244,13 @@ the dedicated privacy key. `privacy/operations/repository.ts`
 then atomically advances `nextDepositIndex` and adds the operation in the
 active profile's IndexedDB (`walletchan-privacy-v1` on Sepolia,
 `walletchan-privacy-mainnet-v1` on mainnet); request-ID and pending account/amount lookups make a
-retry idempotent. Terminal records such as a wallet-rejected confirmation stay
-in activity history but are excluded from amount dedupe, allowing a new user
-intent to Shield the same amount with a fresh request ID. A retry finds and account-validates that exact active durable
+retry idempotent. Terminal records are excluded from amount dedupe, allowing a
+new user intent to Shield the same amount with a fresh request ID. After a
+rejection is durably marked and its
+pending transaction is removed, WalletChan deletes the encrypted rejected
+operation while keeping `nextDepositIndex` advanced; activity reads hide
+rejected attempts. Startup removes any orphaned pending prompt before
+pruning rejected rows left by older builds. A retry finds and account-validates that exact active durable
 operation before another deployment/quote RPC pass. Only the sanitized public
 summary is returned. The background then creates a trusted, pinned normal
 WalletChan transaction request without repeating deployment verification;

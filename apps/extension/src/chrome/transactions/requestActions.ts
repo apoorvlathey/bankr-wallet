@@ -29,6 +29,14 @@ export async function handleRejectTransaction(
     console.warn("[privacy-ragequit] failed to persist wallet rejection", error);
   }
   await removePendingTxRequest(txId);
+  try {
+    const { discardRejectedPrivacyShieldOperation } = await import(
+      "../privacy/operations/rejectionLifecycle"
+    );
+    await discardRejectedPrivacyShieldOperation(pending);
+  } catch (error) {
+    console.warn("[privacy-shield] failed to delete rejected operation", error);
+  }
   await writeResultToStorage(`txResult:${txId}`, {
     success: false,
     error: "Transaction rejected by user",

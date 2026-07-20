@@ -7,9 +7,6 @@ import {
   MAX_PRIVACY_OPERATIONS,
   MAX_VISIBLE_PRIVACY_OPERATIONS,
   PRIVACY_NEXT_DEPOSIT_INDEX_KEY,
-  PRIVACY_OPERATIONS_DATABASE,
-  PRIVACY_OPERATIONS_DATABASES,
-  PRIVACY_OPERATIONS_DATABASE_VERSION,
   PRIVACY_OPERATIONS_METADATA_STORE,
   PRIVACY_OPERATIONS_STORE,
   privacyShieldOperationPublicSummary,
@@ -17,88 +14,23 @@ import {
   type PrivacyShieldOperationTrackingV1,
   type StoredPrivacyShieldOperationV1,
 } from "./types";
+import {
+  openPrivacyOperationsDatabase,
+  PRIVACY_OPERATION_CREATED_AT_INDEX,
+  PRIVACY_OPERATION_DEDUPE_INDEX,
+  PRIVACY_OPERATION_REQUEST_ID_INDEX,
+  requestResult,
+  transactionComplete,
+  validatedOperation,
+} from "./database";
+import { isRejectedPrivacyShieldOperation } from "./rejectionRepository";
 
-const REQUEST_ID_INDEX = "by-request-id";
-const DEDUPE_INDEX = "by-dedupe-key";
-const CREATED_AT_INDEX = "by-created-at";
-
-let databasePromise: Promise<IDBDatabase> | null = null;
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed"));
-  });
-}
-
-function transactionComplete(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () =>
-      reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
-    transaction.onerror = () =>
-      reject(transaction.error ?? new Error("IndexedDB transaction failed"));
-  });
-}
-
-async function openPrivacyOperationsDatabase(): Promise<IDBDatabase> {
-  if (databasePromise) return databasePromise;
-  databasePromise = new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("Privacy operation storage unavailable"));
-      return;
-    }
-    const request = indexedDB.open(
-      PRIVACY_OPERATIONS_DATABASE,
-      PRIVACY_OPERATIONS_DATABASE_VERSION,
-    );
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      const operations = database.createObjectStore(PRIVACY_OPERATIONS_STORE, {
-        keyPath: "summary.id",
-      });
-      operations.createIndex(REQUEST_ID_INDEX, "summary.requestId", {
-        unique: true,
-      });
-      operations.createIndex(DEDUPE_INDEX, "summary.dedupeKey", {
-        unique: false,
-      });
-      operations.createIndex(CREATED_AT_INDEX, "summary.createdAt", {
-        unique: false,
-      });
-      database.createObjectStore(PRIVACY_OPERATIONS_METADATA_STORE, {
-        keyPath: "key",
-      });
-    };
-    request.onsuccess = () => {
-      const database = request.result;
-      database.onversionchange = () => database.close();
-      resolve(database);
-    };
-    request.onerror = () => {
-      databasePromise = null;
-      reject(request.error ?? new Error("Privacy operation storage failed"));
-    };
-    request.onblocked = () => {
-      databasePromise = null;
-      reject(new Error("Privacy operation storage blocked"));
-    };
-  });
-  return databasePromise;
-}
-
-function validatedOperation(value: unknown): StoredPrivacyShieldOperationV1 | null {
-  if (value === undefined) return null;
-  if (!isValidStoredPrivacyShieldOperation(value)) {
-    throw new Error("Invalid privacy operation record");
-  }
-  return value;
-}
+export { deletePrivacyOperationsDatabase } from "./database";
 
 /**
- * Dedupe only operations that can still be resumed. Terminal records remain in
- * activity history, but must not prevent a fresh user intent for the same
- * account and amount.
+ * Dedupe only operations that can still be resumed. Any terminal record still
+ * awaiting lifecycle cleanup must not prevent a fresh user intent for the
+ * same account and amount.
  */
 export function newestActivePrivacyShieldOperation(
   operations: readonly StoredPrivacyShieldOperationV1[],
@@ -126,14 +58,14 @@ export async function findPrivacyShieldOperation(input: {
   const completion = transactionComplete(transaction);
   const store = transaction.objectStore(PRIVACY_OPERATIONS_STORE);
   const byRequest = await requestResult(
-    store.index(REQUEST_ID_INDEX).get(input.requestId),
+    store.index(PRIVACY_OPERATION_REQUEST_ID_INDEX).get(input.requestId),
   );
   if (byRequest !== undefined) {
     await completion;
     return validatedOperation(byRequest);
   }
   const byDedupe = await requestResult(
-    store.index(DEDUPE_INDEX).getAll(input.dedupeKey),
+    store.index(PRIVACY_OPERATION_DEDUPE_INDEX).getAll(input.dedupeKey),
   );
   await completion;
   const candidates = (Array.isArray(byDedupe) ? byDedupe : [])
@@ -293,10 +225,14 @@ export async function commitPrivacyShieldOperation(
     const [rawMetadata, byRequest, byDedupe, operationCount] = await Promise.all([
       requestResult(metadata.get(PRIVACY_NEXT_DEPOSIT_INDEX_KEY)),
       requestResult(
-        operations.index(REQUEST_ID_INDEX).get(operation.summary.requestId),
+        operations
+          .index(PRIVACY_OPERATION_REQUEST_ID_INDEX)
+          .get(operation.summary.requestId),
       ),
       requestResult(
-        operations.index(DEDUPE_INDEX).getAll(operation.summary.dedupeKey),
+        operations
+          .index(PRIVACY_OPERATION_DEDUPE_INDEX)
+          .getAll(operation.summary.dedupeKey),
       ),
       requestResult(operations.count()),
     ]);
@@ -358,7 +294,7 @@ async function readPrivacyShieldOperations(
   const completion = transactionComplete(transaction);
   const index = transaction
     .objectStore(PRIVACY_OPERATIONS_STORE)
-    .index(CREATED_AT_INDEX);
+    .index(PRIVACY_OPERATION_CREATED_AT_INDEX);
   const operations: StoredPrivacyShieldOperationV1[] = [];
   await new Promise<void>((resolve, reject) => {
     const request = index.openCursor(null, "prev");
@@ -393,9 +329,10 @@ export function listAllPrivacyShieldOperations(): Promise<StoredPrivacyShieldOpe
 }
 
 export async function listPrivacyShieldOperationSummaries() {
-  return (await listPrivacyShieldOperations()).map(
-    privacyShieldOperationPublicSummary,
-  );
+  return (await listAllPrivacyShieldOperations())
+    .filter((operation) => !isRejectedPrivacyShieldOperation(operation))
+    .slice(0, MAX_VISIBLE_PRIVACY_OPERATIONS)
+    .map(privacyShieldOperationPublicSummary);
 }
 
 export function isTerminalPrivacyShieldState(
@@ -410,22 +347,4 @@ export function isTerminalPrivacyShieldState(
     state === "ragequit_available" ||
     state === "ragequit_recovered" ||
     state === "failed_needs_support";
-}
-
-export async function deletePrivacyOperationsDatabase(): Promise<void> {
-  const existing = databasePromise;
-  databasePromise = null;
-  if (existing) {
-    const database = await existing.catch(() => null);
-    database?.close();
-  }
-  if (typeof indexedDB === "undefined") return;
-  await Promise.all(PRIVACY_OPERATIONS_DATABASES.map((name) =>
-    new Promise<void>((resolve, reject) => {
-      const request = indexedDB.deleteDatabase(name);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error ?? new Error("Privacy operation reset failed"));
-      request.onblocked = () => reject(new Error("Privacy operation reset blocked"));
-    })
-  ));
 }

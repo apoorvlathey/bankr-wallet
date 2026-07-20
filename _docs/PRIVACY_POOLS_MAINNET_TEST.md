@@ -125,7 +125,8 @@ spend/fee caps:
    the exact existing request reopens without a second operation,
    `operation-unavailable`, or hidden-focused-descendant ARIA warning. Explicit
    Reject must still terminalize that request and allow a later Shield attempt
-   to create a fresh operation.
+   to create a fresh operation. Confirm the rejected encrypted operation is
+   deleted after its pending request while `nextDepositIndex` remains advanced.
 3. For each of Bankr, private-key, and seed accounts, complete a capped Shield
    and observe confirmation, pool indexing, ASP classification, and Private
    Activity/balance transitions across UI and service-worker restarts.
