@@ -63,7 +63,7 @@ test("portfolio hover sound is shared by tabs, protocol links, and activity rows
   }
 });
 
-test("portfolio tab clicks use whisper only when switching tabs", async () => {
+test("portfolio tab clicks switch silently while retaining their hover cue", async () => {
   const [tabsSource, managerSource] = await Promise.all([
     readFile(
       new URL("../../src/components/PortfolioTabs.tsx", import.meta.url),
@@ -75,13 +75,11 @@ test("portfolio tab clicks use whisper only when switching tabs", async () => {
     ),
   ]);
 
-  assert.match(
-    managerSource,
-    /portfolioTabSwitch: \{ player: cuelume\("whisper"\)/,
-  );
+  assert.doesNotMatch(managerSource, /portfolioTabSwitch/);
   assert.match(
     tabsSource,
-    /if \(nextIndex === tabIndexRef\.current\) return;\s*void playInteractionSound\("portfolioTabSwitch"\);\s*selectTab\(nextIndex\);/,
+    /if \(nextIndex === tabIndexRef\.current\) return;\s*selectTab\(nextIndex\);/,
   );
+  assert.doesNotMatch(tabsSource, /playInteractionSound\("portfolioTabSwitch"\)/);
   assert.match(tabsSource, /onClick=\{\(\) => handleTabClick\(index\)\}/);
 });

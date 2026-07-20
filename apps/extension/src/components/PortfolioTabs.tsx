@@ -184,7 +184,6 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const handleTabClick = useCallback(
     (nextIndex: number) => {
       if (nextIndex === tabIndexRef.current) return;
-      void playInteractionSound("portfolioTabSwitch");
       selectTab(nextIndex);
     },
     [selectTab],
