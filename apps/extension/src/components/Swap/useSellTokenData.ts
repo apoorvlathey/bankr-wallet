@@ -23,7 +23,13 @@ export function useSellTokenData({
   const [holdingsAllChains, setHoldingsAllChains] = useState<PortfolioToken[]>(
     [],
   );
-  const [sellToken, setSellToken] = useState<PortfolioToken | null>(null);
+  // Asset-row navigation already has a complete portfolio snapshot. Render it
+  // on the first frame, then refresh the same selection from the catalog and
+  // onchain balances as those slower reads finish.
+  const [sellToken, setSellToken] = useState<PortfolioToken | null>(
+    initialSellToken ?? null,
+  );
+  const initialSellTokenRef = useRef(initialSellToken);
   const verifiedZeroBalancesRef = useRef<Set<string>>(new Set());
   const resolvedSellPriceRef = useRef<Set<string>>(new Set());
 
@@ -41,9 +47,10 @@ export function useSellTokenData({
           ...catalog.customTokenKeys,
           ...catalog.recentReceivedTokenKeys,
         ]);
-        if (initialSellToken) {
+        const pinnedInitialSellToken = initialSellTokenRef.current;
+        if (pinnedInitialSellToken) {
           priorityKeys.add(
-            `${initialSellToken.chainId}-${initialSellToken.contractAddress.toLowerCase()}`,
+            `${pinnedInitialSellToken.chainId}-${pinnedInitialSellToken.contractAddress.toLowerCase()}`,
           );
         }
         const interactiveTokens = selectPortfolioTokensForInteraction(
@@ -52,15 +59,17 @@ export function useSellTokenData({
         );
 
         setHoldingsAllChains(interactiveTokens);
-        if (initialSellToken) {
-          const cachedMatch = interactiveTokens.find(
-            (token) =>
-              token.chainId === initialSellToken.chainId &&
-              token.contractAddress.toLowerCase() ===
-                initialSellToken.contractAddress.toLowerCase(),
+        setSellToken((current) => {
+          if (!current) return current;
+          return (
+            interactiveTokens.find(
+              (token) =>
+                token.chainId === current.chainId &&
+                token.contractAddress.toLowerCase() ===
+                  current.contractAddress.toLowerCase(),
+            ) ?? current
           );
-          setSellToken(cachedMatch ?? initialSellToken);
-        }
+        });
 
         let tokens = interactiveTokens;
         try {
@@ -73,28 +82,18 @@ export function useSellTokenData({
         }
         if (cancelled) return;
 
-        const chainTokens = tokens.filter((token) => token.chainId === chainId);
         setHoldingsAllChains(tokens);
-        if (initialSellToken) {
-          const match = chainTokens.find(
-            (token) =>
-              token.contractAddress.toLowerCase() ===
-              initialSellToken.contractAddress.toLowerCase(),
+        setSellToken((current) => {
+          if (!current) return current;
+          return (
+            tokens.find(
+              (token) =>
+                token.chainId === current.chainId &&
+                token.contractAddress.toLowerCase() ===
+                  current.contractAddress.toLowerCase(),
+            ) ?? current
           );
-          setSellToken(match ?? initialSellToken);
-        } else {
-          setSellToken((current) => {
-            if (!current) return current;
-            return (
-              tokens.find(
-                (token) =>
-                  token.chainId === current.chainId &&
-                  token.contractAddress.toLowerCase() ===
-                    current.contractAddress.toLowerCase(),
-              ) ?? current
-            );
-          });
-        }
+        });
       } catch {
         // Portfolio failures do not block manual token selection.
       }
@@ -102,8 +101,6 @@ export function useSellTokenData({
     return () => {
       cancelled = true;
     };
-    // Initial sell token is applied only while loading the holdings snapshot.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromAddress, chainId, isSwapSupported]);
 
   useEffect(() => {

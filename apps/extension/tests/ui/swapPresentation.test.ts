@@ -169,3 +169,17 @@ test("Swap initializes a generic entry from the cached top portfolio token", asy
   assert.match(utils, /if \(!args\.buyTokenInfo \|\| !address\) return null/u);
   assert.match(view, /setSellChainId\(buyChainId\)[\s\S]*?setBuyChainId\(previousSellChainId\)/u);
 });
+
+test("asset-row Swap renders its sell token before portfolio hydration", async () => {
+  const data = await readSwapSource("useSellTokenData.ts");
+
+  assert.match(
+    data,
+    /const \[sellToken, setSellToken\] = useState<PortfolioToken \| null>\(\s*initialSellToken \?\? null,\s*\)/u,
+  );
+  assert.match(data, /const initialSellTokenRef = useRef\(initialSellToken\)/u);
+  assert.doesNotMatch(
+    data,
+    /const \[sellToken, setSellToken\] = useState<PortfolioToken \| null>\(null\)/u,
+  );
+});

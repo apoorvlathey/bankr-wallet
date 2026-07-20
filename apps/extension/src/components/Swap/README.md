@@ -29,6 +29,9 @@ catalog discovery for the selected network. The network browser is the shared
 wallet selector also used by Send and homepage portfolio filtering. A
 generic Swap entry starts from the highest-value funded token in the cached
 portfolio, while asset-row entry continues to honor its explicit token. The
+asset-row token is seeded synchronously from the navigation payload so its
+symbol, logo, balance, and price render on the first Swap frame; catalog and
+onchain hydration refresh that same selected asset afterward. The
 form infers same-chain swap versus bridge from the selected pair, keeps route
 and fee detail behind the minimum-received disclosure, and leaves custom
 slippage available in its bottom sheet. Amber is reserved for active routing
