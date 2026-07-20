@@ -1,106 +1,114 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Button } from "@chakra-ui/react";
+import type { Account } from "@/chrome/types";
 import ShieldAmountPanel from "./ShieldAmountPanel";
 import ShieldDashboard from "./ShieldDashboard";
-import UnshieldAmountPanel from "./UnshieldAmountPanel";
-import { type ShieldDashboardActionId } from "./model/shieldDashboard";
 import { useShieldInitialization } from "./hooks/useShieldInitialization";
 import { useShieldQuote } from "./hooks/useShieldQuote";
 import { useShieldReview } from "./hooks/useShieldReview";
 import { useShieldOperation } from "./hooks/useShieldOperation";
 import { useShieldOperations } from "./hooks/useShieldOperations";
 import type { ShieldSourceAccount } from "./model/shieldQuote";
-import { useUnshield } from "./hooks/useUnshield";
-import { usePublicRecovery } from "./hooks/usePublicRecovery";
-import PublicRecoveryPanel from "./PublicRecoveryPanel";
-import { useShieldNativePrice } from "./hooks/useShieldNativePrice";
-import { getPublicWithdrawalOffer } from "./model/recovery";
+import ShieldSourceAccountPicker from "./ShieldSourceAccountPicker";
 
 interface ShieldScreenProps {
   onBack: () => void;
   account: ShieldSourceAccount | null;
+  accounts?: Account[];
 }
 
-/** Balance-first screen with silent background privacy identity setup. */
-export default function ShieldScreen({ onBack, account }: ShieldScreenProps) {
-  const [shieldPanelOpen, setShieldPanelOpen] = useState(false);
-  const [unshieldPanelOpen, setUnshieldPanelOpen] = useState(false);
-  const { initialization, retry } = useShieldInitialization();
-  const quote = useShieldQuote({
-    account,
-    enabled: shieldPanelOpen,
+/** Public Sepolia ETH deposit into the wallet-wide private balance. */
+export default function ShieldScreen({
+  onBack,
+  account,
+  accounts = [],
+}: ShieldScreenProps) {
+  const [sourceAccount, setSourceAccount] = useState<ShieldSourceAccount | null>(() => {
+    if (account && (account.type === "privateKey" || account.type === "seedPhrase")) {
+      return account;
+    }
+    return accounts.find((candidate) =>
+      candidate.type === "privateKey" || candidate.type === "seedPhrase"
+    ) ?? null;
   });
-  const review = useShieldReview({ account, quote });
+  const { initialization, retry } = useShieldInitialization();
   const activity = useShieldOperations();
-  const nativePriceUsd = useShieldNativePrice();
+  const quote = useShieldQuote({ account: sourceAccount, enabled: true });
+  const review = useShieldReview({ account: sourceAccount, quote });
   const operation = useShieldOperation({
-    account,
+    account: sourceAccount,
     quote,
     review,
     onSaved: activity.refresh,
   });
-  const unshield = useUnshield({
-    availableWei: activity.portfolio.readyBalanceWei,
-    onComplete: activity.refresh,
-  });
-  const publicRecovery = usePublicRecovery(activity.refresh);
-  const publicWithdrawalOffer = getPublicWithdrawalOffer({
-    account,
-    recoverableBalanceWei: activity.portfolio.recoverableBalanceWei,
-    operations: activity.operations,
-  });
+  const operationStatus = operation.state.status;
+  const saveOperation = operation.save;
+
+  useEffect(() => {
+    setSourceAccount((current) => {
+      if (current && accounts.some((candidate) =>
+        candidate.id === current.id &&
+        (candidate.type === "privateKey" || candidate.type === "seedPhrase")
+      )) return current;
+      return accounts.find((candidate) =>
+        candidate.type === "privateKey" || candidate.type === "seedPhrase"
+      ) ?? null;
+    });
+  }, [accounts]);
+
+  useEffect(() => {
+    if (review.state.status === "ready" && operationStatus === "idle") {
+      saveOperation();
+    }
+  }, [operationStatus, review.state.status, saveOperation]);
+
+  const readyQuote = quote.state.status === "ready" ? quote.state.quote : null;
+  const shieldBusy = review.state.status === "preparing" || operation.state.status === "saving";
+  const canReviewShield = Boolean(
+    initialization.status === "ready" &&
+    sourceAccount &&
+    readyQuote?.canAfford &&
+    review.state.status !== "ready" &&
+    operation.state.status !== "saved" &&
+    !shieldBusy,
+  );
 
   return (
     <ShieldDashboard
+      title="Shield"
       onBack={onBack}
-      initialization={initialization}
-      operations={activity.operations}
-      withdrawals={activity.withdrawals}
-      recoveries={activity.recoveries}
-      confirmedBalanceWei={activity.portfolio.confirmedBalanceWei}
-      pendingAspBalanceWei={activity.portfolio.pendingBalanceWei}
-      nativePriceUsd={nativePriceUsd}
-      onRetryInitialization={retry}
-      shieldPanel={
-        shieldPanelOpen ? (
-          <ShieldAmountPanel
-            account={account}
-            quote={quote}
-            review={review}
-            operation={operation}
-          />
-        ) : null
-      }
-      unshieldPanel={
-        unshieldPanelOpen ? (
-          <UnshieldAmountPanel
-            availableWei={activity.portfolio.readyBalanceWei}
-            controller={unshield}
-          />
-        ) : null
-      }
-      recoveryPanel={
-        <PublicRecoveryPanel
-          amountWei={publicWithdrawalOffer?.amountWei ?? 0n}
-          depositAccountAddress={publicWithdrawalOffer?.accountAddress ?? ""}
-          activeAccountMatches={publicWithdrawalOffer?.activeAccountMatches ?? false}
-          waitingForAsp={
-            activity.portfolio.pendingBalanceWei > 0n &&
-            activity.portfolio.attentionCount === 0
-          }
-          status={publicRecovery.status}
-          error={publicRecovery.error}
-          onRecover={publicRecovery.prepare}
+      sourceAccountControl={(
+        <ShieldSourceAccountPicker
+          accounts={accounts}
+          account={sourceAccount}
+          onChange={(next) => {
+            review.reset();
+            operation.reset();
+            setSourceAccount(next);
+          }}
         />
-      }
-      onAction={(action: ShieldDashboardActionId) => {
-        if (action === "shield") {
-          setShieldPanelOpen(true);
-          setUnshieldPanelOpen(false);
-          return;
-        }
-        setShieldPanelOpen(false);
-        setUnshieldPanelOpen(true);
-      }}
+      )}
+      initialization={initialization}
+      onRetryInitialization={retry}
+      content={(
+        <ShieldAmountPanel
+          account={sourceAccount}
+          quote={quote}
+          review={review}
+          operation={operation}
+        />
+      )}
+      primaryAction={(
+        <Button
+          variant="brand"
+          onClick={review.prepare}
+          isLoading={shieldBusy}
+          loadingText="Opening review…"
+          isDisabled={!canReviewShield}
+        >
+          {quote.amount ? "Review shield" : "Enter an amount"}
+        </Button>
+      )}
     />
   );
 }

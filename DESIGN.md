@@ -228,17 +228,83 @@
 
 ## Slop audit
 
+- 2026-07-20 public/private wallet-mode audit: one compact two-state control
+  at the right edge of the balance heading separates the account-scoped public wallet from the
+  wallet-wide Privacy Pools identity. Both selected modes use the existing
+  amber intent token inside a tooltip-free 28px control on the normal Warm Midnight base
+  canvas—no full-width gray rail, tinted page, gradient, glow, glass effect,
+  oversized mode title, or decorative privacy claim. Private reuses the exact
+  public quick-action anatomy for Shield, Unshield, and Send. The vertical down
+  arrow makes Unshield distinct without adding a new icon family. Its headline and chart include
+  only ASP-cleared Shielded ETH, while one small amber value exposes processing
+  ETH still awaiting compliance. The account selector, Positions, public
+  assets, and public Activity are absent rather than dimmed, and public contains
+  no Shielded ETH pseudo-asset.
+- 2026-07-20 Settings icon-state audit: Midnight list rows again derive their
+  default hover glyph from each row's semantic accent tile, while an optional
+  dark resting override remains independent. Explicit Privacy Pools amber
+  hover and destructive red overrides are preserved, so every row has a
+  visible, intentional hover state instead of inheriting a near-black
+  foreground.
+- 2026-07-20 Privacy Pools recovery icon audit: the Settings entry reuses the
+  detective-style privacy mark from Home. Its main Settings row stays neutral
+  at rest and turns amber on hover like its peers, while the two recovery-menu
+  actions retain their semantic amber foreground at rest and on hover.
+- 2026-07-20 Privacy Pools recovery menu audit: the submenu now uses the same
+  16px/14px list-row hierarchy as the rest of Settings, removes its duplicate
+  in-body heading, and names Privacy Pools directly with concise recovery copy.
+- 2026-07-20 Shield recovery audit: Settings now starts with two plain choices
+  instead of mixing backup and network maintenance. Backup uses one amber
+  commitment action and conceals the phrase by default. Replacement separates
+  balance-at-risk, two explicit acknowledgements, and phrase entry into a short
+  irreversible-action sequence without introducing a modal or a second primary
+  action.
+- 2026-07-20 Shield status polish: Activity and transaction details now reuse
+  the same amber privacy mark and durable four-stage lifecycle projection.
+  Unshield remains a literal inverse of Shield in every state: Shielded ETH is
+  always the source and Sepolia ETH the outcome. When only ragequit funds are
+  available, the same cards show the fixed public-exit amount and original
+  depositor, followed by one unchecked commitment control and one sticky action
+  instead of an empty-state card plus a second warning card. The control names
+  the original-address recovery as a public transaction and keeps the action
+  disabled until explicit consent. While compliance remains pending, one
+  compact amber information surface immediately above it explains that the
+  original-account recovery path is already available. The 320px/360px audit
+  scores 10/10: one primary action, defined-edge surfaces without resting
+  shadows, 44px-plus core targets, visible text/icon disclosure independent of
+  color, and no nested cards, gradients, glow, glass, or decorative motion.
+  Slider drag updates the visible source amount immediately while remaining
+  renderer-local until release; the last verified balance and quote geometry
+  stay visible through refreshes. The result preserves WalletChan's short
+  decision path, tabular financial values,
+  color-independent labels, and single-action hierarchy without new tokens.
+- 2026-07-20 Shielded ETH integration audit: Shield uses the established
+  Swap form grammar—fixed Sepolia ETH/Shielded ETH cards, one
+  percentage slider, and one sticky commitment action—without copying the
+  reference product's oversized typography or purple branding. The permanent
+  Private Assets row carries the same icon, confirmed balance,
+  available/pending hierarchy, and Sepolia test identity without entering any
+  public account total or picker. Private home and the asset action sheet route
+  directly to separate Shield, Unshield, and Send screens or Private Activity;
+  no conversion screen repeats those modes as tabs. Private send
+  reuses WalletChan's recipient controls and concise confirmation regions with
+  a normal button press; it adds no hold gesture, password surface, biometric
+  prompt, parallel activity feed, selector, marketing card, or privacy
+  overclaim.
 - 2026-07-20 public-withdrawal cancellation audit: rejecting WalletChan's own
   confirmation prompt creates no failed Activity card. The encrypted recovery
   record remains an internal cleanup/dedupe concern; genuine proof,
   submission, revert, and recovery outcomes remain visible.
-- 2026-07-20 main Activity Shield audit: Shield deposits reuse the established
+- 2026-07-20 Private Activity Shield audit: Shield deposits reuse the established
   transaction row and detail navigation instead of introducing a parallel card
   type. `Shield ETH`, the signed amount, plain-language lifecycle context, and
   `Step n of 4` form one compact hierarchy; blue, amber, green, and error tones
   remain semantic and always pair with text/spinner/icon states. The row stays
   fully clickable and keyboard focusable while its separate explorer action
-  remains valid nested-interaction-free markup.
+  remains valid nested-interaction-free markup. Private tab state now survives
+  Shield-screen and confirmation remounts, and successful deposit/recovery
+  confirmations select Activity. Recovery and deposit rows share the same
+  privacy mark, while the generic confirmation title contracts to `Shield Recovery`.
 - 2026-07-20 Shield balance-value audit: the primary amount and ETH unit are
   one non-wrapping financial value, with its live USD equivalent directly
   beneath as subordinate context. ASP status remains a separate right-aligned
@@ -546,6 +612,45 @@
 
 ## Changelog
 
+- 2026-07-20: kept Private Assets/Activity state above Shield confirmation
+  remounts, routed successful Shield and public-recovery confirmations to
+  Activity, and unified every WalletChan Shield-origin row on the privacy mark.
+  Public recovery now uses the concise `Shield Recovery` activity title.
+- 2026-07-20: added a compact amber pending-compliance explanation above
+  Unshield's public-recovery consent control. It states that the deposit can
+  already return to its original account without competing with the checkbox
+  or sticky action.
+- 2026-07-20: replaced Unshield's passive public-exit linkage line with a native
+  amber commitment checkbox. Public recovery now starts unchecked and the
+  sticky `Withdraw publicly` action remains disabled until the user explicitly
+  acknowledges recovery to the original address as a public transaction.
+- 2026-07-20: rebuilt Unshield as the persistent inverse of Shield. Ready funds
+  retain the editable private-relay amount flow; ASP-pending or declined funds
+  reuse the same source/outcome cards as a fixed ragequit route to the original
+  depositor, with the privacy linkage stated once and the public exit promoted
+  to the existing sticky commitment action.
+- 2026-07-20: replaced Shield's nested Shield/Unshield tabs with three sibling
+  Private-home actions: Shield, vertical-arrow Unshield, and Send. Shield now
+  mounts only the deposit controller; Unshield defaults its relay recipient to
+  the active wallet, while Send starts recipient-first over the same audited
+  withdrawal engine and uses intent-specific titles and review copy.
+- 2026-07-20: moved the smaller tooltip-free wallet-mode control into the
+  balance heading below the Public account selector. Tightened Shield into a
+  compact deposit form with `Deposit from`, 48px amount fields, a smaller
+  direction marker, no fee-reserve jargon, and no repeated private-balance strip.
+- 2026-07-20: aligned the Public/Private control and Private home with Warm
+  Midnight: compact amber selection, shared base canvas, public-home action
+  icons/recipes, concise `Send`/`Shield` labels, and an explicit split between
+  ASP-cleared Shielded ETH and amber processing ETH. The main private USD value
+  and encrypted chart now follow only the cleared balance.
+- 2026-07-20: split the wallet home into persistent Public and Private modes.
+  Private owns the Privacy Pools balance/chart, Shielded ETH asset, and private
+  Activity; public account portfolios and generic Send/Swap no longer receive
+  the pseudo-asset. Shield chooses its funding signer internally and private
+  send remains wallet-wide.
+- 2026-07-20: split Shield recovery into backup and restore paths, concealed
+  revealed phrases by default, removed the manual Sepolia scan action, and
+  added balance-at-risk plus double confirmation before phrase replacement.
 - 2026-07-20: hid user-rejected public-withdrawal prompts from Shield Activity
   after their background commitment claim is safely released.
 - 2026-07-20: added one compact `Withdraw without waiting?` action for indexed

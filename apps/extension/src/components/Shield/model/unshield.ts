@@ -5,6 +5,8 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const UINT = /^(?:0|[1-9]\d{0,79})$/;
 
+export type PrivateWithdrawalIntent = "unshield" | "send";
+
 export interface UnshieldOperation {
   readonly id: string;
   readonly state:

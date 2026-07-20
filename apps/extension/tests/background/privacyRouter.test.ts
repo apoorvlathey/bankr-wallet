@@ -37,6 +37,7 @@ test("privacy operation routes expose only durable public summaries", async () =
   const operationCapture = responseCapture();
   const listCapture = responseCapture();
   let observed: unknown;
+  let portfolioSeriesBalance: string | null = null;
   const operation = {
     schema: "walletchan-privacy-shield-operation-v1" as const,
     id: "00000000-0000-4000-8000-000000000001",
@@ -76,13 +77,22 @@ test("privacy operation routes expose only durable public summaries", async () =
     listPrivacyShieldOperationSummaries: async () => [operation],
     readPrivacyCommitmentPortfolio: async () => ({
       status: "ready",
-      confirmedBalanceWei: "0",
-      readyBalanceWei: "0",
-      pendingBalanceWei: "0",
+      confirmedBalanceWei: "200",
+      readyBalanceWei: "100",
+      maxPrivateSendWei: "0",
+      pendingBalanceWei: "100",
       recoverableBalanceWei: "0",
       attentionCount: 0,
       lastUpdatedAt: null,
     }),
+    readPrivacyPortfolioSeries: async (balanceWei: string) => {
+      portfolioSeriesBalance = balanceWei;
+      return {
+        priceUsd: 3400,
+        totalValueUsd: 0,
+        snapshots: [],
+      };
+    },
     listPrivacyUnshields: async () => [],
     listPrivacyRagequits: async () => [{
       summary: {
@@ -146,16 +156,20 @@ test("privacy operation routes expose only durable public summaries", async () =
   const listed = await listCapture.response as any;
   assert.equal(listed.success, true);
   assert.equal(listed.operations.length, 1);
+  assert.equal(portfolioSeriesBalance, "100");
   assert.equal(listed.withdrawals.length, 0);
   assert.equal(listed.recoveries.length, 0);
   assert.equal("requestId" in listed.operations[0], false);
   assert.equal("commitment" in listed.operations[0], false);
-  assert.equal(listed.portfolio.readyBalanceWei, "0");
+  assert.equal(listed.portfolio.readyBalanceWei, "100");
+  assert.equal(listed.series.priceUsd, 3400);
 });
 
 test("Unshield routes expose the reviewed quote but no commitment linkage", async () => {
   const quoteCapture = responseCapture();
+  const invalidCapture = responseCapture();
   const executeCapture = responseCapture();
+  let observedQuoteInput: unknown;
   const summary = {
     schema: "walletchan-privacy-unshield-v1" as const,
     version: 1 as const,
@@ -188,7 +202,10 @@ test("Unshield routes expose the reviewed quote but no commitment linkage", asyn
     },
   };
   const route = createBackgroundPrivacyMessageRouter({
-    preparePrivacyUnshieldQuote: (async () => record) as any,
+    preparePrivacyUnshieldQuote: (async (input: unknown) => {
+      observedQuoteInput = input;
+      return record;
+    }) as any,
     executePrivacyUnshield: (async () => ({
       ...record,
       tracking: { ...record.tracking, state: "submitted", revision: 1, txHash: `0x${"44".repeat(32)}` },
@@ -199,8 +216,25 @@ test("Unshield routes expose the reviewed quote but no commitment linkage", asyn
     requestId: summary.requestId,
     amountWei: summary.amountWei,
     recipient: summary.recipient,
+    accountId: "must-not-bind-private-balance",
+  }, invalidCapture.sendResponse);
+  assert.deepEqual(await invalidCapture.response, {
+    success: false,
+    code: "invalid-request",
+    error: "Invalid request",
+  });
+  route({
+    type: "privacyPrepareUnshieldQuote",
+    requestId: summary.requestId,
+    amountWei: summary.amountWei,
+    recipient: summary.recipient,
   }, quoteCapture.sendResponse);
   const quoted = await quoteCapture.response as any;
+  assert.deepEqual(observedQuoteInput, {
+    requestId: summary.requestId,
+    amountWei: summary.amountWei,
+    recipient: summary.recipient,
+  });
   assert.equal(quoted.success, true);
   assert.equal(quoted.operation.relayerName, "Testnet Relay");
   assert.equal("commitment" in quoted.operation, false);
@@ -267,6 +301,9 @@ test("public recovery route queues only a bounded public operation", async () =>
   route({
     type: "privacyPrepareRagequit",
     requestId: record.summary.requestId,
+    accountId: record.summary.accountId,
+    accountAddress: record.summary.accountAddress,
+    accountType: record.summary.accountType,
   }, capture.sendResponse);
   const response = await capture.response as any;
   assert.equal(response.success, true);

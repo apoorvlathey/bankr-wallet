@@ -26,8 +26,13 @@ import {
   encryptPrivacyRecovery,
   isValidPrivacyRecoveryPhrase,
 } from "../crypto";
+import { deletePrivacyCommitmentsDatabase } from "../commitments/repository";
+import { deletePrivacyOperationsDatabase } from "../operations/repository";
+import { deletePrivacyRagequitsDatabase } from "../ragequit/repository";
 import { PRIVACY_DERIVATION_V1 } from "../record";
 import { readPrivacyVault, savePrivacyVault } from "../repository";
+import { deletePrivacyWithdrawalsDatabase } from "../withdrawals/repository";
+import { deletePrivacyPortfolioDatabase } from "../portfolioHistory/repository";
 import type {
   PrivacyVaultRecordV1,
   UnlockedPrivacyKey,
@@ -62,7 +67,7 @@ export type PrivacyRecoveryErrorCode =
   | "auth-required"
   | "account-unavailable"
   | "recovery-missing"
-  | "recovery-conflict"
+  | "replacement-confirmation-required"
   | "recovery-unavailable";
 
 export class PrivacyRecoveryError extends Error {
@@ -75,11 +80,21 @@ export class PrivacyRecoveryError extends Error {
 type Dependencies = {
   getActiveAccount: typeof getActiveAccount;
   verifyMasterPassword: typeof verifyMasterPassword;
+  deletePrivacyCommitmentsDatabase: typeof deletePrivacyCommitmentsDatabase;
+  deletePrivacyOperationsDatabase: typeof deletePrivacyOperationsDatabase;
+  deletePrivacyRagequitsDatabase: typeof deletePrivacyRagequitsDatabase;
+  deletePrivacyWithdrawalsDatabase: typeof deletePrivacyWithdrawalsDatabase;
+  deletePrivacyPortfolioDatabase: typeof deletePrivacyPortfolioDatabase;
 };
 
 const productionDependencies: Dependencies = {
   getActiveAccount,
   verifyMasterPassword,
+  deletePrivacyCommitmentsDatabase,
+  deletePrivacyOperationsDatabase,
+  deletePrivacyRagequitsDatabase,
+  deletePrivacyWithdrawalsDatabase,
+  deletePrivacyPortfolioDatabase,
 };
 
 function normalizePhrase(value: string): string {
@@ -228,7 +243,7 @@ export async function revealPrivacyRecovery(
         throw new PrivacyRecoveryError("auth-required");
       }
       if (!phrase) throw new PrivacyRecoveryError("recovery-unavailable");
-      await markPrivacyRecoveryBackedUp(current.keyId);
+      await markPrivacyRecoveryBackedUp(current.keyId, current.revision);
       return { phrase, hasMasterRecovery: true };
     } finally {
       if (resolved.ownsBytes) resolved.unlocked.keyBytes.fill(0);
@@ -270,7 +285,14 @@ async function createRestoredRecord(
 
 /** Import one WalletChan privacy phrase without replacing a different identity. */
 export async function restorePrivacyRecovery(
-  request: { requestId: string; phrase: string; password: string },
+  request: {
+    requestId: string;
+    phrase: string;
+    password: string;
+    replaceExisting: boolean;
+    backupConfirmed: boolean;
+    lossConfirmed: boolean;
+  },
   overrides: Partial<Dependencies> = {},
 ): Promise<{ status: "restored" | "already-current" }> {
   const phrase = normalizePhrase(request.phrase);
@@ -299,7 +321,10 @@ export async function restorePrivacyRecovery(
       try {
         assertCurrentMasterAuthorization(expectedEpoch);
         await savePrivacyVault(created.record);
-        await markPrivacyRecoveryBackedUp(created.record.keyId);
+        await markPrivacyRecoveryBackedUp(
+          created.record.keyId,
+          created.record.revision,
+        );
         setCachedPrivacyKey(created.unlocked);
         return { status: "restored" };
       } finally {
@@ -319,15 +344,56 @@ export async function restorePrivacyRecovery(
           throw new PrivacyRecoveryError("recovery-unavailable");
         }
         if (currentPhrase !== phrase) {
-          throw new PrivacyRecoveryError("recovery-conflict");
+          if (
+            !request.replaceExisting ||
+            !request.backupConfirmed ||
+            !request.lossConfirmed ||
+            !(await readPrivacyRecoveryBackup(
+              stored.record.keyId,
+              stored.record.revision,
+            ))
+          ) {
+            throw new PrivacyRecoveryError("replacement-confirmation-required");
+          }
+
+          const next: PrivacyVaultRecordV1 = {
+            ...stored.record,
+            revision: stored.record.revision + 1,
+            recovery: await encryptPrivacyRecovery(
+              resolved.unlocked.key,
+              stored.record.keyId,
+              phrase,
+            ),
+          };
+          assertCurrentMasterAuthorization(expectedEpoch);
+          await savePrivacyVault(next);
+          try {
+            await dependencies.deletePrivacyOperationsDatabase();
+            await dependencies.deletePrivacyCommitmentsDatabase();
+            await dependencies.deletePrivacyWithdrawalsDatabase();
+            await dependencies.deletePrivacyRagequitsDatabase();
+            await dependencies.deletePrivacyPortfolioDatabase();
+            assertCurrentMasterAuthorization(expectedEpoch);
+            await markPrivacyRecoveryBackedUp(next.keyId, next.revision);
+          } catch {
+            // The old phrase remains authoritative if rebuildable-state cleanup
+            // cannot complete. Deleted indexes can be reconstructed by rescan.
+            await savePrivacyVault(stored.record);
+            throw new PrivacyRecoveryError("recovery-unavailable");
+          }
+          setCachedPrivacyKey(resolved.unlocked);
+          return { status: "restored" };
         }
-        await ensureMasterWrapper(
+        const current = await ensureMasterWrapper(
           stored.record,
           resolved.unlocked,
           request.password,
           expectedEpoch,
         );
-        await markPrivacyRecoveryBackedUp(stored.record.keyId);
+        await markPrivacyRecoveryBackedUp(
+          current.keyId,
+          current.revision,
+        );
         setCachedPrivacyKey(resolved.unlocked);
         return { status: "already-current" };
       }
@@ -347,7 +413,7 @@ export async function restorePrivacyRecovery(
       };
       assertCurrentMasterAuthorization(expectedEpoch);
       await savePrivacyVault(next);
-      await markPrivacyRecoveryBackedUp(next.keyId);
+      await markPrivacyRecoveryBackedUp(next.keyId, next.revision);
       setCachedPrivacyKey(resolved.unlocked);
       return { status: "restored" };
     } finally {

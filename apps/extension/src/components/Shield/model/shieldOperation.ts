@@ -49,10 +49,20 @@ export interface ShieldPrivatePortfolio {
   readonly status: "ready" | "locked";
   readonly confirmedBalanceWei: bigint;
   readonly readyBalanceWei: bigint;
+  readonly maxPrivateSendWei: bigint;
   readonly pendingBalanceWei: bigint;
   readonly recoverableBalanceWei: bigint;
   readonly attentionCount: number;
   readonly lastUpdatedAt: number | null;
+}
+
+export interface ShieldPortfolioSeries {
+  readonly priceUsd: number | null;
+  readonly totalValueUsd: number | null;
+  readonly snapshots: ReadonlyArray<{
+    readonly timestamp: number;
+    readonly totalValueUsd: number;
+  }>;
 }
 
 const OPERATION_STATES = new Set<ShieldPendingOperation["state"]>([
@@ -225,6 +235,7 @@ export function parseShieldOperationListResponse(
 ): {
   operations: ShieldPendingOperation[];
   portfolio: ShieldPrivatePortfolio;
+  series: ShieldPortfolioSeries;
   withdrawals: UnshieldOperation[];
   recoveries: PublicRecoveryOperation[];
 } | null {
@@ -232,7 +243,7 @@ export function parseShieldOperationListResponse(
     typeof response !== "object" ||
     response === null ||
     Array.isArray(response) ||
-    !hasExactKeys(response, ["operations", "portfolio", "recoveries", "success", "withdrawals"])
+    !hasExactKeys(response, ["operations", "portfolio", "recoveries", "series", "success", "withdrawals"])
   ) {
     return null;
   }
@@ -257,6 +268,7 @@ export function parseShieldOperationListResponse(
       "attentionCount",
       "confirmedBalanceWei",
       "lastUpdatedAt",
+      "maxPrivateSendWei",
       "pendingBalanceWei",
       "recoverableBalanceWei",
       "readyBalanceWei",
@@ -266,12 +278,15 @@ export function parseShieldOperationListResponse(
   const rawPortfolio = portfolio as Record<string, unknown>;
   const confirmedBalanceWei = parseWei(rawPortfolio.confirmedBalanceWei);
   const readyBalanceWei = parseWei(rawPortfolio.readyBalanceWei);
+  const maxPrivateSendWei = parseWei(rawPortfolio.maxPrivateSendWei);
   const pendingBalanceWei = parseWei(rawPortfolio.pendingBalanceWei);
   const recoverableBalanceWei = parseWei(rawPortfolio.recoverableBalanceWei);
   if (
     (rawPortfolio.status !== "ready" && rawPortfolio.status !== "locked") ||
     confirmedBalanceWei === null ||
     readyBalanceWei === null ||
+    maxPrivateSendWei === null ||
+    maxPrivateSendWei > readyBalanceWei ||
     pendingBalanceWei === null ||
     recoverableBalanceWei === null ||
     typeof rawPortfolio.attentionCount !== "number" ||
@@ -282,6 +297,32 @@ export function parseShieldOperationListResponse(
         !Number.isSafeInteger(rawPortfolio.lastUpdatedAt) ||
         rawPortfolio.lastUpdatedAt < 0))
   ) return null;
+  const series = outer.series;
+  if (
+    typeof series !== "object" || series === null || Array.isArray(series) ||
+    !hasExactKeys(series, ["priceUsd", "snapshots", "totalValueUsd"])
+  ) return null;
+  const rawSeries = series as Record<string, unknown>;
+  if (
+    (rawSeries.priceUsd !== null &&
+      (typeof rawSeries.priceUsd !== "number" || !Number.isFinite(rawSeries.priceUsd) || rawSeries.priceUsd <= 0)) ||
+    (rawSeries.totalValueUsd !== null &&
+      (typeof rawSeries.totalValueUsd !== "number" || !Number.isFinite(rawSeries.totalValueUsd) || rawSeries.totalValueUsd < 0)) ||
+    !Array.isArray(rawSeries.snapshots) || rawSeries.snapshots.length > 193
+  ) return null;
+  const snapshots: Array<{ timestamp: number; totalValueUsd: number }> = [];
+  let previousTimestamp = -1;
+  for (const item of rawSeries.snapshots) {
+    if (typeof item !== "object" || item === null || Array.isArray(item) ||
+      !hasExactKeys(item, ["timestamp", "totalValueUsd"])) return null;
+    const snapshot = item as Record<string, unknown>;
+    if (typeof snapshot.timestamp !== "number" || !Number.isSafeInteger(snapshot.timestamp) ||
+      snapshot.timestamp < 0 || snapshot.timestamp < previousTimestamp ||
+      typeof snapshot.totalValueUsd !== "number" || !Number.isFinite(snapshot.totalValueUsd) ||
+      snapshot.totalValueUsd < 0) return null;
+    previousTimestamp = snapshot.timestamp;
+    snapshots.push({ timestamp: snapshot.timestamp, totalValueUsd: snapshot.totalValueUsd });
+  }
   const parsed = outer.operations.map(parseOperation);
   const withdrawals = outer.withdrawals.map(parseUnshieldOperation);
   const recoveries = outer.recoveries.map(parsePublicRecoveryOperation);
@@ -292,10 +333,16 @@ export function parseShieldOperationListResponse(
         operations: parsed,
         withdrawals,
         recoveries,
+        series: {
+          priceUsd: rawSeries.priceUsd as number | null,
+          totalValueUsd: rawSeries.totalValueUsd as number | null,
+          snapshots,
+        },
         portfolio: {
           status: rawPortfolio.status,
           confirmedBalanceWei,
           readyBalanceWei,
+          maxPrivateSendWei,
           pendingBalanceWei,
           recoverableBalanceWei,
           attentionCount: rawPortfolio.attentionCount,

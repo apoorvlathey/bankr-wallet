@@ -32,6 +32,7 @@ import {
 } from "../privacy/asp/eligibility";
 import { refreshPrivacyCommitmentEligibility } from "../privacy/asp/commitmentEligibility";
 import { readPrivacyCommitmentPortfolio } from "../privacy/commitments/portfolio";
+import { readPrivacyPortfolioSeries } from "../privacy/portfolioHistory/repository";
 import {
   preparePrivacyUnshieldQuote,
   PrivacyUnshieldPrepareError,
@@ -85,6 +86,7 @@ type Dependencies = {
   materializeIndexedPrivacyShieldCommitments: typeof materializeIndexedPrivacyShieldCommitments;
   refreshPrivacyCommitmentEligibility: typeof refreshPrivacyCommitmentEligibility;
   readPrivacyCommitmentPortfolio: typeof readPrivacyCommitmentPortfolio;
+  readPrivacyPortfolioSeries: typeof readPrivacyPortfolioSeries;
   preparePrivacyUnshieldQuote: typeof preparePrivacyUnshieldQuote;
   executePrivacyUnshield: typeof executePrivacyUnshield;
   listPrivacyUnshields: typeof listPrivacyUnshields;
@@ -115,6 +117,7 @@ const productionDependencies: Dependencies = {
   materializeIndexedPrivacyShieldCommitments,
   refreshPrivacyCommitmentEligibility,
   readPrivacyCommitmentPortfolio,
+  readPrivacyPortfolioSeries,
   preparePrivacyUnshieldQuote,
   executePrivacyUnshield,
   listPrivacyUnshields,
@@ -177,6 +180,9 @@ interface PrivacyExecuteUnshieldMessage {
 interface PrivacyPrepareRagequitMessage {
   type: "privacyPrepareRagequit";
   requestId: string;
+  accountId: string;
+  accountAddress: string;
+  accountType: "privateKey" | "seedPhrase";
 }
 
 function isPrivacyPrepareUnshieldMessage(
@@ -206,9 +212,12 @@ function isPrivacyPrepareRagequitMessage(
 ): message is PrivacyPrepareRagequitMessage {
   if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
   const value = message as Record<string, unknown>;
-  return Object.keys(value).length === 2 &&
+  return Object.keys(value).length === 5 &&
     value.type === "privacyPrepareRagequit" &&
-    typeof value.requestId === "string";
+    typeof value.requestId === "string" &&
+    typeof value.accountId === "string" &&
+    typeof value.accountAddress === "string" &&
+    (value.accountType === "privateKey" || value.accountType === "seedPhrase");
 }
 
 function isPrivacyAmountMessage(
@@ -559,17 +568,21 @@ export function createBackgroundPrivacyMessageRouter(
           dependencies.listPrivacyUnshields(),
           dependencies.listPrivacyRagequits(),
         ])
-          .then(([operations, portfolio, withdrawals, recoveries]) =>
+          .then(async ([operations, portfolio, withdrawals, recoveries]) => {
+            const series = await dependencies
+              .readPrivacyPortfolioSeries(portfolio.readyBalanceWei)
+              .catch(() => ({ priceUsd: null, totalValueUsd: null, snapshots: [] }));
             sendResponse({
               success: true,
               operations: operations.map(publicOperationSummary),
               portfolio,
+              series,
               withdrawals: withdrawals.map(publicUnshieldSummary),
               recoveries: recoveries
                 .map(privacyRagequitPublicSummary)
                 .filter((recovery) => recovery.state !== "wallet_rejected"),
-            }),
-          )
+            });
+          })
           .catch(() =>
             sendResponse({
               success: false,
@@ -669,7 +682,11 @@ export function createBackgroundPrivacyMessageRouter(
           return { handled: true, keepChannelOpen: false };
         }
         dependencies.materializeIndexedPrivacyShieldCommitments()
-          .then(() => dependencies.preparePrivacyRagequit(message.requestId))
+          .then(() => dependencies.preparePrivacyRagequit(message.requestId, {
+            accountId: message.accountId,
+            accountAddress: message.accountAddress,
+            accountType: message.accountType,
+          }))
           .then((operation) =>
             dependencies.queuePrivacyRagequitConfirmation(operation.summary.id),
           )
@@ -683,7 +700,7 @@ export function createBackgroundPrivacyMessageRouter(
             const messages = {
               "invalid-request": "Invalid recovery request.",
               "auth-required": "Unlock with your main password or biometrics and try again.",
-              "account-unavailable": "Switch to the original deposit account and try again.",
+              "account-unavailable": "Choose the original deposit account and try again.",
               "bankr-testnet-unsupported": "Bankr doesn’t support Sepolia transactions.",
               "recovery-unavailable": "No public recovery is available for this account.",
               "proof-failed": "Couldn’t prepare the recovery proof. Try again.",

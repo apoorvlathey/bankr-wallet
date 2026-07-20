@@ -12,7 +12,7 @@
 > The fresh-session implementation handoff is
 > [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md).
 
-> **Current implementation slice (2026-07-20):** First Shield access
+> **Current implementation slice (2026-07-20):** First eligible Private-mode entry
 > creates a separate encrypted Privacy Pools recovery phrase in the background.
 > Password login and fresh biometric login both support this; a biometric
 > factor that predates Shield receives an empty purpose-separated scaffold on
@@ -446,7 +446,7 @@ only backup.
 
 ### Setup and backup UX
 
-Sepolia setup is deliberately invisible: first Shield access under a master or
+Sepolia setup is deliberately invisible: first eligible Private-mode entry under a master or
 fresh biometric session creates the identity in the service worker and shows
 only the balance/actions dashboard. Backup and restore live in one compact
 Settings -> Shield Recovery leaf. Reveal requires the explicitly entered

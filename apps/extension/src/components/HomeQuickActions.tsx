@@ -1,6 +1,9 @@
-import { Box, Button, Grid, Icon, Text } from "@chakra-ui/react";
-import { isDarkThemeId, useTheme } from "@/theme";
-import { playInteractionSound } from "@/sounds/soundManager";
+import { Grid, Icon } from "@chakra-ui/react";
+import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
+import {
+  HomeQuickActionButton,
+  HomeSendIcon,
+} from "@/components/shared/HomeQuickActionButton";
 
 interface HomeQuickActionsProps {
   onSend: () => void;
@@ -9,19 +12,6 @@ interface HomeQuickActionsProps {
   onMore: () => void;
   hasConnectedApps?: boolean;
 }
-
-const SendIcon = () => (
-  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
-    <path
-      d="M7 17 17 7M10 7h7v7"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Icon>
-);
 
 const SwapIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
@@ -32,35 +22,6 @@ const SwapIcon = () => (
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-    />
-  </Icon>
-);
-
-const ShieldIcon = () => (
-  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
-    <path
-      d="M14 18a2 2 0 0 0-4 0M19 11l-2.11-6.657a2 2 0 0 0-2.752-1.148l-1.276.61A2 2 0 0 1 12 4H8.5a2 2 0 0 0-1.925 1.456L5 11M2 11h20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <circle
-      cx="17"
-      cy="18"
-      r="3"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    />
-    <circle
-      cx="7"
-      cy="18"
-      r="3"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
     />
   </Icon>
 );
@@ -78,9 +39,9 @@ const MoreIcon = () => (
 );
 
 const actions = [
-  { id: "send", label: "Send", icon: <SendIcon /> },
+  { id: "send", label: "Send", icon: <HomeSendIcon /> },
   { id: "swap", label: "Swap", icon: <SwapIcon /> },
-  { id: "shield", label: "Shield", icon: <ShieldIcon /> },
+  { id: "shield", label: "Shield", icon: <PrivacyShieldIcon /> },
   { id: "more", label: "More", icon: <MoreIcon /> },
 ] as const;
 
@@ -92,8 +53,6 @@ export default function HomeQuickActions({
   onMore,
   hasConnectedApps = false,
 }: HomeQuickActionsProps) {
-  const { themeId } = useTheme();
-  const isWarmMidnight = isDarkThemeId(themeId);
   const handlers = { send: onSend, swap: onSwap, shield: onShield, more: onMore };
 
   return (
@@ -107,77 +66,20 @@ export default function HomeQuickActions({
       mx="auto"
     >
       {actions.map((action) => (
-        <Button
+        <HomeQuickActionButton
           key={action.id}
-          type="button"
-          variant="ghost"
-          w="100%"
-          maxW="88px"
-          justifySelf="center"
-          minW={0}
-          h="auto"
-          minH="78px"
-          px={2}
-          py={1.5}
-          borderRadius="md"
-          flexDirection="column"
-          gap={2}
-          color="fg.primary"
-          aria-label={
+          label={action.label}
+          icon={action.icon}
+          onClick={handlers[action.id]}
+          emphasized={action.id === "swap"}
+          accentIcon={action.id !== "more"}
+          indicator={action.id === "more" && hasConnectedApps}
+          ariaLabel={
             action.id === "more" && hasConnectedApps
               ? "More, connected app active"
               : action.label
           }
-          onClick={handlers[action.id]}
-          onMouseEnter={() => void playInteractionSound("quickActionHover")}
-          _hover={{ bg: "surface.raisedHover" }}
-          _active={{ bg: "surface.sunken" }}
-        >
-          <Box
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            boxSize="40px"
-            borderRadius={isWarmMidnight ? "md" : "full"}
-            bg={
-              action.id === "swap"
-                ? isWarmMidnight
-                  ? "accent.highlight"
-                  : "accent.primary"
-                : "surface.raised"
-            }
-            color={
-              action.id === "swap"
-                ? isWarmMidnight
-                  ? "accentFg.highlight"
-                  : "accentFg.primary"
-                : isWarmMidnight && action.id !== "more"
-                  ? "accent.highlight"
-                  : "fg.primary"
-            }
-            borderWidth={action.id === "swap" ? "0" : "1px"}
-            borderColor="border.subtle"
-            position="relative"
-          >
-            {action.icon}
-            {action.id === "more" && hasConnectedApps && (
-              <Box
-                position="absolute"
-                top="-4px"
-                right="-4px"
-                boxSize="10px"
-                borderRadius="full"
-                bg="accent.highlight"
-                border="2px solid"
-                borderColor="surface.base"
-                aria-hidden="true"
-              />
-            )}
-          </Box>
-          <Text as="span" fontSize="sm" fontWeight="600" lineHeight="1.2">
-            {action.label}
-          </Text>
-        </Button>
+        />
       ))}
     </Grid>
   );

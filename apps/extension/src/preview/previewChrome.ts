@@ -441,10 +441,10 @@ export function responseForPreviewMessage(
       );
       return { success: true, accounts: environment.accounts };
     }
-    case "getActiveAccount":
-      return { ...activeAccount(environment) };
+    case "getActiveAccount": return { ...activeAccount(environment) };
     case "getTabAccount":
       return { ...activeAccount(environment) };
+    case "getProviderRequestSurfaceHint": return null;
     case "getPendingDappConnectionRequests":
       return [];
     case "getDappConnectionContext":

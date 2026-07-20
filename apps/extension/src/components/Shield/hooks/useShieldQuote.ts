@@ -12,10 +12,10 @@ import {
 } from "../model/shieldQuote";
 
 export type ShieldQuoteState =
-  | { status: "idle"; quote: null; error: null }
-  | { status: "loading"; quote: null; error: null }
+  | { status: "idle"; quote: ShieldQuote | null; error: null }
+  | { status: "loading"; quote: ShieldQuote | null; error: null }
   | { status: "ready"; quote: ShieldQuote; error: null }
-  | { status: "failed"; quote: null; error: string };
+  | { status: "failed"; quote: ShieldQuote | null; error: string };
 
 const QUOTE_DELAY_MS = 350;
 const QUOTE_FALLBACK_ERROR = "Quote unavailable. Try again.";
@@ -47,6 +47,7 @@ export function useShieldQuote(input: {
 
   useEffect(() => {
     setAmount(DEFAULT_SHIELD_AMOUNT);
+    setState({ status: "idle", quote: null, error: null });
   }, [account?.id]);
 
   useEffect(() => {
@@ -57,11 +58,19 @@ export function useShieldQuote(input: {
       account.type === "impersonator" ||
       validation.status !== "valid"
     ) {
-      setState({ status: "idle", quote: null, error: null });
+      setState((current) => ({
+        status: "idle",
+        quote: current.quote,
+        error: null,
+      }));
       return;
     }
 
-    setState({ status: "loading", quote: null, error: null });
+    setState((current) => ({
+      status: "loading",
+      quote: current.quote,
+      error: null,
+    }));
     const timer = window.setTimeout(() => {
       chrome.runtime
         .sendMessage({
@@ -77,12 +86,12 @@ export function useShieldQuote(input: {
             response,
             validation.amountWei,
           );
-          setState(
+          setState((current) =>
             quote
               ? { status: "ready", quote, error: null }
               : {
                   status: "failed",
-                  quote: null,
+                  quote: current.quote,
                   error:
                     parseShieldQuoteError(response) ?? QUOTE_FALLBACK_ERROR,
                 },
@@ -90,11 +99,11 @@ export function useShieldQuote(input: {
         })
         .catch(() => {
           if (generation.current === requestGeneration) {
-            setState({
+            setState((current) => ({
               status: "failed",
-              quote: null,
+              quote: current.quote,
               error: QUOTE_FALLBACK_ERROR,
-            });
+            }));
           }
         });
     }, QUOTE_DELAY_MS);
@@ -110,7 +119,7 @@ export function useShieldQuote(input: {
     state,
     setAmount,
     useMaximum: () => {
-      if (state.status === "ready") {
+      if (state.quote) {
         setAmount(shieldMaximumInput(state.quote));
       }
     },

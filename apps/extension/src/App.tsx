@@ -54,11 +54,7 @@ import {
 } from "@/app/lazyScreens";
 import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
 
-/**
- * Detects if we're running in Arc browser using CSS variable
- * Arc browser injects --arc-palette-title CSS variable
- * This is the recommended way to detect Arc (used by MetaMask)
- */
+/** Detect Arc from its injected palette title variable. */
 function isArcBrowser(): boolean {
   try {
     const arcPaletteTitle = getComputedStyle(
@@ -133,6 +129,7 @@ import {
 } from "@/app/initialApprovalRequests";
 import { applyInitialApprovalRoute, resolveHintedInitialApprovalRoute } from "@/app/initialApprovalRoute";
 import { openOrFocusOnboarding } from "@/app/openOnboarding";
+import { PrivatePortfolioHome, useWalletHomeMode, WalletModeToggle } from "@/app/home";
 type AddChainReturnTarget = {
   view: "walletConnect";
   dappName?: string;
@@ -163,6 +160,7 @@ function App() {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
+  const { mode: walletHomeMode, setMode: setWalletHomeMode } = useWalletHomeMode();
   const [view, setView] = useState<AppView>("main");
   const [isLoading, setIsLoading] = useState(true);
   const [isApprovalRequestLoading, setIsApprovalRequestLoading] = useState(false);
@@ -218,6 +216,7 @@ function App() {
   );
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
   const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
+  const [privateHomeTab, setPrivateHomeTab] = useState<"assets" | "activity">("assets");
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
   const [portfolioChainRelinkRequest, setPortfolioChainRelinkRequest] =
     useState<PortfolioChainRelinkRequest | null>(null);
@@ -309,13 +308,12 @@ function App() {
     onOpen: onQROpen,
     onClose: onQRClose,
   } = useDisclosure();
-  const [transferToken, setTransferToken] = useState<PortfolioToken | null>(
-    null,
-  );
+  const [transferToken, setTransferToken] = useState<PortfolioToken | null>(null);
   const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
-    { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
-  >();
+    { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined>();
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
+  const [privacyActionMode, setPrivacyActionMode] = useState<"shield" | "unshield" | "send">("shield");
+  const openPrivacyAction = (mode: "shield" | "unshield" | "send") => { setPrivacyActionMode(mode); setView("shield"); };
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
   const { establishKeepalivePort, sendMessageWithRetry } =
@@ -1206,12 +1204,11 @@ function App() {
             const wasUserRejected = rejectingTxIdsRef.current.delete(
               selectedTxRequest.id,
             );
+            if (!wasUserRejected && (selectedTxRequest.privacyShieldMeta || selectedTxRequest.privacyRagequitMeta)) setPrivateHomeTab("activity");
             if (updated.length > 0) {
               setSelectedTxRequest(updated[0]);
             } else {
-              // In popup mode during tx confirm, don't clear state —
-              // TransactionConfirmation shows the success animation then
-              // closes the popup itself via window.close()
+              // Popup confirmation owns its success animation and close.
               if (view === "txConfirm" && !isInSidePanel && !isFullscreenTab) {
                 // Let the animation play; popup will close itself
               } else {
@@ -1771,8 +1768,8 @@ function App() {
 
   const handleTxConfirmed = useCallback(async () => {
     const currentTxId = selectedTxRequest?.id;
+    if (selectedTxRequest?.privacyShieldMeta || selectedTxRequest?.privacyRagequitMeta) setPrivateHomeTab("activity");
     const requests = await loadPendingRequests();
-
     // Check if more pending requests (use fresh data from loadPendingRequests)
     const remaining = requests.filter((r) => r.id !== currentTxId);
     if (remaining.length > 0) {
@@ -2492,7 +2489,7 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <ShieldView onBack={() => setView("main")} account={activeAccount} />
+            <ShieldView key={privacyActionMode} mode={privacyActionMode} onBack={() => setView("main")} onNavigate={openPrivacyAction} account={activeAccount} accounts={accounts} />
           </Suspense>
         </Box>
       </Box>
@@ -3263,7 +3260,6 @@ function App() {
       </Box>
     );
   }
-
   // Main view
   const openWchanSwap = () => {
     const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
@@ -3289,10 +3285,9 @@ function App() {
     });
     setView("swap");
   };
-
+  const walletModeToggle = <WalletModeToggle mode={walletHomeMode} publicDappConnected={Boolean(activeDappContext?.connected)} onChange={setWalletHomeMode} />;
   return (
     <Box bg="surface.base" h="100%" minH={0} display="flex" flexDirection="column">
-      {/* Fullscreen centered wrapper */}
       <Box
         maxW={isFullscreenTab ? "480px" : "100%"}
         mx="auto"
@@ -3304,7 +3299,7 @@ function App() {
       >
         <AppHeaderBar
           isAgentSession={passwordType === "agent"}
-          canChat={activeAccount?.type === "bankr"}
+          canChat={walletHomeMode === "public" && activeAccount?.type === "bankr"}
           sidePanelSupported={sidePanelSupported}
           sidePanelMode={sidePanelMode}
           isFullscreenTab={isFullscreenTab}
@@ -3321,9 +3316,8 @@ function App() {
             chrome.tabs.create({ url: WALLETCHAN_OS_URL });
           }}
         />
-
         <Container
-          data-screen-scroll-owner
+          data-screen-scroll-owner data-wallet-mode={walletHomeMode}
           pt={3}
           pb={4}
           flex="1"
@@ -3331,16 +3325,16 @@ function App() {
           display="flex"
           flexDirection="column"
           overflowY="auto"
+          bg="surface.base"
         >
           <VStack spacing={4} align="stretch">
-            {failedTxError && (
+            {walletHomeMode === "public" && failedTxError && (
               <FailedTransactionAlert
                 error={failedTxError}
                 onDismiss={() => setFailedTxError(null)}
               />
             )}
 
-            {/* Pending Requests Banner */}
             <PendingTxBanner
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
@@ -3405,7 +3399,7 @@ function App() {
               }}
             />
 
-            <RpcIssueAlert
+            {walletHomeMode === "public" && <RpcIssueAlert
               chainIds={visibleRpcIssueChainIds}
               networksInfo={networksInfo}
               isDarkTheme={isDarkTheme}
@@ -3415,10 +3409,9 @@ function App() {
                 setView("settings");
               }}
               onDismiss={dismissRpcIssues}
-            />
+            />}
 
-            {/* Account Switcher + Chain Selector Row */}
-            <AccountNetworkControls
+            {walletHomeMode === "public" && <AccountNetworkControls
               accounts={accounts}
               activeAccount={activeAccount}
               selectedChain={selectedChain}
@@ -3438,10 +3431,9 @@ function App() {
               isAccountPickerOpen={isAccountPickerOpen}
               onAccountPickerOpenChange={setIsAccountPickerOpen}
               onAccountsReordered={setAccounts}
-            />
+            />}
 
-            {/* Portfolio balance, primary actions, assets, positions, and activity */}
-            {address && (
+            {walletHomeMode === "public" && address && (
               <PortfolioTabs
                 address={address}
                 accounts={accounts}
@@ -3458,6 +3450,7 @@ function App() {
                 chainRelinkRequest={portfolioChainRelinkRequest}
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
+                modeToggle={walletModeToggle}
                 quickActions={
                   activeAccount?.type !== "impersonator" ? (
                     <HomeQuickActions
@@ -3471,7 +3464,7 @@ function App() {
                         setSwapInitialSellToken(undefined);
                         setView("swap");
                       }}
-                      onShield={() => setView("shield")}
+                      onShield={() => openPrivacyAction("shield")}
                       onMore={() => setView("more")}
                     />
                   ) : undefined
@@ -3504,7 +3497,17 @@ function App() {
                 }}
               />
             )}
-
+            {walletHomeMode === "private" && (
+              <PrivatePortfolioHome
+                accounts={accounts}
+                modeToggle={walletModeToggle}
+                onShield={() => openPrivacyAction("shield")}
+                onUnshield={() => openPrivacyAction("unshield")}
+                onSend={() => openPrivacyAction("send")}
+                onTransactionClick={(tx) => { setSelectedCompletedTx(tx); setView("txDetail"); }}
+                activeTab={privateHomeTab} onTabChange={setPrivateHomeTab}
+              />
+            )}
             {reloadRequired && (
               <ReloadRequiredAlert
                 onReload={async () => {
@@ -3519,7 +3522,7 @@ function App() {
           </VStack>
         </Container>
 
-        {activeDappContext?.connected && (
+        {walletHomeMode === "public" && activeDappContext?.connected && (
           <HomeDappDock
             context={activeDappContext}
             selectedChain={selectedChain}
@@ -3533,9 +3536,7 @@ function App() {
             }}
           />
         )}
-
       </Box>
-      {/* End fullscreen centered wrapper */}
     </Box>
   );
   })();

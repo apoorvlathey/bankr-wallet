@@ -19,9 +19,9 @@ import {
 } from "@/lib/privacyShieldLifecycle";
 import { formatEther } from "viem";
 
-export interface ActivityDateGroup {
+export interface ActivityDateGroup<T extends { createdAt: number } = CompletedTransaction> {
   label: string;
-  txs: CompletedTransaction[];
+  txs: T[];
 }
 
 export interface ActivityStatusModel {
@@ -46,11 +46,11 @@ export interface ActivityPresentation {
 }
 
 /** Group transactions by date label. */
-export function groupActivityByDate(
-  txs: CompletedTransaction[],
+export function groupActivityByDate<T extends { createdAt: number }>(
+  txs: T[],
   today: Date,
-): ActivityDateGroup[] {
-  const groups: Map<string, CompletedTransaction[]> = new Map();
+): ActivityDateGroup<T>[] {
+  const groups: Map<string, T[]> = new Map();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
@@ -272,6 +272,16 @@ export function getInternalSendSymbol(
   return symbol || null;
 }
 
+export function isShieldRecoveryActivityTransaction(tx: CompletedTransaction): boolean {
+  return tx.origin.trim().toLowerCase() === "walletchan shield recovery";
+}
+
+export function isShieldActivityTransaction(tx: CompletedTransaction): boolean {
+  return Boolean(
+    tx.privacyShieldMeta || tx.origin.toLowerCase().includes("walletchan shield"),
+  );
+}
+
 export function getActivityStatusModel(
   tx: CompletedTransaction,
 ): ActivityStatusModel {
@@ -345,9 +355,11 @@ export function getActivityPresentation(
     }
   }
 
-  const intent = tx.clearSignedMeta
-    ? getClearSignedIntent(tx.clearSignedMeta)
-    : tx.transferMeta
+  const intent = isShieldRecoveryActivityTransaction(tx)
+    ? "Shield Recovery"
+    : tx.clearSignedMeta
+      ? getClearSignedIntent(tx.clearSignedMeta)
+      : tx.transferMeta
       ? `Send ${tx.transferMeta.symbol}`
       : bridgeIntent
         ? bridgeIntent

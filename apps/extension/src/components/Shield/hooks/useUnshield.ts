@@ -15,14 +15,14 @@ export type UnshieldState =
 
 export function useUnshield(input: {
   availableWei: bigint;
+  recipient: string;
   onComplete: () => void;
 }) {
   const [amount, setAmountValue] = useState("");
-  const [recipient, setRecipientValue] = useState("");
   const [state, setState] = useState<UnshieldState>({ status: "idle", operation: null, error: null });
   const validation = useMemo(
-    () => validateUnshieldInput(amount, recipient, input.availableWei),
-    [amount, recipient, input.availableWei],
+    () => validateUnshieldInput(amount, input.recipient, input.availableWei),
+    [amount, input.recipient, input.availableWei],
   );
   const resetQuote = useCallback(() => {
     setState((current) => current.status === "quoting" || current.status === "proving"
@@ -30,7 +30,6 @@ export function useUnshield(input: {
       : { status: "idle", operation: null, error: null });
   }, []);
   const setAmount = useCallback((value: string) => { setAmountValue(value); resetQuote(); }, [resetQuote]);
-  const setRecipient = useCallback((value: string) => { setRecipientValue(value); resetQuote(); }, [resetQuote]);
 
   const quote = useCallback(async () => {
     if (!validation.valid) return;
@@ -73,5 +72,18 @@ export function useUnshield(input: {
     if (input.availableWei === 0n) setState({ status: "idle", operation: null, error: null });
   }, [input.availableWei]);
 
-  return { amount, recipient, setAmount, setRecipient, validation, state, quote, execute };
+  useEffect(() => {
+    resetQuote();
+  }, [input.recipient, resetQuote]);
+
+  return {
+    amount,
+    recipient: input.recipient,
+    setAmount,
+    validation,
+    state,
+    quote,
+    execute,
+    resetQuote,
+  };
 }

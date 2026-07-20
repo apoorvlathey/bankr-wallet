@@ -56,16 +56,22 @@ function restoreRequest(message: unknown): message is {
   requestId: string;
   phrase: string;
   password: string;
+  replaceExisting: boolean;
+  backupConfirmed: boolean;
+  lossConfirmed: boolean;
 } {
   if (typeof message !== "object" || message === null || Array.isArray(message)) {
     return false;
   }
   const value = message as Record<string, unknown>;
-  return Object.keys(value).length === 4 &&
+  return Object.keys(value).length === 7 &&
     value.type === "privacyRestoreRecovery" &&
     typeof value.requestId === "string" &&
     typeof value.phrase === "string" && value.phrase.length <= 512 &&
-    typeof value.password === "string";
+    typeof value.password === "string" &&
+    typeof value.replaceExisting === "boolean" &&
+    typeof value.backupConfirmed === "boolean" &&
+    typeof value.lossConfirmed === "boolean";
 }
 
 function recoveryFailure(error: unknown): {
@@ -81,8 +87,8 @@ function recoveryFailure(error: unknown): {
     "auth-required": "Enter your main password and try again.",
     "account-unavailable": "Switch to a wallet account and try again.",
     "recovery-missing": "No Shield recovery phrase exists yet.",
-    "recovery-conflict":
-      "A different Shield identity already exists. Reset before restoring another phrase.",
+    "replacement-confirmation-required":
+      "Back up the current Shield phrase and confirm both recovery warnings first.",
     "recovery-unavailable": "Shield recovery is unavailable. Try again.",
   } as const;
   return { success: false, code, error: messages[code] };
@@ -134,6 +140,9 @@ export function createBackgroundPrivacyRecoveryMessageRouter(
           requestId: message.requestId,
           phrase: message.phrase,
           password: message.password,
+          replaceExisting: message.replaceExisting,
+          backupConfirmed: message.backupConfirmed,
+          lossConfirmed: message.lossConfirmed,
         }).then((result) => sendResponse({ success: true, ...result }))
           .catch((error: unknown) => sendResponse(recoveryFailure(error)));
         return { handled: true, keepChannelOpen: true };

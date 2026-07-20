@@ -22,6 +22,8 @@ import {
   TransactionEstimatedChangesTitle,
   TransactionFinancialImpact,
   TransactionOutcome,
+  PrivacyShieldRequestContext,
+  PrivacyShieldTransactionOutcome,
 } from "./TransactionSummary";
 import type { TransactionConfirmationProps } from "./types";
 import { useTransactionActions } from "./useTransactionActions";
@@ -57,6 +59,7 @@ function TransactionConfirmation({
   const is7702SetDelegate = delegation7702?.kind === "setDelegate";
   const isErc7715PermissionRevoke =
     !!txRequest.erc7715PermissionRevokeMeta;
+  const isPrivacyShield = !!txRequest.privacyShieldMeta;
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
@@ -121,7 +124,9 @@ function TransactionConfirmation({
   }
   if (actions.state === "sent") return <TransactionSentScreen />;
 
-  const screenTitle = is7702Revoke
+  const screenTitle = isPrivacyShield
+    ? "Review shield"
+    : is7702Revoke
     ? "Revoke smart account"
     : is7702SetDelegate
       ? "Set smart account"
@@ -191,7 +196,9 @@ function TransactionConfirmation({
         ) : undefined
       }
       outcome={
-        <TransactionOutcome
+        isPrivacyShield ? (
+          <PrivacyShieldTransactionOutcome txRequest={txRequest} />
+        ) : <TransactionOutcome
           txRequest={txRequest}
           iconChipBg={iconChipBg}
           isInternalWalletChan={metadata.isInternalWalletChan}
@@ -219,7 +226,9 @@ function TransactionConfirmation({
         )
       }
       context={
-        <TransactionContext
+        isPrivacyShield ? (
+          <PrivacyShieldRequestContext />
+        ) : <TransactionContext
           txRequest={txRequest}
           actionLabel={decodedActionFallback}
           explorer={explorer}

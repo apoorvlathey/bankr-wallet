@@ -36,6 +36,7 @@ apps/extension/src/
 │   ├── BatchConfirmation/  # ERC-5792 review and confirmation
 │   ├── ClearSigning/       # Feature domain
 │   ├── Portfolio/Holdings/ # Portfolio loading and holdings presentation
+│   ├── Shield/             # Separate Shield/Unshield/Send screens over shared privacy controllers
 │   ├── Settings/           # Feature domain
 │   ├── Swap/               # Feature domain
 │   ├── TransactionConfirmation/ # Single-request review and confirmation
@@ -51,6 +52,14 @@ apps/extension/src/
 Migration is incremental. Existing root component imports may remain as small
 compatibility facades while their implementations move into named feature
 folders. Do not churn every caller merely to make the tree look finished.
+
+`app/home/` owns the public/private presentation-mode model, persisted-mode
+adapter, private portfolio composition, and shared balance-visibility adapter.
+It may compose feature components but must not own Privacy Pools storage,
+proofs, quotes, or transaction policy. `App.tsx` owns only the mode branch and
+screen navigation. Public portfolio/account components never receive the
+Shielded ETH pseudo-asset; `PrivatePortfolioHome` is the sole home-level owner
+of that asset row and its private Activity scope.
 
 ## Component-root contract
 

@@ -32,6 +32,7 @@ function createDependencies(
     deletePrivacyCommitmentsDatabase: async () => {},
     deletePrivacyWithdrawalsDatabase: async () => {},
     deletePrivacyRagequitsDatabase: async () => {},
+    deletePrivacyPortfolioDatabase: async () => {},
     clearPrivacyPublicEventCache: async () => {},
     getAllLocalStorage: async () => ({ accounts: [] }),
     getWalletLocalStorageKeysToRemove: () => ["accounts"],
@@ -125,6 +126,9 @@ test("reset installs its barrier synchronously and preserves destructive order",
     deletePrivacyRagequitsDatabase: async () => {
       events.push("privacy-ragequits:reset");
     },
+    deletePrivacyPortfolioDatabase: async () => {
+      events.push("privacy-portfolio:reset");
+    },
     clearPrivacyPublicEventCache: async () => {
       events.push("privacy-events:reset");
     },
@@ -174,6 +178,7 @@ test("reset installs its barrier synchronously and preserves destructive order",
     "privacy-commitments:reset",
     "privacy-withdrawals:reset",
     "privacy-ragequits:reset",
+    "privacy-portfolio:reset",
     "privacy-events:reset",
     "local:get",
     "manifest:accounts,cache",

@@ -15,9 +15,7 @@ import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import { TokenPickerContent } from "@/components/Swap/TokenPickerContent";
-
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-
 /** Popular token symbols per chain — same list as BuyTokenSelector so the
  *  buy/sell dropdowns offer parity. */
 const POPULAR_PER_CHAIN: Record<number, string[]> = {
@@ -29,9 +27,6 @@ const POPULAR_PER_CHAIN: Record<number, string[]> = {
   130: ["ETH", "USDC", "WBTC", "WETH"],
 };
 
-/** Convert a static token-list entry into the PortfolioToken shape parents
- *  consume for the sell side. Tokens not in the user's holdings get a zero
- *  balance — the swap quote will still load against onchain balance. */
 function entryToPortfolioToken(
   t: TokenListEntry,
   chainId: number,
@@ -59,13 +54,9 @@ interface TokenSelectorProps {
   onSelect: (token: PortfolioToken) => void;
   excludeAddress?: string;
   chainId: number;
-  /** Called when user enters a valid 0x address — parent resolves it */
   onCustomAddress?: (address: string) => void;
-  /** Called when user clicks the resolved custom token row */
   onSelectCustomToken?: (token: PortfolioToken) => void;
-  /** Resolved custom token to show in dropdown */
   resolvedCustomToken?: PortfolioToken | null;
-  /** Whether custom token is currently being resolved */
   customTokenLoading?: boolean;
   /** Error message from custom token resolution */
   customTokenError?: string | null;

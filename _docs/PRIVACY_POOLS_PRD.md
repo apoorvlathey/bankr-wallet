@@ -121,8 +121,8 @@ larger surface. Changing one requires updating this PRD before implementation.
 
 ### New privacy user
 
-As a WalletChan user, I can open Shield and immediately see a private balance
-with Shield and Unshield actions. WalletChan creates and protects the separate
+As a WalletChan user, I can switch to Private and immediately see a private
+balance with Shield, Unshield, and Send actions. WalletChan creates and protects the separate
 privacy identity in the background without showing protocol setup.
 
 ### Returning user
@@ -153,7 +153,8 @@ Shield
 ├── Confirmed Shield balance + USD value
 │   └── Waiting-for-ASP subset when non-zero
 ├── Shield ETH
-├── Unshield
+├── Unshield to my wallet
+├── Send privately to a recipient
 ├── Withdraw publicly when eligible
 └── Activity
 
@@ -169,23 +170,25 @@ so the user understands where funds are held.
 
 ## 7. User experience
 
-### 7.1 Shield dashboard
+### 7.1 Private dashboard
 
-Shield is one balance-first screen:
+Private mode is one balance-first home:
 
 1. private ETH balance;
-2. **Shield** and **Unshield** actions;
+2. separate **Shield**, **Unshield**, and **Send** actions;
 3. recent private activity;
 4. network, recovery, or operation status only when user action is required.
 
-There is no protocol introduction, seed-phrase setup wizard, recovery
+Each action opens its own single-purpose screen with no nested mode tabs. There
+is no protocol introduction, seed-phrase setup wizard, recovery
 verification challenge, or multi-page explanation before the dashboard.
 Privacy Pools naming stays inside route/operation details.
 
 ### 7.2 Automatic privacy identity
 
-On first Shield access, the renderer requests a non-secret initialization
-status. If no privacy identity exists:
+On first eligible entry into Private mode, the renderer sends a non-blocking,
+non-secret initialization request. The Shield screen repeats it so a bounded
+failure can offer Retry. If no privacy identity exists:
 
 1. require a live master or biometric-master capability in the background;
 2. generate one BIP-39 privacy recovery phrase with a CSPRNG;
@@ -195,7 +198,7 @@ status. If no privacy identity exists:
 
 For a biometric factor created before Shield existed, its next fresh assertion
 may first create an empty passkey-only privacy-vault scaffold. This stores no
-phrase yet; it only lets first Shield access generate and encrypt the phrase
+phrase yet; it only lets the first eligible Private-mode entry generate and encrypt the phrase
 without requesting the main password. New biometric setup normally stores both
 master and passkey wrappers.
 
@@ -279,6 +282,12 @@ support Sepolia; impersonator and agent paths fail closed.
 
 ### 7.5 Withdrawal flow
 
+Private home exposes two distinct entry screens over this same exact relayed
+withdrawal engine. **Unshield** defaults the public recipient to the active
+WalletChan account and uses Unshield labels. **Send** starts with an empty
+recipient and uses private-send labels. Neither screen contains a Shield mode
+tab or a public source-account selector.
+
 1. Choose a ready commitment or an amount across compatible ready
    commitments.
 2. Enter and checksum-normalize the Ethereum recipient.
@@ -311,10 +320,15 @@ submission time.
 
 ### 7.7 Ragequit
 
-Ragequit is presented as **Withdraw publicly**, not private Unshield. It is the
-always-available custody exit for an indexed commitment owned by the original
-depositor, including while ASP review is pending. The product should not force
-the user to wait for ASP approval if they accept the public link.
+Ragequit is incorporated into the Unshield amount interface but remains
+explicitly presented as **Withdraw publicly**, never as a private withdrawal.
+The same inverse asset cards show its fixed amount and original depositor. An
+unchecked commitment control above the public sticky action identifies recovery
+to the original address as a public transaction; the action remains disabled
+until the user checks it. It is the always-available
+custody exit for an indexed commitment owned by the original depositor,
+including while ASP review is pending. The product should not force the user to
+wait for ASP approval if they accept the public link.
 
 It is offered when:
 
@@ -1016,7 +1030,7 @@ recipients, tx hashes, or timing precise enough to correlate operations.
 
 ### Automatic recovery initialization
 
-- First Shield access under a master/biometric-master session atomically
+- First eligible Private-mode entry under a master/biometric-master session atomically
   creates the encrypted privacy identity when absent.
 - An existing biometric factor that predates Shield can initialize without the
   main password after its next fresh assertion.
@@ -1119,10 +1133,10 @@ Frozen Sepolia budgets live in `apps/extension/privacy-prover.budgets.json`:
 55 MiB unpacked build, 24 MiB raw artifacts, 512 KiB prover worker, 4 MiB
 background bundle, 60 seconds per first/restart fixed-proof run, 512 MiB peak
 Chromium process-tree RSS delta, and one concurrent proof. The latest
-2026-07-20 packaged run measured 8.904/8.922 seconds and a
-350,142,464-byte peak RSS delta. The corresponding build measured 46,188,084
+2026-07-20 packaged run measured 9.027/9.981 seconds and a
+352,976,896-byte peak RSS delta. The corresponding build measured 46,233,929
 bytes, including 23,690,342 artifact bytes, a 336,397-byte prover worker, and a
-3,509,167-byte background bundle.
+3,522,011-byte background bundle.
 
 ## 26. Rollout
 
@@ -1143,7 +1157,7 @@ replace its matching manual gate in `PRIVACY_POOLS_SEPOLIA_TEST.md`.
 **Implementation:** Complete. **Manual status:** First-use password/passkey
 behavior observed; full reveal/restore/rescan rehearsal remains pending.
 
-- Generate and encrypt the independent privacy phrase only on first Shield
+- Generate and encrypt the independent privacy phrase only on first eligible Private-mode
   access, with status-only UI messaging.
 - Integrate the privacy key with master-password and passkey lifecycle changes.
 - Keep export and explicit restore as separate master-only actions.

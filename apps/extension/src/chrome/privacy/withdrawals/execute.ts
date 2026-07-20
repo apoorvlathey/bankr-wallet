@@ -3,7 +3,6 @@ import {
   generateMerkleProof,
 } from "@0xbow/privacy-pools-core-sdk";
 
-import { getActiveAccount } from "../../accounts/selectionStorage";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -81,10 +80,6 @@ export async function executePrivacyUnshield(
 ): Promise<StoredPrivacyUnshieldV1> {
   if (!UUID.test(operationId)) throw new Error("invalid-request");
   const expectedEpoch = await capturePrivacyMasterAuthorization();
-  const activeAccount = await getActiveAccount();
-  if (!activeAccount || activeAccount.type === "impersonator") {
-    throw new Error("auth-required");
-  }
   await verifyPrivacyPoolsSepoliaDeployment();
   const material = await readPrivacyAspMasterMaterial();
   if (!material) throw new Error("auth-required");

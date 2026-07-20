@@ -9,8 +9,8 @@ export function getPublicWithdrawalCopy(waitingForAsp: boolean): {
 } {
   return {
     title: waitingForAsp
-      ? "Withdraw without waiting?"
-      : "Private Unshield unavailable",
+      ? "Need it now?"
+      : "Public exit available",
     action: "Withdraw publicly",
   };
 }
@@ -96,9 +96,7 @@ export function getPublicWithdrawalOffer(input: {
   const matchingOffer = offers.find((offer) => accountMatches(input.account, offer));
   if (matchingOffer) {
     return {
-      amountWei: input.recoverableBalanceWei > matchingOffer.amountWei
-        ? input.recoverableBalanceWei
-        : matchingOffer.amountWei,
+      amountWei: matchingOffer.amountWei,
       accountId: matchingOffer.accountId,
       accountAddress: matchingOffer.accountAddress,
       accountType: matchingOffer.accountType,

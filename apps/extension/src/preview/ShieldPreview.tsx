@@ -1,13 +1,30 @@
 import ShieldView from "@/components/ShieldView";
-import { getPreviewWallet } from "./fixtures";
+import { getPreviewWallet, toAccount } from "./fixtures";
 import type { PreviewWalletType } from "./types";
+import type { PrivacyActionMode } from "@/components/ShieldView";
 
-export function ShieldPreview({ wallet }: { wallet: PreviewWalletType }) {
-  const account = getPreviewWallet(wallet);
+export function ShieldPreview({
+  wallet,
+  scenario,
+}: {
+  wallet: PreviewWalletType;
+  scenario: string;
+}) {
+  const previewWallet = getPreviewWallet(wallet);
+  const account = toAccount(previewWallet);
+  const mode: PrivacyActionMode = scenario === "unshield" || scenario === "unshield-pending"
+    ? "unshield"
+    : scenario === "send"
+      ? "send"
+      : "shield";
   return (
     <ShieldView
+      key={mode}
+      mode={mode}
       onBack={() => {}}
-      account={{ id: account.accountId, type: account.accountType, address: account.address }}
+      onNavigate={() => {}}
+      account={account}
+      accounts={[account]}
     />
   );
 }

@@ -9,6 +9,10 @@ import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import ChainIcon from "@/components/ChainIcon";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import type { ResolvedChain } from "@/lib/chains";
+import {
+  getPrivacyShieldActivityState,
+  isPrivacyShieldLifecycleState,
+} from "@/lib/privacyShieldLifecycle";
 import { useIconChipBg } from "@/theme";
 import ForceInclusionSteps from "./ForceInclusionSteps";
 import { getForceInclusionState } from "./forceInclusionState";
@@ -33,11 +37,28 @@ function getOpenableOrigin(origin: string): string | null {
 }
 
 function getStatusPresentation(tx: CompletedTransaction) {
+  if (
+    tx.privacyShieldMeta &&
+    isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+  ) {
+    const privacy = getPrivacyShieldActivityState(tx.privacyShieldMeta.state);
+    return {
+      label: privacy.statusLabel,
+      color: `status.${privacy.tone}.emphasis`,
+      icon: privacy.tone === "success"
+        ? CheckCircleIcon
+        : privacy.tone === "info"
+          ? TimeIcon
+          : WarningIcon,
+      pending: privacy.pending,
+    } as const;
+  }
   if (tx.status === "success") {
     return {
       label: tx.forceInclusionMeta ? "L1 + L2 confirmed" : "Confirmed",
       color: "status.success.emphasis",
       icon: CheckCircleIcon,
+      pending: false,
     } as const;
   }
 
@@ -56,6 +77,7 @@ function getStatusPresentation(tx: CompletedTransaction) {
       label,
       color: "status.error.emphasis",
       icon: WarningIcon,
+      pending: false,
     } as const;
   }
 
@@ -67,6 +89,7 @@ function getStatusPresentation(tx: CompletedTransaction) {
         : "Pending",
     color: "status.info.emphasis",
     icon: TimeIcon,
+    pending: true,
   } as const;
 }
 
@@ -87,7 +110,7 @@ export default function StatusHeader({
   const isInternalWalletChan = !originHostname && tx.origin.startsWith("WalletChan");
   const status = getStatusPresentation(tx);
   const StatusIcon = status.icon;
-  const isPending = tx.status === "pending" || tx.status === "processing";
+  const isPending = status.pending;
   const chainName = resolvedChain?.name ?? tx.chainName;
   const initials = (originHostname ?? tx.origin)
     .split(/[.\s-]+/u)
@@ -121,7 +144,7 @@ export default function StatusHeader({
       >
         <HStack spacing={1.5} color={status.color}>
           {isPending ? (
-            <Spinner boxSize="12px" thickness="2px" speed="0.8s" />
+            <Spinner boxSize="12px" thickness="2px" speed="0.8s" color="currentColor" />
           ) : (
             <StatusIcon boxSize="13px" aria-hidden />
           )}

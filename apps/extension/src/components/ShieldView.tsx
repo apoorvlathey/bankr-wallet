@@ -1,1 +1,2 @@
-export { default } from "./Shield/ShieldScreen";
+export { default } from "./Shield/PrivacyActionScreen";
+export type { PrivacyActionMode } from "./Shield/PrivacyActionScreen";

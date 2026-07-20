@@ -55,6 +55,7 @@ test("wallet reset local and sync manifests retain their exact released keys", (
     "sessionEncKey",
     "onboardingInitialization",
     "sponsoredTransferIntents",
+    "walletHomeModeV1",
   ]);
   assert.deepEqual(WALLET_SYNC_STORAGE_KEYS, [
     "address",

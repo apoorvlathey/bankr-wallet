@@ -14,6 +14,7 @@ export type WalletResetExecutionDependencies = {
   deletePrivacyCommitmentsDatabase: () => Promise<void>;
   deletePrivacyWithdrawalsDatabase: () => Promise<void>;
   deletePrivacyRagequitsDatabase: () => Promise<void>;
+  deletePrivacyPortfolioDatabase: () => Promise<void>;
   clearPrivacyPublicEventCache: () => Promise<void>;
   getAllLocalStorage: () => Promise<Record<string, unknown>>;
   getWalletLocalStorageKeysToRemove: (storage: Record<string, unknown>) => string[];
@@ -61,6 +62,7 @@ export async function executeWalletReset(
       await dependencies.deletePrivacyCommitmentsDatabase();
       await dependencies.deletePrivacyWithdrawalsDatabase();
       await dependencies.deletePrivacyRagequitsDatabase();
+      await dependencies.deletePrivacyPortfolioDatabase();
       await dependencies.clearPrivacyPublicEventCache();
       const allLocalStorage = await dependencies.getAllLocalStorage();
       const localKeys = dependencies.getWalletLocalStorageKeysToRemove(allLocalStorage);

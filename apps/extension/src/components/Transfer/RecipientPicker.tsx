@@ -19,6 +19,7 @@ import type { AddressContactIdentity } from "@/hooks/useAddressContactIdentities
 import { getAccountTypeLabel } from "./formatting";
 
 interface RecipientPickerProps {
+  title?: string;
   accounts: Account[];
   contacts: AddressContactIdentity[];
   allContacts: AddressContact[];
@@ -35,6 +36,7 @@ interface RecipientPickerProps {
 }
 
 export function RecipientPicker({
+  title = "My contacts",
   accounts,
   contacts,
   allContacts,
@@ -51,7 +53,7 @@ export function RecipientPicker({
 }: RecipientPickerProps) {
   return (
     <FullScreenPicker
-      title="My contacts"
+      title={title}
       onBack={onBack}
       controls={(
         <FullScreenPickerSearch

@@ -14,11 +14,12 @@ complete; the matching manual gate remains the product owner's approval point.
 
 | Area | Current evidence | Remaining manual gate |
 | --- | --- | --- |
-| Balance-first UI | Product owner accepted the simplified screen with no setup/explainer content | Recheck both themes and final popup/sidepanel layouts |
+| Public/private home | Dual-mode home, private-only balance/chart/assets/activity, explicit Shield signer, and account-independent private send are implemented | Recheck both themes and final popup/sidepanel transitions in the unpacked extension |
+| Shield/Unshield/Send UI | Three private-home actions, separate fixed-asset screens, private-only Shielded ETH asset, and private Activity are implemented | Recheck both themes and final popup/sidepanel layouts in the unpacked extension |
 | Password/passkey initialization | Fresh biometric login was confirmed working after capability parity fixes | Complete reveal, restore, rotation, factor-removal, and clean-install recovery rehearsal |
 | Quote/review | Real quotes work with three-request RPC batches; arbitrary 1 ETH cap removed | Repeat with Bankr, private-key, seed-phrase, impersonator, and agent sessions |
 | Sepolia Shield | Real deposits reached confirmation/indexing and appeared in the confirmed balance while ASP-pending | Complete and record one full private-key and one full seed-phrase run, including rejection/restart/account-switch cases |
-| Live status | Confirmed-balance, amber ASP subset, progress refresh, USD value, and main Activity projection are implemented | Reconfirm every transition without closing Shield and from main Activity alone |
+| Live status | Confirmed/available/pending balance, permanent private asset row, and Private Activity projections are implemented | Reconfirm every transition from the asset row and Private Activity |
 | Private Unshield | Automated full/partial, quote, proof, relayer, lineage, and retry coverage passes | No complete manual partial/full ASP-approved withdrawal has been recorded |
 | Withdraw publicly | One real Sepolia public withdrawal succeeded after the proof-signal fix | Repeat for both local wallet types after clean recovery; recheck that a user-rejected prompt creates no Activity card |
 | Recovery and destructive safety | Automated phrase, rescan, account-removal, and reset coverage passes | Complete the written disposable-wallet rehearsal |
@@ -29,9 +30,22 @@ complete; the matching manual gate remains the product owner's approval point.
 **Implementation:** Complete. **Manual:** Core simplified layout accepted; final
 cross-theme/layout recheck remains.
 
-- [x] Show the Sepolia private balance first.
-- [x] Keep Shield and Unshield as the two primary actions.
-- [x] Keep activity on the same screen and hide healthy background recovery.
+- [x] Show ASP-cleared Shielded ETH as the main private value and
+  compliance-pending processing ETH as compact amber subcopy.
+- [x] Expose Shield, Unshield, and Send as three private-home actions with
+  separate screens and no nested mode tabs.
+- [x] Align one tiny tooltip-free amber Public/Private switch to the balance
+  heading below the Public account selector.
+- [x] Keep private balance, chart, assets, and Activity separate from the
+  selected public account; omit account selector and Positions in Private.
+- [x] Keep mutually exclusive Public and Privacy Pools Activity scopes.
+- [x] Add permanent Shielded ETH only to Private Assets; keep generic public
+  Assets, Send, and Swap free of the pseudo-asset.
+- [x] Select the Sepolia Shield signer inside Shield without changing the
+  public active account.
+- [x] Make private send spend the wallet-wide privacy identity without a public
+  account field, while retaining master authorization and exact note checks.
+- [x] Encrypt the bounded eight-day private USD chart with the privacy key.
 - [x] Remove recovery setup, phrase, and protocol explainer pages.
 - [x] Add a pure fixture/presentation model and UI coverage.
 - [x] Pass Shield model tests, UI-scoped typecheck/lint, axe checks, and
@@ -40,10 +54,13 @@ cross-theme/layout recheck remains.
 Manual gate:
 
 1. Reload the extension and open **Shield** from the home quick actions.
-2. Confirm the first things visible are the balance, Shield, and Unshield.
-3. Review both themes and the popup/sidepanel layouts.
-4. Confirm no recovery or privacy explainer block appears in the healthy state.
-5. Confirm opening Shield creates no transaction prompt and shows no phrase.
+2. Confirm Shield opens directly to `Deposit from` and compact fixed Sepolia
+   ETH/Shielded ETH cards without a repeated balance strip or mode tabs.
+3. Return to Private and confirm Unshield and Send open their own titled screens;
+   Unshield defaults to the active wallet while Send starts recipient-first.
+4. Review both themes and the popup/sidepanel layouts.
+5. Confirm no recovery or privacy explainer block appears in the healthy state.
+6. Confirm opening Shield creates no transaction prompt and shows no phrase.
    Status-only initialization and bounded sync may run in the background.
 
 ## Checkpoint 2: Privacy recovery lifecycle
@@ -96,11 +113,12 @@ Manual gate: run fixed proofs from the packaged Chrome extension while closing
 and reopening the wallet UI.
 
 Automated packaged-Chromium measurement (2026-07-20): both proofs verified in
-8.904 s on the first run and 8.922 s after closing/reopening the extension page.
-The measured Chromium process-tree RSS delta peaked at 350,142,464 bytes
-(333.9 MiB). The current unpacked build is 46,188,084 bytes; the six pinned
+9.027 s on the first run and 9.981 s after closing/reopening the extension page.
+The measured Chromium process-tree RSS delta peaked at 352,976,896 bytes
+(336.6 MiB). The current unpacked build is 46,233,929 bytes; the six pinned
 circuit artifacts contribute 23,690,342 bytes and the packaged prover worker
-contributes 336,397 bytes. `privacy-prover.budgets.json` freezes 55 MiB build,
+contributes 336,397 bytes; the background bundle is 3,522,011 bytes.
+`privacy-prover.budgets.json` freezes 55 MiB build,
 24 MiB artifact, 512 KiB worker, 4 MiB background, 60 s first/restart proof,
 512 MiB peak-RSS-delta, and single-proof concurrency budgets. The build and
 packaged Chromium QA enforce them.
@@ -145,23 +163,24 @@ verify that the public transaction becomes the expected private commitment.
 Bankr must fail before a prompt because it cannot submit Sepolia transactions.
 
 Quote slice gate: on Bankr, private-key, and seed-phrase accounts, Shield opens
-one inline amount panel with a `0.001 ETH` minimum showing the public Sepolia balance, 1%
-protocol fee, expected Shield credit, gas reserve, total required, and a
+one fixed-asset amount form with a `0.001 ETH` minimum showing the public Sepolia balance, 1%
+protocol fee, expected Shielded ETH credit, and a
 gas-aware Max value. Invalid decimals, `uint256` overflow, and sub-minimum
 amounts fail locally; view-only accounts fail closed. There is no confirm control, prepared intent,
 signing request, operation record, or submission in this slice.
 
-Review-preparation slice gate: pressing `Continue` under a current password or
+Review-preparation slice gate: pressing `Review shield` under a current password or
 fresh biometric master session prepares the exact native-deposit call in the
 background, checks its chain, source, Entrypoint, value, fee math, selector,
 argument, and derived precommitment through an independent decoder, and shows
-only `Ready for review — nothing sent yet.` Bankr, private-key, and seed-phrase
-accounts must reach that state. Agent sessions and view-only accounts fail
-closed. The review intent is explicitly non-submittable, uses a disposable
-derivation, is not persisted, and never opens a signing or submission path.
+only the bounded ready result. Bankr, private-key, and seed-phrase accounts may
+prepare that result. Agent sessions and view-only accounts fail closed. The
+review intent is explicitly non-submittable, uses a disposable derivation, and
+is not persisted.
 
-Current submission gate: after that review, pressing `Confirm details` must add
-one durable Activity row and open the normal WalletChan transaction confirmation.
+Current submission gate: the ready result immediately persists one durable
+operation and opens the normal WalletChan transaction confirmation as the only
+review surface.
 Rejecting releases the operation without signing. Confirming from a local
 private-key or seed-phrase account submits only the pinned Sepolia deposit,
 then receipt/event/ASP tracking advances the private balance across UI and

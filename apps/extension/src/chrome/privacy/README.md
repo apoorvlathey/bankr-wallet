@@ -18,7 +18,7 @@ map, not the release checklist.
 - `vault.ts`: verified master/passkey unwrap plus credential-lifecycle
   preparation.
 - `passkey.ts`: lock-held biometric compatibility initialization and commit.
-- `identity.ts`: master-authorized, idempotent first-Shield initialization.
+- `identity.ts`: master-authorized, idempotent first-Private-mode initialization.
 - `protocol/`: pinned official SDK primitives plus locally packaged,
   integrity-checked commitment/withdrawal artifacts.
 - `deployment/`: exact Sepolia ETH deployment pins, bounded onchain snapshot,

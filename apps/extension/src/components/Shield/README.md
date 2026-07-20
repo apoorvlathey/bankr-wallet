@@ -1,95 +1,89 @@
 # Shield UI audit map
 
-The Shield domain owns WalletChan's private-balance renderer. Secret storage,
-authorization, protocol, proving, RPC, and signing effects remain background
-responsibilities.
+The Shield domain owns WalletChan's fixed Sepolia ETH ↔ Shielded ETH renderer.
+Secret storage, authorization, protocol, proving, RPC, signing, and relayer
+effects remain background responsibilities.
 
 ## Files
 
-- `ShieldScreen.tsx`: composition root and compact action feedback.
-- `ShieldDashboard.tsx`: the single balance-first Sepolia Shield screen.
-- `ShieldOperationProgress.tsx`: accessible four-stage Shield lifecycle bar;
-  it reports real states rather than guessing elapsed time and exposes the
-  current-stage explanation on hover or keyboard focus.
-- `hooks/useShieldInitialization.ts`: one status-only background request on
-  entry plus an explicit retry path.
-- `hooks/useShieldQuote.ts`: debounced exact-account quote request and bounded
-  response parsing.
-- `hooks/useShieldReview.ts`: one user-triggered review-preparation request with
-  stale-response suppression.
-- `hooks/useShieldOperation.ts`: stable request UUID plus one user-triggered
-  durable-operation save; retries reuse the same request until inputs change.
-- `hooks/useShieldOperations.ts`: sanitized durable activity read, matching
-  receipt-event refresh, and adaptive indexing/ASP sync while mounted.
-- `hooks/useShieldNativePrice.ts`: public Sepolia ETH/USD lookup through the
-  wallet's existing cached native-price route.
-- `hooks/useUnshield.ts`: private-withdrawal quote/review/submission state with
-  stale-response suppression and bounded public response validation.
-- `hooks/usePublicRecovery.ts`: user-triggered original-depositor public-exit
-  preparation through the normal WalletChan confirmation surface.
-- `ShieldAmountPanel.tsx`: compact inline amount, balance, fee, gas, and Max UI.
-- `UnshieldAmountPanel.tsx`: compact ready-balance, recipient, amount, quote,
-  and private-withdrawal review UI.
-- `PublicRecoveryPanel.tsx`: compact opt-out from ASP waiting with an explicit
-  public-link warning before the normal wallet confirmation.
-- `model/shieldDashboard.ts`: pure dashboard fixture and presentation copy.
-- `model/shieldQuote.ts`: exact decimal validation, response invariants, and
-  approximation-marked display formatting.
-- `model/shieldReview.ts`: exact public ready-summary validation; calldata and
-  commitment material are rejected by shape.
-- `model/shieldOperation.ts`: exact public pending-operation and activity-list
-  validation; secret-bearing fields are rejected by shape.
-- `model/shieldActivity.ts`: pure activity status and badge copy for Shield,
-  private Unshield, and public withdrawal records.
-- `model/recovery.ts`: public-withdrawal response validation, concise copy, and
-  account-bound indexed-operation offer fallback.
-- `model/shieldProgress.ts`: pure durable-state to progress-stage mapping.
+- `PrivacyActionScreen.tsx`: stable three-intent router for the separate Shield,
+  Unshield, and Send screens.
+- `ShieldScreen.tsx`: public deposit composition, source account, quote, and
+  transaction-review routing only.
+- `PrivateWithdrawalScreen.tsx`: shared relay controller for distinct Unshield
+  and Send entries, including recipient/review routing and contextual recovery.
+- `ShieldDashboard.tsx`: fixed-title shell and sticky transaction action; it
+  deliberately owns no mode tabs.
+- `ShieldAssetCards.tsx`: Swap-aligned fixed-asset amount cards, live-display
+  percentage slider, and direction marker. The amount field follows each drag
+  frame, while the value stays renderer-local and triggers a quote only on
+  release. Neither side exposes an asset/network picker.
+- `ShieldAmountPanel.tsx`: public Sepolia ETH source and Shielded ETH outcome.
+- `UnshieldAmountPanel.tsx`: Shielded ETH source, public ETH outcome, shared
+  recipient controls, and intent-aware Unshield/Send copy.
+- `PrivateSendReview.tsx`: concise relayed-withdrawal review with a normal
+  `Send privately` press action and no renderer password/biometric step.
+- `PublicRecoveryPanel.tsx`: compact secondary original-depositor public exit
+  for screens that still have a ready private-relay route.
+- `hooks/useShieldInitialization.ts`: one status-only entry request plus retry.
+- `hooks/useShieldQuote.ts`: debounced account-bound public deposit quote.
+- `hooks/useShieldReview.ts`: bounded background deposit-review preparation.
+- `hooks/useShieldOperation.ts`: stable request UUID and durable-operation save.
+- `hooks/useShieldOperations.ts`: sanitized operation/portfolio read and the
+  single adaptive event/index/ASP sync loop for its mounted feature owner.
+- `hooks/useUnshield.ts`: private-send quote and relay submission controller.
+- `hooks/usePublicRecovery.ts`: user-triggered public-exit preparation.
+- `model/shieldedAsset.ts`: Shielded ETH identity, Sepolia pin, asset actions,
+  and the renderer-only Send-selector sentinel.
+- `model/shieldQuote.ts`, `shieldReview.ts`, `shieldOperation.ts`,
+  `unshield.ts`, and `recovery.ts`: exact bounded public response models.
+- `model/shieldActivity.ts` and `shieldProgress.ts`: pure status presentation.
 
 ## Effects and dependency direction
 
-The entry hook sends only `privacyEnsureInitialized` and receives only `ready`
-or a bounded action-required status. Pressing Shield opens the amount form
-immediately; no prover or deployment-readiness job blocks that interaction. The
-quote hook sends exact account metadata and public amount through
-`privacyQuoteShield`, then accepts only arithmetic-consistent decimal-string
-responses. Final operation preparation still verifies the pinned deployment
-before anything can be persisted or submitted. Healthy setup paints no extra
-recovery UI. There are no renderer
-storage, network, clipboard, cryptographic, proving, or transaction effects.
-`Continue` can only request a background-prepared ready status. The following
-`Confirm details` control asks the background to persist one encrypted,
-account-bound operation and queue the normal WalletChan transaction
-confirmation. The renderer itself never receives calldata, signs, or submits;
-the background revalidates the encrypted intent before the existing local
-signer path can publish it.
-The balance headline uses the aggregate already confirmed in the pinned pool;
-its ETH unit stays attached to the amount and a subordinate live USD value uses
-the existing public native-price route. Private Unshield remains limited to the
-separately verified ready balance. Once a deposit is confirmed and indexed, a
-local private-key or seed-phrase depositor may instead withdraw it publicly to
-the original address without waiting for ASP inclusion. The action stays
-visible from the account-bound indexed operation even when another wallet
-account is selected; the renderer identifies the original address and requires
-that account to be selected before proof preparation. It also stays visible
-while an older profile's encrypted commitment record catches up; clicking
-repeats local materialization before proof preparation and does not wait on ASP
-transport. Any
-confirmed amount still awaiting the ASP appears as one compact amber value with
-a hover/focus explanation, an optional public-withdrawal action, and no
-speculative time estimate. Matching
-transaction-history updates reload the lifecycle after its receipt mirror, so
-progress changes without leaving and reopening Shield. Confirmation/indexing
-states use a short adaptive sync and ASP-only waiting uses a two-minute cadence.
-User-rejected public-withdrawal prompts are omitted from the returned Activity
-projection after the background releases their claims; genuine failures and
-submitted/recovered exits remain visible.
-Presentation depends on the pure model and shared `components/ui` primitives.
-The root `components/ShieldView.tsx` remains a compatibility facade for the
-existing lazy route.
+Entering Private mode requests `privacyEnsureInitialized` without blocking the
+home transition or consuming its status. The Shield screen repeats that request
+and receives only a ready/action-required status so it can offer Retry. Shield
+opens directly on amount entry; no prover/readiness job blocks the form. The
+quote hook sends only exact account metadata and a public amount, then accepts
+only arithmetic-consistent responses. `Review shield` obtains a bounded intent
+review and immediately persists the encrypted operation so the existing normal
+transaction request becomes the single review/confirmation screen. React never
+receives calldata or note material and never signs or submits.
 
-Pure model behavior is covered by `tests/ui/shieldDashboardModel.test.ts` and
-`tests/ui/shieldQuoteModel.test.ts`, `tests/ui/shieldReviewModel.test.ts`, and
-`tests/ui/shieldOperationModel.test.ts`.
-Manual coverage is tracked in
-`_docs/PRIVACY_POOLS_TASKS.md`; fresh-session context and ordered remaining work
-are in `_docs/PRIVACY_POOLS_HANDOFF.md`.
+The private home exposes Shield, Unshield, and Send as three sibling quick
+actions. Shield is its own public-deposit screen. Unshield and Send are separate
+screens backed by the same exact withdrawal controller: Unshield defaults the
+recipient to the active WalletChan account, while Send starts recipient-first.
+Both reuse Send's contact, ENS, and contract-warning controls, then open one
+compact intent-aware review. The background generates and verifies the proof
+and submits through the pinned relay. The already-unlocked master capability is
+checked in the background; the renderer adds no password, biometric, or
+hold-to-confirm step.
+
+Unshield always retains the inverse Shield asset form. With ready funds it is
+an editable Shielded ETH -> Sepolia ETH relayed withdrawal. When no private
+balance is ready but ragequit is available, those same cards show the fixed
+public amount and original depositor. A required, unchecked commitment control
+states that recovery returns to the original address through a public
+transaction; the sticky `Withdraw publicly` action remains disabled until the
+user checks it. While the ASP compliance check is still pending, a compact
+amber information panel above that acknowledgment explains that the deposit
+can already be recovered to its original account.
+
+The private home reports ready and compliance-pending ETH; the pending amount
+uses the shared amber privacy-status accent. Quote refreshes
+retain the last verified balance, maximum, output, and slider geometry until a
+replacement quote succeeds, so loading never flashes the public ETH balance to
+zero or removes the amount control.
+Shielded ETH is deliberately excluded from the public portfolio USD total,
+chart, low-value group, and chain totals. The Shield screen owns no parallel
+activity list: public deposits and sanitized private-send withdrawals appear in
+the main dated wallet Activity timeline. Public recovery remains contextual on
+the standalone Unshield screen and returns only to the original depositor with explicit link
+disclosure.
+
+The root `components/ShieldView.tsx` remains a policy-free compatibility facade.
+Pure coverage lives in `tests/ui/shield*.test.ts` and
+`tests/ui/unshieldModel.test.ts`; protocol and wallet-matrix coverage lives in
+`tests/privacy/`.

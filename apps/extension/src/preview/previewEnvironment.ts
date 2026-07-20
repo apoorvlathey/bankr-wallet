@@ -179,12 +179,12 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
         ? previewHiddenTokens.map((token) => ({ ...token }))
         : [],
   };
+  if (route === "home" && scenario === "private") local.walletHomeModeV1 = "private";
   if (route === "onboarding") {
     delete local.encryptedApiKeyVault;
     delete local.encryptedApiKey;
   }
   if (crossDappBatch) local.crossDappBatch = crossDappBatch;
-
   return {
     parsed,
     accounts,

@@ -7,12 +7,8 @@ import {
   getActivityPresentation,
   getActivityStatusModel,
   groupActivityByDate,
+  isShieldActivityTransaction,
 } from "../../src/components/Activity/activityModel";
-import {
-  getPrivacyShieldActivitySyncPlan,
-  SHIELD_ACTIVITY_ACTIVE_SYNC_MS,
-  SHIELD_ACTIVITY_ASP_SYNC_MS,
-} from "../../src/components/Activity/privacyShieldActivityModel";
 import { buildActivityAddressLabels } from "../../src/components/Activity/activityIdentityModel";
 
 const transaction = (
@@ -279,52 +275,22 @@ test("Shield activity presents amount and durable Privacy Pools progress", () =>
   );
 });
 
-test("Shield activity sync uses active and ASP-specific cadences", () => {
-  const shield = transaction({
-    id: "shield-operation",
-    origin: "WalletChan Shield",
+test("Shield recovery keeps the shared private activity identity", () => {
+  const recovery = transaction({
+    origin: "WalletChan Shield Recovery",
     chainId: 11_155_111,
-    privacyShieldMeta: {
-      version: 1,
-      operationId: "shield-operation",
-      state: "submitted",
-      updatedAt: 10,
-      amountWei: "3000000000000000",
-      shieldedAmountWei: "2970000000000000",
-    },
+    chainName: "Sepolia",
+    functionName: "Recover Shield balance",
   });
-  assert.equal(
-    getPrivacyShieldActivitySyncPlan([shield]).delay,
-    SHIELD_ACTIVITY_ACTIVE_SYNC_MS,
-  );
-  assert.equal(
-    getPrivacyShieldActivitySyncPlan([
-      {
-        ...shield,
-        privacyShieldMeta: {
-          ...shield.privacyShieldMeta!,
-          state: "awaiting_asp",
-        },
-      },
-    ]).delay,
-    SHIELD_ACTIVITY_ASP_SYNC_MS,
-  );
-  assert.equal(
-    getPrivacyShieldActivitySyncPlan([
-      {
-        ...shield,
-        privacyShieldMeta: {
-          ...shield.privacyShieldMeta!,
-          state: "private_ready",
-        },
-      },
-    ]).shouldSync,
-    false,
-  );
-  assert.equal(
-    getPrivacyShieldActivitySyncPlan([
-      { ...shield, privacyShieldMeta: undefined },
-    ]).shouldSync,
-    true,
-  );
+
+  assert.equal(isShieldActivityTransaction(recovery), true);
+  assert.equal(isShieldActivityTransaction(transaction({ origin: "WalletChan Shield" })), true);
+  assert.equal(isShieldActivityTransaction(transaction({})), false);
+  assert.deepEqual(getActivityPresentation(recovery), {
+    originHostname: null,
+    intent: "Shield Recovery",
+    context: "Recover Shield balance",
+    value: null,
+    compactValue: null,
+  });
 });

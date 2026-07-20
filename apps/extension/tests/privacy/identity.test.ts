@@ -30,7 +30,7 @@ async function establishSession(passwordType: "master" | "agent") {
   return session;
 }
 
-test("first Shield access creates one encrypted identity for every custody wallet type", async () => {
+test("first Private-mode initialization creates one encrypted identity for every custody wallet type", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
   const privacyCrypto = await import("../../src/chrome/privacy/crypto");
   const privacyVault = await import("../../src/chrome/privacy/vault");

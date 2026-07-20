@@ -89,7 +89,7 @@ test("an indexed ASP-pending commitment is publicly withdrawable without becomin
   assert.equal(portfolio.attentionCount, 0);
 });
 
-test("public recovery amount is scoped to the active original depositor", () => {
+test("public recovery balance is global to the privacy identity", () => {
   const portfolio = aggregatePrivacyCommitmentPortfolio([
     commitment("awaiting_asp", "shield-active"),
     commitment(
@@ -100,6 +100,6 @@ test("public recovery amount is scoped to the active original depositor", () => 
   ], [], "0x1111111111111111111111111111111111111111");
 
   assert.equal(portfolio.confirmedBalanceWei, "9900");
-  assert.equal(portfolio.recoverableBalanceWei, "4950");
-  assert.equal(portfolio.attentionCount, 0);
+  assert.equal(portfolio.recoverableBalanceWei, "9900");
+  assert.equal(portfolio.attentionCount, 1);
 });

@@ -78,6 +78,7 @@ import { clearPrivacyPublicEventCache } from "../../privacy/events/repository";
 import { deletePrivacyCommitmentsDatabase } from "../../privacy/commitments/repository";
 import { deletePrivacyWithdrawalsDatabase } from "../../privacy/withdrawals/repository";
 import { deletePrivacyRagequitsDatabase } from "../../privacy/ragequit/repository";
+import { deletePrivacyPortfolioDatabase } from "../../privacy/portfolioHistory/repository";
 import { resetWalletConnectForWalletReset } from "../../walletConnect/client";
 import { readPrivacyResetRisk } from "../../privacy/resetSafety";
 import { createBackgroundChatMessageRouter } from "../chatRouter";
@@ -160,6 +161,7 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
     deletePrivacyCommitmentsDatabase,
     deletePrivacyWithdrawalsDatabase,
     deletePrivacyRagequitsDatabase,
+    deletePrivacyPortfolioDatabase,
     clearPrivacyPublicEventCache,
     getAllLocalStorage: () => chrome.storage.local.get(null),
     getWalletLocalStorageKeysToRemove,

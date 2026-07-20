@@ -576,7 +576,7 @@ export function PreviewScreen({
     case "swap":
       return <SwapPreview wallet={wallet} scenario={scenario} />;
     case "shield":
-      return <ShieldPreview wallet={wallet} />;
+      return <ShieldPreview wallet={wallet} scenario={scenario} />;
     case "swap-picker":
       return (
         <SwapPickerPreview

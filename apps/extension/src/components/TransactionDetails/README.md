@@ -23,6 +23,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `TxDetailModal.tsx` | Adapt the shared controller to the modal host | None |
 | `TxDetailScreen.tsx` | Adapt the shared controller to navigation and refresh pending history | History messages, receipt polling, runtime listener |
 | `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status | Opens the requesting site and transaction explorer |
+| `PrivacyShieldLifecycleSummary.tsx` | Render the same durable Shield stage used by Activity, plus net Shielded ETH and four-step progress | None |
 | `BridgeSummary.tsx` | Render source and destination bridge legs, status, amounts, and explorer actions | Explorer navigation |
 | `TransactionImpact.tsx` | Render source/destination asset changes in the shared request-review direction hierarchy | None |
 | `ClearSigningSummary.tsx` | Render ERC-7715 revoke, ERC-7821 batch, EIP-7702 delegation, and clear-signed summaries | Copy/explorer actions delegated to shared components |
@@ -94,6 +95,10 @@ large hook.
 - Processing and broadcast-uncertain records remain explicitly in progress;
   sequential batch receipts identify their call index without implying atomic
   execution.
+- Shield deposits replace the generic confirmed label with their durable
+  Privacy Pools stage and show the same stage/context projection as Activity.
+  The ordinary transaction, fee, account, explorer, and technical details stay
+  available beneath that lifecycle summary.
 - Confirmed ERC-7715 revocations use a receipt-specific ledger. The blue
   explanatory warning and nested allowance panel remain exclusive to the
   pre-confirmation review surface.

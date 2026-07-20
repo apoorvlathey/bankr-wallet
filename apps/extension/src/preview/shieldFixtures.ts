@@ -14,7 +14,10 @@ export function previewShieldPortfolioResponse(
     type: "privateKey",
   },
 ) {
-  const pendingEligibility = scenario === "pending-eligibility";
+  const pendingEligibility = scenario === "pending-eligibility" || scenario === "unshield-pending" || scenario === "private";
+  const readyToSend = scenario === "unshield" || scenario === "send" || scenario === "private";
+  const readyBalanceWei = readyToSend ? 10_000_000_000_000_000n : 0n;
+  const pendingBalanceWei = pendingEligibility ? 1_980_000_000_000_000n : 0n;
   return {
     success: true,
     operations: pendingEligibility
@@ -43,12 +46,21 @@ export function previewShieldPortfolioResponse(
     recoveries: [],
     portfolio: {
       status: "ready",
-      confirmedBalanceWei: pendingEligibility ? "1980000000000000" : "0",
-      readyBalanceWei: "0",
-      pendingBalanceWei: pendingEligibility ? "1980000000000000" : "0",
+      confirmedBalanceWei: (readyBalanceWei + pendingBalanceWei).toString(),
+      readyBalanceWei: readyBalanceWei.toString(),
+      maxPrivateSendWei: readyToSend ? "10000000000000000" : "0",
+      pendingBalanceWei: pendingBalanceWei.toString(),
       recoverableBalanceWei: pendingEligibility ? "1980000000000000" : "0",
       attentionCount: 0,
       lastUpdatedAt: PREVIEW_EPOCH_MS,
+    },
+    series: {
+      priceUsd: 3_420,
+      totalValueUsd: readyToSend ? 34.2 : 0,
+      snapshots: [
+        { timestamp: PREVIEW_EPOCH_MS - 3_600_000, totalValueUsd: 0 },
+        { timestamp: PREVIEW_EPOCH_MS, totalValueUsd: readyToSend ? 34.2 : 0 },
+      ],
     },
   };
 }

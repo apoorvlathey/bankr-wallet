@@ -15,11 +15,33 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 
 ## Product behavior now
 
-- Shield is one balance-first screen. It shows the confirmed Shield balance,
-  live USD value, Shield, Unshield, and Activity. There is no recovery wizard,
-  protocol primer, or setup page in the normal flow.
-- First healthy Shield access creates a separate 12-word Privacy Pools phrase
-  inside the background service worker. The phrase is encrypted immediately
+- The unlocked home now has a Public/Private switch aligned to the right edge
+  of the balance heading—below the account selector in Public and in the same
+  position in Private. It is a tiny tooltip-free amber-selected control on the
+  shared Warm Midnight base canvas. Public remains the account-scoped wallet. Private removes the
+  account selector, positions, public assets, public chart, and public Activity.
+- Private mode shows only the wallet-wide Shielded ETH balance and USD chart,
+  `Shield` / `Unshield` / `Send`, one Shielded ETH Assets row, and Privacy
+  Pools Activity across all depositor accounts. The public side excludes all
+  Shield/Unshield rows and never mixes the private balance into account totals.
+  The three private actions reuse the exact public-home action treatment and
+  icons instead of introducing large action cards.
+- Shield now follows the wallet's Swap form grammar with compact fixed Sepolia
+  ETH and Shielded ETH amount cards and one sticky review action. Shield,
+  Unshield, and Send are independent screens reached directly from Private;
+  there is no internal mode selector. `Deposit from` names the signer without a redundant
+  network subtitle, and the private balance is not repeated inside the form. There is no
+  recovery wizard, protocol primer, local activity list, asset selector, or
+  network selector in the normal flow. Shield chooses its Sepolia-paying
+  account inside the form without changing the global public account.
+- `Shielded ETH` is permanent only in Private Assets, even at zero. It shows
+  the compliance-cleared balance with amber processing subcopy, carries a
+  Sepolia test identity, and opens Shield, Unshield, Send privately, or Private Activity.
+  Generic public Send and Swap never receive this pseudo-asset.
+- First eligible Private-mode entry starts creation of a separate 12-word
+  Privacy Pools phrase inside the background service worker without blocking
+  the mode transition. The Shield screen retains the bounded status/Retry
+  fallback. The phrase is encrypted immediately
   and ordinary Shield messages never return it to React.
 - A main-password session or fresh biometric/passkey master session can use
   Shield without an extra password interruption. Explicit phrase reveal and
@@ -31,24 +53,55 @@ checkboxes in [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
   confirmation/signing path. Bankr can quote/review but is rejected before a
   Sepolia transaction prompt because its raw-submit API does not support
   Sepolia. Impersonators and agent-password sessions cannot mutate Shield.
-- The main balance includes value as soon as the exact deposit is confirmed
-  and indexed in the pinned pool. ASP approval is not required for that
-  headline balance. The subset still under review appears as compact amber
-  `waiting ASP check` text with a hover/focus explanation.
-- Private Unshield is available only for locally verified, ASP-approved
-  commitments. WalletChan does not invent an ASP completion estimate.
+- The main private USD balance and encrypted chart include only ASP-cleared,
+  spendable Shielded ETH. The compact breakdown beneath it separately shows
+  the shielded amount and amber processing ETH still waiting for the ASP
+  compliance check.
+- Private Unshield and **Send privately** are separate entries over the same
+  relayed withdrawal engine. Unshield defaults receipt to the active WalletChan
+  account; Send begins with an empty recipient. Shielded ETH is debited and
+  public Sepolia ETH is delivered through the shared Send recipient/contact/ENS
+  flow through the pinned relay. Its concise review uses a normal button press,
+  explains there is no direct onchain link to the deposit, and makes no claim
+  that timing, amount matching, or address reuse are untraceable. No additional
+  renderer password, biometric, or hold gesture is introduced.
+- Private send is available only for locally verified, ASP-approved
+  commitments. It spends the wallet-wide privacy identity, so it intentionally
+  has no public-account selector and works independently of whether Bankr,
+  private-key, seed-phrase, or an impersonator is selected on the public side.
+  A live master/passkey capability is still required and agent sessions remain
+  blocked. WalletChan does not invent an ASP completion estimate.
 - After an exact deposit is confirmed and indexed, the original depositor may
   choose **Withdraw publicly** without waiting for the ASP. This produces the
   protocol ragequit transaction, returns funds to that original public
   account, and publicly links the exit to the deposit.
-- Shield progress appears both on the Shield screen and on the matching normal
-  wallet Activity row. It uses four real stages and refreshes while mounted.
-  Clicking the main Activity row still opens the ordinary Sepolia transaction
-  details.
+- Public Shield progress and relayed private-send outcomes live in Private
+  Activity only. Shield deposits keep their four real stages
+  and ordinary Sepolia transaction details; both the Activity row and detail
+  screen use the same amber privacy mark and durable lifecycle projection.
+  Successful Shield and public-recovery confirmations return to Private
+  Activity instead of resetting to Assets. Deposit, lifecycle, and recovery
+  rows all reuse the privacy mark; the recovery confirmation is titled
+  `Shield Recovery`.
+  Private sends use sanitized withdrawal rows and concise route/fee/status
+  details. The matching Public Activity stays strictly account/public scoped.
+- Shield quote loading retains the last verified public balance, maximum,
+  output, and slider geometry. The source amount mirrors slider movement on
+  every drag frame, but that draft remains renderer-local until release, so
+  dragging does not start quote requests or flash the ETH balance to zero.
+- Unshield always mirrors Shield's two-card amount grammar. When no Shielded
+  ETH is privately available but ragequit is, the same cards show the fixed
+  public-exit amount and original depositor. A required unchecked commitment
+  control identifies recovery to the original address as a public transaction;
+  only checking it enables the sticky `Withdraw publicly` action. The
+  pending amount on the private home uses WalletChan's amber privacy status accent.
 - A public-withdrawal prompt rejected by the user is retained internally long
   enough to release its encrypted commitment claim safely, but is omitted
   from user-facing Activity. Actual proof, submission, revert, and recovery
   outcomes remain visible.
+- The private USD chart keeps at most eight days / 193 points. Balance and
+  price values are AES-GCM encrypted with the dedicated privacy key; reset and
+  recovery replacement delete the private chart database.
 
 ## What has been observed manually
 
@@ -146,8 +199,11 @@ a self-consistent mock.
 | Private exit | `apps/extension/src/chrome/privacy/relayer/`, `withdrawals/` | Signed quote validation, proof, submit, nullifier-aware recovery |
 | Public exit | `apps/extension/src/chrome/privacy/ragequit/` | Original-depositor proof, confirmation, exact event reconciliation |
 | Proving | `apps/extension/src/chrome/privacy/prover/`, `apps/extension/privacy-prover-offscreen.html` | Nonce-bound offscreen host and packaged one-shot worker |
-| Shield renderer | `apps/extension/src/components/Shield/` | Aggregate-only UI and adaptive lifecycle refresh |
-| Main Activity | `apps/extension/src/components/Activity/` | Exact-bound public Shield projection and normal details navigation |
+| Private portfolio history | `apps/extension/src/chrome/privacy/portfolioHistory/` | Privacy-key-encrypted bounded USD history and reset/recovery cleanup |
+| Home mode | `apps/extension/src/app/home/`, `components/WalletModeToggle.tsx` | Persisted public/private presentation branch and private-only portfolio composition |
+| Shield renderer | `apps/extension/src/components/Shield/` | Fixed Shield/Unshield swap-style form, private-send review, and contextual public recovery |
+| Portfolio/Send integration | `apps/extension/src/app/home/PrivatePortfolioHome.tsx`, `components/Portfolio/Holdings/` | Private-only Shielded ETH asset; public Holdings/Send remain ordinary assets only |
+| Activity | `apps/extension/src/components/Activity/` | Mutually exclusive public versus Privacy Pools scopes plus private-send details |
 | Recovery settings | `apps/extension/src/components/Settings/PrivacyRecoverySettings.tsx` | Temporary phrase reveal/restore UI only |
 
 All privacy runtime messages are classified `wallet-ui` and must originate
@@ -162,15 +218,16 @@ forwarded through the content script or exposed to dapps.
 | Initialize with master/passkey | Yes | Yes | Yes | No | No |
 | Quote and review Sepolia Shield | Yes | Yes | Yes | No | No |
 | Submit Sepolia Shield | No, rejected before prompt | Yes | Yes | No | No |
-| Private Unshield | No on Sepolia | Yes | Yes | No | No |
+| Private Unshield | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | No |
 | Withdraw publicly on Sepolia | No | Original depositor only | Original depositor only | No | No |
 | Reveal/restore phrase | Main password only | Main password only | Main password only | No | No |
 
-Account switching after review does not transfer authority: final preparation
-and signing re-pin the stored account ID, address, type, chain, value, and
-encrypted intent. Public withdrawal remains visible when another account is
-selected, but it asks the user to switch to the exact original depositor before
-proof preparation.
+Account switching after a Shield review does not transfer authority: final
+preparation and signing re-pin the explicit internal source account ID,
+address, type, chain, value, and encrypted intent. Private Unshield accepts no
+public account fields and therefore cannot drift with account selection.
+Public withdrawal remains exact-original-depositor only, but the private UI
+passes that signer explicitly instead of changing the global active account.
 
 ## Sepolia release pins and network behavior
 
@@ -206,6 +263,8 @@ manifests and PRD; do not copy-edit those values independently.
   `walletchan-privacy-withdrawals-v1`, and
   `walletchan-privacy-ragequits-v1` store encrypted private lineage and
   restart-safe exit state.
+- `walletchan-privacy-portfolio-v1` stores at most 193 fresh-IV encrypted
+  ASP-cleared private balance/price/USD chart points with eight-day retention.
 - `walletchan-privacy-events-v1` is a disposable public Sepolia event cache.
   Phrase rescan rederives and verifies lineage instead of trusting the cache.
 - Password rotation rewraps the same privacy key. Passkey setup/removal
@@ -213,18 +272,22 @@ manifests and PRD; do not copy-edit those values independently.
   already-submitted public effects can continue.
 - Account removal is blocked for unresolved Shield work, in-flight public
   recovery, or unspent commitments. Reset requires the explicit Shield-loss
-  acknowledgement and deletes the vault, marker, and all five databases.
+  acknowledgement and deletes the vault, marker, and all six databases.
 
 ## Current automated baseline
 
-The handoff verification passed the full Privacy Pools suite (`170/170`) and
-`pnpm build:extension`. The build measured 46,188,084 bytes, including
-23,690,342 artifact bytes, a 336,397-byte prover worker, and a 3,509,167-byte
-background bundle. Packaged Chromium QA also passed both proofs across a closed
-and reopened extension page in 8.904/8.922 seconds with a 350,142,464-byte peak
-process-tree RSS delta, within every frozen budget. Targeted lint had passed on
-the preceding feature changes. Re-run the commands below after any further
-change and record the new results in this section and the Sepolia rehearsal:
+The 2026-07-20 dual-mode verification passed the full Privacy Pools suite
+(`175/175`), all three TypeScript configurations, `222/222` UI tests, all six
+renderer architecture guards, targeted changed-file lint, all 12 private-home
+preview states, and `pnpm build:extension`. The refreshed build measured 46,233,929
+bytes, including 23,690,342 artifact bytes, a 336,397-byte prover worker, and a
+3,522,011-byte background bundle. Packaged Chromium QA passed both proofs
+across a closed and reopened extension page in 9.027/9.981 seconds with a
+352,976,896-byte peak process-tree RSS delta, within every frozen budget.
+Targeted changed-file lint is clean; repository-wide lint was not part of this
+checkpoint.
+Re-run the commands below after any further change and record the new results
+in this section and the Sepolia rehearsal:
 
 ```bash
 pnpm --filter @walletchan/extension test:privacy
@@ -236,10 +299,12 @@ pnpm --filter @walletchan/extension qa:extension:privacy-prover
 node apps/extension/scripts/privacy-prover-distribution.mjs --target=unpacked-sepolia-test
 ```
 
-The repository-wide extension typecheck currently has unrelated pre-existing
-errors in ENS bookmarks, Swap/Bridge quote displays, and preview edge fixtures.
-Do not misattribute those to Shield; still run the Shield-scoped checks and
-report any new error in a changed file.
+The extension's main, UI, and QA TypeScript configurations all pass. Keep all
+three in the rehearsal because Privacy Pools crosses service-worker, renderer,
+and packaged-QA boundaries.
+
+The full renderer UI and module-size suites are clean. Keep the existing size
+ratchets fixed rather than raising them to absorb future feature growth.
 
 Safe service-worker diagnostics use these prefixes:
 
@@ -259,33 +324,39 @@ proofs, public signals, calldata, or secret material to logs.
    a seed-phrase account. Exercise password and fresh passkey login, account
    switching during review, prompt rejection, approval, UI closure, and
    service-worker restart.
-3. Confirm both the Shield screen and main wallet Activity advance live through
-   wallet confirmation, Sepolia confirmation, indexing, and ASP review, while
-   the headline balance appears after pool confirmation.
-4. Obtain an ASP-approved test commitment and complete partial and Max/full
+3. Confirm Private mode shows the same confirmed, available, and pending
+   amounts in its balance and sole asset row, while Public account totals,
+   assets, Send, chart, and Activity contain no Shielded ETH. Verify the row
+   actions route to Shield, Send privately, and Private Activity.
+4. Confirm Private Activity advances live through wallet confirmation,
+   Sepolia confirmation, indexing, and ASP review, while the Shielded ETH
+   balance appears after pool confirmation.
+5. Obtain an ASP-approved test commitment and complete partial and Max/full
    private Unshield. Test quote expiry, relayer substitution rejection,
    restart during proving/submission, recipient receipt, replacement lineage,
    and nullifier-aware retry.
-5. Use Settings -> Shield recovery on disposable accounts: reveal, auto-hide,
+6. Use Settings -> Shield recovery on disposable accounts: reveal, auto-hide,
    backup marker, scan, clean-install restore, and invalid-phrase rejection.
    Then repeat public withdrawal after a clean restore/rescan for both local
    wallet types.
-6. Exercise Bankr, impersonator, and agent-password negative paths. Bankr must
-   fail before Sepolia mutation prompts; impersonator and agent sessions must
-   never reach proof/signing/submission.
-7. Exercise account-removal and reset safeguards with pending work and unspent
+7. Exercise Bankr, impersonator, and agent-password paths. Bankr and
+   impersonator cannot sign Shield/public-recovery transactions, but an
+   existing master-unlocked wallet-wide privacy identity may send privately
+   regardless of the displayed public account. Agent sessions must never reach
+   private proof/submission.
+8. Exercise account-removal and reset safeguards with pending work and unspent
    commitments. Verify cancel leaves state intact and acknowledged disposable
    reset removes all Shield data.
-8. Run the complete automated rehearsal above, reconcile any browser findings,
+9. Run the complete automated rehearsal above, reconcile any browser findings,
    and mark each manual gate in `PRIVACY_POOLS_SEPOLIA_TEST.md`.
-9. Before any store build or mainnet work, resolve the `snarkjs` license and
+10. Before any store build or mainnet work, resolve the `snarkjs` license and
    distribution decision, complete security/legal/compliance/store-policy
    review, and approve the full PRD go/no-go list.
-10. Only then begin the mainnet **read-only** rehearsal: pin the official
+11. Only then begin the mainnet **read-only** rehearsal: pin the official
     production deployment and bytecode, rescan known fixtures, and exercise
     kill-switch/recovery-only procedures. Do not enable mainnet deposits in
     that phase.
-11. A controlled mainnet beta is the final step, after every Sepolia and
+12. A controlled mainnet beta is the final step, after every Sepolia and
     read-only gate passes. Start with explicitly approved local wallet types;
     Bankr remains disabled until original-depositor public recovery is proven.
 

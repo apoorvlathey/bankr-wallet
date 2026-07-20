@@ -1,6 +1,6 @@
 import { encodeFunctionData, type Address } from "viem";
 
-import { getActiveAccount } from "../../accounts/selectionStorage";
+import { getAccountById } from "../../accounts/repository";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -117,16 +117,23 @@ export function encodePrivacyRagequitCallData(input: {
 /** Build and persist a proof-backed public recovery before any transaction is queued. */
 export async function preparePrivacyRagequit(
   requestId: string,
+  requestedAccount: {
+    accountId: string;
+    accountAddress: string;
+    accountType: "privateKey" | "seedPhrase";
+  },
 ): Promise<StoredPrivacyRagequitV1> {
   if (!UUID.test(requestId)) throw new PrivacyRagequitPrepareError("invalid-request");
   const expectedEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new PrivacyRagequitPrepareError("auth-required");
   });
-  const account = await getActiveAccount();
-  if (!account || account.type === "impersonator") {
+  const account = await getAccountById(requestedAccount.accountId);
+  if (!account ||
+    account.address.toLowerCase() !== requestedAccount.accountAddress.toLowerCase() ||
+    account.type !== requestedAccount.accountType) {
     throw new PrivacyRagequitPrepareError("account-unavailable");
   }
-  if (account.type === "bankr") {
+  if (account.type !== "privateKey" && account.type !== "seedPhrase") {
     throw new PrivacyRagequitPrepareError("bankr-testnet-unsupported");
   }
   const [byRequest, existing, material] = await Promise.all([

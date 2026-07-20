@@ -1,6 +1,5 @@
 import { getAddress, isAddress, zeroAddress, type Address } from "viem";
 
-import { getActiveAccount } from "../../accounts/selectionStorage";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -57,10 +56,6 @@ export async function preparePrivacyUnshieldQuote(input: {
   const expectedEpoch = await capturePrivacyMasterAuthorization().catch(() => {
     throw new PrivacyUnshieldPrepareError("auth-required");
   });
-  const activeAccount = await getActiveAccount();
-  if (!activeAccount || activeAccount.type === "impersonator") {
-    throw new PrivacyUnshieldPrepareError("auth-required");
-  }
   const material = await readPrivacyAspMasterMaterial();
   if (!material) throw new PrivacyUnshieldPrepareError("auth-required");
   const commitments = await readPrivacyCommitments(material.key, material.keyId);

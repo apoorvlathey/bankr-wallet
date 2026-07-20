@@ -58,6 +58,7 @@ interface PortfolioTabsProps {
   onSwapClick?: (token: PortfolioToken) => void;
   onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onTransactionClick?: (tx: CompletedTransaction) => void;
+  modeToggle?: ReactNode;
   quickActions?: ReactNode;
   onChainBalancesChange?: (
     totals: ReadonlyMap<number, number>,
@@ -86,7 +87,7 @@ const PORTFOLIO_VALUE_TIMING = {
   easing: "cubic-bezier(0.23, 1, 0.32, 1)",
 };
 
-export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, modeToggle, quickActions, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -423,56 +424,59 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     <>
       <VStack ref={portfolioRootRef} align="stretch" spacing={2}>
         <Box px={1}>
-          <Text fontSize="sm" color="fg.secondary" fontWeight="500">
-            Portfolio balance
-          </Text>
+          <HStack justify="space-between" align="center" spacing={3}>
+            <Text fontSize="sm" color="fg.secondary" fontWeight="500">
+              Portfolio balance
+            </Text>
+            {modeToggle}
+          </HStack>
           <HStack mt={0.5} spacing={2} align="center">
-            {!holdingsState ||
-            (holdingsState.loading && !holdingsState.totalValueUsd) ? (
-              <Skeleton h="34px" w="150px" />
-            ) : (
-              <Text
-                data-testid="portfolio-balance"
-                fontSize="3xl"
-                lineHeight="1.15"
-                fontWeight="700"
-                letterSpacing="-0.03em"
-                color={
-                  balanceMotionDirection === "up"
-                    ? "status.success.emphasis"
-                    : balanceMotionDirection === "down"
-                      ? "status.error.emphasis"
-                      : "fg.primary"
-                }
-                transition="color 160ms cubic-bezier(0.23, 1, 0.32, 1)"
-                sx={{ fontVariantNumeric: "tabular-nums" }}
-              >
-                {holdingsState.hideValue ? (
-                  formatUsdShared(portfolioDisplayValue, { hide: true })
-                ) : (
-                  <NumberFlow
-                    value={isBelowDisplayThreshold ? 0.01 : portfolioDisplayValue}
-                    locales="en-US"
-                    format={PORTFOLIO_VALUE_FORMAT}
-                    prefix={isBelowDisplayThreshold ? "<$" : "$"}
-                    transformTiming={PORTFOLIO_VALUE_TIMING}
-                    spinTiming={PORTFOLIO_VALUE_TIMING}
-                    opacityTiming={{ duration: 120, easing: "ease-out" }}
-                    willChange
-                  />
-                )}
-              </Text>
-            )}
-            {holdingsState && (
-              <IconButton
-                aria-label={holdingsState.hideValue ? "Show portfolio values" : "Hide portfolio values"}
-                icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
-                variant="ghost"
-                size="sm"
-                color="fg.secondary"
-                onClick={holdingsState.toggleHideValue}
-              />
-            )}
+              {!holdingsState ||
+              (holdingsState.loading && !holdingsState.totalValueUsd) ? (
+                <Skeleton h="34px" w="150px" />
+              ) : (
+                <Text
+                  data-testid="portfolio-balance"
+                  fontSize="3xl"
+                  lineHeight="1.15"
+                  fontWeight="700"
+                  letterSpacing="-0.03em"
+                  color={
+                    balanceMotionDirection === "up"
+                      ? "status.success.emphasis"
+                      : balanceMotionDirection === "down"
+                        ? "status.error.emphasis"
+                        : "fg.primary"
+                  }
+                  transition="color 160ms cubic-bezier(0.23, 1, 0.32, 1)"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                >
+                  {holdingsState.hideValue ? (
+                    formatUsdShared(portfolioDisplayValue, { hide: true })
+                  ) : (
+                    <NumberFlow
+                      value={isBelowDisplayThreshold ? 0.01 : portfolioDisplayValue}
+                      locales="en-US"
+                      format={PORTFOLIO_VALUE_FORMAT}
+                      prefix={isBelowDisplayThreshold ? "<$" : "$"}
+                      transformTiming={PORTFOLIO_VALUE_TIMING}
+                      spinTiming={PORTFOLIO_VALUE_TIMING}
+                      opacityTiming={{ duration: 120, easing: "ease-out" }}
+                      willChange
+                    />
+                  )}
+                </Text>
+              )}
+              {holdingsState && (
+                <IconButton
+                  aria-label={holdingsState.hideValue ? "Show portfolio values" : "Hide portfolio values"}
+                  icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
+                  variant="ghost"
+                  size="sm"
+                  color="fg.secondary"
+                  onClick={holdingsState.toggleHideValue}
+                />
+              )}
           </HStack>
         </Box>
 
@@ -531,7 +535,9 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
                   bg: "surface.raisedHover",
                 }}
                 _active={{ transform: "none" }}
-                onClick={() => selectTab(index)}
+                onClick={() => {
+                  selectTab(index);
+                }}
                 onKeyDown={(event) => {
                   let next = index;
                   if (event.key === "ArrowRight") next = (index + 1) % labels.length;
@@ -601,6 +607,7 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
               filterChainId={filterChainId}
               onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}
+              scope="public"
             />
           </Box>
         </Box>

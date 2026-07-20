@@ -39,10 +39,9 @@ export function useHoldingsViewModel({
     () => filterPortfolioTokens(tokens, filterChainId, searchQuery),
     [filterChainId, searchQuery, tokens],
   );
-  const { primaryAssetRows, lowValueAssetRows, lowValueTotalUsd } = useMemo(
-    () => buildAssetDisplayRows(filteredTokens, filterChainId, unifyBalances),
-    [filterChainId, filteredTokens, unifyBalances],
-  );
+  const { primaryAssetRows, lowValueAssetRows, lowValueTotalUsd } = useMemo(() => {
+    return buildAssetDisplayRows(filteredTokens, filterChainId, unifyBalances);
+  }, [filterChainId, filteredTokens, unifyBalances]);
   const primaryTokens = useMemo(
     () => getTokensFromRows(primaryAssetRows),
     [primaryAssetRows],

@@ -25,9 +25,9 @@ and pending release gates are recorded in
 | Seed phrases    | V2 `mnemonicVault` entries encrypted by a dedicated mnemonic key; V1 entries encrypted by the master password (plus read-only transitional shared-vault compatibility) | `cachedMnemonicKey` only in master/password or V2 passkey sessions; never in agent sessions. Reveal still requires explicit master-password verification |
 | Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped); a native finite-or-Never passkey session may also hold one encrypted, factor-bound general-key capability split across session/local storage | `cachedVaultKey` in `session/inMemoryCache.ts`     |
 | Mnemonic key    | Master wrapper in V2 `mnemonicVault.masterWrappedKey`; independent V2 passkey wrapper in `passkeyUnlock.wrappedMnemonicKey` | `cachedMnemonicKey` as a non-extractable CryptoKey in password-master and fresh V2 passkey-assertion sessions only; it is deliberately absent after any cold passkey restoration |
-| Privacy Pools phrase | `privacyVault.recovery`, encrypted by a dedicated privacy key with key-ID-bound AES-GCM AAD | Decrypted transiently for background derivation/rescan. It leaves the service worker only through the explicit main-password-gated trusted Settings reveal route, never through ordinary Shield or page/provider routes. |
+| Privacy Pools phrase | `privacyVault.recovery`, encrypted by a dedicated privacy key with key-ID-bound AES-GCM AAD | Decrypted transiently for background derivation/rescan. It leaves the service worker only through the explicit main-password-gated trusted Settings reveal route, never through Private-mode initialization, ordinary Shield, or page/provider routes. |
 | Privacy key | At least one master or purpose-separated passkey wrapper inside `privacyVault`; normal setup stores both | `cachedPrivacyKey` as a non-extractable CryptoKey plus a zeroed-on-teardown 32-byte rewrap copy in master-password and fresh matching passkey sessions only; never in agent sessions or persisted session envelopes |
-| Privacy operation details | IndexedDB Shield, commitment, Unshield, and ragequit records encrypted by the dedicated privacy key with complete-summary/key-ID/revision AES-GCM AAD | Note linkage, secrets, proof inputs, relayer payloads, and calldata remain background-only; the renderer receives aggregates and bounded public activity only |
+| Privacy operation details | IndexedDB Shield, commitment, Unshield, ragequit, and private-portfolio records encrypted by the dedicated privacy key with complete-summary/key-ID/revision or record-header AES-GCM AAD | Note linkage, secrets, proof inputs, relayer payloads, calldata, and stored balance/price values remain background-only; the trusted renderer receives aggregates, bounded activity, and bounded decrypted chart points only |
 
 ### Trust Boundaries
 
@@ -80,7 +80,7 @@ which is insufficient without the browser-session ciphertext.
 | IV             | 12 bytes (random per encryption)                        |
 | Vault key      | 256-bit random (generated once, encrypted per-password) |
 
-**Files**: the stable `crypto.ts` and `cryptoUtils.ts` facades cover the `cryptography/` audit domain (`types.ts` for the released envelope, `base64.ts` for bounded codecs, `passwordKey.ts` for fixed PBKDF2 policy, `passwordCipher.ts` for legacy AES-GCM records, `vaultKey.ts` for 32-byte vault-key wrapping/direct encryption, and `credentialStorage.ts` for vault-first legacy-compatible Bankr lookup). The policy-free `vaultCrypto.ts` facade covers the `vault/` audit domain (`entryCrypto.ts` for released password/vault-key transforms, `accountIntegrity.ts` for local key binding, `generalIntegrity.ts` for general-key recovery proof, `recordCodec.ts` for bounded released-V1 decoding and the unique-ID mutation gate, `repository.ts` for exact `pkVault` V1 storage, and `operations.ts` for serialized mutation/hydration/migration preparation). The stable `mnemonicStorage.ts` facade covers the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `privacy/` audit domain owns the exact `privacyVault` record, dedicated-key encryption and wrappers, repository, lifecycle preparation, and idempotent first-Shield identity initialization. The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. Stable `secretRevealHandlers.ts` and `masterAuthorization.ts` facades cover `secrets/revealHandlers.ts` and `secrets/masterAuthorization.ts`, where plaintext release remains lock-held, epoch-bound, master-only, and revalidated after asynchronous reads.
+**Files**: the stable `crypto.ts` and `cryptoUtils.ts` facades cover the `cryptography/` audit domain (`types.ts` for the released envelope, `base64.ts` for bounded codecs, `passwordKey.ts` for fixed PBKDF2 policy, `passwordCipher.ts` for legacy AES-GCM records, `vaultKey.ts` for 32-byte vault-key wrapping/direct encryption, and `credentialStorage.ts` for vault-first legacy-compatible Bankr lookup). The policy-free `vaultCrypto.ts` facade covers the `vault/` audit domain (`entryCrypto.ts` for released password/vault-key transforms, `accountIntegrity.ts` for local key binding, `generalIntegrity.ts` for general-key recovery proof, `recordCodec.ts` for bounded released-V1 decoding and the unique-ID mutation gate, `repository.ts` for exact `pkVault` V1 storage, and `operations.ts` for serialized mutation/hydration/migration preparation). The stable `mnemonicStorage.ts` facade covers the `mnemonic/` audit domain (`record.ts`, `crypto.ts`, `repository.ts`, `operations.ts`, and `recovery.ts` for encrypted-vault compatibility; `derivation.ts` for pure BIP39/BIP44 operations; `masterAccess.ts` for the call-stack-only master capability; `integrity.ts` for master-recovery/account proof; and `addressPreview.ts`, `accountPersistence.ts`, and `accountHandlers.ts` for seed-account workflows). The `privacy/` audit domain owns the exact `privacyVault` record, dedicated-key encryption and wrappers, repository, lifecycle preparation, and idempotent first-Private-mode identity initialization. The `passkey/` audit domain contains `record.ts`, `keyWrapping.ts`, `repository.ts`, `status.ts`, `setup.ts`, `hydration.ts`, and `removal.ts`; `passkeyUnlockCrypto.ts` and `passkeyUnlock.ts` remain stable facades. Stable `secretRevealHandlers.ts` and `masterAuthorization.ts` facades cover `secrets/revealHandlers.ts` and `secrets/masterAuthorization.ts`, where plaintext release remains lock-held, epoch-bound, master-only, and revalidated after asynchronous reads.
 
 See [`SECURITY_ARCHITECTURE.md`](./SECURITY_ARCHITECTURE.md) for the enforced
 dependency direction, background-message audience contract, critical operation
@@ -197,7 +197,7 @@ The agent password model restricts what operations are available when the wallet
 | Prepare a Sepolia Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; produces a non-persisted, non-submittable background intent and returns no calldata or commitment material |
 | Persist a Sepolia Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
 | Confirm/submit Sepolia Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, local account, and master epoch are rechecked at confirmation and raw-RPC publication. Bankr is blocked on Sepolia. |
-| Prepare/submit private Unshield | Yes | **BLOCKED** | `privacy/withdrawals/` validates pinned signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST |
+| Prepare/submit private Unshield | Yes | **BLOCKED** | Wallet-wide privacy authority: no active public account is accepted in the request or consulted during quote/proof work. `privacy/withdrawals/` validates the dedicated master capability, signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST. |
 | Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, locally verifies the commitment proof/calldata, and rechecks the encrypted commitment claim at the raw-RPC boundary |
 | Reveal/restore/rescan Privacy Pools recovery | Yes | **BLOCKED** | `background/privacyRecoveryRouter.ts` requires the exact trusted UI plus explicit main-password proof or a live master epoch; plaintext reveal is confined to the Settings leaf and restore resets only rebuildable privacy state |
 | Initiate token transfer          | Yes    | Yes         | `txHandlers.ts` - creates PendingTxRequest                                     |
@@ -823,6 +823,23 @@ Only a bounded public summary returns through the wallet-UI route;
 Neither route imports a signer, opens wallet confirmation, or performs an
 onchain mutation.
 
+The same exact trusted-UI list route may return at most 193 decrypted private
+portfolio points only after the service worker verifies the cached privacy key
+against the current vault record. IndexedDB stores their balance, price, and
+USD value encrypted; malformed/tampered snapshots are ignored. Public mode
+does not request or combine these values with any public account portfolio.
+
+Private Unshield is owned by the wallet-wide Privacy Pools identity, not the
+currently selected public account. The prepare request accepts only request ID,
+amount, and recipient; the execute request accepts only the durable operation
+ID. Extra account fields fail exact-shape validation. Both stages require the
+live dedicated privacy/master capability and revalidate encrypted commitment
+lineage, so changing between Bankr, private-key, seed-phrase, or impersonator
+display accounts cannot redirect the withdrawal or select different notes.
+Agent sessions remain blocked. This is distinct from Shield deposits and
+public ragequit, which still need an explicit transaction signer and remain
+account-pinned through broadcast.
+
 `network/boundedHttp.ts` is the secure-default boundary for fixed WalletChan,
 Bankr, swap/bridge, portfolio, CoinGecko, labels, clear-signing, and ABI lookup
 HTTP calls. It rejects redirects, cookies, and referrers and enforces one
@@ -1204,7 +1221,8 @@ accessible resources.
 | `agentPasswordEnabled`     | No               | Boolean flag                                            |
 | `mnemonicVault`            | Yes (encrypted)  | V2 dedicated-key-encrypted phrases + master wrapper, or V1 PBKDF2-encrypted phrases |
 | `privacyVault`             | Yes (encrypted)  | Exact V1 dedicated-key-encrypted Privacy Pools phrase, authenticated key check, and at least one master/purpose-separated passkey wrapper; a pre-Shield biometric compatibility scaffold may be passkey-only until later main-password rewrap |
-| `privacyRecoveryBackup`    | No               | Exact `{version, keyId, verifiedAt}` marker written only after successful explicit reveal or restore; never contains the phrase or an encryption capability |
+| `privacyRecoveryBackup`    | No               | V2 exact `{version, keyId, revision, verifiedAt}` marker written only after successful explicit reveal or restore; V1 key-ID-only records remain readable but cannot authorize replacement; never contains the phrase or an encryption capability |
+| `walletHomeModeV1`         | No               | Local presentation choice, exactly `public` or `private`; malformed/missing values resolve to public. It grants no provider, account, privacy, or signing authority. |
 | `seedGroups`               | No               | Seed group metadata (names, counts)                     |
 | `accounts`                 | No               | Account metadata (addresses, names, types)              |
 | `addressContacts`          | No               | Local-only user labels for public EVM addresses         |
@@ -1275,6 +1293,7 @@ accessible resources.
 | `walletchan-privacy-commitments-v1.commitments` | Yes (encrypted) | Current commitment hash/value lineage, depositor recovery dependency, status, and derivation indexes with revision-bound AAD. Only aggregate balances leave the background. |
 | `walletchan-privacy-withdrawals-v1.withdrawals` | Yes (encrypted) | At most 256 restart-safe Unshield intents; commitment linkage, expected nullifier/replacement, signed quote, and relayer payload remain encrypted. |
 | `walletchan-privacy-ragequits-v1.ragequits` | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
+| `walletchan-privacy-portfolio-v1.snapshots` | Yes (encrypted) | At most 193 eight-day private balance/price/USD points. Values use fresh-IV AES-GCM under the dedicated privacy key with record/key/timestamp-bound AAD; only identifiers and creation time remain public metadata. The background verifies the current privacy vault/key binding before returning bounded chart points. |
 | `walletchan-privacy-events-v1` | No | Disposable bounded public Deposited/Withdrawn/Ragequit logs plus a canonical Sepolia checkpoint; rebuilt from the pinned pool and never treated as note authority without local derivation checks. |
 
 ---
@@ -1456,22 +1475,29 @@ These must always hold true. Violations indicate a security bug.
     every valid Bankr/private-key/seed selection. Malformed legacy EVM addresses
     leave the encrypted credential untouched and create no account row.
 
-12d. **Privacy recovery is independent and explicit-release-only** - First Shield access
+12d. **Privacy recovery is independent and explicit-release-only** - First eligible Private-mode entry
     may generate one separate 12-word Privacy Pools phrase only inside the
     service worker, under the wallet-secret lock and a live password or fresh
     biometric master auth epoch. A successful assertion from a biometric
     factor that predates Shield may first create an empty passkey-only vault;
-    it contains no phrase until a custody account opens Shield. The exact
+    it contains no phrase until a custody account enters Private mode. The exact
     `privacyVault` codec requires at least one valid recovery wrapper, rejects
     malformed or oversized records, and never overwrites invalid storage.
     Ordinary Shield routes return only public status. The one exception is
     `privacyRevealRecovery`, which requires an explicitly entered current main
     password and returns plaintext only to the exact trusted Settings document.
-    Successful reveal/restore writes only a key-ID-bound non-secret backup
-    marker. Restore validates BIP-39, preserves the dedicated privacy-key
-    capability, commits a new versioned identity under the wallet-secret lock,
-    deletes only rebuildable privacy indexes, and starts a bounded rescan.
-    Agent sessions and active impersonator accounts cannot create, reveal,
+    Successful reveal/restore writes only a key-ID-and-vault-revision-bound
+    non-secret backup marker. Replacing an existing phrase additionally
+    requires that exact marker and both explicit loss acknowledgements. Restore
+    validates BIP-39 before authorization or storage mutation, preserves the
+    dedicated privacy-key capability, commits a new versioned identity under
+    the wallet-secret lock, and deletes only rebuildable privacy indexes. A
+    cleanup failure restores the previous encrypted vault record; the Settings
+    renderer starts a bounded rescan only after restore succeeds.
+    The renderer's Public/Private presentation toggle grants no authority and
+    does not wait for initialization; it only sends the existing trusted-UI
+    request, whose background gates remain authoritative. Agent sessions and
+    active impersonator accounts cannot create, reveal,
     restore, or rescan the phrase; repeat initialization is a byte-for-byte
     no-op once initialized.
 
@@ -1578,8 +1604,9 @@ These must always hold true. Violations indicate a security bug.
     `Poseidon(nullifier)` and checks the exact circuit order against the pinned
     artifacts. Rejection restores the claimed commitment's prior
     ASP status; success requires the exact Ragequit event before the source
-    activity becomes terminal. Agent, impersonator, and Bankr Sepolia paths
-    fail before proof publication or signing.
+    activity becomes terminal. Agent sessions, impersonator accounts, and Bankr
+    Sepolia accounts fail before relayer quote/proof publication or signing;
+    local private-key and seed-phrase accounts share the same bounded path.
 
 12i. **Account removal and reset cannot silently orphan Shield funds** -
     Account deletion checks Shield safety once before any dapp revocation and
@@ -1917,7 +1944,8 @@ Quick reference for which files to examine based on what area of security you're
 - `background/lifecycle/` - Focused Chrome callbacks and immediate startup effects
 - `privacy/deposit/` - Exact public quote plus master-only recovery derivation and independently decoded non-submittable review intent; no operation persistence, signer, or submission import
 - `privacy/operations/` - Exact encrypted durable-operation codec/repository/preparation boundary with atomic index reservation; no signer or submission import
-- `privacy/recovery/` - Explicit master-only phrase reveal/restore, non-secret key-ID backup marker, passkey-only master-wrapper upgrade, and rebuildable-state rescan boundary
+- `privacy/withdrawals/` - Wallet-wide, master-authorized private-exit preparation/execution; exact request shapes accept no public-account binding and encrypted note/relayer/proof checks remain authoritative
+- `privacy/recovery/` - Explicit master-only phrase reveal/restore, non-secret key-ID-and-revision backup marker, confirmed replacement with compensation, passkey-only master-wrapper upgrade, and rebuildable-state rescan boundary
 - `privacy/accountSafety.ts` / `privacy/resetSafety.ts` - Fail-closed account-removal checks and public reset-risk projection
 - `walletConnect/` - WalletConnect relay audit domain: SDK lifecycle, proposal policy, claimed request dispatch, pinned confirmation adapters, durable terminal outbox, active-session keepalive, and replacement-wallet namespace teardown; see its `README.md`
 

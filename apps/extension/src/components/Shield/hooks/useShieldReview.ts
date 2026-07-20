@@ -19,6 +19,7 @@ const REVIEW_FALLBACK_ERROR = "Review unavailable. Try again.";
 export interface ShieldReviewController {
   state: ShieldReviewState;
   prepare: () => void;
+  reset: () => void;
 }
 
 export function useShieldReview(input: {
@@ -87,5 +88,12 @@ export function useShieldReview(input: {
       });
   }, [account, quote.amount, quote.state, quote.validation]);
 
-  return { state, prepare };
+  return {
+    state,
+    prepare,
+    reset: () => {
+      generation.current += 1;
+      setState({ status: "idle", review: null, error: null });
+    },
+  };
 }

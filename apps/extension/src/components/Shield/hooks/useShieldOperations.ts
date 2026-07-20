@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   parseShieldOperationListResponse,
   type ShieldPrivatePortfolio,
+  type ShieldPortfolioSeries,
   type ShieldPendingOperation,
 } from "../model/shieldOperation";
 import type { UnshieldOperation } from "../model/unshield";
@@ -29,6 +30,8 @@ export function useShieldOperations(): {
   withdrawals: UnshieldOperation[];
   recoveries: PublicRecoveryOperation[];
   portfolio: ShieldPrivatePortfolio;
+  series: ShieldPortfolioSeries;
+  loading: boolean;
   refresh: () => void;
 } {
   const [operations, setOperations] = useState<ShieldPendingOperation[]>([]);
@@ -38,12 +41,19 @@ export function useShieldOperations(): {
     status: "locked",
     confirmedBalanceWei: 0n,
     readyBalanceWei: 0n,
+    maxPrivateSendWei: 0n,
     pendingBalanceWei: 0n,
     recoverableBalanceWei: 0n,
     attentionCount: 0,
     lastUpdatedAt: null,
   });
+  const [series, setSeries] = useState<ShieldPortfolioSeries>({
+    priceUsd: null,
+    totalValueUsd: null,
+    snapshots: [],
+  });
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [loading, setLoading] = useState(true);
   const refresh = useCallback(() => setRefreshNonce((value) => value + 1), []);
 
   useEffect(() => {
@@ -70,6 +80,8 @@ export function useShieldOperations(): {
           setWithdrawals(parsed.withdrawals);
           setRecoveries(parsed.recoveries);
           setPortfolio(parsed.portfolio);
+          setSeries(parsed.series);
+          setLoading(false);
         }
       });
 
@@ -131,5 +143,5 @@ export function useShieldOperations(): {
     };
   }, [refreshNonce]);
 
-  return { operations, withdrawals, recoveries, portfolio, refresh };
+  return { operations, withdrawals, recoveries, portfolio, series, loading, refresh };
 }

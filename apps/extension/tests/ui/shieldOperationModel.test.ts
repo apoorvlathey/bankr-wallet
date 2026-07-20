@@ -44,10 +44,22 @@ function portfolio() {
     status: "ready",
     confirmedBalanceWei: "99000000000000000",
     readyBalanceWei: "99000000000000000",
+    maxPrivateSendWei: "99000000000000000",
     pendingBalanceWei: "0",
     recoverableBalanceWei: "0",
     attentionCount: 0,
     lastUpdatedAt: 2,
+  };
+}
+
+function series() {
+  return {
+    priceUsd: 3400,
+    totalValueUsd: 336.6,
+    snapshots: [
+      { timestamp: 1, totalValueUsd: 330 },
+      { timestamp: 2, totalValueUsd: 336.6 },
+    ],
   };
 }
 
@@ -90,7 +102,7 @@ test("Shield activity accepts only aggregate private balance and public operatio
     blockNumber: null,
     errorCode: null,
   };
-  const valid = { success: true, operations: [operation()], portfolio: portfolio(), withdrawals: [], recoveries: [recovery] };
+  const valid = { success: true, operations: [operation()], portfolio: portfolio(), series: series(), withdrawals: [], recoveries: [recovery] };
   const parsed = parseShieldOperationListResponse(valid);
   assert.equal(parsed?.operations.length, 1);
   assert.equal(parsed?.recoveries.length, 1);
@@ -104,6 +116,7 @@ test("Shield activity accepts only aggregate private balance and public operatio
       success: true,
       operations: [secret],
       portfolio: portfolio(),
+      series: series(),
       withdrawals: [],
       recoveries: [],
     }),
@@ -117,6 +130,7 @@ test("Shield activity accepts only aggregate private balance and public operatio
       success: true,
       operations: [mismatched],
       portfolio: portfolio(),
+      series: series(),
       withdrawals: [],
       recoveries: [],
     }),
@@ -127,6 +141,7 @@ test("Shield activity accepts only aggregate private balance and public operatio
       success: true,
       operations: [operation()],
       portfolio: { ...portfolio(), commitment: "123" },
+      series: series(),
       withdrawals: [],
       recoveries: [],
     }),
@@ -136,12 +151,12 @@ test("Shield activity accepts only aggregate private balance and public operatio
 
 test("ASP-pending funds offer a plain-language public withdrawal", () => {
   assert.deepEqual(getPublicWithdrawalCopy(true), {
-    title: "Withdraw without waiting?",
+    title: "Need it now?",
     action: "Withdraw publicly",
   });
   assert.equal(
     getPublicWithdrawalCopy(false).title,
-    "Private Unshield unavailable",
+    "Public exit available",
   );
 });
 

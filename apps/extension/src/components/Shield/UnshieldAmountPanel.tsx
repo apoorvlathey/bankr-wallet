@@ -1,111 +1,165 @@
-import {
-  Alert,
-  AlertIcon,
-  Box,
-  Button,
-  FormControl,
-  FormLabel,
-  HStack,
-  Input,
-  Text,
-  VStack,
-} from "@chakra-ui/react";
-import { formatEther } from "viem";
-
+import { Box, HStack, Text, VStack } from "@chakra-ui/react";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
+import { RecipientSection } from "@/components/Transfer/RecipientSection";
+import type { TransferRecipient } from "@/components/Transfer/hooks/useTransferRecipient";
+import { truncateAddress } from "@/lib/addressUtils";
 import type { ReturnTypeUseUnshield } from "./hooks/useUnshield.types";
+import {
+  ShieldDestinationCard,
+  ShieldDirectionMarker,
+  ShieldSourceCard,
+} from "./ShieldAssetCards";
 import { formatShieldWei } from "./model/shieldQuote";
+import type { PrivateWithdrawalIntent } from "./model/unshield";
 
 interface Props {
+  intent: PrivateWithdrawalIntent;
   availableWei: bigint;
+  totalReadyWei: bigint;
+  confirmedWei: bigint;
+  pendingWei: bigint;
   controller: ReturnTypeUseUnshield;
+  recipientState: TransferRecipient;
+  explorerUrl: string;
+  publicExit?: {
+    amountWei: bigint;
+    depositAccountAddress: string;
+    waitingForAsp: boolean;
+    status: "idle" | "preparing" | "queued" | "error";
+    error: string | null;
+  };
 }
 
-export default function UnshieldAmountPanel({ availableWei, controller }: Props) {
+export default function UnshieldAmountPanel({
+  intent,
+  availableWei,
+  totalReadyWei,
+  confirmedWei,
+  pendingWei,
+  controller,
+  recipientState,
+  explorerUrl,
+  publicExit,
+}: Props) {
   const operation = controller.state.operation;
-  const busy = controller.state.status === "quoting" || controller.state.status === "proving";
+  const usesPublicExit = intent === "unshield" && availableWei === 0n && Boolean(publicExit);
+  const publicExitAmount = publicExit ? formatShieldWei(publicExit.amountWei) : null;
+
+  const error = !usesPublicExit && controller.state.status === "error"
+    ? controller.state.error
+    : !usesPublicExit && controller.amount && !controller.validation.valid
+      ? "Enter an amount within your available balance."
+      : null;
+  const balanceLabel = usesPublicExit
+    ? publicExit?.waitingForAsp
+      ? "Awaiting eligibility"
+      : "Public exit available"
+    : pendingWei > 0n
+      ? `${formatShieldWei(pendingWei)} ETH is still awaiting its check`
+      : totalReadyWei > availableWei
+        ? `${formatShieldWei(totalReadyWei)} ETH ready · withdraw up to ${formatShieldWei(availableWei)} at a time`
+        : availableWei > 0n
+          ? intent === "unshield" ? "Available to unshield" : "Available to send privately"
+          : confirmedWei > 0n
+            ? "No private balance is ready yet"
+            : "No Shielded ETH yet";
+
   return (
-    <Box bg="surface.raised" border="1px solid" borderColor="border.default" borderRadius="lg" p={4}>
-      <VStack align="stretch" spacing={4}>
-        <Text fontWeight="700">Unshield ETH</Text>
-        <FormControl>
-          <FormLabel fontSize="xs" color="fg.secondary">Amount</FormLabel>
-          <HStack>
-            <Input
-              value={controller.amount}
-              onChange={(event) => controller.setAmount(event.target.value)}
-              inputMode="decimal"
-              placeholder="0.0"
-              aria-label="ETH amount to Unshield"
-            />
-            <Button size="sm" variant="secondary" onClick={() => controller.setAmount(formatEther(availableWei))}>
-              Max
-            </Button>
-          </HStack>
-          <Text mt={1} fontSize="xs" color="fg.secondary">
-            Available {formatShieldWei(availableWei)} ETH
+    <VStack align="stretch" spacing={4}>
+      <Box>
+        <ShieldSourceCard
+          label="From"
+          shielded
+          amount={usesPublicExit ? publicExitAmount ?? "" : controller.amount}
+          balanceWei={usesPublicExit ? publicExit?.amountWei ?? 0n : availableWei}
+          maxWei={usesPublicExit ? 0n : availableWei}
+          balanceLabel={balanceLabel}
+          balanceLabelColor={pendingWei > 0n || usesPublicExit ? "accent.highlight" : undefined}
+          error={error}
+          isDisabled={!usesPublicExit && availableWei === 0n}
+          isReadOnly={usesPublicExit}
+          onAmountChange={controller.setAmount}
+        />
+        <ShieldDirectionMarker />
+        <ShieldDestinationCard
+          shielded={false}
+          label={intent === "unshield" ? "You receive" : "Recipient gets"}
+          amount={usesPublicExit ? publicExitAmount : operation ? formatShieldWei(operation.netRecipientAmountWei) : null}
+          detail={usesPublicExit
+            ? "Returns to the original deposit account"
+            : operation
+            ? `${formatShieldWei(operation.relayFeeWei)} ETH relayer fee`
+            : "Exact amount appears after the relay quote"}
+        />
+      </Box>
+
+      {usesPublicExit && publicExit ? (
+        <Box>
+          <Text mb={1} fontSize="sm" fontWeight="600" color="fg.secondary">
+            Receive in
           </Text>
-        </FormControl>
-        <FormControl>
-          <FormLabel fontSize="xs" color="fg.secondary">Recipient</FormLabel>
-          <Input
-            value={controller.recipient}
-            onChange={(event) => controller.setRecipient(event.target.value)}
-            placeholder="0x…"
-            aria-label="Unshield recipient address"
-          />
-        </FormControl>
-
-        {operation ? (
-          <VStack align="stretch" spacing={1} fontSize="sm">
-            <HStack justify="space-between">
-              <Text color="fg.secondary">Recipient gets</Text>
-              <Text fontWeight="600">{formatShieldWei(operation.netRecipientAmountWei)} ETH</Text>
-            </HStack>
-            <HStack justify="space-between">
-              <Text color="fg.secondary">Relay fee</Text>
-              <Text>{formatShieldWei(operation.relayFeeWei)} ETH</Text>
-            </HStack>
-            <HStack justify="space-between">
-              <Text color="fg.secondary">Relay</Text>
-              <Text>{operation.relayerName}</Text>
-            </HStack>
-          </VStack>
-        ) : null}
-
-        {operation?.recipientMatchesDepositor ? (
-          <Alert status="warning" borderRadius="md" py={2}>
-            <AlertIcon />
-            <Text fontSize="xs">Using the original address can weaken privacy.</Text>
-          </Alert>
-        ) : null}
-        {controller.state.status === "error" ? (
-          <Text role="alert" fontSize="xs" color="status.error.fg">{controller.state.error}</Text>
-        ) : null}
-        {controller.state.status === "submitted" ? (
-          <Text role="status" fontSize="xs" color="status.success.fg">Submitted on Sepolia. Balance will update after confirmation.</Text>
-        ) : null}
-
-        {controller.state.status === "quoted" || controller.state.status === "proving" ? (
-          <Button
-            variant="brand"
-            isLoading={controller.state.status === "proving"}
-            loadingText="Preparing"
-            onClick={() => void controller.execute()}
+          <HStack
+            minH="48px"
+            px={3}
+            justify="space-between"
+            bg="surface.raised"
+            borderWidth="1px"
+            borderColor="border.default"
+            borderRadius="md"
           >
-            Unshield
-          </Button>
-        ) : controller.state.status !== "submitted" ? (
-          <Button
-            variant="brand"
-            isLoading={controller.state.status === "quoting"}
-            loadingText="Getting quote"
-            isDisabled={!controller.validation.valid || busy || availableWei === 0n}
-            onClick={() => void controller.quote()}
+            <Text fontSize="xs" color="fg.secondary">Original deposit account</Text>
+            <LabeledAddressPopover
+              address={publicExit.depositAccountAddress}
+              contextLabel="public exit recipient"
+              explorer={explorerUrl}
+              label={truncateAddress(publicExit.depositAccountAddress)}
+              maxW="160px"
+            />
+          </HStack>
+        </Box>
+      ) : (
+        <RecipientSection
+          recipientState={recipientState}
+          explorerUrl={explorerUrl}
+          label={intent === "unshield" ? "Receive in" : "Recipient"}
+          chooserLabel={intent === "unshield" ? "Choose address" : "My contacts"}
+        />
+      )}
+
+      {operation?.recipientMatchesDepositor && (
+        <Box
+          role="alert"
+          bg="status.warning.bg"
+          borderWidth="1px"
+          borderColor="status.warning.border"
+          borderRadius="md"
+          px={3}
+          py={2.5}
+        >
+          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
+            This recipient matches the original depositor. Reusing it can weaken privacy.
+          </Text>
+        </Box>
+      )}
+
+      {usesPublicExit ? (
+        (publicExit?.error || publicExit?.status === "queued") ? (
+          <Text
+            fontSize="xs"
+            color={publicExit?.status === "error" ? "status.error.fg" : "fg.secondary"}
+            role={publicExit?.status === "error" ? "alert" : "status"}
           >
-            Get quote
-          </Button>
-        ) : null}
-      </VStack>
-    </Box>
+            {publicExit.error ?? "Open the wallet confirmation to continue."}
+          </Text>
+        ) : null
+      ) : (
+        <HStack justify="space-between" spacing={3}>
+          <Text fontSize="xs" color="fg.secondary">Privacy Pools · Sepolia</Text>
+          <Text fontSize="xs" color="fg.secondary" textAlign="right">
+            Sent by a verified relay
+          </Text>
+        </HStack>
+      )}
+    </VStack>
   );
 }

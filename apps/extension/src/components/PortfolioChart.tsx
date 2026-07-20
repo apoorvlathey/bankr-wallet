@@ -9,6 +9,7 @@ import { playInteractionSound } from "@/sounds/soundManager";
 
 interface PortfolioChartProps {
   address: string;
+  snapshots?: ReadonlyArray<Snapshot>;
   hideValue?: boolean;
   refreshTrigger?: number;
   onHoverValueChange?: (value: number | null) => void;
@@ -27,6 +28,7 @@ const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
 export default function PortfolioChart({
   address,
+  snapshots: suppliedSnapshots,
   hideValue,
   refreshTrigger = 0,
   onHoverValueChange,
@@ -41,6 +43,11 @@ export default function PortfolioChart({
   const isPointerDraggingRef = useRef(false);
 
   useEffect(() => {
+    if (suppliedSnapshots) {
+      setSnapshots([...suppliedSnapshots]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     getSnapshots(address).then((data) => {
@@ -52,7 +59,7 @@ export default function PortfolioChart({
     return () => {
       cancelled = true;
     };
-  }, [address, refreshTrigger]);
+  }, [address, refreshTrigger, suppliedSnapshots]);
 
   const { path, areaPath, change, changePercent, points, dayTicks } = useMemo(() => {
     if (snapshots.length < 2)
@@ -61,8 +68,9 @@ export default function PortfolioChart({
     const first = snapshots[0];
     const last = snapshots[snapshots.length - 1];
     const change = last.totalValueUsd - first.totalValueUsd;
-    const changePercent =
-      first.totalValueUsd > 0 ? (change / first.totalValueUsd) * 100 : 0;
+    const changePercent = first.totalValueUsd > 0
+      ? (change / first.totalValueUsd) * 100
+      : null;
 
     const values = snapshots.map((s) => s.totalValueUsd);
     const minVal = Math.min(...values);
@@ -219,7 +227,11 @@ export default function PortfolioChart({
                 {hideValue ? "+$***" : `${isPositive ? "+" : "-"}${formatChange(change)}`}
               </Text>
               <Text fontSize="xs" lineHeight="18px" fontWeight="700" color={lineColor}>
-                {hideValue ? "(+**%)" : `(${isPositive ? "+" : ""}${changePercent.toFixed(2)}%)`}
+                {hideValue
+                  ? "(+**%)"
+                  : changePercent === null
+                    ? "(new)"
+                    : `(${isPositive ? "+" : ""}${changePercent.toFixed(2)}%)`}
               </Text>
             </HStack>
           </>

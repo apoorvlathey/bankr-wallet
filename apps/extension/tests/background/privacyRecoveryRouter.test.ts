@@ -95,10 +95,10 @@ test("reveal releases a phrase only for the exact dedicated request", async () =
 
 test("restore validates its exact envelope and bounds domain failures", async () => {
   const invalidCapture = capture();
-  const conflictCapture = capture();
+  const confirmationCapture = capture();
   const route = createBackgroundPrivacyRecoveryMessageRouter({
     restorePrivacyRecovery: async () => {
-      throw new PrivacyRecoveryError("recovery-conflict");
+      throw new PrivacyRecoveryError("replacement-confirmation-required");
     },
   });
   const request = {
@@ -107,6 +107,9 @@ test("restore validates its exact envelope and bounds domain failures", async ()
     phrase:
       "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
     password: "main",
+    replaceExisting: true,
+    backupConfirmed: true,
+    lossConfirmed: true,
   };
   route({ ...request, extra: true }, invalidCapture.sendResponse);
   assert.deepEqual(await invalidCapture.response, {
@@ -115,11 +118,11 @@ test("restore validates its exact envelope and bounds domain failures", async ()
     error: "Enter a valid 12-word Shield recovery phrase.",
   });
 
-  route(request, conflictCapture.sendResponse);
-  assert.deepEqual(await conflictCapture.response, {
+  route(request, confirmationCapture.sendResponse);
+  assert.deepEqual(await confirmationCapture.response, {
     success: false,
-    code: "recovery-conflict",
+    code: "replacement-confirmation-required",
     error:
-      "A different Shield identity already exists. Reset before restoring another phrase.",
+      "Back up the current Shield phrase and confirm both recovery warnings first.",
   });
 });

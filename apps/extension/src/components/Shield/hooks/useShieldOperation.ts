@@ -18,6 +18,7 @@ export type ShieldOperationState =
 export interface ShieldOperationController {
   state: ShieldOperationState;
   save: () => void;
+  reset: () => void;
 }
 
 const FALLBACK_ERROR = "Couldn’t save this Shield operation. Try again.";
@@ -92,5 +93,13 @@ export function useShieldOperation(input: {
       });
   }, [account, onSaved, quote.amount, quote.state, quote.validation, review.state]);
 
-  return { state, save };
+  return {
+    state,
+    save,
+    reset: () => {
+      generation.current += 1;
+      requestId.current = crypto.randomUUID();
+      setState({ status: "idle", operation: null, error: null });
+    },
+  };
 }

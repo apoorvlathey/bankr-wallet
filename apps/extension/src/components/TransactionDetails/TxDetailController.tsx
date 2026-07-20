@@ -9,6 +9,7 @@ import {
 } from "@/lib/chains";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
+import { isPrivacyShieldLifecycleState } from "@/lib/privacyShieldLifecycle";
 import {
   decodeErc7821Batch,
   looksLikeErc7821SelfBatch,
@@ -27,6 +28,7 @@ import SwapSummary from "./SwapSummary";
 import TransactionMeta from "./TransactionMeta";
 import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
+import PrivacyShieldLifecycleSummary from "./PrivacyShieldLifecycleSummary";
 import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
 import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
@@ -87,6 +89,10 @@ export function TxDetailController({
   // permission summary, not a second generic ERC-7730/clear-signing card for
   // the same DelegationManager calldata.
   const clearSignedMeta = hasErc7715Revoke ? undefined : tx.clearSignedMeta;
+  const privacyShieldMeta = tx.privacyShieldMeta &&
+      isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+    ? tx.privacyShieldMeta
+    : null;
   // eth.sh label for the delegation target — shared cache, so this is free
   // on reopen and free if any other surface (tx-confirmation screen, etc.)
   // already fetched it.
@@ -124,7 +130,8 @@ export function TxDetailController({
     hasBatchCalls ||
     hasDelegation ||
     !!tx.swapMeta ||
-    !!tx.bridge;
+    !!tx.bridge ||
+    !!privacyShieldMeta;
   const [errorExpanded, setErrorExpanded] = useState(false);
   const [decodedFunctionName, setDecodedFunctionName] = useState<string | undefined>(
     tx.functionName,
@@ -260,6 +267,10 @@ export function TxDetailController({
           explorerBase={explorerBase}
           onViewExplorer={handleViewOnExplorer}
         />
+
+        {privacyShieldMeta && (
+          <PrivacyShieldLifecycleSummary meta={privacyShieldMeta} />
+        )}
 
         <ArbitrumForceInclusionAction isOpen={isOpen} tx={tx} />
 

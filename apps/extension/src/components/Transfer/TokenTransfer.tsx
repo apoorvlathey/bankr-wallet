@@ -31,7 +31,7 @@ function TokenTransfer({
   fromAddress,
   chainId,
   accountType,
-  accounts,
+  accounts = [],
   onBack,
   onTransferInitiated,
 }: TokenTransferProps) {
@@ -213,7 +213,7 @@ function TokenTransfer({
             triggerChainLabel={triggerChainLabel}
             chainEnvironmentLabel={chainEnvironmentLabel}
             token={catalog.selectedToken}
-            holdings={catalog.holdings}
+          holdings={catalog.holdings}
             tokenList={catalog.tokenList}
             holdingsLoading={catalog.holdingsLoading}
             resolvedCustomToken={catalog.resolvedCustomToken}

@@ -62,6 +62,11 @@ test("dedicated recovery export reveals the phrase only after explicit master pr
         .backupVerified,
       true,
     );
+    assert.equal(harness.stores.local.privacyRecoveryBackup.version, 2);
+    assert.equal(
+      harness.stores.local.privacyRecoveryBackup.revision,
+      harness.stores.local.privacyVault.revision,
+    );
     assert.equal(JSON.stringify(harness.stores.local).includes(revealed.phrase), false);
   } finally {
     session.clearInMemoryAuthCache();
@@ -119,7 +124,7 @@ test("export upgrades a passkey-only compatibility identity with master recovery
   }
 });
 
-test("restore is idempotent for the same phrase and rejects identity replacement", async () => {
+test("restore preserves the current phrase until replacement is fully confirmed", async () => {
   const selected = account("bankr");
   const harness = createChromeStorageHarness({
     local: { accounts: [selected] },
@@ -137,6 +142,9 @@ test("restore is idempotent for the same phrase and rejects identity replacement
       requestId: "00000000-0000-4000-8000-000000000101",
       phrase: `  ${PHRASE.toUpperCase()}  `,
       password: PASSWORD,
+      replaceExisting: false,
+      backupConfirmed: false,
+      lossConfirmed: false,
     }, dependencies);
     assert.deepEqual(first, { status: "restored" });
     const firstRecord = structuredClone(harness.stores.local.privacyVault);
@@ -145,6 +153,9 @@ test("restore is idempotent for the same phrase and rejects identity replacement
       requestId: "00000000-0000-4000-8000-000000000102",
       phrase: PHRASE,
       password: PASSWORD,
+      replaceExisting: false,
+      backupConfirmed: false,
+      lossConfirmed: false,
     }, dependencies);
     assert.deepEqual(repeated, { status: "already-current" });
     const secondRecord = structuredClone(harness.stores.local.privacyVault);
@@ -158,15 +169,111 @@ test("restore is idempotent for the same phrase and rejects identity replacement
           ? privacyCrypto.generatePrivacyRecoveryPhrase()
           : different,
         password: PASSWORD,
+        replaceExisting: true,
+        backupConfirmed: false,
+        lossConfirmed: true,
       }, dependencies),
       (error: unknown) =>
         error instanceof recovery.PrivacyRecoveryError &&
-        error.code === "recovery-conflict",
+        error.code === "replacement-confirmation-required",
     );
     assert.deepEqual(harness.stores.local.privacyVault, firstRecord);
+
+    const replacementPhrase = different === PHRASE
+      ? privacyCrypto.generatePrivacyRecoveryPhrase()
+      : different;
+    await assert.rejects(
+      recovery.restorePrivacyRecovery({
+        requestId: "00000000-0000-4000-8000-000000000106",
+        phrase: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+        password: PASSWORD,
+        replaceExisting: true,
+        backupConfirmed: true,
+        lossConfirmed: true,
+      }, dependencies),
+      (error: unknown) =>
+        error instanceof recovery.PrivacyRecoveryError &&
+        error.code === "invalid-request",
+    );
+    assert.deepEqual(harness.stores.local.privacyVault, firstRecord);
+
+    await assert.rejects(
+      recovery.restorePrivacyRecovery({
+        requestId: "00000000-0000-4000-8000-000000000107",
+        phrase: replacementPhrase,
+        password: PASSWORD,
+        replaceExisting: true,
+        backupConfirmed: true,
+        lossConfirmed: true,
+      }, {
+        ...dependencies,
+        deletePrivacyOperationsDatabase: async () => undefined,
+        deletePrivacyCommitmentsDatabase: async () => {
+          throw new Error("blocked");
+        },
+      }),
+      (error: unknown) =>
+        error instanceof recovery.PrivacyRecoveryError &&
+        error.code === "recovery-unavailable",
+    );
+    assert.deepEqual(harness.stores.local.privacyVault, firstRecord);
+
+    const deleted: string[] = [];
+    const replaced = await recovery.restorePrivacyRecovery({
+      requestId: "00000000-0000-4000-8000-000000000105",
+      phrase: replacementPhrase,
+      password: PASSWORD,
+      replaceExisting: true,
+      backupConfirmed: true,
+      lossConfirmed: true,
+    }, {
+      ...dependencies,
+      deletePrivacyOperationsDatabase: async () => { deleted.push("operations"); },
+      deletePrivacyCommitmentsDatabase: async () => { deleted.push("commitments"); },
+      deletePrivacyWithdrawalsDatabase: async () => { deleted.push("withdrawals"); },
+      deletePrivacyRagequitsDatabase: async () => { deleted.push("ragequits"); },
+      deletePrivacyPortfolioDatabase: async () => { deleted.push("portfolio"); },
+    });
+    assert.deepEqual(replaced, { status: "restored" });
+    assert.deepEqual(deleted, ["operations", "commitments", "withdrawals", "ragequits", "portfolio"]);
+    const revealed = await recovery.revealPrivacyRecovery(PASSWORD, dependencies);
+    assert.equal(revealed.phrase, replacementPhrase);
   } finally {
     session.clearInMemoryAuthCache();
     harness.restore();
+  }
+});
+
+test("restore accepts every custody wallet type", async () => {
+  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+    const selected = account(type);
+    const harness = createChromeStorageHarness({
+      local: { accounts: [selected] },
+      sync: { activeAccountId: selected.id, autoLockTimeout: 60_000 },
+    });
+    const session = await masterSession();
+    try {
+      const recovery = await import("../../src/chrome/privacy/recovery/operations");
+      const dependencies = {
+        getActiveAccount: async () => selected,
+        verifyMasterPassword: async () => true,
+      };
+      assert.deepEqual(await recovery.restorePrivacyRecovery({
+        requestId: `00000000-0000-4000-8000-00000000020${type === "bankr" ? 1 : type === "privateKey" ? 2 : 3}`,
+        phrase: PHRASE,
+        password: PASSWORD,
+        replaceExisting: false,
+        backupConfirmed: false,
+        lossConfirmed: false,
+      }, dependencies), { status: "restored" });
+      assert.equal(
+        (await recovery.revealPrivacyRecovery(PASSWORD, dependencies)).phrase,
+        PHRASE,
+      );
+    } finally {
+      session.clearInMemoryAuthCache();
+      harness.restore();
+    }
   }
 });
 
@@ -188,6 +295,9 @@ test("agent and active impersonator sessions cannot export or restore Shield rec
         requestId: "00000000-0000-4000-8000-000000000104",
         phrase: PHRASE,
         password: PASSWORD,
+        replaceExisting: false,
+        backupConfirmed: false,
+        lossConfirmed: false,
       }, dependencies),
       (error: unknown) =>
         error instanceof recovery.PrivacyRecoveryError &&

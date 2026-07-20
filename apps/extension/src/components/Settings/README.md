@@ -33,8 +33,10 @@ background authorization, storage, RPC, or cryptographic policy. New settings
 subfeatures should use a focused component or hook instead of growing the root
 router.
 
-`PrivacyRecoverySettings.tsx` is the dedicated secret-bearing Shield phrase
-backup/restore surface. It owns only temporary form/display state and clipboard
-effects; the background owns password proof, vault mutation, and Sepolia
-rescan policy. `PrivacyRecoverySettingsRow.tsx` keeps its agent-disabled
+`PrivacyRecoverySettings.tsx` is an export-only facade for the
+`PrivacyRecovery/` feature folder. Its root owns temporary form/display state,
+clipboard effects, and post-restore rescan orchestration; presentational leaves
+own the chooser, concealed backup, balance-at-risk, two-confirmation, and
+phrase-import layouts. The background owns password proof and vault mutation.
+`PrivacyRecoverySettingsRow.tsx` keeps its agent-disabled
 navigation presentation out of the Settings registry composition file.

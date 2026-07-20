@@ -1,4 +1,3 @@
-import { getActiveAccount } from "../../accounts/selectionStorage";
 import { getCachedPrivacyKey } from "../../sessionCache";
 import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
@@ -14,6 +13,7 @@ export interface PrivacyCommitmentPortfolio {
   status: "ready" | "locked";
   confirmedBalanceWei: string;
   readyBalanceWei: string;
+  maxPrivateSendWei: string;
   pendingBalanceWei: string;
   recoverableBalanceWei: string;
   attentionCount: number;
@@ -50,10 +50,10 @@ const CONFIRMED_OPERATION_STATES = new Set<PrivacyShieldTrackingState>([
 export function aggregatePrivacyCommitmentPortfolio(
   commitments: readonly PrivacyPortfolioCommitmentInput[],
   operations: readonly PrivacyPortfolioOperationInput[],
-  publicRecoveryAccountAddress?: string,
 ): Omit<PrivacyCommitmentPortfolio, "status"> {
   let confirmed = 0n;
   let ready = 0n;
+  let maxPrivateSend = 0n;
   let pendingAsp = 0n;
   let recoverable = 0n;
   let attentionCount = 0;
@@ -63,14 +63,12 @@ export function aggregatePrivacyCommitmentPortfolio(
   for (const commitment of commitments) {
     const balance = BigInt(commitment.balanceWei);
     confirmed += balance;
-    if (commitment.status === "private_ready") ready += balance;
+    if (commitment.status === "private_ready") {
+      ready += balance;
+      if (balance > maxPrivateSend) maxPrivateSend = balance;
+    }
     if (commitment.status === "awaiting_asp") pendingAsp += balance;
-    const belongsToRecoveryAccount = publicRecoveryAccountAddress === undefined ||
-      commitment.depositor.toLowerCase() === publicRecoveryAccountAddress.toLowerCase();
-    if (
-      belongsToRecoveryAccount &&
-      isPrivacyCommitmentPubliclyRecoverableStatus(commitment.status)
-    ) {
+    if (isPrivacyCommitmentPubliclyRecoverableStatus(commitment.status)) {
       recoverable += balance;
       if (commitment.status !== "awaiting_asp") attentionCount += 1;
     }
@@ -94,6 +92,7 @@ export function aggregatePrivacyCommitmentPortfolio(
   return {
     confirmedBalanceWei: confirmed.toString(),
     readyBalanceWei: ready.toString(),
+    maxPrivateSendWei: maxPrivateSend.toString(),
     pendingBalanceWei: pendingAsp.toString(),
     recoverableBalanceWei: recoverable.toString(),
     attentionCount,
@@ -103,10 +102,9 @@ export function aggregatePrivacyCommitmentPortfolio(
 
 /** Release aggregates only; individual private commitment links remain encrypted. */
 export async function readPrivacyCommitmentPortfolio(): Promise<PrivacyCommitmentPortfolio> {
-  const [vault, privacyKey, activeAccount] = await Promise.all([
+  const [vault, privacyKey] = await Promise.all([
     readPrivacyVault(),
     Promise.resolve(getCachedPrivacyKey()),
-    getActiveAccount(),
   ]);
   if (
     vault.status !== "valid" ||
@@ -118,6 +116,7 @@ export async function readPrivacyCommitmentPortfolio(): Promise<PrivacyCommitmen
       status: "locked",
       confirmedBalanceWei: "0",
       readyBalanceWei: "0",
+      maxPrivateSendWei: "0",
       pendingBalanceWei: "0",
       recoverableBalanceWei: "0",
       attentionCount: 0,
@@ -148,7 +147,6 @@ export async function readPrivacyCommitmentPortfolio(): Promise<PrivacyCommitmen
           updatedAt: tracking?.updatedAt ?? operation.summary.updatedAt,
         };
       }),
-      activeAccount?.address,
     ),
   };
 }

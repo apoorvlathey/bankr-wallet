@@ -47,6 +47,8 @@ bounded rescan. ASP tests cover approved/declined/removed/malformed/root-drift
 and unavailable recovery. Account/reset safety tests prove unresolved or
 unspent state blocks deletion and that destructive reset requires the exact
 acknowledgement while deleting every privacy store.
+Private portfolio tests bind the encrypted eight-day balance/price snapshots
+to their public record headers and reject plaintext or schema additions.
 `commitmentProofBinding.test.ts` generates a real proof from the pinned Wasm and
 zkey and checks all four public signals. This specifically prevents the SDK
 1.2.0 deposit precommitment (`Poseidon(nullifier, secret)`) from being confused
