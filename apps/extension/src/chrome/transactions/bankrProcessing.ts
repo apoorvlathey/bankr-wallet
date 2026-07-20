@@ -24,7 +24,6 @@ import {
   processingTxIds,
   writeResultToStorage,
 } from "./runtime";
-
 /** Own the fire-and-forget Bankr submission and terminal publication flow. */
 export async function processBankrTransactionInBackground(
   txId: string,
@@ -82,7 +81,6 @@ export async function processBankrTransactionInBackground(
     );
     effectGuard.settleEffect();
     const txHash = result.transactionHash;
-
     if (result.status === "reverted") {
       await handleTransactionFailure(txId, pending, "Transaction reverted");
     } else if (result.status === "success" && txHash) {

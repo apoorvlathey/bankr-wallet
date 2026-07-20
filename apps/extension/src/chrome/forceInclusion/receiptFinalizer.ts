@@ -63,6 +63,22 @@ async function evaluateMissingTransaction(
     error: "Transaction dropped from the mempool",
     completedAt: Date.now(),
   });
+  try {
+    const { recordPrivacyShieldDropped } = await import(
+      "../privacy/operations/lifecycle"
+    );
+    await recordPrivacyShieldDropped(txId, txHash);
+  } catch (error) {
+    console.warn("[privacy-shield] dropped transaction mirror failed", error);
+  }
+  try {
+    const { recordPrivacyRagequitDropped } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitDropped(txId, txHash);
+  } catch (error) {
+    console.warn("[privacy-ragequit] dropped transaction mirror failed", error);
+  }
   await showReceiptNotification(txId, txHash, chainId, false, "dropped");
   await maybeAdvanceSplitBundle(txId, txHash, "dropped");
   return false;

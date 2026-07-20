@@ -23,6 +23,10 @@ import {
   tryRestoreSession,
 } from "../sessionCache";
 import { decryptAllKeys } from "../vaultCrypto";
+import {
+  authorizePrivacyConfirmation,
+  privacyConfirmationGasError,
+} from "./privacyConfirmation";
 
 type ConfirmationResult = { success: boolean; error?: string };
 
@@ -81,6 +85,12 @@ export async function handleConfirmTransactionAsyncPK(
 
   const pending = await getPendingTxRequestById(txId);
   if (!pending) return { success: false, error: "Transaction request not found" };
+  const privacyGasError = privacyConfirmationGasError(
+    pending,
+    forceInclusion,
+    feePaymentToken,
+  );
+  if (privacyGasError) return { success: false, error: privacyGasError };
   processingTxIds.add(txId);
 
   const pinned = await resolvePinnedAccount(pending);
@@ -103,6 +113,12 @@ export async function handleConfirmTransactionAsyncPK(
       success: false,
       error: "Transaction 'from' does not match active account",
     };
+  }
+
+  const privacyAuthorization = await authorizePrivacyConfirmation(pending);
+  if (!privacyAuthorization.ok) {
+    processingTxIds.delete(txId);
+    return { success: false, error: privacyAuthorization.error };
   }
 
   let expectedDelegatedAuthorityAuthEpoch: string | undefined;
@@ -213,6 +229,8 @@ export async function handleConfirmTransactionAsyncPK(
       gasOverrides,
       effectLease,
       expectedDelegatedAuthorityAuthEpoch,
+      privacyAuthorization.shield,
+      privacyAuthorization.ragequit,
     );
   }
   return { success: true };

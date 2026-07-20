@@ -12,6 +12,12 @@ import {
   formatActivityAddress,
   getLiveActivityAddressLabel,
 } from "./activityIdentityModel";
+import {
+  getPrivacyShieldActivityState,
+  isPrivacyShieldLifecycleState,
+  type PrivacyShieldActivityState,
+} from "@/lib/privacyShieldLifecycle";
+import { formatEther } from "viem";
 
 export interface ActivityDateGroup {
   label: string;
@@ -28,6 +34,7 @@ export interface ActivityStatusModel {
   bridgeRefunded: boolean;
   bridgeFailedTerminal: boolean;
   isBridgePendingDest: boolean;
+  privacyShield: PrivacyShieldActivityState | null;
 }
 
 export interface ActivityPresentation {
@@ -218,6 +225,25 @@ function getActivityValue(
   );
 }
 
+function getPrivacyShieldValue(
+  tx: CompletedTransaction,
+  compactTiny: boolean,
+): string | null {
+  const meta = tx.privacyShieldMeta;
+  if (!meta || !/^\d+$/.test(meta.amountWei)) return null;
+  try {
+    return formatActivityValueLabel(
+      formatEther(BigInt(meta.amountWei)),
+      "ETH",
+      "−",
+      18,
+      compactTiny,
+    );
+  } catch {
+    return null;
+  }
+}
+
 function getClearSignedContext(
   meta: ClearSignedMeta,
   addressLabels?: ReadonlyMap<string, string>,
@@ -249,6 +275,10 @@ export function getInternalSendSymbol(
 export function getActivityStatusModel(
   tx: CompletedTransaction,
 ): ActivityStatusModel {
+  const privacyShield = tx.privacyShieldMeta &&
+      isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+    ? getPrivacyShieldActivityState(tx.privacyShieldMeta.state)
+    : null;
   const isForceInclusion = !!tx.forceInclusionMeta;
   const isForcePendingL2 =
     tx.status === "pending" &&
@@ -277,6 +307,7 @@ export function getActivityStatusModel(
     bridgeRefunded,
     bridgeFailedTerminal,
     isBridgePendingDest,
+    privacyShield,
   };
 }
 
@@ -285,6 +316,19 @@ export function getActivityPresentation(
   addressLabels?: ReadonlyMap<string, string>,
   originDisplayHostname?: string | null,
 ): ActivityPresentation {
+  if (
+    tx.privacyShieldMeta &&
+    isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+  ) {
+    const activity = getPrivacyShieldActivityState(tx.privacyShieldMeta.state);
+    return {
+      originHostname: null,
+      intent: "Shield ETH",
+      context: activity.context,
+      value: getPrivacyShieldValue(tx, false),
+      compactValue: getPrivacyShieldValue(tx, true),
+    };
+  }
   const originHostname =
     originDisplayHostname ?? getOriginHostname(tx.origin);
   const arrow = " → ";

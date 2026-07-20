@@ -7,6 +7,7 @@ import {
   WALLET_SYNC_STORAGE_KEYS,
 } from "../walletResetStorage";
 import { withStorageLock } from "../storageLock";
+import { deletePrivacyOperationsDatabase } from "../privacy/operations/repository";
 
 export const ONBOARDING_INITIALIZATION_KEY = "onboardingInitialization";
 export const ONBOARDING_LOCK_KEY = `local:${ONBOARDING_INITIALIZATION_KEY}`;
@@ -21,6 +22,7 @@ const AUTHORITATIVE_WALLET_LOCAL_STORAGE_KEYS = [
   "passkeyUnlock",
   "pkVault",
   "mnemonicVault",
+  "privacyVault",
   "accounts",
   "seedGroups",
 ] as const;
@@ -84,6 +86,7 @@ export async function clearNonAuthoritativeWalletResidue(
   await Promise.all([
     chrome.storage.local.remove(localKeys),
     chrome.storage.sync.remove([...ONBOARDING_IDENTITY_SYNC_KEYS]),
+    deletePrivacyOperationsDatabase(),
   ]);
 }
 
@@ -176,6 +179,7 @@ export async function rollbackMarkedInitialization(
     await Promise.all([
       chrome.storage.local.remove(getWalletLocalStorageKeysToRemove(allLocal)),
       chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
+      deletePrivacyOperationsDatabase(),
     ]);
     return true;
   });

@@ -37,6 +37,24 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "rollbackOnboardingInitialization",
   "onboardingComplete",
 
+  // Privacy Pools identity
+  "privacyEnsureInitialized",
+  "privacyRunShieldReadinessCheck",
+  "privacyRunProverSelfTest",
+  "privacyQuoteShield",
+  "privacyPrepareShieldReview",
+  "privacyPrepareShield",
+  "privacyListShieldOperations",
+  "privacySyncShield",
+  "privacyPrepareUnshieldQuote",
+  "privacyExecuteUnshield",
+  "privacyPrepareRagequit",
+  "privacyGetRecoveryStatus",
+  "privacyRevealRecovery",
+  "privacyRestoreRecovery",
+  "privacyRescanRecovery",
+  "privacyGetResetRisk",
+
   // Transaction/signature confirmations and rejection
   "confirmTransaction",
   "confirmTransactionAsync",

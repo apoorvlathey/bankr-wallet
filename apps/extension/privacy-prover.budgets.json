@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "cleanBuildBytes": 57671680,
+  "artifactBytes": 25165824,
+  "proverWorkerBytes": 524288,
+  "backgroundBundleBytes": 4194304,
+  "fixedSelfTestMs": 60000,
+  "restartSelfTestMs": 60000,
+  "peakBrowserRssDeltaBytes": 536870912,
+  "maxConcurrentProofs": 1
+}

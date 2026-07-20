@@ -13,6 +13,7 @@ export type {
   CompletedTransaction,
   ForceInclusionMeta,
   GasData,
+  PrivacyShieldHistoryMeta,
   SwapMeta,
   TransferMeta,
   TxCallOrigin,

@@ -1,6 +1,7 @@
 import { Badge } from "@chakra-ui/react";
 import { InfoOutlineIcon } from "@chakra-ui/icons";
 import { SettingsRow } from "./SettingsRow";
+import { PrivacyRecoverySettingsRow } from "./PrivacyRecoverySettingsRow";
 import {
   PaletteIcon,
   LockIcon,
@@ -15,7 +16,6 @@ import {
   GlobeIcon,
   SpeakerIcon,
 } from "./icons";
-
 export type LeafId =
   | "about"
   | "appearance"
@@ -23,6 +23,7 @@ export type LeafId =
   | "changePassword"
   | "agentPassword"
   | "biometricUnlock"
+  | "privacyRecovery"
   | "autoLock"
   | "chains"
   | "ensBrowsing"
@@ -82,6 +83,13 @@ export const LEAF_ENTRIES: readonly LeafEntry[] = [
     title: "Biometric Unlock",
     subtitle: "Unlock this device with a passkey",
     keywords: ["biometric", "passkey", "fingerprint", "face", "unlock", "security"],
+    group: "security",
+  },
+  {
+    id: "privacyRecovery",
+    title: "Shield Recovery",
+    subtitle: "Back up or restore your Shield phrase",
+    keywords: ["shield", "privacy", "recovery", "backup", "restore", "phrase"],
     group: "security",
   },
   {
@@ -159,21 +167,8 @@ export function filterLeaves(query: string): LeafEntry[] {
   });
 }
 
-export type NavigableLeafId =
-  | "about"
-  | "appearance"
-  | "sounds"
-  | "changePassword"
-  | "agentPassword"
-  | "biometricUnlock"
-  | "autoLock"
-  | "chains"
-  | "ensBrowsing"
-  | "clearSigning"
-  | "clearTxHistory";
-
 export type ActionLeafId = "resetNonce" | "clearChatHistory";
-
+export type NavigableLeafId = Exclude<LeafId, ActionLeafId>;
 export interface RowContext {
   isDarkTheme: boolean;
   chainStripBg: string;
@@ -332,6 +327,11 @@ export function renderLeafRow(id: LeafId, ctx: RowContext) {
           }
         />
       );
+    }
+
+    case "privacyRecovery": {
+      const disabled = ctx.passwordType === "agent";
+      return <PrivacyRecoverySettingsRow key={id} disabled={disabled} onClick={() => ctx.onNavigate(id)} />;
     }
 
     case "autoLock":

@@ -21,6 +21,7 @@ import {
 import {
   clearAllAuthState,
   clearInMemoryAuthCache,
+  getCachedPrivacyKey,
   resolvePasswordType,
 } from "../sessionCache";
 import {
@@ -39,6 +40,8 @@ import {
   checkHasVaultKeySystem,
   handleUnlockWallet,
 } from "./walletUnlock";
+import { PRIVACY_VAULT_STORAGE_KEY } from "../privacy/record";
+import { preparePrivacyVaultForPasswordRotation } from "../privacy/vault";
 
 /** Atomically rotates the explicit master-password recovery factor. */
 export async function handleChangePassword(
@@ -114,6 +117,20 @@ export async function handleChangePassword(
             return {
               success: false,
               error: `${generalIntegrity.error}. Password was not changed.`,
+            };
+          }
+
+          const newPrivacyVault =
+            await preparePrivacyVaultForPasswordRotation(
+              currentPassword,
+              newPassword,
+              getCachedPrivacyKey(),
+            );
+          if (newPrivacyVault === false) {
+            return {
+              success: false,
+              error:
+                "Shield recovery could not be verified. Password was not changed.",
             };
           }
 
@@ -199,11 +216,28 @@ export async function handleChangePassword(
           if (migratedVault) {
             storageUpdate[VAULT_STORAGE_KEY] = migratedVault;
           }
+          if (newPrivacyVault) {
+            storageUpdate[PRIVACY_VAULT_STORAGE_KEY] = newPrivacyVault;
+          }
           await chrome.storage.local.set(storageUpdate);
         } else {
           // Legacy API, PK, and mnemonic data must all rotate in one write.
           if (!(await verifyMasterPassword(currentPassword))) {
             return { success: false, error: "Invalid master password" };
+          }
+
+          const newPrivacyVault =
+            await preparePrivacyVaultForPasswordRotation(
+              currentPassword,
+              newPassword,
+              getCachedPrivacyKey(),
+            );
+          if (newPrivacyVault === false) {
+            return {
+              success: false,
+              error:
+                "Shield recovery could not be verified. Password was not changed.",
+            };
           }
 
           const storageUpdate: Record<string, unknown> = {};
@@ -247,6 +281,10 @@ export async function handleChangePassword(
               };
             }
             storageUpdate.mnemonicVault = newMnemonicVault;
+          }
+
+          if (newPrivacyVault) {
+            storageUpdate[PRIVACY_VAULT_STORAGE_KEY] = newPrivacyVault;
           }
 
           if (Object.keys(storageUpdate).length > 0) {

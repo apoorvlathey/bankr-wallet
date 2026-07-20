@@ -142,6 +142,34 @@ export function getPreviewActivityTransactions(): CompletedTransaction[] {
   return [
     {
       ...shared,
+      id: "preview-shield-awaiting-asp",
+      status: "success",
+      origin: "WalletChan Shield",
+      favicon: previewAssets.brand.walletChan,
+      chainName: "Sepolia",
+      chainId: 11_155_111,
+      createdAt: PREVIEW_EPOCH_MS - 20 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 19 * 60_000,
+      txHash:
+        "0x4d842ed9a61f8e49a1d5ab5f8c0db21e8a2be15be38d1dde7c47b9f1205b78a1",
+      tx: {
+        from: PREVIEW_WALLETS.privateKey.address,
+        to: "0x1111111111111111111111111111111111111111",
+        data: "0x",
+        value: `0x${3_000_000_000_000_000n.toString(16)}`,
+        chainId: 11_155_111,
+      },
+      privacyShieldMeta: {
+        version: 1,
+        operationId: "preview-shield-awaiting-asp",
+        state: "awaiting_asp",
+        updatedAt: PREVIEW_EPOCH_MS - 19 * 60_000,
+        amountWei: "3000000000000000",
+        shieldedAmountWei: "2970000000000000",
+      },
+    },
+    {
+      ...shared,
       id: "preview-activity-send",
       status: "success",
       origin: "WalletChan",

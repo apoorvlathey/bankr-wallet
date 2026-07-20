@@ -1,0 +1,232 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  parseShieldOperationListResponse,
+  parseShieldOperationResponse,
+} from "../../src/components/Shield/model/shieldOperation";
+import {
+  getPublicWithdrawalCopy,
+  getPublicWithdrawalOffer,
+} from "../../src/components/Shield/model/recovery";
+
+const account = {
+  id: "pk-1",
+  type: "privateKey" as const,
+  address: "0x1111111111111111111111111111111111111111",
+};
+
+function operation() {
+  return {
+    id: "00000000-0000-4000-8000-000000000001",
+    revision: 0,
+    state: "awaiting_wallet_confirmation",
+    createdAt: 1,
+    chainId: 11_155_111,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: account.type,
+    amountWei: "100000000000000000",
+    protocolFeeWei: "1000000000000000",
+    shieldedAmountWei: "99000000000000000",
+    gasReserveWei: "200000000000000",
+    totalRequiredWei: "100200000000000000",
+    destinationAddress: "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB",
+    poolAddress: "0x644d5A2554d36e27509254F32ccfeBe8cd58861f",
+    txHash: null,
+    blockNumber: null,
+    errorCode: null,
+  };
+}
+
+function portfolio() {
+  return {
+    status: "ready",
+    confirmedBalanceWei: "99000000000000000",
+    readyBalanceWei: "99000000000000000",
+    pendingBalanceWei: "0",
+    recoverableBalanceWei: "0",
+    attentionCount: 0,
+    lastUpdatedAt: 2,
+  };
+}
+
+test("Shield operation response accepts only the pinned account and amount", () => {
+  const response = {
+    success: true,
+    status: "awaiting_wallet_confirmation",
+    operation: operation(),
+  };
+  const parsed = parseShieldOperationResponse(
+    response,
+    account,
+    100_000_000_000_000_000n,
+  );
+  assert.ok(parsed);
+  assert.equal(parsed.state, "awaiting_wallet_confirmation");
+
+  response.operation.amountWei = "100000000000000001";
+  assert.equal(
+    parseShieldOperationResponse(
+      response,
+      account,
+      100_000_000_000_000_000n,
+    ),
+    null,
+  );
+});
+
+test("Shield activity accepts only aggregate private balance and public operations", () => {
+  const recovery = {
+    id: "00000000-0000-4000-8000-000000000004",
+    state: "awaiting_wallet_confirmation",
+    revision: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    chainId: 11_155_111,
+    amountWei: "1000",
+    accountAddress: account.address,
+    txHash: null,
+    blockNumber: null,
+    errorCode: null,
+  };
+  const valid = { success: true, operations: [operation()], portfolio: portfolio(), withdrawals: [], recoveries: [recovery] };
+  const parsed = parseShieldOperationListResponse(valid);
+  assert.equal(parsed?.operations.length, 1);
+  assert.equal(parsed?.recoveries.length, 1);
+  assert.equal(parsed?.portfolio.confirmedBalanceWei, 99_000_000_000_000_000n);
+  assert.equal(parsed?.portfolio.readyBalanceWei, 99_000_000_000_000_000n);
+
+  const secret = operation() as any;
+  secret.callData = "0xsecret";
+  assert.equal(
+    parseShieldOperationListResponse({
+      success: true,
+      operations: [secret],
+      portfolio: portfolio(),
+      withdrawals: [],
+      recoveries: [],
+    }),
+    null,
+  );
+
+  const mismatched = operation();
+  mismatched.shieldedAmountWei = "1";
+  assert.equal(
+    parseShieldOperationListResponse({
+      success: true,
+      operations: [mismatched],
+      portfolio: portfolio(),
+      withdrawals: [],
+      recoveries: [],
+    }),
+    null,
+  );
+  assert.equal(
+    parseShieldOperationListResponse({
+      success: true,
+      operations: [operation()],
+      portfolio: { ...portfolio(), commitment: "123" },
+      withdrawals: [],
+      recoveries: [],
+    }),
+    null,
+  );
+});
+
+test("ASP-pending funds offer a plain-language public withdrawal", () => {
+  assert.deepEqual(getPublicWithdrawalCopy(true), {
+    title: "Withdraw without waiting?",
+    action: "Withdraw publicly",
+  });
+  assert.equal(
+    getPublicWithdrawalCopy(false).title,
+    "Private Unshield unavailable",
+  );
+});
+
+test("an indexed pending operation keeps public withdrawal visible before materialization", () => {
+  const pending = {
+    ...operation(),
+    state: "awaiting_asp",
+    shieldedAmountWei: 99_000_000_000_000_000n,
+  };
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 0n,
+    operations: [pending],
+  }), {
+    amountWei: pending.shieldedAmountWei,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: true,
+  });
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account: { ...account, id: "pk-2" },
+    recoverableBalanceWei: 0n,
+    operations: [pending],
+  }), {
+    amountWei: pending.shieldedAmountWei,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: false,
+  });
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account: { ...account, type: "bankr" },
+    recoverableBalanceWei: pending.shieldedAmountWei,
+    operations: [pending],
+  }), {
+    amountWei: pending.shieldedAmountWei,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: false,
+  });
+});
+
+test("public withdrawal amounts stay scoped to one depositing account", () => {
+  const first = {
+    ...operation(),
+    state: "awaiting_asp",
+    shieldedAmountWei: 3n,
+    createdAt: 10,
+  };
+  const second = {
+    ...operation(),
+    id: "315c4871-4208-48de-b9ce-315b233a7301",
+    accountId: "seed-2",
+    accountAddress: "0x2222222222222222222222222222222222222222",
+    accountType: "seedPhrase",
+    state: "awaiting_asp",
+    shieldedAmountWei: 2n,
+    createdAt: 20,
+  };
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account: null,
+    recoverableBalanceWei: 0n,
+    operations: [first, second],
+  }), {
+    amountWei: 3n,
+    accountId: first.accountId,
+    accountAddress: first.accountAddress,
+    accountType: "privateKey",
+    activeAccountMatches: false,
+  });
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account: {
+      id: second.accountId,
+      address: second.accountAddress,
+      type: second.accountType,
+    },
+    recoverableBalanceWei: second.shieldedAmountWei,
+    operations: [first, second],
+  }), {
+    amountWei: 2n,
+    accountId: second.accountId,
+    accountAddress: second.accountAddress,
+    accountType: "seedPhrase",
+    activeAccountMatches: true,
+  });
+});

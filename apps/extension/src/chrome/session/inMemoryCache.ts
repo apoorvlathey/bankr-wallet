@@ -14,6 +14,12 @@ export interface CachedMnemonicKey {
   keyId: string;
 }
 
+export interface CachedPrivacyKey {
+  key: CryptoKey;
+  keyBytes: Uint8Array;
+  keyId: string;
+}
+
 let cachedApiKey: string | null = null;
 let cachedPassword: string | null = null;
 let cacheTimestamp = 0;
@@ -24,6 +30,7 @@ let vaultCacheTimestamp = 0;
 let cachedPasswordType: PasswordType | null = null;
 let cachedVaultKey: CryptoKey | null = null;
 let cachedMnemonicKey: CachedMnemonicKey | null = null;
+let cachedPrivacyKey: CachedPrivacyKey | null = null;
 let authCacheTimestamp = 0;
 let authSessionHardExpiresAt: number | null = null;
 
@@ -38,12 +45,14 @@ function isCacheEntryValid(timestamp: number, timeout: number): boolean {
 }
 
 export function clearInMemoryAuthCache(): void {
+  cachedPrivacyKey?.keyBytes.fill(0);
   cachedApiKey = null;
   cachedPassword = null;
   cachedVault = null;
   cachedPasswordType = null;
   cachedVaultKey = null;
   cachedMnemonicKey = null;
+  cachedPrivacyKey = null;
   cacheTimestamp = 0;
   vaultCacheTimestamp = 0;
   authCacheTimestamp = 0;
@@ -123,6 +132,25 @@ export function setCachedMnemonicKey(value: CachedMnemonicKey | null): void {
   if (value) authCacheTimestamp = Date.now();
 }
 
+export function getCachedPrivacyKey(
+  timeout: number,
+): CachedPrivacyKey | null {
+  if (cachedPrivacyKey && isCacheEntryValid(authCacheTimestamp, timeout)) {
+    return cachedPrivacyKey;
+  }
+  if (cachedPrivacyKey) clearInMemoryAuthCache();
+  return null;
+}
+
+export function setCachedPrivacyKey(value: CachedPrivacyKey | null): void {
+  const nextValue = value
+    ? { ...value, keyBytes: new Uint8Array(value.keyBytes) }
+    : null;
+  cachedPrivacyKey?.keyBytes.fill(0);
+  cachedPrivacyKey = nextValue;
+  if (value) authCacheTimestamp = Date.now();
+}
+
 export function getPasswordType(timeout: number): PasswordType | null {
   if (cachedPasswordType && isCacheEntryValid(authCacheTimestamp, timeout)) {
     return cachedPasswordType;
@@ -165,7 +193,12 @@ export function decrementUIConnections(): void {
   activeUIConnections = 0;
   if (cachedApiKey) cacheTimestamp = Date.now();
   if (cachedVault) vaultCacheTimestamp = Date.now();
-  if (cachedVaultKey || cachedMnemonicKey || cachedPasswordType) {
+  if (
+    cachedVaultKey ||
+    cachedMnemonicKey ||
+    cachedPrivacyKey ||
+    cachedPasswordType
+  ) {
     authCacheTimestamp = Date.now();
   }
 }

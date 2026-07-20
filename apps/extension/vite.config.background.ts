@@ -1,10 +1,35 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import path from "path";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { sharedConfig, sharedBuildConfig, buildDir } from "./vite.config";
 
 const isFirefox = process.env.BROWSER === "firefox";
+
+const privacySdkServiceWorkerBoundary = (): Plugin => ({
+  name: "privacy-sdk-service-worker-boundary",
+  enforce: "post",
+  generateBundle(_options, bundle) {
+    const background = Object.values(bundle).find(
+      (entry) => entry.type === "chunk" && entry.fileName === "background.js",
+    );
+    if (!background || background.type !== "chunk") {
+      this.error("Missing background service-worker bundle");
+    }
+    const forbiddenMarkers = [
+      "curve_bn128",
+      "URL.createObjectURL(workerBlob)",
+      "The nonce must be less than 2 ^ 128",
+    ];
+    for (const marker of forbiddenMarkers) {
+      if (background.code.includes(marker)) {
+        this.error(
+          `Privacy Pools prover/worker code leaked into background.js: ${marker}`,
+        );
+      }
+    }
+  },
+});
 
 export default defineConfig(({ mode }) => {
   const extensionEnv = loadEnv(mode, __dirname, "");
@@ -49,6 +74,25 @@ export default defineConfig(({ mode }) => {
           __dirname,
           "src/chrome/walletConnect/payUnavailable.ts",
         ),
+        // The SDK's published root barrel eagerly bundles snarkjs/ffjavascript.
+        // ffjavascript calls URL.createObjectURL at module evaluation time,
+        // which is unavailable in a Chrome MV3 service worker. Consume the
+        // package's reviewed pure crypto source directly so the background
+        // includes the official derivation/hash primitives without prover or
+        // worker startup code. The package version and source provenance remain
+        // pinned by privacy-pools.protocol.json and the lockfile tests.
+        "@0xbow/privacy-pools-core-sdk": path.resolve(
+          __dirname,
+          "node_modules/@0xbow/privacy-pools-core-sdk/src/crypto.ts",
+        ),
+        // The SDK's maci-crypto dependency initializes Poseidon constants for
+        // every supported width at service-worker startup. Privacy Pools uses
+        // only widths 1-3, so bind that exact surface to a vector-checked
+        // lightweight implementation and avoid the large eager allocation.
+        "maci-crypto/build/ts/hashing.js": path.resolve(
+          __dirname,
+          "src/chrome/privacy/protocol/poseidonLite.ts",
+        ),
       },
     },
     plugins: [
@@ -61,6 +105,7 @@ export default defineConfig(({ mode }) => {
           process: true,
         },
       }),
+      privacySdkServiceWorkerBoundary(),
     ],
     build: {
       ...sharedBuildConfig,

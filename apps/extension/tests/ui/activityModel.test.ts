@@ -8,6 +8,11 @@ import {
   getActivityStatusModel,
   groupActivityByDate,
 } from "../../src/components/Activity/activityModel";
+import {
+  getPrivacyShieldActivitySyncPlan,
+  SHIELD_ACTIVITY_ACTIVE_SYNC_MS,
+  SHIELD_ACTIVITY_ASP_SYNC_MS,
+} from "../../src/components/Activity/privacyShieldActivityModel";
 import { buildActivityAddressLabels } from "../../src/components/Activity/activityIdentityModel";
 
 const transaction = (
@@ -216,4 +221,110 @@ test("transfer-only history resolves its recipient from current identities", () 
     ),
   );
   assert.equal(after.context, "To Newly added account");
+});
+
+test("Shield activity presents amount and durable Privacy Pools progress", () => {
+  const tx = transaction({
+    id: "shield-operation",
+    origin: "WalletChan Shield",
+    chainId: 11_155_111,
+    chainName: "Sepolia",
+    privacyShieldMeta: {
+      version: 1,
+      operationId: "shield-operation",
+      state: "awaiting_asp",
+      updatedAt: 10,
+      amountWei: "3000000000000000",
+      shieldedAmountWei: "2970000000000000",
+    },
+  });
+
+  assert.deepEqual(getActivityPresentation(tx), {
+    originHostname: null,
+    intent: "Shield ETH",
+    context: "Waiting for eligibility",
+    value: "−0.003 ETH",
+    compactValue: "−0.003 ETH",
+  });
+  assert.deepEqual(getActivityStatusModel(tx).privacyShield, {
+    context: "Waiting for eligibility",
+    statusLabel: "Step 4 of 4",
+    tone: "warning",
+    pending: true,
+  });
+
+  const ready = {
+    ...tx,
+    privacyShieldMeta: {
+      ...tx.privacyShieldMeta!,
+      state: "private_ready" as const,
+      updatedAt: 20,
+    },
+  };
+  assert.equal(getActivityPresentation(ready).context, "Ready to Unshield");
+  assert.equal(getActivityStatusModel(ready).privacyShield?.statusLabel, "Ready");
+
+  const withdrawn = {
+    ...tx,
+    privacyShieldMeta: {
+      ...tx.privacyShieldMeta!,
+      state: "ragequit_recovered" as const,
+      updatedAt: 30,
+    },
+  };
+  assert.equal(getActivityPresentation(withdrawn).context, "Withdrawn publicly");
+  assert.equal(
+    getActivityStatusModel(withdrawn).privacyShield?.statusLabel,
+    "Withdrawn",
+  );
+});
+
+test("Shield activity sync uses active and ASP-specific cadences", () => {
+  const shield = transaction({
+    id: "shield-operation",
+    origin: "WalletChan Shield",
+    chainId: 11_155_111,
+    privacyShieldMeta: {
+      version: 1,
+      operationId: "shield-operation",
+      state: "submitted",
+      updatedAt: 10,
+      amountWei: "3000000000000000",
+      shieldedAmountWei: "2970000000000000",
+    },
+  });
+  assert.equal(
+    getPrivacyShieldActivitySyncPlan([shield]).delay,
+    SHIELD_ACTIVITY_ACTIVE_SYNC_MS,
+  );
+  assert.equal(
+    getPrivacyShieldActivitySyncPlan([
+      {
+        ...shield,
+        privacyShieldMeta: {
+          ...shield.privacyShieldMeta!,
+          state: "awaiting_asp",
+        },
+      },
+    ]).delay,
+    SHIELD_ACTIVITY_ASP_SYNC_MS,
+  );
+  assert.equal(
+    getPrivacyShieldActivitySyncPlan([
+      {
+        ...shield,
+        privacyShieldMeta: {
+          ...shield.privacyShieldMeta!,
+          state: "private_ready",
+        },
+      },
+    ]).shouldSync,
+    false,
+  );
+  assert.equal(
+    getPrivacyShieldActivitySyncPlan([
+      { ...shield, privacyShieldMeta: undefined },
+    ]).shouldSync,
+    true,
+  );
 });

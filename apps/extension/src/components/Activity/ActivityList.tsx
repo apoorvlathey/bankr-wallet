@@ -18,6 +18,7 @@ import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import ActivityItem from "./ActivityItem";
 import { buildActivityAddressLabels } from "./activityIdentityModel";
 import { groupActivityByDate } from "./activityModel";
+import { usePrivacyShieldActivitySync } from "./usePrivacyShieldActivitySync";
 
 interface ActivityListProps {
   maxItems?: number;
@@ -46,6 +47,7 @@ function TxStatusList({
   const [selectedTx, setSelectedTx] = useState<CompletedTransaction | null>(
     null,
   );
+  usePrivacyShieldActivitySync(allHistory);
   const { contacts } = useAddressContacts();
   const formatOrigin = useDappOriginFormatter();
   const addressLabels = useMemo(

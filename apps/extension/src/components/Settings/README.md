@@ -32,3 +32,9 @@ Settings components call trusted renderer message routes but do not reproduce
 background authorization, storage, RPC, or cryptographic policy. New settings
 subfeatures should use a focused component or hook instead of growing the root
 router.
+
+`PrivacyRecoverySettings.tsx` is the dedicated secret-bearing Shield phrase
+backup/restore surface. It owns only temporary form/display state and clipboard
+effects; the background owns password proof, vault mutation, and Sepolia
+rescan policy. `PrivacyRecoverySettingsRow.tsx` keeps its agent-disabled
+navigation presentation out of the Settings registry composition file.

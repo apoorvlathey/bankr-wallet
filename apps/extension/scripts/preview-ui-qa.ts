@@ -47,6 +47,7 @@ const EXPANDED_FRAME_ROUTES = new Set([
   "portfolio",
   "tx-detail",
   "swap",
+  "shield",
   "batch",
   "permission",
   "send",

@@ -24,6 +24,18 @@ import { getAccountById } from "../accountStorage";
 import type { Account } from "../types";
 import { lookupFunctionName } from "./displayMetadata";
 import { handleTransactionFailure } from "./failure";
+import {
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+  recordPrivacyShieldSubmissionFailure,
+} from "../privacy/operations/lifecycle";
+import type { PrivacyShieldConfirmationAuthorization } from "../privacy/operations/submission";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+  recordPrivacyRagequitSubmissionFailure,
+} from "../privacy/ragequit/lifecycle";
+import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
 
 export interface GasOverrides {
   gasLimit: string;
@@ -49,6 +61,8 @@ export async function processLocalTransactionInBackground(
   gasOverrides?: GasOverrides,
   effectLease?: PendingRequestEffectLease,
   expectedDelegatedAuthorityAuthEpoch?: string,
+  privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
+  privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -184,12 +198,28 @@ export async function processLocalTransactionInBackground(
             expectedDelegatedAuthorityAuthEpoch,
           );
         }
+        await beginPrivacyShieldSubmission(
+          pending,
+          privacyShieldAuthorization ?? null,
+        );
+        await beginPrivacyRagequitSubmission(
+          pending,
+          privacyRagequitAuthorization ?? null,
+        );
         effectGuard.beginEffect();
       },
     );
     effectGuard.settleEffect();
 
     const txHash = result.txHash;
+    if (txHash) {
+      await recordPrivacyShieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-shield] failed to persist submitted hash", error),
+      );
+      await recordPrivacyRagequitSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-ragequit] failed to persist submitted hash", error),
+      );
+    }
     if (txHash && result.receipt) {
       await applyReceiptToHistory(
         txId,
@@ -211,6 +241,12 @@ export async function processLocalTransactionInBackground(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     resetNonce(pending.tx.from, pending.tx.chainId);
+    await recordPrivacyShieldSubmissionFailure(pending).catch((trackingError) =>
+      console.warn("[privacy-shield] failed to persist submission failure", trackingError),
+    );
+    await recordPrivacyRagequitSubmissionFailure(pending).catch((trackingError) =>
+      console.warn("[privacy-ragequit] failed to persist submission failure", trackingError),
+    );
     await handleTransactionFailure(txId, pending, errorMessage);
   } finally {
     effectGuard.releaseIfSafe();

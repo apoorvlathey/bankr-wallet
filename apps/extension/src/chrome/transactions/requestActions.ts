@@ -12,6 +12,22 @@ export async function handleRejectTransaction(
   if (!pending) {
     return { success: false, error: "Transaction request not found" };
   }
+  try {
+    const { recordPrivacyShieldWalletRejected } = await import(
+      "../privacy/operations/lifecycle"
+    );
+    await recordPrivacyShieldWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-shield] failed to persist wallet rejection", error);
+  }
+  try {
+    const { recordPrivacyRagequitWalletRejected } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-ragequit] failed to persist wallet rejection", error);
+  }
   await removePendingTxRequest(txId);
   await writeResultToStorage(`txResult:${txId}`, {
     success: false,

@@ -35,6 +35,7 @@ export async function getOnboardingInitializationStatus(
     "passkeyUnlock",
     "pkVault",
     "mnemonicVault",
+    "privacyVault",
     "accounts",
     "seedGroups",
   ]);

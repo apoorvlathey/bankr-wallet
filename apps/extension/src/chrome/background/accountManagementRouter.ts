@@ -47,9 +47,17 @@ export type BackgroundAccountManagementDependencies = {
   removeAccountWithDappPrivacyBoundary: (options: any) => Promise<any>;
   getAccountById: (accountId: string) => Promise<any>;
   hasUnresolvedSponsoredTransferIntent: (address: string) => Promise<boolean>;
+  assertPrivacyAccountRemovalSafe: (input: {
+    accountId: string;
+    accountAddress: string;
+  }) => Promise<void>;
   getAccounts: () => Promise<any[]>;
   handleRevokeDappPermission: (origin: string) => Promise<any>;
-  handleRemoveAccount: (accountId: string, expectedEpoch: string) => Promise<any>;
+  handleRemoveAccount: (
+    accountId: string,
+    expectedEpoch: string,
+    validateRemoval?: () => Promise<void>,
+  ) => Promise<any>;
   sendRuntimeMessage: (message: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -247,6 +255,10 @@ async function removeAccount(
               "Check the pending sponsored transfer before removing this account",
             );
           }
+          await dependencies.assertPrivacyAccountRemovalSafe({
+            accountId: message.accountId,
+            accountAddress: account.address,
+          });
           if ((await dependencies.getAccounts()).length <= 1) {
             throw new Error("Cannot remove the last account");
           }
@@ -257,6 +269,14 @@ async function removeAccount(
           dependencies.handleRemoveAccount(
             message.accountId,
             operationAuthEpoch,
+            async () => {
+              const account = await dependencies.getAccountById(message.accountId);
+              if (!account) throw new Error("Account not found");
+              await dependencies.assertPrivacyAccountRemovalSafe({
+                accountId: message.accountId,
+                accountAddress: account.address,
+              });
+            },
           ),
       }),
     );

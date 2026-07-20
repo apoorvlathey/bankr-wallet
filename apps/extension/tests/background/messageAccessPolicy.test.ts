@@ -11,6 +11,8 @@ import {
 import { BACKGROUND_AUTH_MESSAGE_TYPES } from "../../src/chrome/background/authRouter";
 import { BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES } from "../../src/chrome/background/bankrCredentialRouter";
 import { BACKGROUND_ONBOARDING_MESSAGE_TYPES } from "../../src/chrome/background/onboardingRouter";
+import { BACKGROUND_PRIVACY_MESSAGE_TYPES } from "../../src/chrome/background/privacyRouter";
+import { BACKGROUND_PRIVACY_RECOVERY_MESSAGE_TYPES } from "../../src/chrome/background/privacyRecoveryRouter";
 import { BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES } from "../../src/chrome/background/accountStateRouter";
 import { BACKGROUND_CONTACT_BOOK_MESSAGE_TYPES } from "../../src/chrome/background/contactBookRouter";
 import { BACKGROUND_SETTINGS_MESSAGE_TYPES } from "../../src/chrome/background/settingsRouter";
@@ -76,6 +78,8 @@ test("every main background route has exactly one explicit audience", async () =
     BACKGROUND_AUTH_MESSAGE_TYPES,
     BACKGROUND_BANKR_CREDENTIAL_MESSAGE_TYPES,
     BACKGROUND_ONBOARDING_MESSAGE_TYPES,
+    BACKGROUND_PRIVACY_MESSAGE_TYPES,
+    BACKGROUND_PRIVACY_RECOVERY_MESSAGE_TYPES,
     BACKGROUND_ACCOUNT_STATE_MESSAGE_TYPES,
     BACKGROUND_CONTACT_BOOK_MESSAGE_TYPES,
     BACKGROUND_SETTINGS_MESSAGE_TYPES,
@@ -174,6 +178,8 @@ test("delegated routers run after the audience gate and before unknown handling"
     "routeBackgroundAuthMessage",
     "routeBackgroundBankrCredentialMessage",
     "routeBackgroundOnboardingMessage",
+    "routeBackgroundPrivacyMessage",
+    "routeBackgroundPrivacyRecoveryMessage",
     "routeBackgroundAccountStateMessage",
     "routeBackgroundSettingsMessage",
     "routeBackgroundDappPermissionMessage",

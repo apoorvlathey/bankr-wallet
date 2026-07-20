@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "snarkjsVersion": "0.7.5",
+  "license": "GPL-3.0",
+  "status": "blocked-pending-legal-review",
+  "allowedTargets": ["unpacked-sepolia-test"]
+}

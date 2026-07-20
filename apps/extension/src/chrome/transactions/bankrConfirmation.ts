@@ -17,6 +17,7 @@ import {
   getBankrApiKeyForConfirmation,
 } from "./bankrSession";
 import {
+  bankrPrivacyConfirmationError,
   validateBankrTransactionChain,
   validatePinnedBankrTransaction,
 } from "./bankrPolicy";
@@ -25,13 +26,14 @@ import {
   processingTxIds,
   type TransactionResult,
 } from "./runtime";
-
 export async function handleConfirmTransaction(
   txId: string,
   password: string,
 ): Promise<TransactionResult> {
   const pending = await getPendingTxRequestById(txId);
   if (!pending) return { success: false, error: "Transaction request not found" };
+  const privacyError = bankrPrivacyConfirmationError(pending);
+  if (privacyError) return { success: false, error: privacyError };
 
   const policy = await validatePinnedBankrTransaction(pending);
   if (!policy.ok) return { success: false, error: policy.error };
@@ -111,6 +113,8 @@ export async function handleConfirmTransactionAsync(
 
   const pending = await getPendingTxRequestById(txId);
   if (!pending) return { success: false, error: "Transaction request not found" };
+  const privacyError = bankrPrivacyConfirmationError(pending);
+  if (privacyError) return { success: false, error: privacyError };
   const policy = await validatePinnedBankrTransaction(pending);
   if (!policy.ok) return { success: false, error: policy.error };
   const chainPolicy = validateBankrTransactionChain(

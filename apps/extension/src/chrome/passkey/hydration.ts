@@ -33,6 +33,7 @@ import {
   setCachedAutoLockTimeout,
 } from "../session/autoLockPolicy";
 import { getPasskeySessionBinding } from "./sessionBinding";
+import { unlockPrivacyVaultForPasskeySession } from "../privacy/passkey";
 
 export async function handleUnlockWithPasskey(
   payload: Partial<PasskeyCredentialPayload>,
@@ -45,6 +46,7 @@ export async function handleUnlockWithPasskey(
   }
 
   let unwrapped: UnwrappedPasskeyRecordKeys | null = null;
+  let privacyKeyBytes: Uint8Array | null = null;
   try {
     const record = await loadPasskeyUnlockRecord();
     if (!record) {
@@ -66,6 +68,11 @@ export async function handleUnlockWithPasskey(
     }
 
     let mnemonicKey: { key: CryptoKey; keyId: string } | null = null;
+    let privacyKey: {
+      key: CryptoKey;
+      keyBytes: Uint8Array;
+      keyId: string;
+    } | null = null;
     if (unwrapped.mnemonicKeyBytes && unwrapped.mnemonicKeyId) {
       const mnemonicVault = await loadMnemonicVault();
       if (
@@ -99,6 +106,24 @@ export async function handleUnlockWithPasskey(
       };
     }
 
+    try {
+      const preparedPrivacy = await unlockPrivacyVaultForPasskeySession(
+        payload.prfKeyMaterial,
+      );
+      if (preparedPrivacy) {
+        privacyKey = {
+          key: preparedPrivacy.key,
+          keyId: preparedPrivacy.keyId,
+          keyBytes: preparedPrivacy.keyBytes,
+        };
+        privacyKeyBytes = preparedPrivacy.keyBytes;
+      }
+    } catch (error) {
+      // Keep the wallet unlockable if optional Shield state is damaged. The
+      // Shield route will surface the fail-closed repair state when opened.
+      console.error("Failed to unlock privacy vault with biometrics:", error);
+    }
+
     await clearAllAuthState();
     const autoLockTimeout = await readStoredAutoLockTimeout();
     setCachedAutoLockTimeout(autoLockTimeout);
@@ -115,7 +140,7 @@ export async function handleUnlockWithPasskey(
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       unwrapped.vaultKeyBytes,
       "master",
-      { password: null, mnemonicKey },
+      { password: null, mnemonicKey, privacyKey },
     );
     if (!hydrated.success) {
       await clearAllAuthState();
@@ -154,5 +179,6 @@ export async function handleUnlockWithPasskey(
   } finally {
     unwrapped?.vaultKeyBytes.fill(0);
     unwrapped?.mnemonicKeyBytes?.fill(0);
+    privacyKeyBytes?.fill(0);
   }
 }

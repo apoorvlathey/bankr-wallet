@@ -10,6 +10,22 @@ export async function applyReceiptStateMirrors(args: {
   rpcUrl?: string;
 }): Promise<void> {
   const { txId, chainId, succeeded, rpcUrl } = args;
+  try {
+    const { applyPrivacyShieldReceipt } = await import(
+      "../privacy/operations/lifecycle"
+    );
+    await applyPrivacyShieldReceipt(args);
+  } catch (error) {
+    console.warn("[privacy-shield] receipt mirror failed", error);
+  }
+  try {
+    const { applyPrivacyRagequitReceipt } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await applyPrivacyRagequitReceipt(args);
+  } catch (error) {
+    console.warn("[privacy-ragequit] receipt mirror failed", error);
+  }
   await syncDelegationMirrorFromChain(txId, chainId, rpcUrl);
   if (succeeded) await markErc7715PermissionRevokedFromReceipt(txId);
 }

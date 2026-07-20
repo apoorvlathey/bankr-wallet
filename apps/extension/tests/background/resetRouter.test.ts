@@ -18,12 +18,21 @@ function createDependencies(
     resolvePasswordType: async () => "master",
     handleUnlockWallet: async () => ({ success: true }),
     hasUnresolvedSponsoredTransferIntent: async () => false,
+    readPrivacyResetRisk: async () => ({
+      hasShieldData: false,
+      backupVerified: false,
+    }),
     invalidateAuthCeremonies: () => {},
     invalidateAvatarImageCacheForWalletReset: () => {},
     clearAllAuthState: async () => {},
     resetWalletConnectForWalletReset: async () => {},
     withWalletSecretLock: async (work) => work(),
     performSecurityReset: async () => {},
+    deletePrivacyOperationsDatabase: async () => {},
+    deletePrivacyCommitmentsDatabase: async () => {},
+    deletePrivacyWithdrawalsDatabase: async () => {},
+    deletePrivacyRagequitsDatabase: async () => {},
+    clearPrivacyPublicEventCache: async () => {},
     getAllLocalStorage: async () => ({ accounts: [] }),
     getWalletLocalStorageKeysToRemove: () => ["accounts"],
     removeLocalStorage: async () => {},
@@ -39,21 +48,25 @@ function createDependencies(
 
 function dispatch(
   dependencies: BackgroundResetDependencies,
+  message: Record<string, unknown> = {
+    type: "resetExtension",
+    privacyAcknowledged: false,
+  },
 ): Promise<{ response: any; route: any }> {
   return new Promise((resolve) => {
     const router = createBackgroundResetMessageRouter(dependencies);
     let route: any;
-    route = router({ type: "resetExtension" }, (response) => {
+    route = router(message, (response) => {
       queueMicrotask(() => resolve({ response, route }));
     });
   });
 }
 
-test("reset transport declares one unique route", () => {
-  assert.equal(
-    new Set(BACKGROUND_RESET_MESSAGE_TYPES).size,
-    BACKGROUND_RESET_MESSAGE_TYPES.length,
-  );
+test("reset transport declares its exact unique route set", () => {
+  assert.deepEqual(BACKGROUND_RESET_MESSAGE_TYPES, [
+    "privacyGetResetRisk",
+    "resetExtension",
+  ]);
 });
 
 test("reset installs its barrier synchronously and preserves destructive order", async () => {
@@ -73,6 +86,10 @@ test("reset installs its barrier synchronously and preserves destructive order",
       assert.equal(unlock, dependencies.handleUnlockWallet);
       events.push(`password:${restore}`);
       return "master";
+    },
+    readPrivacyResetRisk: async () => {
+      events.push("privacy:risk");
+      return { hasShieldData: false, backupVerified: false };
     },
     hasUnresolvedSponsoredTransferIntent: async () => {
       events.push("sponsored");
@@ -95,6 +112,21 @@ test("reset installs its barrier synchronously and preserves destructive order",
     },
     performSecurityReset: async () => {
       events.push("security:reset");
+    },
+    deletePrivacyOperationsDatabase: async () => {
+      events.push("privacy-operations:reset");
+    },
+    deletePrivacyCommitmentsDatabase: async () => {
+      events.push("privacy-commitments:reset");
+    },
+    deletePrivacyWithdrawalsDatabase: async () => {
+      events.push("privacy-withdrawals:reset");
+    },
+    deletePrivacyRagequitsDatabase: async () => {
+      events.push("privacy-ragequits:reset");
+    },
+    clearPrivacyPublicEventCache: async () => {
+      events.push("privacy-events:reset");
     },
     getAllLocalStorage: async () => {
       events.push("local:get");
@@ -130,6 +162,7 @@ test("reset installs its barrier synchronously and preserves destructive order",
     "barrier",
     "transition:start",
     "password:true",
+    "privacy:risk",
     "sponsored",
     "auth:invalidate",
     "avatar:invalidate",
@@ -137,6 +170,11 @@ test("reset installs its barrier synchronously and preserves destructive order",
     "walletconnect:reset",
     "lock:start",
     "security:reset",
+    "privacy-operations:reset",
+    "privacy-commitments:reset",
+    "privacy-withdrawals:reset",
+    "privacy-ragequits:reset",
+    "privacy-events:reset",
     "local:get",
     "manifest:accounts,cache",
     "local:remove:accounts",
@@ -182,6 +220,49 @@ test("restored non-master and unresolved sponsored state fail before cleanup", a
     error: "Check pending sponsored transfers before resetting WalletChan",
   });
   assert.equal(cleanup, false);
+});
+
+test("Shield reset preflight is public and an unacknowledged identity blocks cleanup", async () => {
+  let cleanup = false;
+  const dependencies = createDependencies({
+    readPrivacyResetRisk: async () => ({
+      hasShieldData: true,
+      backupVerified: true,
+    }),
+    invalidateAuthCeremonies: () => {
+      cleanup = true;
+    },
+  });
+  const preflight = await dispatch(dependencies, { type: "privacyGetResetRisk" });
+  assert.deepEqual(preflight.response, {
+    success: true,
+    hasShieldData: true,
+    backupVerified: true,
+  });
+
+  const blocked = await dispatch(dependencies, {
+    type: "resetExtension",
+    privacyAcknowledged: false,
+  });
+  assert.deepEqual(blocked.response, {
+    success: false,
+    error:
+      "Confirm that you saved the Shield recovery phrase or accept that Shield funds cannot be restored",
+  });
+  assert.equal(cleanup, false);
+});
+
+test("reset rejects loose envelopes before installing the destructive barrier", async () => {
+  let claimed = false;
+  const dependencies = createDependencies({
+    runWalletResetAgainstPendingResolutions: async (options) => {
+      claimed = true;
+      return options.resolve();
+    },
+  });
+  const invalid = await dispatch(dependencies, { type: "resetExtension" });
+  assert.deepEqual(invalid.response, { success: false, error: "Invalid request" });
+  assert.equal(claimed, false);
 });
 
 test("reset conflicts and unexpected failures keep exact response contracts", async () => {

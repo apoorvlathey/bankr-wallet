@@ -25,13 +25,12 @@ import {
 import { loadPasskeyUnlockRecord } from "../passkey/repository";
 import { getPasskeySessionBinding } from "../passkey/sessionBinding";
 import { clearManualLockRestorationBlock } from "../authTransition";
-
+import { unlockPrivacyVaultWithPassword } from "../privacy/vault";
 export interface UnlockWalletResult {
   success: boolean;
   error?: string;
   passwordType?: PasswordType;
 }
-
 /** Unlock with either the current vault-key system or the legacy format. */
 export async function handleUnlockWallet(
   credential: string | RestoredPasskeySessionCredential,
@@ -42,9 +41,7 @@ export async function handleUnlockWallet(
   if (typeof credential !== "string") {
     return { success: false, error: "Invalid password" };
   }
-
   const hasVaultKeySystemActive = await checkHasVaultKeySystem();
-
   const result = hasVaultKeySystemActive
     ? await unlockWithVaultKeySystem(credential)
     : await unlockWithLegacySystem(credential);
@@ -133,25 +130,38 @@ async function unlockWithVaultKeySystem(
         mnemonicKey = { key: unlocked.key, keyId: unlocked.keyId };
       }
     } catch (error) {
-      // Corrupt mnemonic state must not lock out Bankr or private-key accounts.
       console.error("Failed to unlock mnemonic vault:", error);
     }
   }
-
-  const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
-    vaultKeyBytes,
-    passwordType,
-    {
-      password,
-      persistPasswordSession: true,
-      migrateLegacyPrivateKeys: passwordType === "master",
-      mnemonicKey,
-    },
-  );
+  const unlockedPrivacy =
+    passwordType === "master"
+      ? await unlockPrivacyVaultWithPassword(password).catch(() => null)
+      : null;
+  let hydrated: UnlockWalletResult;
+  try {
+    hydrated = await hydrateAuthSessionFromVaultKeyBytes(
+      vaultKeyBytes,
+      passwordType,
+      {
+        password,
+        persistPasswordSession: true,
+        migrateLegacyPrivateKeys: passwordType === "master",
+        mnemonicKey,
+        privacyKey: unlockedPrivacy
+          ? {
+              key: unlockedPrivacy.key,
+              keyBytes: unlockedPrivacy.keyBytes,
+              keyId: unlockedPrivacy.keyId,
+            }
+          : null,
+      },
+    );
+  } finally {
+    unlockedPrivacy?.keyBytes.fill(0);
+  }
   if (!hydrated.success) {
     return hydrated;
   }
-
   return { success: true, passwordType };
 }
 

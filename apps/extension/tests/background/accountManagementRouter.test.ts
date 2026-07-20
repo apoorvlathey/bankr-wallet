@@ -49,6 +49,7 @@ function createDependencies(
       address: "0x1111111111111111111111111111111111111111",
     }),
     hasUnresolvedSponsoredTransferIntent: async () => false,
+    assertPrivacyAccountRemovalSafe: async () => {},
     getAccounts: async () => [{ id: "account-1" }, { id: "account-2" }],
     handleRevokeDappPermission: async () => ({ success: true }),
     handleRemoveAccount: async () => ({ success: true }),
@@ -288,6 +289,9 @@ test("account removal validates sponsored state and revokes dapps before deletio
       events.push("sponsored:check");
       return false;
     },
+    assertPrivacyAccountRemovalSafe: async () => {
+      events.push("privacy:check");
+    },
     getAccounts: async () => {
       events.push("accounts:read");
       return [{}, {}];
@@ -295,7 +299,8 @@ test("account removal validates sponsored state and revokes dapps before deletio
     handleRevokeDappPermission: async () => {
       events.push("dapp:revoke");
     },
-    handleRemoveAccount: async () => {
+    handleRemoveAccount: async (_accountId, _epoch, validateRemoval) => {
+      await validateRemoval?.();
       events.push("account:remove");
       return { success: true };
     },
@@ -310,9 +315,42 @@ test("account removal validates sponsored state and revokes dapps before deletio
     "sponsored:start",
     "account:read",
     "sponsored:check",
+    "privacy:check",
     "accounts:read",
     "dapp:revoke",
+    "account:read",
+    "privacy:check",
     "account:remove",
     "sponsored:end",
   ]);
+});
+
+test("account removal stops before permission revocation when Shield funds are at risk", async () => {
+  const effects: string[] = [];
+  const dependencies = createDependencies({
+    removeAccountWithDappPrivacyBoundary: async (options) => {
+      await options.validateRemoval();
+      effects.push("validated");
+      return options.removeAccount();
+    },
+    assertPrivacyAccountRemovalSafe: async () => {
+      throw new Error(
+        "Unshield or recover this account's Shield balance before removing the account",
+      );
+    },
+    handleRemoveAccount: async () => {
+      effects.push("removed");
+      return { success: true };
+    },
+  });
+
+  const { response } = await dispatch(dependencies, {
+    type: "removeAccount",
+    accountId: "account-1",
+  });
+  assert.deepEqual(response, {
+    success: false,
+    error: "Unshield or recover this account's Shield balance before removing the account",
+  });
+  assert.deepEqual(effects, []);
 });

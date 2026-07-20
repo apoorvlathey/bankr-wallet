@@ -41,13 +41,17 @@ import {
 } from "../mnemonic/derivation";
 import {
   clearAllAuthState,
+  getCachedPrivacyKey,
   getPrivateKeyFromCache,
   setCachedMnemonicKey,
+  setCachedPrivacyKey,
 } from "../sessionCache";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
 } from "../storageLock";
+import { PRIVACY_VAULT_STORAGE_KEY } from "../privacy/record";
+import { preparePrivacyVaultForPasskeySetup } from "../privacy/vault";
 
 async function prepareAndCommitPasskeyState(
   payload: PasskeyCredentialPayload,
@@ -153,29 +157,52 @@ async function prepareAndCommitPasskeyState(
         }
       }
 
-      const built = await buildPasskeyRecord(payload, vaultKeyBytes, {
-        keyBytes: mnemonicKeyBytes,
-        keyId: mnemonicKeyId,
-      });
-      if (!built.success || !built.record) return built;
-      if (!isCurrentAuthCeremonyEpoch(payload.authCeremonyEpoch)) {
-        return stalePasskeyCeremonyResult();
-      }
-      if (requireCurrentMasterSession) {
-        try {
-          assertCurrentMasterAuthorization(payload.authCeremonyEpoch);
-        } catch {
-          return stalePasskeyCeremonyResult();
-        }
+      const preparedPrivacy = await preparePrivacyVaultForPasskeySetup(
+        masterPassword,
+        payload.prfKeyMaterial,
+        getCachedPrivacyKey(),
+      );
+      if (!preparedPrivacy) {
+        return {
+          success: false,
+          error:
+            "Shield recovery could not be protected. Biometric unlock was not changed.",
+        };
       }
 
-      await chrome.storage.local.set({
-        mnemonicVault: preparedMnemonicVault,
-        [PASSKEY_UNLOCK_STORAGE_KEY]: built.record,
-      });
-      setCachedMnemonicKey({ key: mnemonicKey, keyId: mnemonicKeyId });
-      invalidateAuthCeremonies();
-      return { success: true };
+      try {
+        const built = await buildPasskeyRecord(payload, vaultKeyBytes, {
+          keyBytes: mnemonicKeyBytes,
+          keyId: mnemonicKeyId,
+        });
+        if (!built.success || !built.record) return built;
+        if (!isCurrentAuthCeremonyEpoch(payload.authCeremonyEpoch)) {
+          return stalePasskeyCeremonyResult();
+        }
+        if (requireCurrentMasterSession) {
+          try {
+            assertCurrentMasterAuthorization(payload.authCeremonyEpoch);
+          } catch {
+            return stalePasskeyCeremonyResult();
+          }
+        }
+
+        await chrome.storage.local.set({
+          mnemonicVault: preparedMnemonicVault,
+          [PRIVACY_VAULT_STORAGE_KEY]: preparedPrivacy.record,
+          [PASSKEY_UNLOCK_STORAGE_KEY]: built.record,
+        });
+        setCachedMnemonicKey({ key: mnemonicKey, keyId: mnemonicKeyId });
+        setCachedPrivacyKey({
+          key: preparedPrivacy.unlocked.key,
+          keyBytes: preparedPrivacy.unlocked.keyBytes,
+          keyId: preparedPrivacy.unlocked.keyId,
+        });
+        invalidateAuthCeremonies();
+        return { success: true };
+      } finally {
+        preparedPrivacy.unlocked.keyBytes.fill(0);
+      }
     }),
   );
 }
@@ -264,11 +291,13 @@ export async function handleSetupPasskeyUnlockWithPassword(
       return { success: false, error: "Invalid master password" };
     }
 
+    const currentPrivacyKey = getCachedPrivacyKey();
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       vaultKeyBytes,
       "master",
       {
         password: masterPassword,
+        privacyKey: currentPrivacyKey,
         persistPasswordSession: true,
         migrateLegacyPrivateKeys: true,
       },

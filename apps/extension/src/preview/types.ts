@@ -10,6 +10,7 @@ export type PreviewRoute =
   | "portfolio"
   | "tx-detail"
   | "swap"
+  | "shield"
   | "swap-picker"
   | "components"
   | "mobile-primitives"

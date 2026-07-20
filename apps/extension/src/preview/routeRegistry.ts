@@ -172,6 +172,13 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     wallets: ALL_WALLETS,
     fidelity: "production",
   },
+  shield: {
+    label: "Shield",
+    defaultScenario: "default",
+    scenarios: ["default", "pending-eligibility"],
+    wallets: SIGNING_WALLETS,
+    fidelity: "production",
+  },
   "swap-picker": {
     label: "Swap picker",
     defaultScenario: "sell",

@@ -6,6 +6,7 @@ import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
+import { previewShieldPortfolioResponse } from "./shieldFixtures";
 import {
   createPreviewEnvironment,
   createPreviewFetch,
@@ -203,6 +204,119 @@ function activeAccount(environment: PreviewEnvironment) {
   );
 }
 
+const PREVIEW_SHIELD_BALANCE_WEI = 250_000_000_000_000_000n;
+const PREVIEW_SHIELD_GAS_RESERVE_WEI = 50_000_000_000_000n;
+const PREVIEW_SHIELD_MINIMUM_WEI = 1_000_000_000_000_000n;
+const PREVIEW_MAX_UINT256 = (1n << 256n) - 1n;
+const PREVIEW_SHIELD_ENTRYPOINT =
+  "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB";
+
+function parsePreviewShieldAmount(value: unknown): bigint | null {
+  if (
+    typeof value !== "string" ||
+    !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)
+  ) {
+    return null;
+  }
+  const [whole, fraction = ""] = value.split(".");
+  try {
+    const amountWei =
+      BigInt(whole) * 1_000_000_000_000_000_000n +
+      BigInt(fraction.padEnd(18, "0") || "0");
+    return amountWei <= PREVIEW_MAX_UINT256 ? amountWei : null;
+  } catch {
+    return null;
+  }
+}
+
+function previewPrivacyShieldQuote(
+  environment: PreviewEnvironment,
+  message: any,
+): unknown {
+  const account = activeAccount(environment);
+  if (
+    message?.accountId !== account.id ||
+    message?.accountAddress?.toLowerCase() !== account.address.toLowerCase() ||
+    message?.accountType !== account.type
+  ) {
+    return {
+      success: false,
+      code: "account-unavailable",
+      error: "Switch accounts and try again.",
+    };
+  }
+  if (account.type === "impersonator") {
+    return {
+      success: false,
+      code: "view-only-account",
+      error: "View-only accounts can’t Shield.",
+    };
+  }
+  const amountWei = parsePreviewShieldAmount(message?.amount);
+  if (amountWei === null) {
+    return {
+      success: false,
+      code: "invalid-amount",
+      error: "Enter a valid ETH amount.",
+    };
+  }
+  if (amountWei < PREVIEW_SHIELD_MINIMUM_WEI) {
+    return {
+      success: false,
+      code: "amount-below-minimum",
+      error: "Minimum is 0.001 ETH.",
+    };
+  }
+  const protocolFeeWei = amountWei / 100n;
+  const totalRequiredWei = amountWei + PREVIEW_SHIELD_GAS_RESERVE_WEI;
+  const maxShieldableWei =
+    PREVIEW_SHIELD_BALANCE_WEI - PREVIEW_SHIELD_GAS_RESERVE_WEI;
+  return {
+    success: true,
+    quote: {
+      chainId: 11_155_111,
+      amountWei: amountWei.toString(),
+      balanceWei: PREVIEW_SHIELD_BALANCE_WEI.toString(),
+      minimumAmountWei: PREVIEW_SHIELD_MINIMUM_WEI.toString(),
+      protocolFeeWei: protocolFeeWei.toString(),
+      shieldedAmountWei: (amountWei - protocolFeeWei).toString(),
+      gasReserveWei: PREVIEW_SHIELD_GAS_RESERVE_WEI.toString(),
+      totalRequiredWei: totalRequiredWei.toString(),
+      maxShieldableWei: maxShieldableWei.toString(),
+      vettingFeeBPS: "100",
+      canAfford: totalRequiredWei <= PREVIEW_SHIELD_BALANCE_WEI,
+    },
+  };
+}
+
+function previewPrivacyShieldReview(
+  environment: PreviewEnvironment,
+  message: any,
+): unknown {
+  const quoted = previewPrivacyShieldQuote(environment, message) as any;
+  if (quoted?.success !== true) return quoted;
+  if (quoted.quote?.canAfford !== true) {
+    return {
+      success: false,
+      code: "insufficient-funds",
+      error: "Not enough Sepolia ETH for this amount and gas.",
+    };
+  }
+  const account = activeAccount(environment);
+  return {
+    success: true,
+    status: "ready",
+    review: {
+      chainId: 11_155_111,
+      accountId: account.id,
+      accountAddress: account.address.toLowerCase(),
+      accountType: account.type,
+      amountWei: quoted.quote.amountWei,
+      destinationAddress: PREVIEW_SHIELD_ENTRYPOINT,
+    },
+  };
+}
+
 function previewCustomTokens(environment: PreviewEnvironment): any[] {
   const tokens = environment.storage.local.customTokens;
   return Array.isArray(tokens) ? tokens : [];
@@ -232,6 +346,23 @@ export function responseForPreviewMessage(
 ): unknown {
   const { route, scenario } = environment.parsed.state;
   switch (message?.type) {
+    case "privacyEnsureInitialized":
+      return { success: true, status: "ready" };
+    case "privacyRunShieldReadinessCheck":
+      return { success: true, status: "ready" };
+    case "privacyListShieldOperations":
+      return previewShieldPortfolioResponse(
+        scenario,
+        environment.activeAccount.type === "impersonator"
+          ? undefined
+          : environment.activeAccount,
+      );
+    case "privacySyncShield":
+      return { success: true, status: "synced" };
+    case "privacyQuoteShield":
+      return previewPrivacyShieldQuote(environment, message);
+    case "privacyPrepareShieldReview":
+      return previewPrivacyShieldReview(environment, message);
     case "ensureNetworksInfo":
       return {
         success: true,

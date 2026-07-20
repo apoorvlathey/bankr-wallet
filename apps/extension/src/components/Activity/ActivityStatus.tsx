@@ -10,7 +10,7 @@ interface ActivityStatusProps {
 
 interface StatusLabelProps {
   label: string;
-  tone: "success" | "info" | "error";
+  tone: "success" | "info" | "warning" | "error";
   isPending?: boolean;
 }
 
@@ -44,6 +44,15 @@ function StatusLabel({ label, tone, isPending }: StatusLabelProps) {
 }
 
 export default function ActivityStatus({ tx, model }: ActivityStatusProps) {
+  if (model.privacyShield) {
+    return (
+      <StatusLabel
+        label={model.privacyShield.statusLabel}
+        tone={model.privacyShield.tone}
+        isPending={model.privacyShield.pending}
+      />
+    );
+  }
   if (model.isBridgePendingDest) {
     return <StatusLabel label="Bridging" tone="info" isPending />;
   }

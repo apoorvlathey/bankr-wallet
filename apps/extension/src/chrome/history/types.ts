@@ -1,5 +1,6 @@
 import type { TransactionParams } from "../bankr/submission";
 import type { Erc7715PermissionRevokeMeta } from "../requests/pendingTxStorage";
+import type { PrivacyShieldLifecycleState } from "../../lib/privacyShieldLifecycle";
 
 export type TxStatus = "processing" | "pending" | "success" | "failed";
 
@@ -133,6 +134,16 @@ export interface GasData {
   l1GasPrice?: string;
 }
 
+/** Bounded public Shield lifecycle projection for the normal Activity row. */
+export interface PrivacyShieldHistoryMeta {
+  version: 1;
+  operationId: string;
+  state: PrivacyShieldLifecycleState;
+  updatedAt: number;
+  amountWei: string;
+  shieldedAmountWei: string;
+}
+
 /**
  * Released `txHistory` record shape. All enrichment fields remain optional so
  * entries written by earlier extension versions continue to decode as-is.
@@ -183,4 +194,6 @@ export interface CompletedTransaction {
   erc7715PermissionRevokeMeta?: Erc7715PermissionRevokeMeta;
   /** Stable account identity captured before any post-confirm side effects. */
   accountId?: string;
+  /** No note, commitment, label, index, proof, or recovery material. */
+  privacyShieldMeta?: PrivacyShieldHistoryMeta;
 }

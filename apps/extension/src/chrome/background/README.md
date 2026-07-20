@@ -11,8 +11,18 @@ Review order:
 3. `composition/` — audit-sized route-family dependencies and lifecycle wiring.
 4. `messageAccessPolicy.ts` — exhaustive `wallet-ui` vs `provider` audience.
 5. `providerRequestRejection.ts` — pure durable rejection mapping.
-6. `authRouter.ts`, `bankrCredentialRouter.ts`, `onboardingRouter.ts` —
-   trusted-UI auth transport and atomic Bankr credential/account binding.
+6. `authRouter.ts`, `bankrCredentialRouter.ts`, `onboardingRouter.ts`,
+   `privacyRouter.ts`, `privacyRecoveryRouter.ts` — trusted-UI auth transport, atomic Bankr
+   credential/account binding, status-only privacy identity initialization,
+   the deployment-first fixed-fixture Shield readiness trigger, aggregate-only
+   prover QA timing route, the
+   account-pinned read-only Sepolia Shield quote, master-only non-submittable
+   review preparation, encrypted durable operation/list transport, and
+   explicit master-only Shield phrase backup/restore/rescan transport.
+   `privacyListShieldOperations` returns aggregates and bounded public
+   lifecycle projections only; it omits user-rejected public-withdrawal prompts
+   after the domain has safely released their claims while preserving genuine
+   failure and submitted/recovered states.
 7. `accountStateRouter.ts`, `contactBookRouter.ts`, `accountManagementRouter.ts` — non-secret account/contact
    state plus master-gated account/seed mutation orchestration.
 8. `secretManagementRouter.ts` — trusted-sender plaintext release and pinned
@@ -42,8 +52,9 @@ Review order:
    execution/recovery transport.
 18. `transactionStatusRouter.ts` — trusted-UI history, processing, failed-result,
    nonce-cache, enrichment, and receipt-status transport.
-19. `resetRouter.ts` — synchronous reset-barrier installation followed by the
-   master-only, serialized destructive reset sequence.
+19. `resetRouter.ts` and `reset/execution.ts` — public Shield-risk preflight,
+   exact acknowledgement, synchronous reset-barrier installation, then the
+   master-only serialized destructive reset sequence.
 20. `lifecycle/` — focused Chrome callbacks and immediate startup effects;
    review its `README.md` in service-worker execution order.
 

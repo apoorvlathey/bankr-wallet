@@ -43,6 +43,20 @@ export interface PendingTxRequest {
   requestChainId?: number;
   /** Explicit service-worker-authored request; never accepted from a webpage. */
   trustedInternal?: true;
+  /**
+   * Background-authored Privacy Pools deposit binding. The operation id is
+   * also the transaction request id so reject, receipt, and restart recovery
+   * can locate the durable lifecycle record without copying note material.
+   */
+  privacyShieldMeta?: {
+    version: 1;
+    operationId: string;
+  };
+  /** Background-authored public Privacy Pools recovery binding. */
+  privacyRagequitMeta?: {
+    version: 1;
+    operationId: string;
+  };
   walletConnect?: {
     topic: string;
     requestId: number;

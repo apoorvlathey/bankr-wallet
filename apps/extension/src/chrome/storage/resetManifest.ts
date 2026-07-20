@@ -9,6 +9,8 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "passkeyUnlock",
   "pkVault",
   "mnemonicVault",
+  "privacyVault",
+  "privacyRecoveryBackup",
   "accounts",
   "addressContacts",
   "seedGroups",

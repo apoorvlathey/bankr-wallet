@@ -3,6 +3,14 @@ import { BANKR_SUPPORTED_CHAIN_IDS, CHAIN_NAMES } from "../../constants/networks
 import type { PendingTxRequest } from "../requests/pendingTxStorage";
 import { resolvePinnedAccount } from "./runtime";
 
+export function bankrPrivacyConfirmationError(
+  pending: PendingTxRequest,
+): string | null {
+  return pending.privacyShieldMeta || pending.privacyRagequitMeta
+    ? "Bankr cannot submit Privacy Pools transactions on Sepolia"
+    : null;
+}
+
 export async function validatePinnedBankrTransaction(
   pending: PendingTxRequest,
 ): Promise<

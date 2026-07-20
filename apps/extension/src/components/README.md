@@ -40,6 +40,11 @@ integration boundary, not the default home for new implementations.
 - `Erc7715PermissionConfirmation/` owns delegated-execution permission review and decisions.
 - `Portfolio/Holdings/` owns portfolio hydration, display transforms, and asset rows.
 - `Settings/` owns settings navigation and configuration screens.
+- `Shield/` owns the balance-first private-balance screen, status-only automatic
+  recovery initialization, Sepolia Shield review/activity, aggregate balance,
+  private Unshield, and original-depositor public-withdrawal presentation. All
+  custody, proving, RPC, signing, and submission effects remain in background
+  domains.
 - `SignatureConfirmation/` owns signature-decision screen composition.
 - `Swap/` owns swap/bridge selection, quoting, review, and execution UI.
 - `TransactionConfirmation/` owns single-transaction review and decisions.

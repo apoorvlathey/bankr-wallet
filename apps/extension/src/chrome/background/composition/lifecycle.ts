@@ -46,6 +46,9 @@ import { cleanupStaleProcessingTxs } from "../../txHistoryStorage";
 import { openPopupWindow } from "../../txHandlers";
 import { fullscreenRequestNotificationWindowId } from "../../windowing/providerRequestSurface";
 import { resumePendingFeePaymentOperations } from "../../feePayment/recovery";
+import { resumePrivacyShieldTracking } from "../../privacy/operations/lifecycle";
+import { resumePrivacyUnshieldTracking } from "../../privacy/withdrawals/lifecycle";
+import { resumePrivacyRagequitTracking } from "../../privacy/ragequit/lifecycle";
 import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
 import { initWalletConnect } from "../../walletConnect/client";
 import { clearExpiredWalletConnectPendingRequests } from "../../walletConnect/storage";
@@ -128,6 +131,9 @@ export function registerBackgroundLifecycle(
     initSidePanel,
     cleanupStaleProcessingTxs,
     resumePendingPollers,
+    resumePrivacyShieldTracking,
+    resumePrivacyUnshieldTracking,
+    resumePrivacyRagequitTracking,
     prunePendingBridges,
     resumePendingBridgePollers,
     recoverStuckForceInclusionTxs,

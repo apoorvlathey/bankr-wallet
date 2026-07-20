@@ -14,6 +14,7 @@ import {
   getCachedPassword,
   setCachedApiKey,
   setCachedMnemonicKey,
+  setCachedPrivacyKey,
   setCachedPasswordDirect,
   setCachedPasswordType,
   setCachedVault,
@@ -37,6 +38,11 @@ export interface HydrateAuthSessionOptions {
   persistPasswordSession?: boolean;
   migrateLegacyPrivateKeys?: boolean;
   mnemonicKey?: { key: CryptoKey; keyId: string } | null;
+  privacyKey?: {
+    key: CryptoKey;
+    keyBytes: Uint8Array;
+    keyId: string;
+  } | null;
   // Current-session biometric setup must not refresh a passively expired
   // master session while it performs migration/decryption work.
   expectedMasterAuthEpoch?: string;
@@ -224,6 +230,9 @@ async function hydrateAuthSessionFromVaultKeyBytesWithinSecretOperation(
   setCachedVaultKey(vaultKey);
   setCachedMnemonicKey(
     passwordType === "master" ? options.mnemonicKey ?? null : null,
+  );
+  setCachedPrivacyKey(
+    passwordType === "master" ? options.privacyKey ?? null : null,
   );
   setCachedPasswordType(passwordType);
   setCachedPasswordDirect(options.password ?? null);

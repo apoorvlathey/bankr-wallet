@@ -82,7 +82,11 @@ export function useTransactionActions({
           ? "Set smart-account delegation"
           : !tx.to
             ? "Contract Deployment"
-            : decodedFunctionName || undefined;
+            : txRequest.privacyRagequitMeta
+              ? "Recover Shield balance"
+              : txRequest.privacyShieldMeta
+                ? "Shield ETH"
+              : decodedFunctionName || undefined;
 
     chrome.runtime.sendMessage(
       {
@@ -91,8 +95,13 @@ export function useTransactionActions({
         password: "",
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
-        ...(forceInclusion ? { forceInclusion: true } : {}),
-        feePaymentToken: feePaymentToken === "native" ? "native" : "token",
+        ...(forceInclusion && !txRequest.privacyShieldMeta && !txRequest.privacyRagequitMeta
+          ? { forceInclusion: true }
+          : {}),
+        feePaymentToken:
+          txRequest.privacyShieldMeta || txRequest.privacyRagequitMeta || feePaymentToken === "native"
+            ? "native"
+            : "token",
         ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
       },
       (result: { success: boolean; error?: string }) => {

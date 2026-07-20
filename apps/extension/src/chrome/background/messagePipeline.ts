@@ -70,6 +70,20 @@ export function createBackgroundMessagePipeline(
     );
     if (onboardingRoute.handled) return onboardingRoute.keepChannelOpen;
 
+    const privacyRoute = routes.routeBackgroundPrivacyMessage(
+      message,
+      sendResponse,
+    );
+    if (privacyRoute.handled) return privacyRoute.keepChannelOpen;
+
+    const privacyRecoveryRoute = routes.routeBackgroundPrivacyRecoveryMessage(
+      message,
+      sendResponse,
+    );
+    if (privacyRecoveryRoute.handled) {
+      return privacyRecoveryRoute.keepChannelOpen;
+    }
+
     const accountStateRoute = routes.routeBackgroundAccountStateMessage(
       message,
       sender,

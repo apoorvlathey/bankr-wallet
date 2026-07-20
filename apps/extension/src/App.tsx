@@ -2492,7 +2492,7 @@ function App() {
           flexDirection="column"
         >
           <Suspense fallback={<LoadingFallback />}>
-            <ShieldView onBack={() => setView("main")} />
+            <ShieldView onBack={() => setView("main")} account={activeAccount} />
           </Suspense>
         </Box>
       </Box>

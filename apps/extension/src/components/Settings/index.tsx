@@ -12,7 +12,6 @@ import {
 } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
-
 import { clearChatHistory } from "@/chrome/bankr/chat/storage";
 import { isDarkThemeId, useStripTokens, useTheme } from "@/theme";
 import Chains from "./Chains";
@@ -25,6 +24,7 @@ import SoundsSettings from "./SoundsSettings";
 import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
 import SecuritySettings from "./SecuritySettings";
+import PrivacyRecoverySettings from "./PrivacyRecoverySettings";
 import DataSettings from "./DataSettings";
 import AboutSettings from "./AboutSettings";
 import ClearTxHistoryScreen from "./ClearTxHistoryScreen";
@@ -44,7 +44,6 @@ import {
   DatabaseIcon,
   LinkChainIcon,
 } from "./icons";
-
 export type SettingsTab =
   | "main"
   | "about"
@@ -55,6 +54,7 @@ export type SettingsTab =
   | "autoLock"
   | "agentPassword"
   | "biometricUnlock"
+  | "privacyRecovery"
   | "appearance"
   | "sounds"
   | "ensBrowsing"
@@ -257,6 +257,8 @@ function Settings({
         onCancel={() => returnFromLeaf("biometricUnlock")}
       />
     );
+  } else if (tab === "privacyRecovery") {
+    body = <PrivacyRecoverySettings onBack={() => returnFromLeaf("privacyRecovery")} />;
   } else if (tab === "appearance") {
     body = <AppearanceSettings onCancel={() => setTab("main")} />;
   } else if (tab === "sounds") {
@@ -398,8 +400,6 @@ function Settings({
   );
 }
 
-// LEAF_ENTRIES is exported from registry for any external consumer that needs
-// to enumerate settings; re-export for backwards compatibility if needed.
 export { LEAF_ENTRIES };
 
 export default memo(Settings);

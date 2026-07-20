@@ -78,6 +78,7 @@ import { createBackgroundSecretManagementMessageRouter } from "../secretManageme
 import { createBackgroundWalletConnectSessionMessageRouter } from "../walletConnectSessionRouter";
 import type { PendingResolutionComposition } from "./pendingResolution";
 import { getEnsContenthashLastUpdated } from "../../ensBrowsing/contenthashHistory";
+import { assertPrivacyAccountRemovalSafe } from "../../privacy/accountSafety";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
@@ -138,6 +139,7 @@ export function composeAccountRoutes(
       removeAccountWithDappPrivacyBoundary,
       getAccountById,
       hasUnresolvedSponsoredTransferIntent,
+      assertPrivacyAccountRemovalSafe,
       getAccounts,
       handleRevokeDappPermission,
       handleRemoveAccount,

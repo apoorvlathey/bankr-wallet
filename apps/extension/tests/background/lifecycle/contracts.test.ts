@@ -200,6 +200,9 @@ test("startup recovery preserves immediate effect and startup-listener order", a
     initSidePanel: () => events.push("sidepanel"),
     cleanupStaleProcessingTxs: () => events.push("processing"),
     resumePendingPollers: () => events.push("receipts"),
+    resumePrivacyShieldTracking: () => events.push("privacy"),
+    resumePrivacyUnshieldTracking: () => events.push("privacy-unshield"),
+    resumePrivacyRagequitTracking: () => events.push("privacy-ragequit"),
     prunePendingBridges: async () => {
       events.push("bridge:prune");
     },
@@ -223,6 +226,9 @@ test("startup recovery preserves immediate effect and startup-listener order", a
     "sidepanel",
     "processing",
     "receipts",
+    "privacy",
+    "privacy-unshield",
+    "privacy-ragequit",
     "bridge:prune",
     "force:recover",
     "ens",

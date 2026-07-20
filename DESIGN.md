@@ -228,13 +228,44 @@
 
 ## Slop audit
 
+- 2026-07-20 public-withdrawal cancellation audit: rejecting WalletChan's own
+  confirmation prompt creates no failed Activity card. The encrypted recovery
+  record remains an internal cleanup/dedupe concern; genuine proof,
+  submission, revert, and recovery outcomes remain visible.
+- 2026-07-20 main Activity Shield audit: Shield deposits reuse the established
+  transaction row and detail navigation instead of introducing a parallel card
+  type. `Shield ETH`, the signed amount, plain-language lifecycle context, and
+  `Step n of 4` form one compact hierarchy; blue, amber, green, and error tones
+  remain semantic and always pair with text/spinner/icon states. The row stays
+  fully clickable and keyboard focusable while its separate explorer action
+  remains valid nested-interaction-free markup.
+- 2026-07-20 Shield balance-value audit: the primary amount and ETH unit are
+  one non-wrapping financial value, with its live USD equivalent directly
+  beneath as subordinate context. ASP status remains a separate right-aligned
+  amber value, preserving the confirmed-total versus pending-subset hierarchy
+  without adding another card, badge, icon, or decorative treatment.
+- 2026-07-20 Shield confirmed-balance audit: the dominant metric now means
+  funds confirmed in the pinned pool rather than only ASP-approved funds. One
+  right-aligned amber text value identifies the exact subset still awaiting the
+  ASP check, with the explanation available on hover and keyboard focus. It
+  adds no card, icon, guessed countdown, or second progress visualization;
+  amount and status text keep meaning independent of color. Activity refreshes
+  in place after receipt events and uses a restrained background cadence.
 - 2026-07-19 fee-token confirmation audit: single and ERC-5792 confirmation
   reuse one compact `Pay gas with` decision row and the existing bottom action
-  sheet for the native/USDC choice. Selection stays financial blue, final
+  sheet for the native/catalog-token choice. Selection stays financial blue, final
   Confirm stays amber, quote/balance values use the existing compact numeric
   hierarchy, and the one-time smart-account upgrade uses the semantic warning
   tint. Relay mechanics remain subordinate footer copy; no promotional banner,
   gradient, card stack, or desktop dropdown was introduced.
+- 2026-07-19 Shield dashboard audit: first use now reads like a wallet balance,
+  not protocol onboarding. One private-balance surface leads directly to
+  Shield and Unshield, followed only by activity. Healthy automatic recovery
+  and explanatory protocol copy stay out of the interface. Initialization is
+  silent when healthy and uses only the existing action-status line plus Retry
+  when attention is required; the fixture badge and action feedback keep this
+  build from looking live. Both themes pass the
+  compact viewport and accessibility gates without extra setup pages.
 - 2026-07-19 request-origin identity audit: WalletChan Browser's enabled state
   now gates ENS-friendly rewriting across every request surface. With browsing
   disabled, the literal gateway hostname remains the primary security identity
@@ -515,6 +546,28 @@
 
 ## Changelog
 
+- 2026-07-20: hid user-rejected public-withdrawal prompts from Shield Activity
+  after their background commitment claim is safely released.
+- 2026-07-20: added one compact `Withdraw without waiting?` action for indexed
+  deposits still under ASP review. It names the exact original destination,
+  explains the public link once, reuses normal wallet confirmation, and adds no
+  setup page, modal, or protocol primer.
+- 2026-07-20: made Shield balance reflect confirmed onchain pool value before
+  ASP approval, added a compact accessible amber waiting-ASP aggregate, and
+  made receipt/indexing progress update while the screen remains open.
+- 2026-07-19: replaced the Shield placeholder with one fixture-only Sepolia
+  balance dashboard. Shield, Unshield, and activity now define the healthy
+  entry state; background recovery and protocol explanation add no resting UI.
+- 2026-07-19: connected Shield entry to status-only background recovery
+  initialization. Healthy setup remains invisible; the only new UI is a compact
+  retry message when encrypted identity creation cannot safely complete.
+- 2026-07-19: added one inline Sepolia ETH amount quote beneath the existing
+  Shield action. It keeps the balance-first screen, shows only available funds,
+  protocol/network fees, expected Shield credit, total, and Max.
+- 2026-07-19: added one `Continue` action that prepares the deposit review in
+  the background and resolves to a quiet `Ready for review` state. It adds no
+  new page or technical explanation and still exposes no confirmation,
+  signature, persistence, or submission control.
 - 2026-07-19: added a quiet, theme-token-driven contenthash provenance pill to
   ENS/IPFS connection requests. It appears only for exact hosted or configured
   local/custom gateway identities and keeps stable loading, resolved, and

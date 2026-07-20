@@ -1,5 +1,8 @@
 /** Export-only compatibility facade for the session audit domain. */
-export type { CachedMnemonicKey } from "./session/inMemoryCache";
+export type {
+  CachedMnemonicKey,
+  CachedPrivacyKey,
+} from "./session/inMemoryCache";
 export {
   AUTO_LOCK_STORAGE_KEY,
   DEFAULT_AUTO_LOCK_TIMEOUT,
@@ -10,6 +13,7 @@ export {
 export {
   getCachedApiKey,
   getCachedMnemonicKey,
+  getCachedPrivacyKey,
   getCachedPassword,
   getCachedVault,
   getCachedVaultKey,
@@ -26,6 +30,7 @@ export {
   setCachedApiKey,
   setCachedApiKeyDirect,
   setCachedMnemonicKey,
+  setCachedPrivacyKey,
   setCachedPasswordDirect,
   setCachedPasswordType,
   setCachedVault,

@@ -9,6 +9,9 @@
     "src/components/ui/**/*.tsx",
     "src/theme/**/*.ts",
     "src/theme/**/*.tsx",
+    "src/components/Shield/**/*.ts",
+    "src/components/Shield/**/*.tsx",
+    "src/components/ShieldView.tsx",
     "src/components/CopyButton.tsx",
     "src/components/FullScreenPickerLayer.tsx"
   ],

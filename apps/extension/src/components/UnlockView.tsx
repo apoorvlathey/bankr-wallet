@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Checkbox,
   FormControl,
   FormLabel,
   HStack,
@@ -58,6 +59,10 @@ interface UnlockViewProps {
   resetDialog: {
     isOpen: boolean;
     isResetting: boolean;
+    hasShieldData: boolean;
+    backupVerified: boolean;
+    shieldAcknowledged: boolean;
+    onShieldAcknowledgedChange: (checked: boolean) => void;
     onClose: () => void;
     onConfirm: () => void;
   };
@@ -364,6 +369,22 @@ export default function UnlockView({
                 Your API key, imported private keys, recovery phrases, accounts, and transaction
                 history will be cleared. Make sure every recovery phrase and private key is backed up.
               </Text>
+              {resetDialog.hasShieldData ? (
+                <Checkbox
+                  isChecked={resetDialog.shieldAcknowledged}
+                  onChange={(event) =>
+                    resetDialog.onShieldAcknowledgedChange(event.target.checked)}
+                >
+                  <Text fontSize="sm">
+                    I saved my Shield phrase, or accept that Shield funds may be lost.
+                  </Text>
+                  {resetDialog.backupVerified ? (
+                    <Text mt={1} fontSize="xs" color="fg.secondary">
+                      The Shield phrase was previously revealed in Settings.
+                    </Text>
+                  ) : null}
+                </Checkbox>
+              ) : null}
             </VStack>
           </ModalBody>
           <ModalFooter gap={2}>
@@ -378,6 +399,7 @@ export default function UnlockView({
               variant="danger"
               onClick={resetDialog.onConfirm}
               isLoading={resetDialog.isResetting}
+              isDisabled={resetDialog.hasShieldData && !resetDialog.shieldAcknowledged}
               loadingText="Resetting…"
             >
               Reset wallet
