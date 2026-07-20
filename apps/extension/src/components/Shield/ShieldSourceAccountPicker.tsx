@@ -15,7 +15,6 @@ import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manife
 import { AccountAvatar } from "@/components/AccountIdentity";
 import { truncateAddress } from "@/lib/addressUtils";
 import type { ShieldSourceAccount } from "./model/shieldQuote";
-import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
 
 interface ShieldSourceAccountPickerProps {
   accounts: Account[];
@@ -24,12 +23,12 @@ interface ShieldSourceAccountPickerProps {
 }
 
 function accountTypeCopy(account: Account): string {
-  if (account.type === "privateKey") return `Private key · ${SHIELDED_ETH_NETWORK_NAME}`;
-  if (account.type === "seedPhrase") return `Seed phrase · ${SHIELDED_ETH_NETWORK_NAME}`;
+  if (account.type === "privateKey") return "Private key";
+  if (account.type === "seedPhrase") return "Seed phrase";
   if (account.type === "bankr") {
     return PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled"
-      ? `Bankr · ${SHIELDED_ETH_NETWORK_NAME}`
-      : `${SHIELDED_ETH_NETWORK_NAME} shielding unavailable`;
+      ? "Bankr"
+      : "Bankr · Shielding unavailable";
   }
   return "View-only accounts cannot shield";
 }
