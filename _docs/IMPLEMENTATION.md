@@ -4949,38 +4949,48 @@ notification clicks. The focused callback implementations remain under
 
 ## Sidepanel Support
 
-The extension supports Chrome's Side Panel API (Chrome 114+). Sidepanel mode is only enabled on genuine Google Chrome — other Chromium browsers (Arc, Brave, Opera, Edge) may expose `chrome.sidePanel` but it silently fails to render. The extension uses `navigator.userAgentData.brands` to detect genuine Chrome and multiple fallback layers to ensure the popup always works.
+The extension supports the Chromium Side Panel API when the runtime exposes
+both `chrome.sidePanel.setPanelBehavior()` and `chrome.sidePanel.open()`.
+Capability detection is deliberately vendor-neutral: Chrome and Brave use the
+same sidepanel path. Arc remains an explicit popup-only exception through the
+renderer-detected `isArcBrowser` policy. Multiple verified fallback layers keep
+the popup available when an advertised sidepanel fails to open.
 
 ### Browser Compatibility
 
-| Browser       | Sidepanel Support       | Default Mode |
-| ------------- | ----------------------- | ------------ |
-| Google Chrome | ✅ Full support         | Sidepanel    |
-| Arc           | ❌ Phantom API (silent) | Popup        |
-| Brave / Edge  | ❌ Blocked (unverified) | Popup        |
-| Firefox       | ❌ No API               | Popup        |
+| Browser       | Sidepanel Support                    | Default Mode |
+| ------------- | ------------------------------------ | ------------ |
+| Google Chrome | ✅ Complete API                      | Sidepanel    |
+| Brave         | ✅ Complete API                      | Sidepanel    |
+| Arc           | ❌ Explicitly suppressed             | Popup        |
+| Other Chromium forks | Capability-driven             | Sidepanel when the complete API exists |
+| Firefox       | ❌ No `chrome.sidePanel` API         | Popup        |
 
-### Non-Chrome Browser Detection
+### Capability and Arc Detection
 
-Arc's sidePanel API is a "perfect phantom" — `sidePanel.open()` resolves successfully, `getContexts()` reports a `SIDE_PANEL` context, but nothing is rendered. Arc also removed its UA string (`Arc/`) and CSS variable (`--arc-palette-title`) signals, making those detection methods unreliable.
+Arc's sidePanel API is a "perfect phantom" — `sidePanel.open()` can resolve and
+`getContexts()` can report a `SIDE_PANEL` context even though no usable panel is
+rendered. Arc therefore needs its own explicit browser policy instead of being
+grouped with every non-Google Chromium browser.
 
-The primary detection uses `navigator.userAgentData.brands`:
+The service worker therefore treats the actual extension API as the general
+capability boundary instead of requiring a `Google Chrome` UA brand:
 
 ```typescript
-function isNonChromeBrowser(): boolean {
-  const uaData = (navigator as any).userAgentData;
-  if (!uaData?.brands) return false;
-  // Genuine Chrome always includes "Google Chrome" in brands
-  return !uaData.brands.some(
-    (b: { brand: string }) => b.brand === "Google Chrome",
+function detectSidePanelSupport(chromeApi): boolean {
+  return Boolean(
+    chromeApi?.sidePanel &&
+      typeof chromeApi.sidePanel.setPanelBehavior === "function" &&
+      typeof chromeApi.sidePanel.open === "function",
   );
 }
 ```
 
-The renderer retains the legacy **CSS variable** fallback
-(`--arc-palette-title` in `App.tsx` / onboarding), which sets the persisted
-`isArcBrowser` flag. Runtime windowing does not inspect the obsolete `Arc/` UA
-string.
+The renderer separately detects Arc through `--arc-palette-title` in `App.tsx`
+and onboarding, then persists `isArcBrowser`. Every async capability query,
+mode transition, and service-worker initialization applies that Arc override
+after the vendor-neutral API check. Runtime windowing does not inspect UA brand
+strings.
 
 ### How It Works — Never Use `openPanelOnActionClick`
 
@@ -4999,7 +5009,7 @@ Instead, the extension controls popup vs sidepanel via `chrome.action.setPopup()
 │    1. Always set openPanelOnActionClick: false                              │
 │    2. Read isArcBrowser and sidePanelMode                                   │
 │    3. If stored Arc → set popup and return (preference remains intact)      │
-│    4. Re-check support via userAgentData.brands + sidePanel API             │
+│    4. Re-check required sidePanel methods (vendor-neutral)                  │
 │    5. If sidePanelMode === true and supported: setPopup('')                 │
 │    6. Otherwise → setPopup('popup-init.html') (safe default)                │
 │                                                                             │
@@ -5026,7 +5036,9 @@ Instead, the extension controls popup vs sidepanel via `chrome.action.setPopup()
 
 ### UI Toggle
 
-A sidepanel toggle button is available on both the **unlock screen** (top-right corner) and **main view header** (only visible when sidepanel is supported, i.e., genuine Chrome).
+A sidepanel toggle button is available on both the **unlock screen**
+(top-right corner) and **main view header** when the complete sidepanel API is
+available and the browser is not Arc.
 
 When toggling from popup to sidepanel mode:
 
@@ -5070,21 +5082,23 @@ When a dapp requests a transaction, the extension opens the appropriate UI:
 | `newPendingTxRequest`  | Background → Views | Notify views of new pending transaction         |
 | `openPopupWindow`      | Views → Background | Request to open a popup window                  |
 | `setArcBrowser`        | Views → Background | Notify background that Arc browser was detected |
-| `isSidePanelSupported` | Views → Background | Check API/Chrome support and stored Arc override |
+| `isSidePanelSupported` | Views → Background | Check complete API support and stored Arc override |
 | `setSidePanelMode`     | Views → Background | Enable/disable sidepanel mode                   |
 | `switchSidePanelToPopup` | Views → Background | Close sidepanel, then open the replacement popup |
 
 ### Key Design Decisions
 
-**Chrome-only sidepanel**: Sidepanel is only enabled on genuine Google Chrome (`navigator.userAgentData.brands` includes "Google Chrome"). Non-Chrome Chromium browsers get popup mode on every service-worker startup, while the stored preference remains intact for a future compatible browser.
+**Capability-driven sidepanel**: Sidepanel is enabled on Chrome, Brave, and
+other Chromium browsers that expose the complete API WalletChan needs. Browser
+vendor names are not used as a proxy for support.
 
 **Verified fallback**: The `action.onClicked` listener and `openExtensionPopup()` both verify the panel after `sidePanel.open()`. If verification fails, they open a detached popup for the current request without mutating the user's stored preference.
 
 **Never `openPanelOnActionClick`**: This setting is always `false`. Using `chrome.action.setPopup()` to control behavior provides a fallback path — `action.onClicked` fires when popup is empty, allowing try/catch around `sidePanel.open()`.
 
-**Multi-layer detection**: Non-Chrome detection combines (1) the
-`userAgentData.brands` check and (2) the stored `isArcBrowser` flag from the
-renderer CSS-variable fallback.
+**Arc-specific exclusion**: Arc's renderer signal and stored `isArcBrowser`
+flag remain a separate popup-only policy. This keeps Arc suppressed without
+blocking capable Chromium forks such as Brave.
 
 ### CSS Handling
 

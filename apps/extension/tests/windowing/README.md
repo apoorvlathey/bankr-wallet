@@ -3,8 +3,9 @@
 This directory freezes popup/side-panel behavior independently of transaction
 and background routing:
 
-- `policy.test.ts` covers browser capability detection, popup-path selection,
-  startup defaults, Arc suppression, and fullscreen request policy.
+- `policy.test.ts` covers Chrome/Brave API capability detection, partial-API and
+  Firefox fallback, popup-path selection, startup defaults, Arc suppression,
+  and fullscreen request policy.
 - `modeEffects.test.ts` freezes sync-storage/action-popup effect order,
   detached-popup-before-panel-close transitions, and startup fallbacks.
 - `requestSurface.test.ts` covers sender-window targeting, existing-view ping,

@@ -44,10 +44,10 @@ Implementations belong in named audit domains. Current domains include:
 - `avatar/` for public-only remote-image policy, bounded manual-redirect
   transport, raster decode/re-encode, FIFO/reset scheduling, and the locked
   best-effort `ensAvatarImageCache` repository.
-- `windowing/` for Chrome/Firefox/Arc capability policy, released display-mode
-  settings, verified side-panel request opening, and reusable/clamped detached
-  popup placement. `sidepanelManager.ts` and `extensionPopup.ts` remain
-  export-only compatibility facades.
+- `windowing/` for Chrome/Brave/Firefox/Arc capability policy, released
+  display-mode settings, verified side-panel request opening, and
+  reusable/clamped detached popup placement. `sidepanelManager.ts` and
+  `extensionPopup.ts` remain export-only compatibility facades.
 
 The remaining root implementations are migrated in behavior-preserving
 tranches into explicit domains. Each domain must have its own

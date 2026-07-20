@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   detectSidePanelSupport,
-  isNonChromeChromiumBrowser,
   popupPathForBrowser,
 } from "../../src/chrome/windowing/browserCapabilities";
 import {
@@ -12,23 +11,29 @@ import {
   shouldUseSidePanelForRequest,
 } from "../../src/chrome/windowing/modePolicy";
 
-test("browser capability policy distinguishes Chrome, phantom Chromium, and Firefox", () => {
-  const sidePanel = { setPanelBehavior: async () => {} } as any;
-  const chromeBrand = {
-    userAgentData: { brands: [{ brand: "Google Chrome" }] },
-  } as any;
-  const arcBrands = {
-    userAgentData: { brands: [{ brand: "Chromium" }, { brand: "Arc" }] },
+test("browser capability policy accepts Chrome and Brave but rejects partial APIs and Firefox", () => {
+  const sidePanel = {
+    setPanelBehavior: async () => {},
+    open: async () => {},
   } as any;
 
   assert.equal(popupPathForBrowser({ sidePanel } as any), "popup-init.html");
   assert.equal(popupPathForBrowser(undefined), "");
-  assert.equal(isNonChromeChromiumBrowser(chromeBrand), false);
-  assert.equal(isNonChromeChromiumBrowser(arcBrands), true);
-  assert.equal(detectSidePanelSupport({ sidePanel } as any, chromeBrand), true);
-  assert.equal(detectSidePanelSupport({ sidePanel } as any, arcBrands), false);
+  for (const browser of ["Chrome", "Brave"]) {
+    assert.equal(
+      detectSidePanelSupport({ sidePanel } as any),
+      true,
+      `${browser} should use its complete sidePanel API`,
+    );
+  }
   assert.equal(
-    detectSidePanelSupport({ sidePanel: undefined } as any, chromeBrand),
+    detectSidePanelSupport({
+      sidePanel: { setPanelBehavior: async () => {} },
+    } as any),
+    false,
+  );
+  assert.equal(
+    detectSidePanelSupport({ sidePanel: undefined } as any),
     false,
   );
 });

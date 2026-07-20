@@ -4,8 +4,8 @@ This domain owns how an already-authorized WalletChan request is presented. It
 does not authorize requests, read pending-request payloads, or touch wallet
 secrets.
 
-- `browserCapabilities.ts` detects genuine Chrome side-panel support and owns
-  the Firefox-safe `POPUP_PATH` constant.
+- `browserCapabilities.ts` detects the complete Chromium side-panel API without
+  vendor allowlisting and owns the Firefox-safe `POPUP_PATH` constant.
 - `modePolicy.ts` contains pure runtime, startup, and fullscreen policies.
 - `chromeAdapter.ts` is the sole Chrome storage/action/window effect adapter.
 - `modeTransitions.ts` preserves `sidePanelMode`/`isArcBrowser` semantics,
@@ -27,6 +27,10 @@ secrets.
 
 `../sidepanelManager.ts` and `../extensionPopup.ts` are export-only historical
 facades. New implementations and tests must import this domain directly.
+
+Chrome and Brave are side-panel-capable when both required API methods exist.
+Arc remains popup-only through the separately detected `isArcBrowser` policy;
+Firefox remains popup-only because it does not expose `chrome.sidePanel`.
 
 `sidePanelVerified` remains a released legacy sync-storage field, but runtime
 windowing does not read or write it. Do not delete, reinterpret, or restore it

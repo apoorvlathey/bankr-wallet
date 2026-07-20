@@ -10,6 +10,7 @@ import {
 import { initializeSidePanelWith } from "../../src/chrome/windowing/initialization";
 import {
   type SidePanelModeDependencies,
+  isSidePanelSupportedAsyncWith,
   setSidePanelModeWith,
   transitionSidePanelToPopupWith,
 } from "../../src/chrome/windowing/modeTransitions";
@@ -90,6 +91,25 @@ test("mode transitions preserve action-popup and persistence ordering", async ()
     "write:false",
     "popup:popup-init.html",
   ]);
+});
+
+test("Arc stays popup-only while Chrome and Brave can use sidepanel mode", async () => {
+  for (const browser of ["Chrome", "Brave"]) {
+    assert.equal(
+      await isSidePanelSupportedAsyncWith(modeDependencies([], {
+        readArcFlag: async () => false,
+      })),
+      true,
+      `${browser} should remain sidepanel-capable`,
+    );
+  }
+
+  assert.equal(
+    await isSidePanelSupportedAsyncWith(modeDependencies([], {
+      readArcFlag: async () => true,
+    })),
+    false,
+  );
 });
 
 test("detached popup opens before the side panel closes", async () => {
