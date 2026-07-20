@@ -1162,3 +1162,7 @@
   “Cancel Transaction” row without duplicate context. Transaction details end
   Advanced details with the signed nonce, while displaced mempool entries use
   an amber `Dropped` state instead of the red execution-failure state.
+- 2026-07-20: restyled Send's smart-contract warning as one quiet graphite
+  decision surface. Amber is limited to the warning signal and acknowledged
+  state; the title, explanatory copy, and full-row risk acknowledgment follow
+  Warm Midnight's neutral hierarchy instead of stacking status-colored cards.

@@ -221,69 +221,99 @@ export function RecipientSection({
         <Box
           mt={2}
           border={tokens.borders.thin}
-          borderColor="status.warning.border"
+          borderColor={
+            acknowledgeContract ? "status.warning.border" : "border.default"
+          }
           borderRadius="lg"
-          bg="status.warning.bg"
+          bg="surface.raised"
           px={3}
-          py={2.5}
+          py={3}
+          transition={tokens.motion.transitionBase}
         >
-          <HStack spacing={2} align="flex-start">
-            <WarningTwoIcon
-              boxSize="14px"
-              color="status.warning.fg"
-              mt="2px"
-              flexShrink={0}
-            />
-            <VStack align="stretch" spacing={2} flex={1}>
-              <Text
-                fontSize="xs"
-                fontWeight="800"
-                color="status.warning.fg"
-                lineHeight="short"
-              >
-                Recipient is a smart contract.
-              </Text>
-              <Text
-                fontSize="xs"
-                fontWeight="600"
-                color="status.warning.fg"
-                lineHeight="short"
-              >
-                Tokens sent directly to a contract may be permanently stuck.
-              </Text>
+          <VStack align="stretch" spacing={3}>
+            <HStack spacing={2.5} align="flex-start">
               <Box
-                bg="surface.raised"
-                border={tokens.borders.thin}
-                borderColor="border.default"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                boxSize="28px"
+                flexShrink={0}
                 borderRadius="md"
-                px={2}
-                py={1.5}
+                bg="status.warning.bg"
+                color="status.warning.fg"
               >
-                <Checkbox
-                  isChecked={acknowledgeContract}
-                  onChange={(event) =>
-                    setAcknowledgeContract(event.target.checked)
-                  }
-                  size="sm"
-                  colorScheme="orange"
-                  sx={{
-                    "& .chakra-checkbox__control": {
-                      borderWidth: "2px",
-                      borderColor: "border.default",
-                      bg: "surface.base",
-                    },
-                    "& .chakra-checkbox__label": {
-                      fontSize: "xs",
-                      fontWeight: 800,
-                      color: "text.primary",
-                    },
-                  }}
-                >
-                  I understand and want to continue
-                </Checkbox>
+                <WarningTwoIcon boxSize="14px" />
               </Box>
-            </VStack>
-          </HStack>
+              <Box minW={0} pt="1px">
+                <Text
+                  fontSize="sm"
+                  fontWeight="700"
+                  color="fg.primary"
+                  lineHeight="short"
+                >
+                  Smart contract recipient
+                </Text>
+                <Text
+                  mt={1}
+                  fontSize="xs"
+                  fontWeight="500"
+                  color="fg.secondary"
+                  lineHeight="base"
+                >
+                  Only continue if this contract accepts direct token transfers.
+                  Otherwise, your tokens may be permanently stuck.
+                </Text>
+              </Box>
+            </HStack>
+            <Checkbox
+              isChecked={acknowledgeContract}
+              onChange={(event) =>
+                setAcknowledgeContract(event.target.checked)
+              }
+              size="sm"
+              alignItems="center"
+              minH="36px"
+              w="full"
+              px={2.5}
+              py={2}
+              border={tokens.borders.thin}
+              borderColor={
+                acknowledgeContract ? "status.warning.border" : "border.subtle"
+              }
+              borderRadius="md"
+              bg={acknowledgeContract ? "status.warning.tint" : "surface.sunken"}
+              transition={tokens.motion.transitionBase}
+              sx={{
+                "& .chakra-checkbox__control": {
+                  borderWidth: "1px",
+                  borderColor: acknowledgeContract
+                    ? "status.warning.fg"
+                    : "border.strong",
+                  bg: acknowledgeContract
+                    ? "status.warning.fg"
+                    : "surface.raised",
+                  color: acknowledgeContract ? "fg.inverse" : undefined,
+                  boxShadow: "none",
+                  _hover: {
+                    borderColor: "status.warning.fg",
+                  },
+                  _focusVisible: {
+                    borderColor: "border.focus",
+                    boxShadow: tokens.shadows.focus,
+                  },
+                },
+                "& .chakra-checkbox__label": {
+                  flex: 1,
+                  fontSize: "xs",
+                  fontWeight: 600,
+                  color: "fg.primary",
+                  lineHeight: "short",
+                },
+              }}
+            >
+              I understand the risk and want to continue
+            </Checkbox>
+          </VStack>
         </Box>
       )}
     </Box>

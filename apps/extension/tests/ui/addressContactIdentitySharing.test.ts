@@ -35,6 +35,8 @@ test("Address Book and Send share contact identity enrichment and contact-list c
     /<HStack spacing=\{1\}>[\s\S]*?Recipient[\s\S]*?hasRecipientChoices && \([\s\S]*?My contacts/u,
   );
   assert.match(recipientSection, /<LabeledAddressPopover[\s\S]*?maxW="180px"/u);
+  assert.match(recipientSection, /transition=\{tokens\.motion\.transitionBase\}/u);
+  assert.doesNotMatch(recipientSection, /tokens\.transitions/u);
   assert.doesNotMatch(recipientSection, /placeholder="0x\.\.\., ENS/u);
   assert.doesNotMatch(recipientPicker, /blo\(/u);
 });
