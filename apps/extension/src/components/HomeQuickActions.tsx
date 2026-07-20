@@ -67,13 +67,14 @@ const ShieldIcon = () => (
 );
 */
 
-const QrCodeIcon = () => (
+const ReceiveIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
     <path
-      d="M3 3h6v6H3V3Zm12 0h6v6h-6V3ZM3 15h6v6H3v-6Zm12 0h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z"
+      d="m17 7-10 10m0-7v7h7"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
     />
   </Icon>
@@ -95,7 +96,7 @@ const actions = [
   { id: "send", label: "Send", icon: <SendIcon /> },
   { id: "swap", label: "Swap", icon: <SwapIcon /> },
   // { id: "shield", label: "Shield", icon: <ShieldIcon /> },
-  { id: "receive", label: "Receive", icon: <QrCodeIcon /> },
+  { id: "receive", label: "Receive", icon: <ReceiveIcon /> },
   { id: "more", label: "More", icon: <MoreIcon /> },
 ] as const;
 
