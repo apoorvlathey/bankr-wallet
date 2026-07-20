@@ -140,7 +140,7 @@ Current semantic cues:
 
 | Cue | Cuelume recipe | Trigger |
 | --- | --- | --- |
-| `unlockSuccess` | `sparkle` | Successful password or biometric unlock |
+| `unlockSuccess` | `sparkle` | Successful password or biometric unlock; preview when interaction sounds are enabled |
 | `transactionConfirm` | `sparkle` | User presses Confirm on a single, batch, or split transaction |
 | `requestReceived` | `chime` | A dapp connection, transaction, signature, permission, asset-watch, or chain-add request reaches the renderer |
 | `actionSheetTransition` | `bloom` | A bottom action sheet or connected-site chain drawer opens or closes |

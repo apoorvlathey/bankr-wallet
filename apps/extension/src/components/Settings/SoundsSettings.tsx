@@ -7,6 +7,7 @@ import {
   ListItemTitle,
   ListSurface,
 } from "@/components/ui";
+import { playInteractionSound } from "@/sounds/soundManager";
 import { useSoundsEnabled } from "@/sounds/useSoundsEnabled";
 import { SettingsScreenFrame } from "./SettingsScreenFrame";
 
@@ -20,9 +21,13 @@ export default function SoundsSettings({ onBack }: SoundsSettingsProps) {
 
   const toggle = async () => {
     if (enabled === null || pending) return;
+    const nextEnabled = !enabled;
     setPending(true);
     try {
-      await setEnabled(!enabled);
+      await setEnabled(nextEnabled);
+      if (nextEnabled) {
+        await playInteractionSound("unlockSuccess");
+      }
     } finally {
       setPending(false);
     }
