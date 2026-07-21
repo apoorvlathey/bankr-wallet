@@ -3,7 +3,9 @@
 > Status: implemented behind exact account, chain, delegation, and token
 > capability gates
 >
-> Last verified against live Pimlico token quotes: 2026-07-19
+> Last full catalog verification against live Pimlico token quotes: 2026-07-19
+>
+> Robinhood mainnet/testnet no-token discovery reverified: 2026-07-21
 
 WalletChan lets an eligible user choose the chain's native currency or a
 reviewed ERC-20 token to pay a transaction's network fee. Token payment uses an
@@ -64,6 +66,12 @@ Base Sepolia is intentionally native-only. The static provider documentation
 lists USDC there, but the live account-specific quote endpoint returned no
 quote during the latest verification. Live quoteability wins over a static
 support table.
+
+Robinhood Chain mainnet (`4663`) and testnet (`46630`) are also intentionally
+native-only. Authenticated `pimlico_getSupportedTokens` calls returned empty
+lists for both networks on 2026-07-21, so enabling their verified default
+DeleGator does not add either chain to the extension or website fee-token
+catalog.
 
 The exact checksummed addresses, decimals, stablecoin classification, logos,
 and maximum fee ceilings live in:

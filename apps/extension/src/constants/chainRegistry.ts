@@ -575,9 +575,11 @@ export const MAINNET_CHAIN_REGISTRY: readonly ChainEntry[] = [
     isOpStack: false,
     isBankrSupported: true,
     isSwapSupported: true,
-    // MetaMask's default EIP7702StatelessDeleGator is not deployed on 4663
-    // in @metamask/delegation-deployments 1.4.0 / Robinhood RPC yet.
-    isEip7702Supported: false,
+    // MetaMask upstream added 4663/46630 in smart-accounts-kit PR #277.
+    // The published delegation-deployments 1.4.0 package predates that merge,
+    // so this built-in flag is pinned to the live 2026-07-21 verification:
+    // v1.3.0 bytecode is present and supports the plain ERC-7821 batch mode.
+    isEip7702Supported: true,
     coingeckoTokenId: "ethereum",
     coingeckoPlatformId: "robinhood",
     geckoTerminalNetworkId: "robinhood",
@@ -711,6 +713,8 @@ interface NativeTestnetSpec {
   rpcUrl: string;
   explorer: string;
   nativeCurrency: ChainEntry["nativeCurrency"];
+  /** Opt in only after the exact default delegate passes live verification. */
+  isEip7702Supported?: boolean;
 }
 
 /**
@@ -741,7 +745,7 @@ const NATIVE_TESTNET_SPECS: readonly NativeTestnetSpec[] = [
   { chainId: 10143, parentChainId: 143, name: "Monad Testnet", rpcUrl: "https://testnet-rpc.monad.xyz", explorer: "https://testnet.monadexplorer.com", nativeCurrency: { name: "Testnet MON", symbol: "MON", decimals: 18 } },
   { chainId: 9746, parentChainId: 9745, name: "Plasma Testnet", rpcUrl: "https://testnet-rpc.plasma.to", explorer: "https://testnet.plasmascan.to", nativeCurrency: { name: "Testnet Plasma", symbol: "XPL", decimals: 18 } },
   { chainId: 80002, parentChainId: 137, name: "Polygon Amoy", rpcUrl: "https://polygon-amoy.drpc.org", explorer: "https://amoy.polygonscan.com", nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 } },
-  { chainId: 46630, parentChainId: 4663, name: "Robinhood Chain Testnet", rpcUrl: "https://rpc.testnet.chain.robinhood.com/rpc", explorer: "https://explorer.testnet.chain.robinhood.com", nativeCurrency: ETH_CURRENCY },
+  { chainId: 46630, parentChainId: 4663, name: "Robinhood Chain Testnet", rpcUrl: "https://rpc.testnet.chain.robinhood.com/rpc", explorer: "https://explorer.testnet.chain.robinhood.com", nativeCurrency: ETH_CURRENCY, isEip7702Supported: true },
   { chainId: 534351, parentChainId: 534352, name: "Scroll Sepolia", rpcUrl: "https://scroll-sepolia.drpc.org", explorer: "https://sepolia.scrollscan.com", nativeCurrency: ETH_CURRENCY },
   { chainId: 14601, parentChainId: 146, name: "Sonic Testnet", rpcUrl: "https://rpc.testnet.soniclabs.com", explorer: "https://explorer.testnet.soniclabs.com", nativeCurrency: { name: "Sonic", symbol: "S", decimals: 18 } },
   { chainId: 42431, parentChainId: 4217, name: "Tempo Moderato", rpcUrl: "https://rpc.moderato.tempo.xyz", explorer: "https://explore.testnet.tempo.xyz", nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 } },
@@ -765,7 +769,7 @@ export const TESTNET_CHAIN_REGISTRY: readonly ChainEntry[] = NATIVE_TESTNET_SPEC
       hiddenByDefault: true,
       isBankrSupported: false,
       isSwapSupported: false,
-      isEip7702Supported: false,
+      isEip7702Supported: testnet.isEip7702Supported ?? false,
       supportsFlashblocks: undefined,
       supportsSyncSend: undefined,
       coingeckoPlatformId: undefined,

@@ -585,6 +585,17 @@ The following chains are supported for transaction signing (listed in dropdown o
 
 These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.
 
+Robinhood Chain mainnet (`4663`) and its native testnet (`46630`) support
+WalletChan's automatic MetaMask v1.3 stateless DeleGator path for private-key
+and seed-phrase accounts. MetaMask added both networks to the upstream
+deployment map in `smart-accounts-kit` PR #277 on 2026-07-14. The published
+`@metamask/delegation-deployments` `1.4.0` package predates that merge, so the
+built-in registry pins the capability from the independent 2026-07-21 live
+verification: both RPCs expose the expected v1.3.0 contract at
+`EIP_7702_DEFAULT_DELEGATE` and return `true` for the plain ERC-7821 batch-mode
+probe. Mainnet and testnet remain native-fee-only because authenticated Pimlico
+discovery returned no fee tokens for either chain.
+
 ### Runtime Chain Resolution
 
 Built-in chain metadata and user-customized chain state are intentionally split:

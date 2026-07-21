@@ -247,6 +247,50 @@ test("valid approval requests pass surface preflight for every wallet path", () 
   );
 });
 
+test("Robinhood delegated permissions admit only local signing wallet types", () => {
+  const address = "0x0000000000000000000000000000000000000001";
+  const request = {
+    id: "robinhood-permission",
+    method: "wallet_requestExecutionPermissions",
+    params: [
+      {
+        chainId: "0x1237",
+        from: address,
+        to: "0x0000000000000000000000000000000000000002",
+        permission: {
+          type: "native-token-allowance",
+          isAdjustmentAllowed: false,
+          data: { allowanceAmount: "0x1" },
+        },
+      },
+    ],
+    chainId: 4663,
+  };
+
+  for (const accountType of ["privateKey", "seedPhrase"]) {
+    assert.equal(
+      providerRequestPassesSurfacePreflight(
+        "i_walletExecutionPermissions",
+        request,
+        { address, accountType, chainId: 4663, dappConnected: true },
+      ),
+      true,
+      accountType,
+    );
+  }
+  for (const accountType of ["bankr", "ledger", "impersonator"]) {
+    assert.equal(
+      providerRequestPassesSurfacePreflight(
+        "i_walletExecutionPermissions",
+        request,
+        { address, accountType, chainId: 4663, dappConnected: true },
+      ),
+      false,
+      accountType,
+    );
+  }
+});
+
 test("unconnected origins cannot open an approval sidepanel", () => {
   const address = "0x0000000000000000000000000000000000000001";
   assert.equal(

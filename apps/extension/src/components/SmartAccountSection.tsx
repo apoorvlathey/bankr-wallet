@@ -160,7 +160,7 @@ export default function SmartAccountSection({
   // visible so they know the feature exists, and the chain list expands on tap.
   const [isExpanded, setIsExpanded] = useState(standalone);
 
-  // The 8 built-in 7702 chains are always in the table. Every non-hidden
+  // Verified built-in 7702 chains are always in the table. Every non-hidden
   // chain in the user's networksInfo joins them (covers custom EVM chains).
   // We also keep any chain with a stored customDelegate that's no longer in
   // networksInfo, so the user can still revoke leftovers. The list is

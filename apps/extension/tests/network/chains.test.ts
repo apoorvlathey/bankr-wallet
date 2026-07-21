@@ -5,6 +5,7 @@ import {
   MAINNET_CHAIN_REGISTRY,
   TESTNET_CHAIN_REGISTRY,
   DEFAULT_NETWORKS,
+  EIP7702_SUPPORTED_CHAIN_IDS,
   ZEROX_SUPPORTED_CHAIN_IDS,
   chainHasNativeToken,
 } from "../../src/constants/chainRegistry";
@@ -76,6 +77,18 @@ test("native testnets ship hidden with complete runtime metadata", () => {
     assert.equal(getResolvedChainById(testnet.chainId, undefined)?.isCustom, false);
     assert.equal(getVisibleChains(undefined).some(({ chainId }) => chainId === testnet.chainId), false);
   }
+});
+
+test("Robinhood mainnet and testnet expose the live-verified default delegate", () => {
+  const mainnet = MAINNET_CHAIN_REGISTRY.find(({ chainId }) => chainId === 4663);
+  const testnet = TESTNET_CHAIN_REGISTRY.find(({ chainId }) => chainId === 46630);
+
+  assert.equal(mainnet?.isEip7702Supported, true);
+  assert.equal(testnet?.isEip7702Supported, true);
+  assert.equal(EIP7702_SUPPORTED_CHAIN_IDS.has(4663), true);
+  assert.equal(EIP7702_SUPPORTED_CHAIN_IDS.has(46630), true);
+  assert.equal(testnet?.isBankrSupported, false);
+  assert.equal(testnet?.isSwapSupported, false);
 });
 
 test("an existing custom testnet is promoted without losing user choices", () => {

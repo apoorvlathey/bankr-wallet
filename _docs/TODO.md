@@ -6,13 +6,14 @@ Don't push anything to github though. Make sure to auto compact your context whe
 
 ## Chain Support Follow-Ups
 
-- [ ] Re-check MetaMask EIP-7702 default delegate support on Robinhood Chain
-      (4663). Before flipping `isEip7702Supported` to `true`, verify that the
-      current `@metamask/delegation-deployments` package includes chain 4663
-      and that `eth_getCode(EIP_7702_DEFAULT_DELEGATE)` on
-      `https://rpc.mainnet.chain.robinhood.com` returns non-empty bytecode.
-      Use `.agents/skills/walletchan-chain-research/SKILL.md` for the support
-      audit.
+- [x] Re-checked MetaMask EIP-7702 default delegate support on Robinhood Chain
+      mainnet (`4663`) and testnet (`46630`) on 2026-07-21. MetaMask's upstream
+      v1.3 deployment map added both networks in `smart-accounts-kit` PR #277;
+      the published `@metamask/delegation-deployments` `1.4.0` package still
+      predates that merge. Both official RPCs return 11,185 bytes at
+      `EIP_7702_DEFAULT_DELEGATE`, report contract version `1.3.0`, and accept
+      WalletChan's plain ERC-7821 batch-mode probe. Enabled both through
+      live-verified built-in flags pending the next package release.
 
 ## Portfolio API Follow-Ups
 
