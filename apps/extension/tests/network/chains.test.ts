@@ -4,11 +4,14 @@ import test from "node:test";
 import {
   MAINNET_CHAIN_REGISTRY,
   TESTNET_CHAIN_REGISTRY,
+  CHAIN_TOKEN_IDS,
+  COINGECKO_PLATFORM_IDS,
   DEFAULT_NETWORKS,
   EIP7702_SUPPORTED_CHAIN_IDS,
   ZEROX_SUPPORTED_CHAIN_IDS,
   chainHasNativeToken,
 } from "../../src/constants/chainRegistry";
+import { PLATFORM_IDS as WEBSITE_TOKEN_LIST_PLATFORM_IDS } from "../../../website/app/api/swap/token-list/platformIds";
 import {
   getVisibleChains,
   getNativeAssetMeta,
@@ -89,6 +92,47 @@ test("Robinhood mainnet and testnet expose the live-verified default delegate", 
   assert.equal(EIP7702_SUPPORTED_CHAIN_IDS.has(46630), true);
   assert.equal(testnet?.isBankrSupported, false);
   assert.equal(testnet?.isSwapSupported, false);
+});
+
+test("native testnet default-delegate flags match the live-verified deployment set", () => {
+  const expected = [
+    97,
+    1301,
+    5003,
+    6343,
+    10143,
+    14601,
+    42431,
+    46630,
+    59141,
+    80002,
+    80069,
+    84532,
+    421614,
+    560048,
+    763373,
+    11155111,
+    11155420,
+  ];
+  const actual = TESTNET_CHAIN_REGISTRY
+    .filter(({ isEip7702Supported }) => isEip7702Supported)
+    .map(({ chainId }) => chainId)
+    .sort((a, b) => a - b);
+
+  assert.deepEqual(actual, expected);
+  for (const chainId of expected) {
+    assert.equal(EIP7702_SUPPORTED_CHAIN_IDS.has(chainId), true);
+  }
+});
+
+test("native pricing, token platforms, and viem metadata stay current", () => {
+  assert.equal(CHAIN_TOKEN_IDS[137], "polygon-ecosystem-token");
+  assert.equal(COINGECKO_PLATFORM_IDS[4326], "megaeth");
+  assert.equal(
+    MAINNET_CHAIN_REGISTRY.find(({ chainId }) => chainId === 130)?.viemChain?.id,
+    130,
+  );
+  assert.deepEqual(COINGECKO_PLATFORM_IDS, WEBSITE_TOKEN_LIST_PLATFORM_IDS);
 });
 
 test("an existing custom testnet is promoted without losing user choices", () => {

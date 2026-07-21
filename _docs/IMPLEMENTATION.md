@@ -596,6 +596,18 @@ verification: both RPCs expose the expected v1.3.0 contract at
 probe. Mainnet and testnet remain native-fee-only because authenticated Pimlico
 discovery returned no fee tokens for either chain.
 
+The broader 2026-07-21 registry audit live-probed every configured mainnet and
+native testnet. Seventeen native testnets now opt into the default DeleGator
+only because their exact chain IDs appear in MetaMask's v1.3 deployment map
+and their configured RPC returned the expected bytecode plus a successful
+plain ERC-7821 batch-mode probe. The same audit corrected Polygon's native POL
+price ID, added MegaETH's CoinGecko platform ID, restored Unichain's installed
+viem chain object, replaced Mode's dead mainnet explorer with its operator's
+Blockscout URL, and replaced HyperEVM Testnet's unavailable explorer with the
+live Hyperscan testnet explorer. Base Sepolia USDC token-paid gas is enabled
+after fresh Pimlico discovery and quote verification; all other fee-token
+catalog entries were re-quoted without address drift.
+
 ### Runtime Chain Resolution
 
 Built-in chain metadata and user-customized chain state are intentionally split:

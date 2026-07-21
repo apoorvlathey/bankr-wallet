@@ -79,11 +79,14 @@ test("adds requested tokens only on their exact chains", () => {
   );
 });
 
-test("includes every requested USDC testnet and rejects cross-chain addresses", () => {
-  for (const chainId of [80002, 11155111, 11155420, 421614]) {
+test("includes every live-quoted USDC testnet and rejects cross-chain addresses", () => {
+  for (const chainId of [80002, 84532, 11155111, 11155420, 421614]) {
     assert.equal(getFeePaymentTokens(chainId)[1]?.symbol, "USDC");
   }
-  assert.deepEqual(getFeePaymentTokens(84532).map((token) => token.symbol), ["ETH"]);
+  assert.equal(
+    getPimlicoUsdcAddress(84532),
+    "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  );
   assert.equal(
     getPimlicoFeeToken(8453, "0xdAC17F958D2ee523a2206206994597C13D831ec7"),
     null,

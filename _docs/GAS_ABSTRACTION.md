@@ -3,9 +3,7 @@
 > Status: implemented behind exact account, chain, delegation, and token
 > capability gates
 >
-> Last full catalog verification against live Pimlico token quotes: 2026-07-19
->
-> Robinhood mainnet/testnet no-token discovery reverified: 2026-07-21
+> Last full catalog verification against live Pimlico token quotes: 2026-07-21
 
 WalletChan lets an eligible user choose the chain's native currency or a
 reviewed ERC-20 token to pay a transaction's network fee. Token payment uses an
@@ -55,6 +53,7 @@ ERC-20 entries are enabled only for their exact chain/address pairs:
 | Monad | 143 | USDC, WMON |
 | MegaETH | 4326 | USDm, USDT0 |
 | Base | 8453 | USDC, USDT |
+| Base Sepolia | 84532 | USDC |
 | Arbitrum One | 42161 | USDC, USDT |
 | Linea | 59144 | USDT |
 | Polygon Amoy | 80002 | USDC |
@@ -62,16 +61,29 @@ ERC-20 entries are enabled only for their exact chain/address pairs:
 | Optimism Sepolia | 11155420 | USDC |
 | Arbitrum Sepolia | 421614 | USDC |
 
-Base Sepolia is intentionally native-only. The static provider documentation
-lists USDC there, but the live account-specific quote endpoint returned no
-quote during the latest verification. Live quoteability wins over a static
-support table.
+Base Sepolia's Circle USDC at
+`0x036CbD53842c5426634e7929541eC2318f3dCF7e` became live-quoteable in the
+2026-07-21 verification and is now enabled in both catalogs. The previous
+2026-07-19 check returned no quote; current live quoteability, exact Circle
+address verification, and onchain `symbol()` / `decimals()` reads supersede
+that older native-only result.
 
 Robinhood Chain mainnet (`4663`) and testnet (`46630`) are also intentionally
 native-only. Authenticated `pimlico_getSupportedTokens` calls returned empty
 lists for both networks on 2026-07-21, so enabling their verified default
 DeleGator does not add either chain to the extension or website fee-token
 catalog.
+
+The same 2026-07-21 pass checked every native testnet with a verified default
+DeleGator. Hoodi, Berachain Bepolia, BNB Testnet, Ink Sepolia, Mantle Sepolia,
+MegaETH Testnet, Monad Testnet, Robinhood Testnet, Sonic Testnet, Tempo
+Moderato, and Unichain Sepolia returned no approved token. Linea Sepolia
+returned only EURe. Ethereum Sepolia and Arbitrum Sepolia also returned PIM
+and EURe, Ethereum Sepolia additionally returned `USD₮`, Polygon Amoy returned
+EURe, and Base Sepolia returned PIM; those assets remain excluded because they
+are outside the reviewed exact-address catalog. Existing USDC entries on
+Ethereum Sepolia, Arbitrum Sepolia, Optimism Sepolia, and Polygon Amoy all
+returned live quotes and remain enabled.
 
 The exact checksummed addresses, decimals, stablecoin classification, logos,
 and maximum fee ceilings live in:

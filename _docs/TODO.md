@@ -14,6 +14,11 @@ Don't push anything to github though. Make sure to auto compact your context whe
       `EIP_7702_DEFAULT_DELEGATE`, report contract version `1.3.0`, and accept
       WalletChan's plain ERC-7821 batch-mode probe. Enabled both through
       live-verified built-in flags pending the next package release.
+- [ ] Replace Mode Testnet's explorer when the operator publishes a working
+      HTTPS endpoint. `testnet.modescan.io` no longer resolves, while the
+      operator-documented `sepolia.explorer.mode.network` presented a TLS
+      certificate for a different hostname on 2026-07-21. The RPC and chain ID
+      remain live, so the hidden-by-default testnet entry is retained.
 
 ## Portfolio API Follow-Ups
 
