@@ -16,7 +16,7 @@ import {
   Tooltip,
   useToast,
 } from "@chakra-ui/react";
-import { RefreshCw, AlertTriangle, ExternalLink as ExternalLinkIcon, Info } from "lucide-react";
+import { RefreshCw, AlertTriangle, ExternalLink as ExternalLinkIcon, Info, ShieldCheck } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   useAccount,
@@ -888,6 +888,50 @@ export default function AdminContent() {
                 accountStatus="address"
               />
             </Box>
+          </Flex>
+
+          <Flex
+            bg="white"
+            border="2px solid"
+            borderColor="bauhaus.border"
+            p={4}
+            align={{ base: "flex-start", sm: "center" }}
+            justify="space-between"
+            gap={4}
+            direction={{ base: "column", sm: "row" }}
+          >
+            <HStack spacing={3}>
+              <Flex
+                w="36px"
+                h="36px"
+                align="center"
+                justify="center"
+                bg="bauhaus.yellow"
+                border="2px solid"
+                borderColor="bauhaus.black"
+              >
+                <ShieldCheck size={19} />
+              </Flex>
+              <Box>
+                <Text fontSize="sm" fontWeight="900" textTransform="uppercase">
+                  Privacy Pools Explorer
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  Verify Shield compliance and association-root publication.
+                </Text>
+              </Box>
+            </HStack>
+            <Button
+              as={Link}
+              href={resolveHref("/privacy-pools-explorer")}
+              variant="outline"
+              size="sm"
+              leftIcon={<ExternalLinkIcon size={15} />}
+              minH="40px"
+              _hover={{ textDecoration: "none", bg: "gray.100" }}
+            >
+              Open explorer
+            </Button>
           </Flex>
 
           {/* Wrong Chain Banner */}

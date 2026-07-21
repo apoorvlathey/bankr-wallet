@@ -859,6 +859,25 @@ When adding a new routed page, update `apps/website/routing.config.json`, add th
 
 **Existing routed pages**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`, `test`.
 
+### Privacy Pools Explorer
+
+`/privacy-pools-explorer` is an internal admin diagnostic linked only from the
+Admin page. It accepts a Shield transaction hash or an Ethereum/Sepolia
+Etherscan transaction URL, auto-selects the chain for recognized URLs, and
+immediately starts verification when a recognized URL is pasted. Raw hashes
+default to Ethereum mainnet and wait for explicit submission. A fixed-endpoint server route verifies
+the successful Entrypoint receipt and exact ETH-pool `Deposited` event, exact
+ASP deposit metadata, association-tree label membership, and equality between
+the ASP root and Entrypoint `latestRoot()`. When available it also resolves the
+matching `RootUpdated` publication and reports its onchain time. The ASP does
+not expose its internal approval timestamp, so older deposits explicitly show
+the current approving-root publication rather than claiming it was the first.
+
+The page is intentionally a main-site path, not a registered subdomain route.
+It exports `noindex`/`nofollow` metadata, and `next.config.js` adds a
+defense-in-depth `X-Robots-Tag` for the path. Do not add this tool to global
+navigation, sitemaps, or marketing pages.
+
 ### Cross-domain URL routing
 
 **CRITICAL**: Never construct subdomain URLs manually or use raw `window.location.hostname` checks for routing. Always use the centralized routing helpers:

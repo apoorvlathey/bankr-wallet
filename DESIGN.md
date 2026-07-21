@@ -242,6 +242,23 @@
 
 ## Slop audit
 
+- 2026-07-21 Privacy Pools Explorer audit: the internal admin diagnostic uses
+  the established Bauhaus website tokens and one four-stage verification path
+  rather than generic metric cards. Transaction input and network selection
+  remain one labeled control group, all status steps pair color with explicit
+  icons and text, hashes use the shared mono face, times and amounts use
+  tabular numerals, and refresh is a distinct secondary action. Loading,
+  invalid, pending, declined, confirmed, and upstream-error states preserve
+  the submitted input. Recognized Etherscan URLs infer their network and begin
+  verification immediately, while raw hashes retain an explicit submit step.
+  Confirmed results foreground the elapsed shield-to-root compliance duration
+  instead of the root publication's age relative to the current clock.
+  Event timestamps use the viewer's local timezone, pair the absolute time with
+  a live relative age, and refresh that relative age once per second.
+  Controls meet the 44px preferred target and expose
+  visible focus treatment. The page introduces no gradients, glass effects,
+  rounded card stacks, decorative motion, or new design tokens.
+
 - 2026-07-20 Safe integration audit: Safe account setup, authority state,
   pending approvals, execution review, and terminal Activity reuse WalletChan's
   existing Warm Midnight hierarchy instead of introducing a parallel visual

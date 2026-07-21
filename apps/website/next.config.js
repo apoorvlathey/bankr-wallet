@@ -60,7 +60,17 @@ function buildRedirects() {
 }
 
 function buildHeaders() {
-  const headers = [];
+  const headers = [
+    {
+      source: "/privacy-pools-explorer/:path*",
+      headers: [
+        {
+          key: "X-Robots-Tag",
+          value: "noindex, nofollow, noarchive, nosnippet, noimageindex",
+        },
+      ],
+    },
+  ];
 
   for (const host of routing.pathBaseHosts) {
     headers.push({
