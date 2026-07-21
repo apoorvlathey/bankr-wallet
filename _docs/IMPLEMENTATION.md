@@ -2096,8 +2096,8 @@ The implemented domain contains:
   live-verified matrix is Ethereum (USDC, USDT, stETH, wstETH, WETH), Optimism
   (USDC, USDC.e, USDT, stETH, wstETH), Base/Polygon/Arbitrum (USDC, USDT), BNB
   Chain/Linea (USDT), MegaETH (USDm, USDT0), Monad (USDC, WMON), and USDC on
-  Ethereum Sepolia, Optimism Sepolia, Arbitrum Sepolia, and Polygon Amoy. Base
-  Sepolia remains native-only because its live quote result is empty;
+  Ethereum Sepolia, Optimism Sepolia, Arbitrum Sepolia, Polygon Amoy, and Base
+  Sepolia;
 - `pimlicoTypes.ts`: local v0.7 PackedUserOperation, EIP-7702 authorization,
   quote, paymaster, gas-estimate, and receipt shapes;
 - `pimlicoClient.ts`: bounded JSON-RPC transport for token quotes, paymaster
@@ -2154,10 +2154,13 @@ rejects unrequested token quotes, and rejects a paymaster address that changes
 after quote selection. A Pimlico API key must never be compiled into the
 extension.
 
-`FeePaymentSelector.tsx` is shared by normal and ERC-5792 confirmation. It uses
+`FeePaymentSelector.tsx` is shared by normal and ERC-5792 confirmation. Normal
+confirmation includes injected and WalletConnect transactions, extension-
+initiated Send requests, replacements, and other requests persisted through
+the pinned single-transaction queue. It uses
 the standard bottom action sheet, keeps native payment as the default, shows
 amount, stablecoin fiat equivalence, live balance, and insufficiency for native
-and every catalog token, identifies assets with their token logos where available, discloses a one-time
+and every funded catalog token, identifies assets with their token logos where available, discloses a one-time
 official smart-account upgrade, and disables Confirm until a current
 request-pinned quote exists. The parent confirmation owns the completed quote;
 the selector derives its displayed maximum and balance from that same object
@@ -2166,10 +2169,18 @@ unchanged; there is no silent fallback from a failed token operation to native
 payment.
 
 The options request reads every catalog-token balance independently of Pimlico quote
-preparation, so the action sheet shows each before selection. Once a token is
+preparation. An exact zero balance omits that catalog token before the options
+leave the service worker; native remains available, while unknown reads retain
+their existing `Balance unavailable` display and quote-time retry behavior
+rather than being misclassified as zero. Once a token is
 selected, the compact decision row is reserved for the bounded maximum fee;
 the balance is not repeated there. The shared estimating loader is centered
 across that row while preparation is pending.
+
+The in-wallet Swap coordinators are separate immediate-execution paths and
+remain native-gas-only; they do not render `FeePaymentSelector` or accept a
+fee-token quote. The zero-balance rule therefore applies to every path that can
+actually expose the picker without implying unsupported token-paid Swap gas.
 
 When simulation shows that the requested transaction would spend too much of the selected token
 for the paymaster to collect its fee (`AA50 postOp reverted 0x7939f424`), the

@@ -3,7 +3,8 @@
 - `tokens.test.ts` freezes the exact native/ERC-20 chain capability catalog and
   requires the extension and proxy address sets to remain synchronized.
 - `capabilities.test.ts` covers Bankr, private-key, seed-phrase, Ledger,
-  view-only, deployment, first-use, pre-delegated, and foreign-delegate gates.
+  view-only, deployment, first-use, pre-delegated, foreign-delegate, and
+  zero-balance option-filtering gates.
 - `userOperation.test.ts` pins WalletChan's Stateless DeleGator call encoding and
   typed-data signature recovery.
 - `authorization.test.ts` freezes real/dummy EIP-7702 authorization formatting.
@@ -19,7 +20,9 @@
 - `receiptValidation.test.ts` requires an independently fetched matching
   EntryPoint event before activity or ERC-5792 finality.
 - `selectorLifecycle.test.ts` freezes bounded option/quote loading, explicit
-  retry, and the no-automatic-retry error state.
+  retry, the no-automatic-retry error state, shared single/batch/internal-Send
+  presentation, and Swap's current native-only boundary.
 
 Background router tests separately freeze the trusted-UI audience and exact
-three-wallet-type fee-selection arguments.
+fee-selection arguments for the three eligible signing-wallet paths; Ledger
+remains explicit and native-only.

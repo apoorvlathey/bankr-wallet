@@ -14,6 +14,7 @@ import {
   getFeePaymentTokens,
   getPimlicoFeeTokens,
   type FeePaymentTokenId,
+  type PimlicoFeeToken,
 } from "./tokens";
 
 export interface FeePaymentOption {
@@ -66,6 +67,29 @@ export function evaluateTokenFeePaymentEligibility(input: {
 
 export const evaluateUsdcFeePaymentEligibility = evaluateTokenFeePaymentEligibility;
 
+export function buildFundedFeePaymentTokenOptions(input: {
+  feeTokens: readonly PimlicoFeeToken[];
+  balances: readonly (bigint | undefined)[];
+  eligibility: Pick<
+    FeePaymentOption,
+    "available" | "unavailableReason" | "oneTimeUpgrade"
+  >;
+}): FeePaymentOption[] {
+  return input.feeTokens.flatMap((token, index) => {
+    const balance = input.balances[index];
+    if (balance === 0n) return [];
+    return [{
+      id: token.id,
+      symbol: token.symbol,
+      decimals: token.decimals,
+      stablecoin: token.stablecoin,
+      logoUrl: token.logoUrl,
+      balance: balance?.toString(),
+      ...input.eligibility,
+    }];
+  });
+}
+
 async function getOptionsForRequest(input: {
   chainId: number;
   account: Account;
@@ -83,18 +107,28 @@ async function getOptionsForRequest(input: {
   if (feeTokens.length === 0) return { success: true, options };
 
   let eligibility: ReturnType<typeof evaluateTokenFeePaymentEligibility>;
-  let balances: Array<string | undefined> = feeTokens.map(() => undefined);
-  if (input.hasDeployment) {
-    eligibility = evaluateTokenFeePaymentEligibility({
-      accountType: input.account.type,
-      chainId: input.chainId,
-      hasDeployment: true,
-      onchainDelegate: null,
-    });
+  let balances: Array<bigint | undefined> = feeTokens.map(() => undefined);
+  const chain = await getStoredResolvedChainById(input.chainId);
+  if (!chain?.rpcUrl) {
+    eligibility = { available: false, unavailableReason: "No RPC is configured for this chain" };
   } else {
-    const chain = await getStoredResolvedChainById(input.chainId);
-    if (!chain?.rpcUrl) {
-      eligibility = { available: false, unavailableReason: "No RPC is configured for this chain" };
+    const balanceReads = Promise.all(
+      feeTokens.map((token) =>
+        getFeeTokenBalanceAtRpc(
+          chain.rpcUrl,
+          token.address,
+          input.account.address as `0x${string}`,
+        ).catch(() => undefined),
+      ),
+    );
+    if (input.hasDeployment) {
+      balances = await balanceReads;
+      eligibility = evaluateTokenFeePaymentEligibility({
+        accountType: input.account.type,
+        chainId: input.chainId,
+        hasDeployment: true,
+        onchainDelegate: null,
+      });
     } else {
       const [delegate, tokenBalances] = await Promise.all([
         readOnchainDelegate(
@@ -102,15 +136,7 @@ async function getOptionsForRequest(input: {
           input.chainId,
           input.account.address as `0x${string}`,
         ),
-        Promise.all(
-          feeTokens.map((token) =>
-            getFeeTokenBalanceAtRpc(
-              chain.rpcUrl,
-              token.address,
-              input.account.address as `0x${string}`,
-            ).then(String).catch(() => undefined),
-          ),
-        ),
+        balanceReads,
       ]);
       balances = tokenBalances;
       eligibility = delegate.ok
@@ -124,17 +150,11 @@ async function getOptionsForRequest(input: {
     }
   }
 
-  feeTokens.forEach((token, index) => {
-    options.push({
-      id: token.id,
-      symbol: token.symbol,
-      decimals: token.decimals,
-      stablecoin: token.stablecoin,
-      logoUrl: token.logoUrl,
-      balance: balances[index],
-      ...eligibility,
-    });
-  });
+  options.push(...buildFundedFeePaymentTokenOptions({
+    feeTokens,
+    balances,
+    eligibility,
+  }));
   return { success: true, options };
 }
 

@@ -22,8 +22,8 @@ The transaction and atomic-batch confirmation screens show **Pay network fee
 with** when the active request is eligible. The picker:
 
 - always preserves the existing native-fee path;
-- shows each available token with its logo and current balance before a quote
-  is requested;
+- shows each available token with its logo and current nonzero balance before a
+  quote is requested, omitting exact zero-balance catalog entries;
 - requests a quote only after the user selects a token;
 - displays the bounded maximum fee in the token's own units;
 - uses an **Estimating Fees** three-dot loader while preparing the quote;
@@ -100,14 +100,16 @@ Provider discovery must not add niche or newly listed assets automatically.
 
 ## Account eligibility
 
-WalletChan has three signing account types and the fee path must be tested with
-all three:
+WalletChan has four signing account types and the fee path must be tested with
+all four. Ledger remains deliberately ineligible because the ERC-4337 path has
+no hardware-signing implementation:
 
 | Account type | Existing official delegation | First-use delegation |
 | --- | --- | --- |
 | Private key | Supported | Supported in the submitted UserOperation |
 | Seed phrase | Supported | Supported in the submitted UserOperation |
 | Bankr API | Supported | Not supported until its signing API can create the required first-use authorization |
+| Ledger | Not supported | Not supported |
 
 View-only impersonator accounts are never eligible.
 
@@ -117,12 +119,16 @@ Eligibility also requires:
 - a chain with a deployed and verified WalletChan official delegate;
 - an exact token entry in the built-in catalog;
 - a live token balance read;
+- a nonzero balance for the token to appear in the picker;
 - no conflicting pending EOA transaction during first-use authorization;
 - no foreign onchain delegation;
 - force inclusion to be disabled.
 
 Unknown chains, unknown token addresses, contract deployments without the
 expected delegate behavior, and stale account/request bindings fail closed.
+An exact zero balance removes only that ERC-20 option; native payment remains
+available. A nonzero but insufficient balance remains visible so the bounded
+quote can explain the actual maximum-fee shortfall.
 
 ## Execution flow
 

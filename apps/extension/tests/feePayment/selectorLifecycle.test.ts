@@ -6,6 +6,32 @@ const source = readFileSync(
   new URL("../../src/components/FeePaymentSelector.tsx", import.meta.url),
   "utf8",
 );
+const capabilitiesSource = readFileSync(
+  new URL("../../src/chrome/feePayment/capabilities.ts", import.meta.url),
+  "utf8",
+);
+const transactionSummarySource = readFileSync(
+  new URL(
+    "../../src/components/TransactionConfirmation/TransactionDecisionSummary.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const batchSummarySource = readFileSync(
+  new URL(
+    "../../src/components/BatchConfirmation/BatchDecisionSummary.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const internalTransferSource = readFileSync(
+  new URL("../../src/chrome/transactions/internalTransfer.ts", import.meta.url),
+  "utf8",
+);
+const swapExecutionSource = readFileSync(
+  new URL("../../src/components/Swap/executePreparedSwap.ts", import.meta.url),
+  "utf8",
+);
 
 test("fee quote loading has a bounded renderer deadline and explicit retry", () => {
   assert.match(source, /QUOTE_REQUEST_TIMEOUT_MS = 30_000/u);
@@ -49,4 +75,26 @@ test("token estimation uses the shared loader and catalog logos", () => {
 test("fee-option discovery cannot spin forever", () => {
   assert.match(source, /OPTIONS_REQUEST_TIMEOUT_MS = 10_000/u);
   assert.match(source, /setLoading\(false\)/u);
+});
+
+test("single, batch, and internal-send reviews share the fee-option boundary", () => {
+  assert.equal(
+    [...capabilitiesSource.matchAll(/return getOptionsForRequest\(/gu)].length,
+    2,
+  );
+  assert.match(
+    capabilitiesSource,
+    /options\.push\(\.\.\.buildFundedFeePaymentTokenOptions\(/u,
+  );
+  assert.match(transactionSummarySource, /<FeePaymentSelector/u);
+  assert.match(batchSummarySource, /<FeePaymentSelector/u);
+  assert.match(batchSummarySource, /requestKind="batch"/u);
+  assert.match(internalTransferSource, /pinnedTxRequest\(activeAccount,/u);
+  assert.match(internalTransferSource, /savePendingTxRequest\(pendingRequest\)/u);
+});
+
+test("in-wallet swap execution stays native-only and exposes no fee-token picker", () => {
+  assert.doesNotMatch(swapExecutionSource, /FeePaymentSelector/u);
+  assert.doesNotMatch(swapExecutionSource, /feePaymentToken/u);
+  assert.doesNotMatch(swapExecutionSource, /prepareFeePaymentQuote/u);
 });
