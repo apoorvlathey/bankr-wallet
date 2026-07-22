@@ -95,8 +95,13 @@ export function aggregatePrivacyCommitmentPortfolio(
   for (const commitment of canonicalCommitments.values()) {
     const balance = BigInt(commitment.balanceWei);
     confirmed += balance;
-    if (commitment.status === "private_ready") {
+    if (
+      commitment.status === "private_ready" ||
+      commitment.status === "withdrawal_pending"
+    ) {
       ready += balance;
+    }
+    if (commitment.status === "private_ready") {
       if (balance > maxPrivateSend) maxPrivateSend = balance;
     }
     if (commitment.status === "awaiting_asp") pendingAsp += balance;

@@ -17,6 +17,7 @@ import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { listPrivacyWithdrawalEvents } from "../events/repository";
 import { syncPrivacyDepositEvents } from "../events/sync";
 import type { PrivacyWithdrawalEventV1 } from "../events/types";
+import { discardPrivacyPortfolioReservationWindow } from "../portfolioHistory/repository";
 import { isPrivacyNullifierSpent } from "./onchain";
 import { decryptPrivacyUnshieldDetails } from "./crypto";
 import {
@@ -24,11 +25,12 @@ import {
   listAllPrivacyUnshields,
   updatePrivacyUnshieldTracking,
 } from "./repository";
-import type {
-  PrivacyAnyUnshieldDetailsV1,
-  PrivacyUnshieldState,
-  PrivacyUnshieldTrackingV1,
-  StoredPrivacyUnshieldV1,
+import {
+  isWalletRejectedPrivacyUnshield,
+  type PrivacyAnyUnshieldDetailsV1,
+  type PrivacyUnshieldState,
+  type PrivacyUnshieldTrackingV1,
+  type StoredPrivacyUnshieldV1,
 } from "./types";
 import {
   getPendingTxRequestById,
@@ -394,7 +396,15 @@ export async function recordPrivacyDirectUnshieldWalletRejected(
       ? advance(current, "failed_recoverable", { errorCode: "wallet-rejected" })
       : null,
   );
-  if (updated && details) await releasePendingCommitment(updated, details);
+  if (updated && details && material) {
+    await releasePendingCommitment(updated, details);
+    await discardPrivacyPortfolioReservationWindow(
+      material.key,
+      material.keyId,
+      operation.summary.createdAt,
+      updated.tracking.updatedAt,
+    ).catch(() => undefined);
+  }
 }
 
 export function getPrivacyDirectUnshieldFailureTracking(
@@ -430,6 +440,7 @@ export async function recordPrivacyDirectUnshieldSubmissionFailure(
 }
 
 async function reconcileWithoutHash(operation: StoredPrivacyUnshieldV1): Promise<void> {
+  if (isWalletRejectedPrivacyUnshield(operation)) return;
   const material = await readPrivacyAspMasterMaterial();
   if (!material || material.keyId !== operation.keyId) return;
   const details = await decryptPrivacyUnshieldDetails(material.key, operation);
@@ -453,6 +464,12 @@ async function reconcileWithoutHash(operation: StoredPrivacyUnshieldV1): Promise
       Date.now() - operation.tracking.updatedAt > 5 * 60_000)
   ) {
     await releasePendingCommitment(operation, details);
+    await discardPrivacyPortfolioReservationWindow(
+      material.key,
+      material.keyId,
+      operation.summary.createdAt,
+      Date.now(),
+    ).catch(() => undefined);
     await setState(operation.summary.id, "failed_recoverable", {
       errorCode: "interrupted-before-submission",
     });

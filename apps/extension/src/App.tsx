@@ -136,6 +136,7 @@ import { PrivatePortfolioHome, useWalletHomeMode, WalletModeToggle } from "@/app
 import type { UnshieldOperation } from "@/components/Shield/model/unshield";
 import PrivacyActionRoute from "@/app/screens/PrivacyActionRoute";
 import TransactionDetailRoute from "@/app/screens/TransactionDetailRoute";
+import { clearRendererMemoryCache } from "@/app/rendererMemoryCache";
 
 function App() {
   const { themeId } = useTheme();
@@ -1796,8 +1797,12 @@ function App() {
     if (selectedTxRequest?.id) {
       rejectingTxIdsRef.current.add(selectedTxRequest.id);
     }
+    if (selectedTxRequest?.privacyUnshieldMeta) {
+      clearRendererMemoryCache();
+      return;
+    }
     navigateToAdjacentRequest();
-  }, [navigateToAdjacentRequest, selectedTxRequest?.id]);
+  }, [navigateToAdjacentRequest, selectedTxRequest]);
 
   const handleBeforeBatchReject = useCallback(() => {
     if (selectedBatchRequest?.id) {

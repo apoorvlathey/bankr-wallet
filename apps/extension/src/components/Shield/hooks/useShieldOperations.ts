@@ -13,8 +13,10 @@ import {
 } from "../model/shieldOperation";
 import type { UnshieldOperation } from "../model/unshield";
 import type { PublicRecoveryOperation } from "../model/recovery";
+import { PRIVACY_PORTFOLIO_UPDATED_MESSAGE } from "@/chrome/privacy/commitments/portfolioNotification";
 
 const CONFIRMATION_REFRESH_DELAY_MS = 350;
+const PRIVATE_BALANCE_REFRESH_DELAY_MS = 50;
 const PARTIAL_EVENT_SYNC_INTERVAL_MS = 1_000;
 const ACTIVE_SYNC_INTERVAL_MS = 10_000;
 const ASP_SYNC_INTERVAL_MS = 120_000;
@@ -207,14 +209,23 @@ export function useShieldOperations(): {
 
     const handleRuntimeMessage = (message: {
       type?: unknown;
-      updatedTx?: { id?: unknown };
+      txId?: unknown;
     }) => {
       if (message.type === "walletLockedExternal") {
         clearRendererMemoryCache();
         return;
       }
+      if (message.type === PRIVACY_PORTFOLIO_UPDATED_MESSAGE) {
+        if (confirmationTimer) clearTimeout(confirmationTimer);
+        confirmationTimer = setTimeout(() => {
+          void load().catch(() => {
+            // Keep the last verified snapshot; a later lifecycle signal retries.
+          });
+        }, PRIVATE_BALANCE_REFRESH_DELAY_MS);
+        return;
+      }
       if (message.type !== "txHistoryUpdated") return;
-      const txId = message.updatedTx?.id;
+      const txId = message.txId;
       if (typeof txId === "string" && !activityIds.has(txId)) return;
       if (confirmationTimer) clearTimeout(confirmationTimer);
       confirmationTimer = setTimeout(

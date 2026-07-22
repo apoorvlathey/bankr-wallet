@@ -221,6 +221,10 @@ uses the shared amber privacy-status accent. Quote refreshes
 retain the last verified balance, maximum, output, and slider geometry until a
 replacement quote succeeds, so loading never flashes the public ETH balance to
 zero or removes the amount control.
+Durable commitment writes broadcast a payload-free private-portfolio
+invalidation. The mounted private home debounces that signal and reloads its
+aggregate and encrypted chart, including when Shield becomes ready after ASP
+approval or a direct/relayed Unshield applies its replacement commitment.
 If an MV3 service-worker restart leaves the dedicated privacy key cold, the
 background still derives confirmed and compliance-pending totals from the same
 sanitized public Shield operation summaries used by Activity. Private-ready,
@@ -246,11 +250,15 @@ button. Selecting an Unshield row pushes the full-screen transaction-detail
 route, and its terminal private-balance state uses the standard `Confirmed`
 status. Receiver-paid preparation records its waiting operation before opening
 normal account-pinned confirmation, then follows Processing, onchain
-confirmation, explorer-link, and final receipt updates in the same row. A
-definite non-submission releases the claimed commitment and is labeled
-`Transaction was not submitted`; only a genuinely ambiguous broadcast remains
-in Processing without a hash while nullifier reconciliation checks it. Recovery
-waits through the bounded confirmation-to-submission handoff instead of treating
+confirmation, explorer-link, and final receipt updates in the same row. Rejecting
+the wallet confirmation releases the claimed commitment and does not add an
+Unshield row to Private Activity. The local reservation stays in the displayed
+private balance, is excluded from the spendable maximum, and never creates a
+chart dip; rejection also removes any legacy point captured during its reservation
+window. A different definite submission failure remains
+visible as `Transaction was not submitted`; only a genuinely ambiguous broadcast
+remains in Processing without a hash while nullifier reconciliation checks it.
+Recovery waits through the bounded confirmation-to-submission handoff instead of treating
 the consumed prompt as an immediate interruption. The shared transaction
 receipt finalizer also updates this private operation directly, with its
 dedicated poller retained for worker-restart recovery. Public recovery remains contextual on

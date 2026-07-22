@@ -118,9 +118,11 @@ The mode control is a tooltip-free, 28px amber-selected two-state pill on the
 normal Warm Midnight base canvas. Private does not repaint the page or introduce a
 parallel button style: its two actions reuse the same icon, 40px action tile,
 type, hover, and pressed treatment as the public home actions. Its headline
-USD value and chart represent only ASP-cleared `readyBalanceWei`; compact
-subcopy separates that shielded amount from amber `pendingBalanceWei`
-processing under the compliance check.
+USD value and chart represent only ASP-cleared `readyBalanceWei`; a locally
+reserved `withdrawal_pending` commitment remains in this displayed total until
+its withdrawal confirms, while `maxPrivateSendWei` excludes it so it cannot be
+spent twice. Compact subcopy separates the shielded amount from amber
+`pendingBalanceWei` processing under the compliance check.
 After an authenticated read, the background keeps one bounded, aggregate-only
 private portfolio view in session storage: ready/pending/recoverable totals and
 the already-released chart series. Automatic auth expiry removes every signing,
@@ -160,7 +162,11 @@ Private Home owns its selected Assets/Activity tab above Shield-screen and
 confirmation remounts. A successful Shield deposit or public recovery selects
 and persists Private wallet mode with its Activity tab selected, including the
 popup path that closes after confirmation. A rejected prompt preserves the
-current mode and tab. Every
+current mode and tab and is omitted from Private Activity. Receiver-paid Unshield
+keeps its internal rejected operation long enough to release the claimed private
+commitment, but the public operation-list projection excludes that explicit
+wallet-rejected, hashless record. Other definite submission failures remain visible
+for diagnosis, and ambiguous broadcasts remain pending for reconciliation. Every
 exact WalletChan Shield origin uses the shared privacy mark; the public recovery
 confirmation is presented concisely as `Shield Recovery`.
 
@@ -174,6 +180,11 @@ replacement delete the database. The renderer receives only bounded decrypted
 `{timestamp,totalValueUsd}` points after the background verifies the current
 privacy vault/key binding. Ready-balance changes create the immediate points;
 processing deposits do not increase the headline or chart until ASP clearance.
+Every durable encrypted commitment mutation broadcasts the payload-free
+`privacyPortfolioUpdated` invalidation. Open Private Home surfaces debounce the
+signal and reload the aggregate and chart directly, so ASP-cleared Shields and
+both direct and relayed successful Unshields update Assets without depending on
+a public transaction-history event or manual refresh.
 The most recently released bounded series is mirrored into
 `chrome.storage.session.privacyPortfolioViewV1` with the aggregate portfolio so
 automatic auth expiry can keep rendering it without decrypting this database.
@@ -380,6 +391,11 @@ impersonators are rejected, and explicit Sepolia builds reject Bankr mutation.
 ASP refresh decisions are revision-and-status compare-and-set writes. A refresh
 that began from an older `private_ready` snapshot cannot overwrite a newer
 `withdrawal_pending` Unshield claim while the normal confirmation is open.
+That local reservation does not lower the private headline or write a chart
+point. Explicit wallet rejection restores the claim, removes any legacy chart
+point written during its reservation window, invalidates the renderer snapshot,
+and remains excluded from the public Activity projection. Hashless rejection
+must not be reclassified by interrupted-submission recovery.
 Receipt reconciliation expects the recipient as `processooor` and applies the
 same spent-nullifier/replacement-commitment transition as relayed withdrawal.
 Relay, receiver-paid, and public-exit preparation all derive the selected
@@ -414,8 +430,9 @@ generates and locally verifies the withdrawal proof, validates all public
 signals, persists the effect transition, and only then submits to the relayer.
 Receipt/nullifier reconciliation applies the exact replacement commitment for
 both partial and full withdrawal. The aggregate `readyBalanceWei` may span
-several encrypted commitments, while `maxPrivateSendWei` is the largest single
-ready commitment. The withdrawal circuit consumes exactly one commitment per
+several encrypted commitments and continues to include a locally reserved
+commitment until onchain confirmation, while `maxPrivateSendWei` is the largest
+single unreserved ready commitment. The withdrawal circuit consumes exactly one commitment per
 proof, so Unshield presents these as `Total ready` and `Max` instead of implying
 that the maximum is the user's whole balance. If the total is larger, an info
 popover explains that subsequent withdrawals can consume the remaining

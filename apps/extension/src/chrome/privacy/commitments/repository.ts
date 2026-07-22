@@ -13,6 +13,7 @@ import {
   type PrivacyCommitmentStatus,
   type StoredPrivacyCommitmentV1,
 } from "./types";
+import { notifyPrivacyPortfolioUpdated } from "./portfolioNotification";
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
@@ -91,6 +92,7 @@ export async function updatePrivacyCommitmentStatus(
     }
     store.put(next);
     await completion;
+    notifyPrivacyPortfolioUpdated();
     return true;
   } catch (error) {
     try { transaction.abort(); } catch { /* already settled */ }
@@ -192,6 +194,7 @@ export async function applyPrivacyCommitmentWithdrawal(
     ) throw new Error("Private commitment changed during Unshield");
     store.put(next);
     await completion;
+    notifyPrivacyPortfolioUpdated();
   } catch (error) {
     try { transaction.abort(); } catch { /* settled */ }
     await completion.catch(() => undefined);
@@ -276,6 +279,7 @@ export async function applyPrivacyCommitmentRagequit(
     ) throw new Error("Private commitment changed during public recovery");
     store.put(next);
     await completion;
+    notifyPrivacyPortfolioUpdated();
   } catch (error) {
     try { transaction.abort(); } catch { /* settled */ }
     await completion.catch(() => undefined);
@@ -420,6 +424,7 @@ export async function upsertPrivacyCommitment(
   try {
     transaction.objectStore(PRIVACY_COMMITMENTS_STORE).add(record);
     await completion;
+    notifyPrivacyPortfolioUpdated();
     return "created";
   } catch (error) {
     try { transaction.abort(); } catch { /* already settled */ }

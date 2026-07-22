@@ -44,14 +44,25 @@ test("sound preference remounts with the latest in-session value", async () => {
   }
 });
 
-test("portfolio hover sound is shared by tabs, protocol links, and activity rows", async () => {
+test("portfolio hover sound is shared by public and private portfolio interactions", async () => {
   const sources = await Promise.all(
     [
       "PortfolioTabs.tsx",
       "PortfolioDefiPositionRow.tsx",
       "Activity/ActivityItem.tsx",
+      "Activity/UnshieldActivityItem.tsx",
     ].map((path) =>
       readFile(new URL(`../../src/components/${path}`, import.meta.url), "utf8"),
+    ),
+  );
+
+  sources.push(
+    await readFile(
+      new URL(
+        "../../src/app/home/PrivatePortfolioHome.tsx",
+        import.meta.url,
+      ),
+      "utf8",
     ),
   );
 

@@ -18,6 +18,7 @@ import ShieldComplianceInfoPopover from "@/components/Shield/ShieldComplianceInf
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
 import { privacyShieldNetAmountWei } from "@/lib/privacyShieldAmounts";
+import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
 
 interface TransactionOutcomeProps {
   txRequest: PendingTxRequest;
@@ -34,6 +35,7 @@ export function TransactionOutcome({
   originHostname,
   originInitials,
 }: TransactionOutcomeProps) {
+  const isReceiverPaidUnshield = !!txRequest.privacyUnshieldMeta;
   return (
     <RequestIdentity
       origin={txRequest.origin}
@@ -42,6 +44,12 @@ export function TransactionOutcome({
       iconChipBg={iconChipBg}
       isInternalWalletChan={isInternalWalletChan}
       originInitials={originInitials}
+      labelOverride={isReceiverPaidUnshield ? "Unshield: Receiver-paid" : undefined}
+      identityIcon={
+        isReceiverPaidUnshield
+          ? <PrivacyShieldIcon boxSize="20px" color="accent.highlight" />
+          : undefined
+      }
     />
   );
 }

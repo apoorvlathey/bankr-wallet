@@ -670,6 +670,23 @@ test("Shield review presents the chosen amount and total wallet debit without a 
   );
 });
 
+test("receiver-paid Unshield review uses the shared privacy identity", async () => {
+  const source = await readFile(
+    new URL(
+      "../../src/components/TransactionConfirmation/TransactionSummary.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(source, /const isReceiverPaidUnshield = !!txRequest\.privacyUnshieldMeta/);
+  assert.match(source, /labelOverride=\{isReceiverPaidUnshield \? "Unshield: Receiver-paid" : undefined\}/);
+  assert.match(
+    source,
+    /isReceiverPaidUnshield[\s\S]*?<PrivacyShieldIcon boxSize="20px" color="accent\.highlight"/,
+  );
+});
+
 test("Shield details and Activity use elapsed compliance progress without step copy", async () => {
   const [
     statusSource,

@@ -149,6 +149,27 @@ export interface StoredPrivacyUnshieldV1 {
   tracking: PrivacyUnshieldTrackingV1;
 }
 
+export function isWalletRejectedPrivacyUnshield(
+  operation: Pick<StoredPrivacyUnshieldV1, "tracking">,
+): boolean {
+  return operation.tracking.state === "failed_recoverable" &&
+    operation.tracking.errorCode === "wallet-rejected" &&
+    operation.tracking.txHash === null;
+}
+
+export function isNonSubmittedPrivacyUnshield(
+  operation: Pick<StoredPrivacyUnshieldV1, "summary" | "tracking">,
+): boolean {
+  return operation.summary.method === "direct" &&
+    operation.tracking.state === "failed_recoverable" &&
+    operation.tracking.txHash === null &&
+    (
+      operation.tracking.errorCode === "wallet-rejected" ||
+      operation.tracking.errorCode === "interrupted-before-confirmation" ||
+      operation.tracking.errorCode === "interrupted-before-submission"
+    );
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;

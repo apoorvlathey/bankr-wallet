@@ -27,8 +27,11 @@ import {
   isPrivacyUnshieldPublicEventMatch,
 } from "../../src/chrome/privacy/withdrawals/lifecycle";
 import { derivePrivacyWithdrawalLineage } from "../../src/chrome/privacy/withdrawals/lineage";
+import { visiblePrivacyUnshields } from "../../src/chrome/privacy/withdrawals/repository";
 import {
   defaultPrivacyUnshieldTracking,
+  isNonSubmittedPrivacyUnshield,
+  isWalletRejectedPrivacyUnshield,
   isValidPrivacyUnshieldDetails,
   isValidStoredPrivacyUnshield,
   type PrivacyUnshieldDetailsV1,
@@ -315,6 +318,65 @@ test("receiver-paid Unshield releases definite non-submissions but preserves amb
     }, false),
     null,
   );
+});
+
+test("Private Activity suppresses only explicit wallet-rejected Unshield attempts", () => {
+  const summary = {
+    ...recordFixture().summary,
+    method: "direct" as const,
+    accountId: "account-1",
+    accountAddress: DEPOSITOR,
+    accountType: "privateKey" as const,
+    gasLimit: "650000",
+    maxFeePerGas: "1000000000",
+    gasFeeEstimateWei: "650000000000000",
+  };
+  const awaiting = defaultPrivacyUnshieldTracking(
+    summary as any,
+    "awaiting_wallet_confirmation",
+  );
+  const rejected = {
+    ...awaiting,
+    state: "failed_recoverable" as const,
+    errorCode: "wallet-rejected",
+  };
+
+  assert.equal(isWalletRejectedPrivacyUnshield({ tracking: rejected }), true);
+  assert.equal(isNonSubmittedPrivacyUnshield({ summary, tracking: rejected }), true);
+  assert.equal(isWalletRejectedPrivacyUnshield({
+    tracking: { ...rejected, errorCode: "submission-failed" },
+  }), false);
+  assert.equal(isWalletRejectedPrivacyUnshield({
+    tracking: { ...rejected, txHash: `0x${"44".repeat(32)}` },
+  }), false);
+  assert.equal(isNonSubmittedPrivacyUnshield({
+    summary,
+    tracking: { ...rejected, errorCode: "interrupted-before-submission" },
+  }), true);
+
+  const operation = {
+    summary,
+    keyId: "privacy-key",
+    encryptedDetails: {
+      version: 1 as const,
+      scheme: "privacy-unshield-key" as const,
+      ciphertext: "unused-by-projection",
+      iv: "unused-by-projection",
+    },
+    tracking: rejected,
+  };
+  assert.deepEqual(visiblePrivacyUnshields([
+    operation,
+    {
+      ...operation,
+      summary: {
+        ...summary,
+        id: "00000000-0000-4000-8000-000000000004",
+        requestId: "00000000-0000-4000-8000-000000000005",
+      },
+      tracking: { ...rejected, errorCode: "submission-failed" },
+    },
+  ]).map((item) => item.tracking.errorCode), ["submission-failed"]);
 });
 
 test("receiver-paid confirmation recovery cannot cancel the live submission handoff", () => {

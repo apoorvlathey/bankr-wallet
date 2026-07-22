@@ -14,7 +14,7 @@
     "dev:inject": "pnpm build:inject --mode development",
     "dev:ens-banner": "pnpm build:ens-banner --mode development",
     "dev:background": "pnpm build:background --mode development",
-    "dev:offscreen": "if [ \"$BROWSER\" = \"firefox\" ]; then exit 0; else pnpm build:offscreen --mode development; fi",
+    "dev:offscreen": "if [ \"$BROWSER\" = \"firefox\" ]; then exit 0; else vite build -c vite.config.offscreen.ts --mode development; fi",
     "dev:privacy-prover": "pnpm build:privacy-prover --mode development",
     "build": "pnpm build:web && pnpm build:onboarding && pnpm build:ens-pages && pnpm build:privacy-prover && concurrently 'pnpm build:inpage' 'pnpm build:inject' 'pnpm build:ens-banner' 'pnpm build:background' 'pnpm build:offscreen' && pnpm privacy:budgets:verify",
     "build:sepolia": "VITE_PRIVACY_POOLS_PROFILE=sepolia pnpm build",

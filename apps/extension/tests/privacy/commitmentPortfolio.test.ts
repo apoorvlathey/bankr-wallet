@@ -124,7 +124,7 @@ test("duplicate records from one partial-withdrawal lineage count only the curre
   assert.equal(portfolio.maxPrivateSendWei, "750");
 });
 
-test("total confirmed balance remains separate from withdrawal and recovery availability", () => {
+test("a reserved Unshield stays in the displayed balance but cannot be spent twice", () => {
   const portfolio = aggregatePrivacyCommitmentPortfolio(
     [
       commitment("private_ready", "shield-ready"),
@@ -134,7 +134,8 @@ test("total confirmed balance remains separate from withdrawal and recovery avai
     [operation("awaiting_event", "shield-indexing")],
   );
   assert.equal(portfolio.confirmedBalanceWei, "19800");
-  assert.equal(portfolio.readyBalanceWei, "4950");
+  assert.equal(portfolio.readyBalanceWei, "9900");
+  assert.equal(portfolio.maxPrivateSendWei, "4950");
   assert.equal(portfolio.pendingBalanceWei, "0");
   assert.equal(portfolio.recoverableBalanceWei, "4950");
   assert.equal(portfolio.attentionCount, 1);

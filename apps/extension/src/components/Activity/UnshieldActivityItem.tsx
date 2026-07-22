@@ -9,6 +9,7 @@ import {
 } from "@/components/Shield/model/shieldedAsset";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import { unshieldStatusCopy } from "@/components/Shield/model/shieldActivity";
+import { playInteractionSound } from "@/sounds/soundManager";
 import {
   formatActivityAddress,
   getLiveActivityAddressLabel,
@@ -77,6 +78,9 @@ export default function UnshieldActivityItem({
           boxShadow: "inset 0 0 0 2px var(--chakra-colors-border-focus)",
         }}
         aria-label="Open Unshield transaction details"
+        onMouseEnter={() =>
+          void playInteractionSound("portfolioTokenHover")
+        }
         onClick={onClick}
       />
       <Box position="relative" zIndex={1} flexShrink={0} pointerEvents="none">

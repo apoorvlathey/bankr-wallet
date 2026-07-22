@@ -6,6 +6,7 @@ import {
   decryptPrivacyPortfolioSnapshot,
   encryptPrivacyPortfolioSnapshot,
 } from "../../src/chrome/privacy/portfolioHistory/crypto";
+import { privacyPortfolioSnapshotIdsInWindow } from "../../src/chrome/privacy/portfolioHistory/repository";
 import {
   isValidStoredPrivacyPortfolioSnapshot,
   type PrivacyPortfolioSnapshotDetailsV1,
@@ -44,4 +45,16 @@ test("private portfolio snapshots encrypt balances and bind their public header"
     isValidStoredPrivacyPortfolioSnapshot({ ...record, confirmedBalanceWei: "leak" }),
     false,
   );
+});
+
+test("a non-submitted reservation removes only chart points from its lifetime", () => {
+  const snapshots = [100, 200, 300].map((timestamp, index) => ({
+    record: { id: `snapshot-${index}` },
+    details: { timestamp },
+  }));
+  assert.deepEqual(
+    privacyPortfolioSnapshotIdsInWindow(snapshots, 150, 250),
+    ["snapshot-1"],
+  );
+  assert.deepEqual(privacyPortfolioSnapshotIdsInWindow(snapshots, 250, 150), []);
 });

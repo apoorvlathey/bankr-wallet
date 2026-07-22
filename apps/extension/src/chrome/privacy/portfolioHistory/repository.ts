@@ -98,6 +98,52 @@ async function commitRecord(
   await done;
 }
 
+export function privacyPortfolioSnapshotIdsInWindow(
+  snapshots: readonly {
+    record: Pick<StoredPrivacyPortfolioSnapshotV1, "id">;
+    details: Pick<PrivacyPortfolioSnapshotDetailsV1, "timestamp">;
+  }[],
+  startedAt: number,
+  endedAt: number,
+): string[] {
+  if (!Number.isSafeInteger(startedAt) || !Number.isSafeInteger(endedAt) ||
+    startedAt < 0 || endedAt < startedAt) return [];
+  return snapshots
+    .filter(({ details }) => details.timestamp >= startedAt && details.timestamp <= endedAt)
+    .map(({ record }) => record.id);
+}
+
+/** Remove chart points produced by a private reservation that never submitted. */
+export function discardPrivacyPortfolioReservationWindow(
+  key: CryptoKey,
+  keyId: string,
+  startedAt: number,
+  endedAt: number,
+): Promise<void> {
+  const cleanup = seriesLock
+    .catch(() => ({ priceUsd: null, totalValueUsd: null, snapshots: [] }))
+    .then(async (current) => {
+      const decrypted = (await Promise.all(
+        (await readRecords())
+          .filter((record) => record.keyId === keyId)
+          .map(async (record) => ({
+            record,
+            details: await decryptPrivacyPortfolioSnapshot(key, record),
+          })),
+      )).filter((item): item is {
+        record: StoredPrivacyPortfolioSnapshotV1;
+        details: PrivacyPortfolioSnapshotDetailsV1;
+      } => Boolean(item.details));
+      await commitRecord(
+        null,
+        privacyPortfolioSnapshotIdsInWindow(decrypted, startedAt, endedAt),
+      );
+      return current;
+    });
+  seriesLock = cleanup;
+  return cleanup.then(() => undefined);
+}
+
 async function readSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeries> {
   const [vault, privacyKey] = await Promise.all([
     readPrivacyVault(),

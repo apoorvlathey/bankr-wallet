@@ -28,6 +28,7 @@ import { useShieldOperations } from "@/components/Shield/hooks/useShieldOperatio
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import type { UnshieldOperation } from "@/components/Shield/model/unshield";
 import { formatUsd } from "@/lib/currencyFormatUtils";
+import { playInteractionSound } from "@/sounds/soundManager";
 import { usePortfolioValueVisibility } from "./usePortfolioValueVisibility";
 
 interface PrivatePortfolioHomeProps {
@@ -224,6 +225,9 @@ export default function PrivatePortfolioHome({
                 transform: "translateX(-50%)",
                 transition: "width 150ms cubic-bezier(0.2, 0.6, 0.2, 1)",
               }}
+              onMouseEnter={() =>
+                void playInteractionSound("portfolioTokenHover")
+              }
               onClick={() => onTabChange(item)}
             >
               {item}

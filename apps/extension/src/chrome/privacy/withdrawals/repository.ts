@@ -1,4 +1,5 @@
 import {
+  isNonSubmittedPrivacyUnshield,
   isValidPrivacyUnshieldTracking,
   isValidStoredPrivacyUnshield,
   MAX_PRIVACY_WITHDRAWALS,
@@ -146,8 +147,16 @@ async function list(limit: number): Promise<StoredPrivacyUnshieldV1[]> {
   return records;
 }
 
+export function visiblePrivacyUnshields(
+  operations: readonly StoredPrivacyUnshieldV1[],
+): StoredPrivacyUnshieldV1[] {
+  return operations
+    .filter((operation) => !isNonSubmittedPrivacyUnshield(operation))
+    .slice(0, MAX_VISIBLE_PRIVACY_WITHDRAWALS);
+}
+
 export function listPrivacyUnshields(): Promise<StoredPrivacyUnshieldV1[]> {
-  return list(MAX_VISIBLE_PRIVACY_WITHDRAWALS);
+  return list(MAX_PRIVACY_WITHDRAWALS).then(visiblePrivacyUnshields);
 }
 
 export function listAllPrivacyUnshields(): Promise<StoredPrivacyUnshieldV1[]> {
