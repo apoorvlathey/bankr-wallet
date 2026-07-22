@@ -37,12 +37,13 @@ import {
   ListSurface,
   ScreenSection,
 } from "@/components/ui";
+import type { Account } from "@/chrome/types";
 
 type Mode = "choose" | "nameGenerated" | "import" | "pick";
 
 interface SeedPhraseSetupProps {
   onBack: () => void;
-  onComplete: () => void;
+  onComplete: (account: Account) => void;
   /** Reassert a live mnemonic capability after a passkey Never-session restore. */
   ensureMnemonicAccess?: () => Promise<{ ready: boolean }>;
   /** When provided, collect mnemonic + selected derivation indices without saving (for onboarding flow where wallet isn't unlocked yet). */
@@ -146,7 +147,7 @@ function SeedPhraseSetup({
 
       const response = await new Promise<{
         success: boolean;
-        error?: string;
+        error?: string; account?: Account;
       }>((resolve) => {
         chrome.runtime.sendMessage(
           {
@@ -159,7 +160,7 @@ function SeedPhraseSetup({
           resolve,
         );
       });
-      if (!response.success) {
+      if (!response.success || !response.account) {
         throw new Error(response.error || "Failed to save seed phrase");
       }
 
@@ -169,7 +170,7 @@ function SeedPhraseSetup({
         status: "success",
         duration: 2000,
       });
-      onComplete();
+      onComplete(response.account);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save seed phrase");
     } finally {
@@ -218,7 +219,7 @@ function SeedPhraseSetup({
       const response = await new Promise<{
         success: boolean;
         error?: string;
-        accounts?: any[];
+        account?: Account; accounts?: Account[];
       }>((resolve) => {
         chrome.runtime.sendMessage(
           {
@@ -232,7 +233,7 @@ function SeedPhraseSetup({
         );
       });
 
-      if (!response.success) {
+      if (!response.success || !response.account) {
         setIsSubmitting(false);
         throw new Error(response.error || "Failed to import seed phrase");
       }
@@ -244,7 +245,7 @@ function SeedPhraseSetup({
         status: "success",
         duration: 2000,
       });
-      onComplete();
+      onComplete(response.account);
     } catch (err) {
       setIsSubmitting(false);
       throw err;

@@ -53,7 +53,7 @@ interface SeedGroup {
 
 interface AddAccountProps {
   onBack: () => void;
-  onAccountAdded: () => void;
+  onAccountAdded: (account: Account) => void;
   onOpenBiometricSettings: () => void;
 }
 
@@ -231,6 +231,7 @@ function AddAccount({
         // authority for master-vs-agent access control.
         const response = await new Promise<{
           success: boolean;
+          account?: Account;
           error?: string;
         }>((resolve) => {
           chrome.runtime.sendMessage(
@@ -243,7 +244,7 @@ function AddAccount({
           );
         });
 
-        if (!response.success) {
+        if (!response.success || !response.account) {
           setErrors({ privateKey: response.error || "Failed to add account" });
           setIsSubmitting(false);
           return;
@@ -256,7 +257,7 @@ function AddAccount({
           duration: 2000,
         });
 
-        onAccountAdded();
+        onAccountAdded(response.account);
       } else if (accountType === "impersonator") {
         // Impersonator (view-only) account
         if (!impersonatorAddress.trim()) {
@@ -278,6 +279,7 @@ function AddAccount({
 
         const response = await new Promise<{
           success: boolean;
+          account?: Account;
           error?: string;
         }>((resolve) => {
           chrome.runtime.sendMessage(
@@ -290,7 +292,7 @@ function AddAccount({
           );
         });
 
-        if (!response.success) {
+        if (!response.success || !response.account) {
           setErrors({
             impersonatorAddress: response.error || "Failed to add account",
           });
@@ -305,7 +307,7 @@ function AddAccount({
           duration: 2000,
         });
 
-        onAccountAdded();
+        onAccountAdded(response.account);
       } else {
         // Bankr account
         if (!bankrApiKey.trim()) {
@@ -330,6 +332,7 @@ function AddAccount({
         // with its cached vault key, including after biometric unlock.
         const response = await new Promise<{
           success: boolean;
+          account?: Account;
           error?: string;
         }>((resolve) => {
           chrome.runtime.sendMessage(
@@ -343,7 +346,7 @@ function AddAccount({
           );
         });
 
-        if (!response.success) {
+        if (!response.success || !response.account) {
           setErrors({
             bankrAddress: response.error || "Failed to add account",
           });
@@ -358,7 +361,7 @@ function AddAccount({
           duration: 2000,
         });
 
-        onAccountAdded();
+        onAccountAdded(response.account);
       }
     } catch (error) {
       toast({
@@ -382,6 +385,7 @@ function AddAccount({
       const response = await new Promise<{
         success: boolean;
         error?: string;
+        account?: Account;
         accounts?: Account[];
       }>((resolve) => {
         chrome.runtime.sendMessage(
@@ -394,7 +398,7 @@ function AddAccount({
         );
       });
 
-      if (!response.success) {
+      if (!response.success || !response.account) {
         setIsSubmitting(false);
         throw new Error(response.error || "Failed to derive accounts");
       }
@@ -410,7 +414,7 @@ function AddAccount({
         duration: 2000,
       });
       setIsSubmitting(false);
-      onAccountAdded();
+      onAccountAdded(response.account);
     } catch (error) {
       setIsSubmitting(false);
       throw error;

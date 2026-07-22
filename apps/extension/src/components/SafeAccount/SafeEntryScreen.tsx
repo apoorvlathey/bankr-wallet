@@ -57,7 +57,7 @@ export function SafeEntryScreen({
   onAccountAdded,
 }: {
   onBack: () => void;
-  onAccountAdded: () => void;
+  onAccountAdded: (account: Account) => void;
 }) {
   const [address, setAddress] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -176,7 +176,7 @@ export function SafeEntryScreen({
     setIsImporting(true);
     setError(null);
     try {
-      const result = await runtimeMessage<{ success: boolean; error?: string }>({
+      const result = await runtimeMessage<{ success: boolean; account?: Account; error?: string }>({
         type: "importSafeAccount",
         address: probe.address,
         displayName: displayName.trim() || undefined,
@@ -184,8 +184,8 @@ export function SafeEntryScreen({
         verificationIds: probe.verificationIds,
         importedBy: selectedFromDiscovery ? "ownerDiscovery" : "manual",
       });
-      if (!result.success) throw new Error(result.error || "Failed to add Safe");
-      onAccountAdded();
+      if (!result.success || !result.account) throw new Error(result.error || "Failed to add Safe");
+      onAccountAdded(result.account);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to add Safe");
     } finally {

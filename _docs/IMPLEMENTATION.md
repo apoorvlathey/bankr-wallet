@@ -623,6 +623,12 @@ Standalone Unshield reuses Send's recipient/contact/ENS/contract-warning
 controller but remains the sole v1 withdrawal surface. It starts with an empty
 recipient and requires an explicit address/contact choice. Its entry screen
 contains only the Shielded ETH amount and boxed `Receive at` destination.
+Only this Unshield recipient chooser exposes a header Add account action. The
+existing creation/import flow stays inside the mounted withdrawal composition:
+Back restores the chooser and successful completion selects the exact returned
+account address while the account-list broadcast refreshes its wallet row. The
+row is then scrolled into view once, using instant movement when reduced motion
+is preferred.
 `Review unshield` opens the quote state on a separate screen, where exact from
 and receiver amounts plus renderer-only USD equivalents appear once in the
 outcome card. The entry amount field uses the same current private-portfolio

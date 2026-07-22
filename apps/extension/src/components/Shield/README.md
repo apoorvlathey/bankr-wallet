@@ -206,6 +206,13 @@ the current route and stays disabled when no Shielded ETH is ready;
 it never turns into a cross-route Shield action. Public recovery is the only
 intentional label override because it is a distinct public transaction.
 
+The Unshield-only recipient chooser exposes a header Add account action. It
+reuses the existing account creation/import flow without unmounting the
+withdrawal controller, so Back restores the chooser and a successful addition
+returns with the exact new address selected. Once the refreshed wallet row is
+available, the chooser performs one reduced-motion-aware scroll to bring it
+into view. Generic Send keeps the shared recipient chooser without this action.
+
 The private home's three-action rail labels the existing recovery-status route
 as `Deposits`. In Warm Midnight, Deposits uses the secondary gray icon tone so
 the amber Shield and Unshield actions remain the primary focus.

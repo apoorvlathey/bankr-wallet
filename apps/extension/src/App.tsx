@@ -2564,6 +2564,7 @@ function App() {
         accounts={accounts} fallback={<LoadingFallback />}
         onBack={() => setView("main")}
         onUnlockRequired={() => requestUnlockReturn({ view: "privacyAction" })}
+        onOpenBiometricSettings={() => { setSettingsInitialTab("biometricUnlock"); setView("settings"); }}
         onUnshieldSubmitted={() => { openPrivateActivity(); setActivityTabTrigger((current) => current + 1); setView("main"); }}
       />
     );

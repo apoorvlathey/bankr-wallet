@@ -4,6 +4,7 @@ import type { Account } from "@/chrome/types";
 import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manifest";
 import { useAccountIdentityLabels } from "@/hooks/useAccountIdentityLabels";
 import { RecipientPicker } from "@/components/Transfer/RecipientPicker";
+import AddAccount from "@/components/AddAccount";
 import { useTransferRecipient } from "@/components/Transfer/hooks/useTransferRecipient";
 import ShieldDashboard from "./ShieldDashboard";
 import UnshieldAmountPanel from "./UnshieldAmountPanel";
@@ -34,6 +35,7 @@ interface PrivateWithdrawalScreenProps {
   accounts?: Account[];
   unshieldTarget?: UnshieldEntryTarget | null;
   onUnlockRequired: () => void;
+  onOpenBiometricSettings: () => void;
   onUnshieldSubmitted?: (operation: UnshieldOperation) => void;
 }
 
@@ -61,10 +63,13 @@ export default function PrivateWithdrawalScreen({
   accounts = [],
   unshieldTarget,
   onUnlockRequired,
+  onOpenBiometricSettings,
   onUnshieldSubmitted,
 }: PrivateWithdrawalScreenProps) {
   const [runtimeAuthRequired, setRuntimeAuthRequired] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
+  const [isAddingRecipientAccount, setIsAddingRecipientAccount] = useState(false);
+  const [recipientAccountToReveal, setRecipientAccountToReveal] = useState<string | null>(null);
   const copy = getUnshieldCopy();
   const accountIdentity = useAccountIdentityLabels(accounts);
   const { initialization, retry } = useShieldInitialization();
@@ -253,6 +258,19 @@ export default function PrivateWithdrawalScreen({
   }
 
   if (recipientState.isRecipientPickerOpen) {
+    if (isAddingRecipientAccount) {
+      return (
+        <AddAccount
+          onBack={() => setIsAddingRecipientAccount(false)}
+          onOpenBiometricSettings={onOpenBiometricSettings}
+          onAccountAdded={(addedAccount) => {
+            recipientState.setRecipient(addedAccount.address);
+            setRecipientAccountToReveal(addedAccount.address);
+            setIsAddingRecipientAccount(false);
+          }}
+        />
+      );
+    }
     return (
       <RecipientPicker
         title={copy.recipientPickerTitle}
@@ -268,6 +286,12 @@ export default function PrivateWithdrawalScreen({
         onSelectAddress={recipientState.selectRecipientAddress}
         onRemoveContact={recipientState.removeContact}
         onReorderContacts={recipientState.reorderContacts}
+        onAddAccount={() => {
+          setRecipientAccountToReveal(null);
+          setIsAddingRecipientAccount(true);
+        }}
+        revealAccountAddress={recipientAccountToReveal}
+        onAccountRevealed={() => setRecipientAccountToReveal(null)}
         onBack={recipientState.closeRecipientPicker}
       />
     );

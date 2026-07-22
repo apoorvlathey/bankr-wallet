@@ -242,6 +242,14 @@
 
 ## Slop audit
 
+- 2026-07-22 Unshield recipient-account audit: added one established 44px
+  header action to the full-screen address chooser, using the existing semantic
+  icon-button and theme-token treatment. The action appears only in Unshield,
+  reuses the existing Add account flow, preserves the withdrawal draft on Back,
+  and returns with the newly added address selected and scrolled into view once.
+  The reveal uses minimal smooth movement and becomes instant under reduced
+  motion. Result: pass.
+
 - 2026-07-21 Privacy Pools Explorer audit: the internal admin diagnostic uses
   the established Bauhaus website tokens and one four-stage verification path
   rather than generic metric cards. Transaction input and network selection

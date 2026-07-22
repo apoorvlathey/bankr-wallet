@@ -14,6 +14,7 @@ interface PrivacyActionScreenProps {
   accounts?: Account[];
   unshieldTarget?: UnshieldEntryTarget | null;
   onUnlockRequired: () => void;
+  onOpenBiometricSettings: () => void;
   onUnshieldSubmitted?: (operation: UnshieldOperation) => void;
 }
 
@@ -24,6 +25,7 @@ export default function PrivacyActionScreen({
   accounts,
   unshieldTarget,
   onUnlockRequired,
+  onOpenBiometricSettings,
   onUnshieldSubmitted,
 }: PrivacyActionScreenProps) {
   if (mode === "shield") {
@@ -54,6 +56,7 @@ export default function PrivacyActionScreen({
       accounts={accounts}
       unshieldTarget={unshieldTarget}
       onUnlockRequired={onUnlockRequired}
+      onOpenBiometricSettings={onOpenBiometricSettings}
       onUnshieldSubmitted={onUnshieldSubmitted}
     />
   );

@@ -15,6 +15,7 @@ interface PrivacyActionRouteProps {
   fallback: ReactNode;
   onBack: () => void;
   onUnlockRequired: () => void;
+  onOpenBiometricSettings: () => void;
   onUnshieldSubmitted: (operation: UnshieldOperation) => void;
 }
 
@@ -28,6 +29,7 @@ export default function PrivacyActionRoute({
   fallback,
   onBack,
   onUnlockRequired,
+  onOpenBiometricSettings,
   onUnshieldSubmitted,
 }: PrivacyActionRouteProps) {
   return (
@@ -47,6 +49,7 @@ export default function PrivacyActionRoute({
             unshieldTarget={unshieldTarget}
             onBack={onBack}
             onUnlockRequired={onUnlockRequired}
+            onOpenBiometricSettings={onOpenBiometricSettings}
             onUnshieldSubmitted={onUnshieldSubmitted}
             account={account}
             accounts={accounts}
