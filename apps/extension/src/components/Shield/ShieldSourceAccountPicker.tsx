@@ -30,6 +30,8 @@ function accountTypeCopy(account: Account): string {
       ? "Bankr"
       : "Bankr · Shielding unavailable";
   }
+  if (account.type === "safe") return "Safe accounts cannot shield";
+  if (account.type === "ledger") return "Ledger accounts cannot shield";
   return "View-only accounts cannot shield";
 }
 

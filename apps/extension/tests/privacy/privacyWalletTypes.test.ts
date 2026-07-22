@@ -29,6 +29,20 @@ test("mainnet mutations support all custody wallet types and never impersonators
   );
   assert.equal(
     isPrivacyPoolsMutationAccountType(
+      "safe",
+      PRIVACY_POOLS_MAINNET_RELEASE_POLICY,
+    ),
+    false,
+  );
+  assert.equal(
+    isPrivacyPoolsMutationAccountType(
+      "ledger",
+      PRIVACY_POOLS_MAINNET_RELEASE_POLICY,
+    ),
+    false,
+  );
+  assert.equal(
+    isPrivacyPoolsMutationAccountType(
       "bankr",
       PRIVACY_POOLS_SEPOLIA_RELEASE_POLICY,
     ),

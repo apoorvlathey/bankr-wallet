@@ -232,7 +232,10 @@ test("Unshield separates amount and destination entry from quote review", async 
   assert.match(amountSource, /<ShieldSourceCard[\s\S]*?shielded[\s\S]*?<ShieldDirectionMarker[\s\S]*?<RecipientSection/);
   assert.match(amountSource, /label=\{copy\.recipientLabel\}/);
   assert.match(amountSource, /chooserLabel=\{copy\.recipientChooserLabel\}/);
-  assert.match(amountSource, /Withdrawal method shown in review/);
+  assert.match(amountSource, /<PrivacyPoolsLogo size="18px"/);
+  assert.match(amountSource, /Privacy Pools · \{SHIELDED_ETH_NETWORK_NAME\}/);
+  assert.match(amountSource, /whiteSpace="nowrap"/);
+  assert.doesNotMatch(amountSource, /Withdrawal method shown in review|Public exit shown in review/);
   assert.doesNotMatch(amountSource, /ShieldDestinationCard|Relay fee too high|Quoted fee/);
   assert.match(reviewSource, /copy\.sourceAmountLabel/);
   assert.match(reviewSource, /copy\.outcomeAmountLabel/);
@@ -591,9 +594,16 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.match(pickerSource, />\s*Deposit from\s*</);
   assert.doesNotMatch(pickerSource, />\s*Pay with\s*</);
   assert.doesNotMatch(pickerSource, /SHIELDED_ETH_NETWORK_NAME|Ethereum|Sepolia/);
+  assert.match(pickerSource, /Safe accounts cannot shield/);
+  assert.match(pickerSource, /Ledger accounts cannot shield/);
+  assert.match(pickerSource, /View-only accounts cannot shield/);
   assert.doesNotMatch(amountSource, /Available after the network-fee reserve/);
   assert.doesNotMatch(amountSource, /Net of the/);
   assert.match(amountSource, /% protocol fee/);
+  assert.match(amountSource, /<PrivacyPoolsLogo size="18px"/);
+  assert.match(amountSource, /Privacy Pools · \{SHIELDED_ETH_NETWORK_NAME\}/);
+  assert.match(amountSource, /whiteSpace="nowrap"/);
+  assert.doesNotMatch(amountSource, /Network fee shown in review/);
   assert.doesNotMatch(dashboardSource, /confirmedBalanceWei|readyBalanceWei|pendingBalanceWei/);
   assert.match(cardsSource, /minH="48px"/);
   assert.doesNotMatch(cardsSource, /minH="58px"/);

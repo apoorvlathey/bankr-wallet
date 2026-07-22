@@ -8,6 +8,7 @@ import {
   ShieldDirectionMarker,
   ShieldSourceCard,
 } from "./ShieldAssetCards";
+import { PrivacyPoolsLogo } from "./ShieldComplianceInfoPopover";
 import {
   formatShieldWei,
   SHIELD_VETTING_FEE_BPS,
@@ -75,12 +76,10 @@ export default function ShieldAmountPanel({
           : `${Number(SHIELD_VETTING_FEE_BPS) / 100}% protocol fee`}
       />
       {visibleQuote && (
-        <HStack justify="space-between" pt={3} spacing={3}>
-          <Text fontSize="xs" color="fg.secondary">
+        <HStack justify="flex-end" pt={3} px={1} spacing={1.5} w="full">
+          <PrivacyPoolsLogo size="18px" />
+          <Text fontSize="xs" color="fg.secondary" whiteSpace="nowrap">
             Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
-          </Text>
-          <Text fontSize="xs" color="fg.secondary" textAlign="right">
-            Network fee shown in review
           </Text>
         </HStack>
       )}

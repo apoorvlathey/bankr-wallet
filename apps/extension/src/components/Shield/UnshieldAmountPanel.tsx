@@ -21,6 +21,7 @@ import {
   ShieldDirectionMarker,
   ShieldSourceCard,
 } from "./ShieldAssetCards";
+import { PrivacyPoolsLogo } from "./ShieldComplianceInfoPopover";
 import { formatShieldUsdValue, formatShieldWei } from "./model/shieldQuote";
 import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
 import { getUnshieldCopy } from "./model/unshield";
@@ -213,12 +214,10 @@ export default function UnshieldAmountPanel({
         )}
       </Box>
 
-      <HStack justify="space-between" spacing={3} px={1} pt={3}>
-        <Text fontSize="xs" color="fg.secondary">
+      <HStack justify="flex-end" spacing={1.5} px={1} pt={3} w="full">
+        <PrivacyPoolsLogo size="18px" />
+        <Text fontSize="xs" color="fg.secondary" whiteSpace="nowrap">
           Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
-        </Text>
-        <Text fontSize="xs" color="fg.secondary" textAlign="right">
-          {usesPublicExit ? "Public exit shown in review" : "Withdrawal method shown in review"}
         </Text>
       </HStack>
     </VStack>
