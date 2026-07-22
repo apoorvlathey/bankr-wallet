@@ -1,5 +1,6 @@
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 import {
+  Badge,
   Box,
   HStack,
   IconButton,
@@ -20,10 +21,12 @@ interface ChainInfo {
 export function DiscoveredSafeRow({
   candidate,
   chainById,
+  isAlreadyAdded = false,
   onSelect,
 }: {
   candidate: DiscoveredSafe;
   chainById: ReadonlyMap<number, ChainInfo>;
+  isAlreadyAdded?: boolean;
   onSelect: () => void;
 }) {
   const primarySnapshot = candidate.snapshots[0];
@@ -58,9 +61,16 @@ export function DiscoveredSafeRow({
         }}
         onClick={onSelect}
       >
-        <Text fontFamily="mono" fontSize="sm" noOfLines={1}>
-          {candidate.address.slice(0, 8)}…{candidate.address.slice(-6)}
-        </Text>
+        <HStack minW={0} spacing={2}>
+          <Text minW={0} fontFamily="mono" fontSize="sm" noOfLines={1}>
+            {candidate.address.slice(0, 8)}…{candidate.address.slice(-6)}
+          </Text>
+          {isAlreadyAdded && (
+            <Badge variant="success" fontSize="2xs" flexShrink={0}>
+              Already added
+            </Badge>
+          )}
+        </HStack>
       </Box>
 
       <HStack flexShrink={0} spacing={1} pr={3}>

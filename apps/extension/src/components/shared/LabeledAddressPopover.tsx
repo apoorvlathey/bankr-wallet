@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Account } from "@/chrome/types";
 import { AccountAvatar } from "@/components/AccountIdentity";
+import { AddressContactAvatar } from "@/components/shared/AddressContactAvatar";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { isDarkThemeId, useTheme } from "@/theme";
@@ -221,19 +222,23 @@ function isRawAddressLabel(label: string, address: string): boolean {
 }
 
 interface LabeledAddressPopoverProps {
+  account?: Account | null;
   address: string;
   contextLabel?: string;
   explorer?: string;
   label: string;
   maxW?: string;
+  showFallbackAvatar?: boolean;
 }
 
 export function LabeledAddressPopover({
+  account: suppliedAccount,
   address,
   contextLabel = "address",
   explorer,
   label,
   maxW = "220px",
+  showFallbackAvatar = false,
 }: LabeledAddressPopoverProps) {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
@@ -245,12 +250,12 @@ export function LabeledAddressPopover({
   const { identities } = useEnsIdentities(identityAddresses);
   const identity = identities.get(address.toLowerCase());
   const cachedIdentityAvatar = useCachedAvatarSrc(identity?.avatar);
-  const [account, setAccount] = useState<Account | null>(null);
+  const [fetchedAccount, setFetchedAccount] = useState<Account | null>(null);
   const { contact } = useAddressContact(address);
 
   useEffect(() => {
-    setAccount(null);
-    if (!isAddress) return;
+    setFetchedAccount(null);
+    if (!isAddress || suppliedAccount !== undefined) return;
 
     let cancelled = false;
     chrome.runtime.sendMessage(
@@ -263,14 +268,16 @@ export function LabeledAddressPopover({
           (candidate) =>
             candidate.address.toLowerCase() === address.toLowerCase(),
         );
-        setAccount(matchingAccount ?? null);
+        setFetchedAccount(matchingAccount ?? null);
       },
     );
 
     return () => {
       cancelled = true;
     };
-  }, [address, isAddress]);
+  }, [address, isAddress, suppliedAccount]);
+
+  const account = suppliedAccount === undefined ? fetchedAccount : suppliedAccount;
 
   const presentation = getAddressIdentityPresentation({
     account,
@@ -296,6 +303,8 @@ export function LabeledAddressPopover({
       />
     ) : presentation.avatarKind === "walletFallback" && account ? (
       <AccountAvatar account={account} ensAvatar={null} size={20} />
+    ) : showFallbackAvatar ? (
+      <AddressContactAvatar address={address} avatar={null} size={20} />
     ) : null;
 
   return (

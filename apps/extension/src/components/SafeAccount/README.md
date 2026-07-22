@@ -4,10 +4,14 @@
 - `SafeOwnerAccountPicker.tsx`: home-selector-style Bankr/private-key/seed owner selection on a dedicated picker screen; only the selected account ID reaches the background lookup.
 - `useSafeOwnerDiscovery.ts`: cancellable renderer state machine for bounded progressive owner-discovery pages and cross-chain result merging.
 - `DiscoveredSafeRow.tsx`: selectable discovered Safe identity with independent
-  copy, first-verified-chain explorer, and verified-network mark utilities.
+  copy, first-verified-chain explorer, verified-network mark utilities, and an
+  inline Already added status that does not block opening the review.
 - `SafeCapabilityBadge.tsx`: non-authoritative capability labels.
 - `SafeVerificationCard.tsx`: compact per-network threshold, balance, version,
   owner-account, capability, and explorer summary used during import review.
+  Owners use the shared labeled-address pill for wallet/contact names, avatars,
+  copy, explorer, and contact editing. Previously imported Safes replace the
+  capability badge with an Already added status.
 - `SafeHomeAlert.tsx`: actionable home rail for proposals that need attention.
   Mounting the active Safe rail immediately starts a targeted request refresh,
   so popup/sidepanel open and account switching do not wait for the alarm. Its
@@ -23,7 +27,8 @@
 - `SafeSecurityScreen.tsx`: Warm Midnight account-settings composition,
   display-name editing, state loading, refresh, and removal orchestration.
 - `SafeChainSettingsSection.tsx`: presentational per-chain authority ledger with
-  owners, verified metadata, security extensions, and explorer/Safe links.
+  owners rendered through the shared labeled-address pill, verified metadata,
+  security extensions, and explorer/Safe links.
 - `SafeRemoveDialog.tsx`: focused destructive confirmation that keeps published
   proposals and onchain data consequences explicit.
 

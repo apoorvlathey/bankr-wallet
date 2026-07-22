@@ -89,6 +89,10 @@ export function SafeEntryScreen({
       account.type === "seedPhrase"),
     [accounts],
   );
+  const importedSafeAddresses = useMemo(
+    () => new Set(safeRecords.map((record) => record.address.toLowerCase())),
+    [safeRecords],
+  );
   useEffect(() => {
     void runtimeMessage<Account[]>({ type: "getAccounts" }).then(setAccounts).catch(() => undefined);
     void runtimeMessage<SafeAccountRecord[]>({ type: "getSafeAccounts" }).then(setSafeRecords).catch(() => undefined);
@@ -262,6 +266,7 @@ export function SafeEntryScreen({
               key={candidate.address}
               candidate={candidate}
               chainById={chainById}
+              isAlreadyAdded={importedSafeAddresses.has(candidate.address.toLowerCase())}
               onSelect={() => {
                 setAddress(candidate.address);
                 setProbe(candidate);
@@ -369,6 +374,7 @@ export function SafeEntryScreen({
                       safeAddress={probe.address!}
                       balanceUsd={balances[snapshot.chainId]}
                       accounts={accounts}
+                      isAlreadyAdded={alreadyImported}
                     />
                   );
                 })}

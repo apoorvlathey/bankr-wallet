@@ -9,7 +9,17 @@ const LABELS: Record<SafeCapability, string> = {
   blocked: "Observe only",
 };
 
-export function SafeCapabilityBadge({ capability }: { capability: SafeCapability }) {
+export function SafeCapabilityBadge({
+  capability,
+  isAlreadyAdded = false,
+}: {
+  capability: SafeCapability;
+  isAlreadyAdded?: boolean;
+}) {
+  if (isAlreadyAdded) {
+    return <Badge variant="success">Already added</Badge>;
+  }
+
   return (
     <Badge
       colorScheme={

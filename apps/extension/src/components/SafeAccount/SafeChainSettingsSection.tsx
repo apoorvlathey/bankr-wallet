@@ -14,20 +14,10 @@ import type { SafeChainSnapshot } from "@/chrome/safe/types";
 import ChainIcon from "@/components/ChainIcon";
 import { CopyButton } from "@/components/CopyButton";
 import MiddleTruncatedAddress from "@/components/MiddleTruncatedAddress";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { ScreenSection } from "@/components/ui";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-function ownerAccountLabel(owner: string, accounts: Account[]): string {
-  const linked = accounts.filter(
-    (candidate) =>
-      candidate.address.toLowerCase() === owner.toLowerCase() &&
-      ["bankr", "privateKey", "seedPhrase"].includes(candidate.type),
-  );
-
-  if (!linked.length) return "External owner";
-  return linked.map((candidate) => candidate.displayName || "Your account").join(" · ");
-}
 
 function configurationLabel(address: string): string {
   return address.toLowerCase() === ZERO_ADDRESS ? "None" : "Configured";
@@ -133,20 +123,22 @@ export function SafeChainSettingsSection({
           <VStack align="stretch" spacing={3}>
             {snapshot.owners.map((owner) => {
               const isContractOwner = snapshot.contractOwners.includes(owner);
+              const linkedAccount = accounts.find(
+                (candidate) => candidate.address.toLowerCase() === owner.toLowerCase(),
+              );
               return (
-                <Box key={owner}>
-                  <HStack mb={1} spacing={2} justify="space-between">
-                    <Text fontSize="sm" fontWeight="600" noOfLines={1}>
-                      {isContractOwner ? "Contract owner" : ownerAccountLabel(owner, accounts)}
-                    </Text>
-                    {isContractOwner && <Badge variant="warning">Unsupported</Badge>}
-                  </HStack>
-                  <AddressActionRow
+                <HStack key={owner} spacing={2} justify="space-between">
+                  <LabeledAddressPopover
+                    account={linkedAccount ?? null}
                     address={owner}
-                    label="owner address"
-                    explorerUrl={explorerAddressUrl && `${explorerAddressUrl}/${owner}`}
+                    contextLabel="Safe owner address"
+                    explorer={chain?.explorer}
+                    label={isContractOwner ? "Contract owner" : "External owner"}
+                    maxW="260px"
+                    showFallbackAvatar
                   />
-                </Box>
+                  {isContractOwner && <Badge variant="warning">Unsupported</Badge>}
+                </HStack>
               );
             })}
           </VStack>

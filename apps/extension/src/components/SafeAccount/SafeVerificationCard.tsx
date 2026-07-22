@@ -11,11 +11,8 @@ import {
 import type { Account } from "@/chrome/types";
 import type { SafeChainSnapshot } from "@/chrome/safe/types";
 import ChainIcon from "@/components/ChainIcon";
+import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { SafeCapabilityBadge } from "./SafeCapabilityBadge";
-
-function shortAddress(address: string) {
-  return `${address.slice(0, 8)}…${address.slice(-6)}`;
-}
 
 function walletTypeLabel(account: Account) {
   if (account.type === "bankr") return "Bankr API";
@@ -35,12 +32,14 @@ export function SafeVerificationCard({
   safeAddress,
   balanceUsd,
   accounts,
+  isAlreadyAdded = false,
 }: {
   snapshot: SafeChainSnapshot;
   chain?: { name: string; explorer: string };
   safeAddress: `0x${string}`;
   balanceUsd?: number;
   accounts: Account[];
+  isAlreadyAdded?: boolean;
 }) {
   const chainName = chain?.name ?? `Chain ${snapshot.chainId}`;
 
@@ -66,7 +65,10 @@ export function SafeVerificationCard({
           </Box>
         </HStack>
         <HStack flexShrink={0} spacing={1}>
-          <SafeCapabilityBadge capability={snapshot.capability} />
+          <SafeCapabilityBadge
+            capability={snapshot.capability}
+            isAlreadyAdded={isAlreadyAdded}
+          />
           {chain && (
             <IconButton
               as="a"
@@ -108,11 +110,8 @@ export function SafeVerificationCard({
         <Text color="fg.muted" fontSize="xs" mb={1}>Owners</Text>
         <VStack align="stretch" spacing={0}>
           {snapshot.owners.map((owner, index) => {
-            const linked = accounts.filter((account) =>
-              (account.type === "bankr" ||
-                account.type === "privateKey" ||
-                account.type === "seedPhrase") &&
-              account.address.toLowerCase() === owner,
+            const linked = accounts.filter(
+              (account) => account.address.toLowerCase() === owner,
             );
             const isContractOwner = snapshot.contractOwners.includes(owner);
             const ownerTitle = isContractOwner
@@ -127,17 +126,22 @@ export function SafeVerificationCard({
             return (
               <HStack
                 key={owner}
+                w="full"
                 spacing={3}
+                justify="space-between"
                 py={2}
                 borderTop={index ? "1px solid" : undefined}
                 borderColor="border.subtle"
               >
-                <Box flex={1} minW={0}>
-                  <Text fontSize="sm" fontWeight="600" noOfLines={1}>{ownerTitle}</Text>
-                  <Text color="fg.secondary" fontFamily="mono" fontSize="xs" noOfLines={1}>
-                    {shortAddress(owner)}
-                  </Text>
-                </Box>
+                <LabeledAddressPopover
+                  account={linked[0] ?? null}
+                  address={owner}
+                  contextLabel="Safe owner address"
+                  explorer={chain?.explorer}
+                  label={ownerTitle}
+                  maxW="260px"
+                  showFallbackAvatar
+                />
                 <Badge flexShrink={0}>{ownerType}</Badge>
               </HStack>
             );

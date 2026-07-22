@@ -10,7 +10,10 @@ review. It resolves the shared cached ENS/Basename/WNS/GNS/Mega identity and
 gives a local address-book label first priority, followed by a matching wallet
 account's display name before any public name or API label. Resolved avatars
 render through the privileged raster cache; only matching wallet accounts may
-fall back to their Bankr or blockie avatar. `addressIdentityPresentation.ts`
+fall back to their Bankr or blockie avatar by default. Owner/address-directory
+surfaces may opt into the shared deterministic blockie fallback for external
+addresses, and callers that already hold trusted account state can supply the
+matching account directly. `addressIdentityPresentation.ts`
 keeps that label/avatar priority pure and directly testable. Unlabeled callers
 use its exported `AddressActions` row directly rather than inventing a generic
 contract label.
