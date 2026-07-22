@@ -152,9 +152,10 @@ batched, fixed public snapshot to a user-configured active-chain RPC or
 WalletChan's immutable known-chain default during diagnostic readiness checks and final
 durable preparation; it does not block opening the Shield amount form. No
 account, phrase, commitment, or amount is included in that fixed snapshot.
-The release policy is selected at Vite compile time: `dev:extension` uses the
-exact `sepolia-local-beta` manifest and normal production builds use the exact
-`mainnet-production` manifest. Both profiles fail closed on any deployment
+The release policy is selected at Vite compile time. `dev:extension` and
+`build:extension` use the exact `mainnet-production` manifest;
+`dev-sepolia:extension` and `build-sepolia:extension` use the exact
+`sepolia-local-beta` manifest. Both profiles fail closed on any deployment
 drift; only mainnet permits Bankr mutations. The prover bridge accepts fixed self-tests plus
 bounded real commitment/withdrawal inputs, runs them in a packaged single-thread
 worker, and verifies every proof locally.

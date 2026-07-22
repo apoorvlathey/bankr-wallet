@@ -57,7 +57,7 @@ function isMismatch(error: unknown): boolean {
   );
 }
 
-test("direct test and development imports retain the pinned Sepolia local beta", () => {
+test("direct test imports retain the pinned Sepolia local beta", () => {
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.mode, "sepolia-local-beta");
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.readiness, "enabled");
   assert.equal(PRIVACY_POOLS_RELEASE_POLICY.quotes, "enabled");

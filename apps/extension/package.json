@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm dev:web && pnpm dev:onboarding && pnpm dev:ens-pages && pnpm dev:privacy-prover && concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:ens-banner' 'pnpm dev:background' 'pnpm dev:offscreen' 'pnpm build:privacy-prover --watch --mode development'",
+    "dev:sepolia": "VITE_PRIVACY_POOLS_PROFILE=sepolia pnpm dev",
     "dev:preview": "vite --host 0.0.0.0 -c vite.config.preview.ts",
     "dev:web": "pnpm build:web --mode development",
     "dev:onboarding": "pnpm build:onboarding --mode development",
@@ -16,6 +17,7 @@
     "dev:offscreen": "if [ \"$BROWSER\" = \"firefox\" ]; then exit 0; else pnpm build:offscreen --mode development; fi",
     "dev:privacy-prover": "pnpm build:privacy-prover --mode development",
     "build": "pnpm build:web && pnpm build:onboarding && pnpm build:ens-pages && pnpm build:privacy-prover && concurrently 'pnpm build:inpage' 'pnpm build:inject' 'pnpm build:ens-banner' 'pnpm build:background' 'pnpm build:offscreen' && pnpm privacy:budgets:verify",
+    "build:sepolia": "VITE_PRIVACY_POOLS_PROFILE=sepolia pnpm build",
     "build:preview": "vite build -c vite.config.preview.ts",
     "qa:preview": "pnpm build:preview && tsx scripts/preview-ui-qa.ts",
     "qa:preview:full": "PREVIEW_QA_MODE=full pnpm qa:preview",

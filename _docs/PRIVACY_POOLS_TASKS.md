@@ -2,7 +2,7 @@
 
 > **Status:** Dual Sepolia-development/mainnet-production implementation complete;
 > value-bearing mainnet rehearsal pending
-> **Target:** `dev:extension` on Sepolia; normal/production builds on Ethereum mainnet only
+> **Target:** normal dev/production commands on Ethereum mainnet; dedicated Sepolia commands on Sepolia
 > **Product source:** [`PRIVACY_POOLS_PRD.md`](./PRIVACY_POOLS_PRD.md)
 > **Fresh-session handoff:** [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md)
 

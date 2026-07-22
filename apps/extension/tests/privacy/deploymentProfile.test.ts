@@ -12,14 +12,22 @@ const probeEntry = path.join(
   "src/chrome/privacy/deployment/profileProbe.ts",
 );
 
-async function buildProbe(mode: "development" | "production") {
-  const outDir = await mkdtemp(path.join(tmpdir(), `walletchan-privacy-${mode}-`));
+async function buildProbe(
+  mode: "development" | "production",
+  profile: "mainnet" | "sepolia",
+) {
+  const outDir = await mkdtemp(
+    path.join(tmpdir(), `walletchan-privacy-${mode}-${profile}-`),
+  );
   try {
     await build({
       root: extensionRoot,
       configFile: false,
       mode,
       logLevel: "silent",
+      define: {
+        __WALLETCHAN_PRIVACY_POOLS_PROFILE__: JSON.stringify(profile),
+      },
       build: {
         outDir,
         emptyOutDir: true,
@@ -34,17 +42,28 @@ async function buildProbe(mode: "development" | "production") {
     const outputPath = path.join(outDir, "probe.js");
     const source = await readFile(outputPath, "utf8");
     const imported = await import(
-      `${pathToFileURL(outputPath).href}?mode=${mode}-${Date.now()}`
+      `${pathToFileURL(outputPath).href}?mode=${mode}-${profile}-${Date.now()}`
     );
-    return { probe: imported.PRIVACY_POOLS_PROFILE_PROBE, source };
+    return { mode, probe: imported.PRIVACY_POOLS_PROFILE_PROBE, source };
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
 }
 
-test("Vite development selects only the Sepolia Privacy Pools profile", async () => {
-  const { probe, source } = await buildProbe("development");
-  assert.deepEqual(probe, {
+test("the explicit Sepolia build profile is independent of Vite mode", async () => {
+  const builds = await Promise.all([
+    buildProbe("development", "sepolia"),
+    buildProbe("production", "sepolia"),
+  ]);
+  for (const { mode, probe, source } of builds) {
+    const { walletchanApiBase, ...privacyProbe } = probe;
+    assert.equal(
+      walletchanApiBase,
+      mode === "development"
+        ? "http://localhost:3030/api"
+        : "https://walletchan.eth.sh/api",
+    );
+    assert.deepEqual(privacyProbe, {
     profile: "sepolia",
     chainId: 11_155_111,
     chainName: "Sepolia",
@@ -61,14 +80,26 @@ test("Vite development selects only the Sepolia Privacy Pools profile", async ()
     confirmationDescription:
       "WalletChan is checking submission and waiting for confirmation on Sepolia.",
     confirmationContext: "Confirming on Sepolia",
-  });
-  assert.doesNotMatch(source, /6818809eefce719e480a7526d76bd3e561526b46/i);
-  assert.doesNotMatch(source, /api\.0xbow\.io/);
+    });
+    assert.doesNotMatch(source, /6818809eefce719e480a7526d76bd3e561526b46/i);
+    assert.doesNotMatch(source, /api\.0xbow\.io/);
+  }
 });
 
-test("Vite production selects only the Ethereum mainnet Privacy Pools profile", async () => {
-  const { probe, source } = await buildProbe("production");
-  assert.deepEqual(probe, {
+test("the mainnet build profile is independent of Vite mode", async () => {
+  const builds = await Promise.all([
+    buildProbe("development", "mainnet"),
+    buildProbe("production", "mainnet"),
+  ]);
+  for (const { mode, probe, source } of builds) {
+    const { walletchanApiBase, ...privacyProbe } = probe;
+    assert.equal(
+      walletchanApiBase,
+      mode === "development"
+        ? "http://localhost:3030/api"
+        : "https://walletchan.eth.sh/api",
+    );
+    assert.deepEqual(privacyProbe, {
     profile: "mainnet",
     chainId: 1,
     chainName: "Ethereum",
@@ -85,8 +116,9 @@ test("Vite production selects only the Ethereum mainnet Privacy Pools profile", 
     confirmationDescription:
       "WalletChan is checking submission and waiting for confirmation on Ethereum.",
     confirmationContext: "Confirming on Ethereum",
-  });
-  assert.doesNotMatch(source, /34a2068192b1297f2a7f85d7d8cde66f8f0921cb/i);
-  assert.doesNotMatch(source, /dw\.0xbow\.io/);
-  assert.doesNotMatch(source, /Confirming on Sepolia|Sepolia confirmation/);
+    });
+    assert.doesNotMatch(source, /34a2068192b1297f2a7f85d7d8cde66f8f0921cb/i);
+    assert.doesNotMatch(source, /dw\.0xbow\.io/);
+    assert.doesNotMatch(source, /Confirming on Sepolia|Sepolia confirmation/);
+  }
 });

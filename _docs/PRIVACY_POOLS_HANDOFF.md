@@ -1,8 +1,8 @@
 # Privacy Pools implementation handoff
 
 > **Handoff date:** 2026-07-21
-> **Build targets:** `dev:extension` uses Sepolia; normal/production builds use
-> Ethereum mainnet only
+> **Build targets:** normal dev/production commands use Ethereum mainnet;
+> `dev-sepolia:extension` and `build-sepolia:extension` use Sepolia
 > **Implementation status:** Dual-profile code and automated profile/wallet
 > coverage are complete; value-bearing mainnet browser smoke tests remain
 > **Distribution status:** Store/release packaging remains blocked pending the
@@ -339,9 +339,9 @@ manifests and PRD; do not copy-edit those values independently.
   hashes are recorded in the mainnet manifest and mainnet test document.
 
 `import.meta.env.MODE === "production"` selects this immutable profile during
-the Vite build. The production background bundle is checked to contain the
-mainnet pins and exclude the Sepolia deployment/API; the development bundle is
-checked for the inverse. There is no runtime, storage, or remote deployment
+the Vite build. Mainnet bundles are checked to contain the mainnet pins and
+exclude the Sepolia deployment/API; explicit Sepolia bundles are checked for
+the inverse. There is no runtime, storage, or remote deployment
 override.
 
 ## Storage and recovery
@@ -419,7 +419,7 @@ proofs, public signals, calldata, or secret material to logs.
    `0.01 ETH` minimum, 0.5% protocol fee, mainnet explorer links, and Bankr plus
    both local source-account options. Confirm no Sepolia endpoint/address is in
    the emitted privacy bundles.
-2. Reload a `dev:extension` build and complete the remaining written Sepolia
+2. Reload a `dev-sepolia:extension` build and complete the remaining written Sepolia
    rehearsal for private-key and seed-phrase accounts, including recovery,
    rejection, restart, private Unshield, and destructive safeguards. Confirm
    Bankr remains blocked in this profile.

@@ -2,6 +2,7 @@ import {
   PRIVACY_POOLS_DEPLOYMENT,
   PRIVACY_POOLS_RELEASE_POLICY,
 } from "./manifest";
+import { WALLETCHAN_API_BASE } from "../../../constants/externalUrls";
 import {
   getPrivacyShieldActivityState,
   getShieldOperationProgress,
@@ -17,6 +18,7 @@ const confirmationActivity = getPrivacyShieldActivityState(
 );
 
 export const PRIVACY_POOLS_PROFILE_PROBE = Object.freeze({
+  walletchanApiBase: WALLETCHAN_API_BASE,
   profile: PRIVACY_POOLS_DEPLOYMENT.profile,
   chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
   chainName: PRIVACY_POOLS_DEPLOYMENT.chainName,

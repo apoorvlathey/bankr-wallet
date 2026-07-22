@@ -855,8 +855,8 @@ fee, and `1,000` bps maximum relay fee. The production ASP is
 Relay uses the pinned quote signer
 `0x3A27cfd1BB78Ff6Fd356Eaa59c2f6232FfC6554a`.
 
-Vite production mode selects `mainnet-production`; development mode selects
-`sepolia-local-beta`. There is no runtime/remote override, and bundle probes
+Normal dev and production commands select `mainnet-production`; dedicated
+Sepolia commands select `sepolia-local-beta`. There is no runtime/remote override, and bundle probes
 require each emitted profile to exclude the other profile's contract and ASP
 pins. Encrypted/rebuildable IndexedDB state is profile-isolated. Production
 Bankr/private-key/seed-phrase mutations are enabled, impersonators remain
@@ -1306,8 +1306,8 @@ negative path, and destructive safeguards still need the written rehearsal.
 
 ### Phase 5: mainnet implementation and controlled Chrome beta
 
-- **Implementation:** Complete. Normal production builds select the immutable
-  mainnet profile; `dev:extension` selects Sepolia. No runtime or remote
+- **Implementation:** Complete. Normal dev and production builds select the
+  immutable mainnet profile; dedicated Sepolia commands select Sepolia. No runtime or remote
   override exists.
 - Enable Bankr, private-key, and seed accounts only through the checked-in
   release-policy state. Impersonators and agent-password mutations stay blocked.

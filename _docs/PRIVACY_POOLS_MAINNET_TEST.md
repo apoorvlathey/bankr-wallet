@@ -1,8 +1,8 @@
 # Privacy Pools Ethereum mainnet verification
 
 This is the production-profile verification and manual rollout record for
-WalletChan Shield. Normal Vite/extension builds select Ethereum mainnet only;
-`dev:extension` continues to select Sepolia. Compiled support is not store or
+WalletChan Shield. Normal dev and production extension builds select Ethereum
+mainnet; dedicated Sepolia commands select Sepolia. Compiled support is not store or
 value-bearing rollout approval.
 
 ## Verified production pins (2026-07-20)
@@ -42,19 +42,19 @@ recipient. Cloaked Relay's quote signature recovered the pinned signer
 
 | Build | Privacy deployment | Bankr mutation | State namespace |
 | --- | --- | --- | --- |
-| `pnpm dev:extension` / Vite development | Sepolia only | Blocked before prompt | Existing `walletchan-privacy-*-v1` names |
-| Normal/production extension build | Ethereum mainnet only | Enabled through Bankr's pinned confirmation/effect boundary | `walletchan-privacy-*-mainnet-v1` names |
+| `pnpm dev:extension` / `pnpm build:extension` | Ethereum mainnet only | Enabled through Bankr's pinned confirmation/effect boundary | `walletchan-privacy-*-mainnet-v1` names |
+| `pnpm dev-sepolia:extension` / `pnpm build-sepolia:extension` | Sepolia only | Blocked before prompt | Existing `walletchan-privacy-*-v1` names |
 
 Private-key and seed-phrase accounts retain the local signing path in both
 profiles. Impersonators remain view-only/reject-only and never reach signing or
 submission. Agent-password sessions remain blocked from Shield, Unshield,
 phrase rescan/export, and public recovery mutations.
 
-The production bundle probe must find the mainnet Entrypoint, production ASP,
+The mainnet bundle probe must find the mainnet Entrypoint, production ASP,
 and `mainnet-production`, while finding none of the Sepolia Entrypoint,
-Sepolia ASP, or `sepolia-local-beta`. The development probe enforces the inverse.
-There is no runtime, stored, query-string, environment-value, or remote switch
-between deployments: Vite mode resolves the profile at compile time.
+Sepolia ASP, or `sepolia-local-beta`. The explicit Sepolia probe enforces the inverse.
+There is no runtime, stored, query-string, or remote switch between deployments:
+the dedicated scripts resolve the profile at compile time.
 
 ## Automated evidence
 

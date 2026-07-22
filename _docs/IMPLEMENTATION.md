@@ -376,7 +376,7 @@ account-pinned transaction confirmation; queue failure compensates by releasing
 the claim. Confirmation and the irreversible submit boundary recheck the exact
 account, calldata, roots, privacy authorization epoch, and deployment. Bankr,
 private-key, and seed-phrase accounts then reuse their existing signing paths;
-impersonators are rejected, and development Sepolia rejects Bankr mutation.
+impersonators are rejected, and explicit Sepolia builds reject Bankr mutation.
 ASP refresh decisions are revision-and-status compare-and-set writes. A refresh
 that began from an older `private_ready` snapshot cannot overwrite a newer
 `withdrawal_pending` Unshield claim while the normal confirmation is open.

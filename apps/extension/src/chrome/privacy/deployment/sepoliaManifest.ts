@@ -6,7 +6,7 @@ import {
   type PrivacyPoolsReleasePolicy,
 } from "./types";
 
-/** Exact Sepolia ETH deployment retained for `dev:extension` builds. */
+/** Exact Sepolia ETH deployment retained for explicit Sepolia builds. */
 export const PRIVACY_POOLS_SEPOLIA_DEPLOYMENT = Object.freeze({
   version: 1 as const,
   profile: "sepolia" as const,

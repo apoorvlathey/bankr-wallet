@@ -1739,11 +1739,11 @@ These must always hold true. Violations indicate a security bug.
     the onchain fields before proving. The official website's app-only `1 ETH`
     setting is not an onchain constraint and is deliberately not enforced;
     quote amounts remain `uint256`-valid, minimum-bound, balance-bound, and
-    gas-aware. ERC-20 deployments remain absent. Vite mode selects one immutable
-    profile at compile time with no runtime or remote override:
-    `dev:extension` uses `sepolia-local-beta`, while normal production builds
-    use `mainnet-production`. Profile-isolated IndexedDB names prevent dev and
-    production lineage from mixing. Bankr remains blocked on Sepolia; mainnet
+    gas-aware. ERC-20 deployments remain absent. The build scripts select one
+    immutable profile at compile time with no runtime or remote override:
+    normal dev/production commands use `mainnet-production`, while the dedicated
+    Sepolia commands use `sepolia-local-beta`. Profile-isolated IndexedDB names
+    prevent Sepolia and mainnet lineage from mixing. Bankr remains blocked on Sepolia; mainnet
     Bankr submission uses the same pinned privacy authorization immediately
     before its irreversible effect boundary. RPC
     unavailability or any drift returns only a bounded generic retry status to

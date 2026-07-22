@@ -54,6 +54,7 @@ export default defineConfig(({ mode }) => {
   return {
     ...sharedConfig,
     define: {
+      ...sharedConfig.define,
       "import.meta.env.VITE_DEFILLAMA_SEARCH_KEY": JSON.stringify(
         defillamaSearchKey,
       ),

@@ -29,6 +29,7 @@ pnpm install
 
 # Development
 pnpm dev:extension         # Build extension in DEVELOPMENT mode (vite build --mode development)
+pnpm dev-sepolia:extension # Local APIs with Sepolia Privacy Pools
 pnpm dev:website           # Start website dev server at localhost:3030
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
@@ -39,6 +40,7 @@ pnpm dev:walletchan-mcp    # Start local stdio MCP adapter backed by walletchan-
 # Build
 pnpm build              # Build both extension and website
 pnpm build:extension    # Build extension in PRODUCTION mode (output: apps/extension/build/)
+pnpm build-sepolia:extension # Production APIs with Sepolia Privacy Pools
 pnpm build:website      # Build website only
 pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
 pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
@@ -76,16 +78,24 @@ See [`PUBLISHING.md`](./PUBLISHING.md) for the full release workflow.
 
 ## Extension Build Modes: Development vs Production
 
-The extension has two build modes, selected via Vite's `--mode` flag. They produce the same output directory (`apps/extension/build/`), but some code paths gate behavior on `import.meta.env.MODE`.
+The extension has independently selected API and Privacy Pools profiles. All
+four commands produce the same output directory (`apps/extension/build/`), so
+the most recent build is the one Chrome loads.
 
-| Command                | Vite mode     | `import.meta.env.MODE` | Use when                                                        |
-| ---------------------- | ------------- | ---------------------- | --------------------------------------------------------------- |
-| `pnpm dev:extension`   | `development` | `"development"`        | Testing changes locally against `pnpm dev:website`              |
-| `pnpm build:extension` | `production`  | `"production"`         | Releases, CWS uploads, GitHub Releases (anything users install) |
+| Command | WalletChan APIs | Privacy Pools | Use when |
+| --- | --- | --- | --- |
+| `pnpm dev:extension` | localhost | Ethereum mainnet | Local API development against the live Privacy Pools deployment |
+| `pnpm dev-sepolia:extension` | localhost | Sepolia | Local API development with testnet Privacy Pools |
+| `pnpm build:extension` | production | Ethereum mainnet | Releases and production-equivalent testing |
+| `pnpm build-sepolia:extension` | production | Sepolia | Production API testing with testnet Privacy Pools |
 
 **What flips between modes**:
 
 The entire `WALLETCHAN_API_BASE` constant in `apps/extension/src/constants/externalUrls.ts` flips when `import.meta.env.MODE === "development"`. Every derived endpoint (portfolio, swap, bridge, sponsored-transfer, premium-status, vault-data, clear-signing) follows it. Development → `http://localhost:3030/api`; production → `https://walletchan.eth.sh/api` so extension APIs remain reachable on ISPs that block `walletchan.com` DNS. The dev port lives in `WALLETCHAN_DEV_PORT` and matches `apps/website/package.json`'s `dev` script (`next dev -p 3030`) — change both together if you ever need to move it.
+
+Privacy Pools defaults to mainnet in every Vite mode. The two dedicated Sepolia
+commands set `VITE_PRIVACY_POOLS_PROFILE=sepolia` for compilation; this is not
+a runtime or persisted profile switch.
 
 **Rule of thumb:**
 
