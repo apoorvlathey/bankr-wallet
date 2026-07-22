@@ -9,7 +9,13 @@ import {
   SAFE_EXECUTION_RECONCILIATION_ALARM,
   startSafeExecutionReconciliation,
 } from "./execution";
-import { createSafeProposal, getSafeProposal, getSafeProposals, updateSafeProposal } from "./proposalRepository";
+import {
+  createSafeProposal,
+  getSafeProposal,
+  getSafeProposals,
+  recoverInterruptedSafeProposalEffects,
+  updateSafeProposal,
+} from "./proposalRepository";
 import { fetchSafePendingTransactions } from "./serviceClient";
 import { validateServiceTransaction } from "./serviceValidation";
 import type { SafeAccountRecord, SafeProposalRecord } from "./types";
@@ -18,6 +24,7 @@ import { claimSafeNotification } from "./notifications";
 import { mergeSafeServiceProposal } from "./serviceMerge";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
 import { reconcileSafeProposalNonceQueue } from "./proposalNonceReconciliation";
+import { replayCancelledSafeProposalRoutes } from "./proposalLifecycle";
 
 const STORAGE_KEY = "safeSyncState";
 const LOCK_KEY = "walletchan:safe-sync";
@@ -157,25 +164,10 @@ async function syncSafeRecords(
       }
     }
   }
-  const allProposals = (await getSafeProposals()).filter(
-    (item) => !accountId || item.safeAccountId === accountId,
-  );
-  const now = Date.now();
-  await Promise.all(allProposals
-    .filter((item) => item.effectClaim && now - item.effectClaim.claimedAt >= STALE_EFFECT_MS)
-    .map((item) => updateSafeProposal(item.id, (current) => {
-      if (!current.effectClaim || now - current.effectClaim.claimedAt < STALE_EFFECT_MS) return current;
-      if (current.effectClaim.kind === "publish") {
-        return { ...current, state: "ambiguous", effectClaim: undefined, error: "Publication was interrupted; reconcile before retrying", updatedAt: now };
-      }
-      if (
-        current.effectClaim.kind === "execute" &&
-        (current.serializedExecution || current.transactionHash)
-      ) {
-        return { ...current, state: "ambiguous", effectClaim: undefined, error: "Execution was interrupted; reconciling exact signed bytes", updatedAt: now };
-      }
-      return { ...current, state: current.effectClaim.kind === "execute" ? "readyToExecute" : "draft", effectClaim: undefined, error: "Interrupted Safe action can be retried", updatedAt: now };
-    }).catch(() => undefined)));
+  await recoverInterruptedSafeProposalEffects({
+    minimumAgeMs: STALE_EFFECT_MS,
+    safeAccountId: accountId,
+  });
   const executions = (await getSafeProposals()).filter((item) => (item.state === "executing" || item.state === "ambiguous") && !!item.transactionHash);
   executions
     .filter((item) => !accountId || item.safeAccountId === accountId)
@@ -232,7 +224,13 @@ export function syncSafeAccount(accountId: string): Promise<void> {
 }
 
 export function startSafeSync(): void {
-  void reconcilePendingSafeExecutions().catch(() => undefined);
+  // Any durable claim visible during worker startup belonged to a worker that
+  // no longer exists. Recover it immediately, while retaining ambiguous
+  // publication/execution evidence for reconciliation.
+  void recoverInterruptedSafeProposalEffects()
+    .then(() => replayCancelledSafeProposalRoutes())
+    .then(() => reconcilePendingSafeExecutions())
+    .catch(() => undefined);
   void syncSafeAccounts().catch(() => undefined);
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: INTERVAL_MS / 60_000 });
   chrome.alarms.onAlarm.addListener((alarm) => {

@@ -10,12 +10,17 @@ import {
   decodeSafeProposalsEnvelope,
   getSafeProposal,
   hasUnresolvedSafeEffects,
+  recoverInterruptedSafeProposalEffects,
   releaseSafeProposalEffect,
+  updateSafeProposal,
 } from "../../src/chrome/safe/proposalRepository";
 import type { SafeProposalRecord } from "../../src/chrome/safe/types";
 import { installNativeSessionStorage } from "../session/testStorage";
-import { authorizeSafeProposalRoute } from "../../src/chrome/safe/proposalLifecycle";
-import { cancelSafeProposal } from "../../src/chrome/safe/proposalLifecycle";
+import {
+  authorizeSafeProposalRoute,
+  cancelSafeProposal,
+  replayCancelledSafeProposalRoutes,
+} from "../../src/chrome/safe/proposalLifecycle";
 
 const installed: Array<ReturnType<typeof installNativeSessionStorage>> = [];
 afterEach(() => installed.pop()?.restore());
@@ -52,7 +57,7 @@ function proposal(): SafeProposalRecord {
 
 test("proposal creation is idempotent and effect claims are first-action-wins", async () => {
   installed.push(installNativeSessionStorage());
-  const initial = proposal();
+  const initial = { ...proposal(), state: "readyToExecute" as const };
   assert.equal((await createSafeProposal(initial)).id, initial.id);
   assert.equal((await createSafeProposal(initial)).id, initial.id);
   const claimed = await claimSafeProposalEffect(initial.id, { kind: "execute" });
@@ -150,6 +155,114 @@ test("unsigned Safe requests cancel locally and reject their waiting provider ro
   const cancelled = await cancelSafeProposal(initial.id);
   assert.equal(cancelled.state, "cancelled");
   assert.deepEqual((storage.local["txResult:request-1"] as any).result, {
+    success: false,
+    error: "Safe proposal request rejected",
+    code: 4001,
+  });
+});
+
+test("cancel revalidates the durable record against an in-flight approval", async () => {
+  installed.push(installNativeSessionStorage());
+  const initial = proposal();
+  await createSafeProposal(initial);
+  const claimed = await claimSafeProposalEffect(initial.id, {
+    kind: "approve",
+    ownerAddress: "0x1111111111111111111111111111111111111111",
+  });
+
+  await assert.rejects(
+    () => cancelSafeProposal(initial.id),
+    /already in progress/,
+  );
+  assert.equal((await getSafeProposal(initial.id))?.effectClaim?.claimId, claimed.effectClaim?.claimId);
+});
+
+test("worker restart recovery distinguishes retryable and ambiguous Safe effects", async () => {
+  installed.push(installNativeSessionStorage());
+  const approval = proposal();
+  await createSafeProposal(approval);
+  await claimSafeProposalEffect(approval.id, { kind: "approve" });
+  const recoveredApproval = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 1 });
+  assert.equal(recoveredApproval[0]?.state, "draft");
+  assert.equal(recoveredApproval[0]?.effectClaim, undefined);
+
+  const publishBase = {
+    ...proposal(),
+    state: "approvedLocally" as const,
+    confirmations: [{
+      ownerAddress: "0x1111111111111111111111111111111111111111" as const,
+      accountId: "owner",
+      accountType: "privateKey" as const,
+      signature: `0x${"11".repeat(65)}` as `0x${string}`,
+      createdAt: Date.now(),
+    }],
+  };
+  // Keep a distinct valid identity by changing the transaction, not its hash.
+  const rejectionBuilt = buildSafeRejectionTransaction({
+    chainId: publishBase.chainId,
+    safeAddress: publishBase.safeAddress,
+    safeVersion: publishBase.safeVersion,
+    nonce: 2n,
+  });
+  const publishRecord = {
+    ...publishBase,
+    id: `${publishBase.chainId}:${publishBase.safeAddress}:${rejectionBuilt.safeTxHash}`,
+    safeTxHash: rejectionBuilt.safeTxHash,
+    calls: rejectionBuilt.calls,
+    transaction: rejectionBuilt.transaction,
+  };
+  await createSafeProposal(publishRecord);
+  await claimSafeProposalEffect(publishRecord.id, { kind: "publish" });
+  const recoveredPublication = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 2 });
+  const publication = recoveredPublication.find((item) => item.id === publishRecord.id);
+  assert.equal(publication?.state, "ambiguous");
+  assert.equal(publication?.confirmations.length, 1);
+
+  const executionBuilt = buildSafeRejectionTransaction({
+    chainId: publishBase.chainId,
+    safeAddress: publishBase.safeAddress,
+    safeVersion: publishBase.safeVersion,
+    nonce: 3n,
+  });
+  const execution = {
+    ...publishBase,
+    id: `${publishBase.chainId}:${publishBase.safeAddress}:${executionBuilt.safeTxHash}`,
+    safeTxHash: executionBuilt.safeTxHash,
+    calls: executionBuilt.calls,
+    transaction: executionBuilt.transaction,
+    state: "readyToExecute" as const,
+  };
+  await createSafeProposal(execution);
+  const executionClaim = await claimSafeProposalEffect(execution.id, { kind: "execute" });
+  await updateSafeProposal(execution.id, (record) => ({
+    ...record,
+    state: "ambiguous",
+    transactionHash: `0x${"44".repeat(32)}`,
+    serializedExecution: "0x1234",
+    executionPreparedAt: Date.now(),
+  }));
+  const recoveredExecution = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 3 });
+  const prepared = recoveredExecution.find((item) => item.id === execution.id);
+  assert.equal(prepared?.state, "ambiguous");
+  assert.equal(prepared?.transactionHash, `0x${"44".repeat(32)}`);
+  assert.equal(prepared?.serializedExecution, "0x1234");
+  assert.notEqual(executionClaim.effectClaim, undefined);
+});
+
+test("cancelled Safe route results are replayed after a worker interruption", async () => {
+  const storage = installNativeSessionStorage();
+  installed.push(storage);
+  const initial = {
+    ...proposal(),
+    route: { kind: "injected" as const, requestId: "replay-request" },
+  };
+  await createSafeProposal(initial);
+  await cancelSafeProposal(initial.id);
+  delete storage.local["txResult:replay-request"];
+
+  await replayCancelledSafeProposalRoutes();
+
+  assert.deepEqual((storage.local["txResult:replay-request"] as any).result, {
     success: false,
     error: "Safe proposal request rejected",
     code: 4001,

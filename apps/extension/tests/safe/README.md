@@ -10,7 +10,8 @@
   `proposalRepository.test.ts`, `proposalNonce.test.ts`: strict storage decoding,
   atomic import/removal, chain-scoped direct-RPC refresh, sequential concurrent
   nonce reservation, unsigned custom rebasing, queue activation, idempotency,
-  and first-action claims.
+  local-cancellation identity reuse, restart-safe effect recovery, route-result
+  replay, and first-action claims.
 - `serviceMerge.test.ts`, `executionPolicy.test.ts`, `executionReceipt.test.ts`,
   `executionReconciliation.test.ts`, `executorHistory.test.ts`: stale Transaction Service reads cannot
   erase local approvals or in-flight outer execution evidence, every durable

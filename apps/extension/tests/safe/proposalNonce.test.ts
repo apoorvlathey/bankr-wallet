@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
+  cancelSafeProposal,
   changeSafeProposalNonce,
   createReviewedSafeProposal,
 } from "../../src/chrome/safe/proposalLifecycle";
 import {
   createSafeProposal,
   getSafeProposal,
+  getSafeProposals,
   replaceUnsignedSafeProposal,
 } from "../../src/chrome/safe/proposalRepository";
 import { getNextAvailableSafeNonce } from "../../src/chrome/safe/proposalNonce";
@@ -170,6 +172,62 @@ test("an unsigned queued future-nonce request can be cancelled locally", async (
     error: "Safe proposal request rejected",
     code: 4001,
   });
+});
+
+test("an identical request revives a locally cancelled unsigned Safe identity", async () => {
+  const storage = installNativeSessionStorage({
+    local: { safeAccounts: { version: 1, records: [safeRecord] } },
+  });
+  installed.push(storage);
+  const verify = { verifySafeOnchainState: async () => safeRecord.chains["8453"] };
+  const calls = [{ to: target, value: "0" as const, data: "0x" as const, operation: 0 as const }];
+  const initial = await createReviewedSafeProposal({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    calls,
+    route: { kind: "injected", requestId: "old-request", origin: "https://app.example" },
+  }, verify);
+  await cancelSafeProposal(initial.id);
+
+  const retried = await createReviewedSafeProposal({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    calls,
+    route: { kind: "injected", requestId: "new-request", origin: "https://app.example" },
+  }, verify);
+
+  assert.equal(retried.id, initial.id);
+  assert.equal(retried.transaction.nonce, 4);
+  assert.equal(retried.state, "draft");
+  assert.equal(retried.route.requestId, "new-request");
+  assert.equal((await getSafeProposals()).length, 1);
+  assert.deepEqual((storage.local["txResult:old-request"] as any).result, {
+    success: false,
+    error: "Safe proposal request rejected",
+    code: 4001,
+  });
+});
+
+test("concurrent identical retries after local cancellation reserve unique nonces", async () => {
+  installed.push(installNativeSessionStorage({
+    local: { safeAccounts: { version: 1, records: [safeRecord] } },
+  }));
+  const verify = { verifySafeOnchainState: async () => safeRecord.chains["8453"] };
+  const calls = [{ to: target, value: "0" as const, data: "0x" as const, operation: 0 as const }];
+  const initial = await createReviewedSafeProposal({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    calls,
+  }, verify);
+  await cancelSafeProposal(initial.id);
+
+  const retried = await Promise.all([
+    createReviewedSafeProposal({ safeAccountId: "safe-account", chainId: 8453, calls }, verify),
+    createReviewedSafeProposal({ safeAccountId: "safe-account", chainId: 8453, calls }, verify),
+  ]);
+
+  assert.deepEqual(retried.map((item) => item.transaction.nonce).sort(), [4, 5]);
+  assert.equal(new Set(retried.map((item) => item.id)).size, 2);
 });
 
 test("custom nonce replacement fails closed after any signature", async () => {

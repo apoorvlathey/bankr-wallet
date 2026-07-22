@@ -6198,7 +6198,12 @@ try the selected RPC first and then WalletChan's pinned built-in/canonical
 endpoints. A provider exception is never collapsed into “receipt not found”:
 if every trusted endpoint fails, the durable request carries an explicit
 retrying RPC warning until any endpoint responds. Safe sync also recovers stale
-claims and deduplicates privacy-safe notifications.
+claims and deduplicates privacy-safe notifications. On service-worker startup,
+approval claims return to a retryable local state, publication claims become
+ambiguous until reconciled with the Transaction Service, and execution claims
+retain any deterministic hash/signed bytes for exact-envelope reconciliation.
+Idempotent local-cancellation route results are replayed so a worker shutdown
+between terminal storage and provider delivery cannot strand the caller.
 New wallet, injected, WalletConnect, ERC-5792, and Safe-swap proposals first
 refresh the Safe directly onchain, then reserve the lowest unused nonce at or
 above that value while holding the `safeProposals` storage lock. Pending local
@@ -6209,6 +6214,13 @@ becoming a same-nonce replacement. A future-nonce request remains visibly
 blocked until account refresh or Safe sync observes that nonce onchain, then
 returns to draft/approval/readiness state. If a competitor consumed its nonce,
 the queued request and its provider/ERC-5792 route are terminalized.
+An unsigned local cancellation does not consume its Safe nonce. If the same
+reviewed calls are requested again at that nonce, the allocator atomically
+reactivates the one cancelled `safeTxHash` identity with the new provider route
+instead of rejecting its durable terminal record as a duplicate. Signed,
+published, rejected-onchain, prepared, and broadcast records are never reset.
+Concurrent retries remain serialized: one may reactivate the free nonce while
+the next reserves the following nonce.
 Selecting a Safe or opening the popup/sidepanel while one is active also sends
 the trusted-UI-only `syncSafeRequests` message. It runs the same validated sync
 for that exact Safe immediately; the Safe Requests header exposes the same

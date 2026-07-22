@@ -3,6 +3,7 @@ import { buildSafeTransaction } from "./transactionBuilder";
 import {
   createSafeProposalAtNextNonce,
   getSafeProposal,
+  getSafeProposals,
   replaceUnsignedSafeProposal,
   updateSafeProposal,
 } from "./proposalRepository";
@@ -192,22 +193,38 @@ export async function changeSafeProposalNonce(input: {
 }
 
 export async function cancelSafeProposal(id: string): Promise<SafeProposalRecord> {
-  const proposal = await getSafeProposal(id);
-  if (!proposal) throw new Error("Safe proposal not found");
-  if (proposal.confirmations.length > 0 || (proposal.unsupportedConfirmations?.length ?? 0) > 0) {
-    throw new Error("Signed Safe proposals require an onchain rejection transaction");
-  }
-  if (!["draft", "approvedLocally", "awaitingApprovals", "readyToExecute", "blocked"].includes(proposal.state)) {
-    throw new Error("Safe proposal cannot be cancelled in its current state");
-  }
   const updated = await updateSafeProposal(id, (record) => ({
-    ...record,
-    state: "cancelled",
-    effectClaim: undefined,
+    ...(() => {
+      if (record.confirmations.length > 0 || (record.unsupportedConfirmations?.length ?? 0) > 0) {
+        throw new Error("Signed Safe proposals require an onchain rejection transaction");
+      }
+      if (record.effectClaim || record.transactionHash || record.serializedExecution) {
+        throw new Error("Safe proposal operation is already in progress");
+      }
+      if (!["draft", "approvedLocally", "awaitingApprovals", "readyToExecute", "blocked"].includes(record.state)) {
+        throw new Error("Safe proposal cannot be cancelled in its current state");
+      }
+      return record;
+    })(),
+    state: "cancelled" as const,
     updatedAt: Date.now(),
   }));
   await rejectPendingSafeRoute(updated, "Safe proposal request rejected");
   return updated;
+}
+
+/** Replays idempotent local-cancellation results after a worker interruption. */
+export async function replayCancelledSafeProposalRoutes(): Promise<void> {
+  const cancelled = (await getSafeProposals()).filter((proposal) =>
+    proposal.state === "cancelled" &&
+    !proposal.rejectedBySafeTxHash &&
+    proposal.confirmations.length === 0 &&
+    (proposal.unsupportedConfirmations?.length ?? 0) === 0,
+  );
+  await Promise.all(cancelled.map((proposal) =>
+    rejectPendingSafeRoute(proposal, "Safe proposal request rejected")
+      .catch(() => undefined),
+  ));
 }
 
 export async function hideSafeProposal(id: string): Promise<SafeProposalRecord> {

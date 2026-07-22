@@ -2335,6 +2335,11 @@ Quick reference for which files to examine based on what area of security you're
    rejects a second prepare/send path even when display state is stale. Reset
    and Safe removal fail while effects are unresolved. `safeTxHash` is proposal
    identity only and is never returned as an onchain transaction result.
+   On service-worker startup, an interrupted approval claim may return to its
+   prior retryable local state because no signature was published; an
+   interrupted publication is always made ambiguous, and execution becomes
+   retryable only when neither a deterministic hash nor serialized bytes were
+   persisted. Otherwise exact-envelope reconciliation remains mandatory.
 
 7. **Executor selection is explicit and bounded.** The UI defaults outer
    execution to a WalletChan-controlled private-key/seed owner when one is
@@ -2381,6 +2386,12 @@ Quick reference for which files to examine based on what area of security you're
    hashes, signed bytes, and canonical rejection proposals all fail closed.
    Choosing an occupied nonce is therefore possible only through the explicit
    Advanced details pencil action; automatic allocation never selects one.
+   The sole terminal-record reuse is an atomic reactivation of the same
+   `safeTxHash` after a zero-signature local cancellation that has no purpose,
+   onchain-rejection link, effect claim, execution hash, or serialized bytes.
+   It replaces the already-rejected route with the freshly reviewed request
+   route. Signed, published, prepared, broadcast, failed, replaced, and
+   onchain-rejected identities are never reset through this path.
 
 ### Extension permissions
 

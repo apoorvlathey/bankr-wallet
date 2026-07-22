@@ -3,6 +3,11 @@ import { withStorageLock } from "../storageLock";
 import { computeSafeTransactionHash } from "./transactionHash";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
 import { getNextAvailableSafeNonce, isUnsignedSafeNonceEditable } from "./proposalNonce";
+import {
+  assertSafeProposalEffectClaimable,
+  isLocallyCancelledUnsignedSafeProposal,
+  recoverInterruptedSafeProposalRecords,
+} from "./proposalRecovery";
 import type {
   SafeAddress,
   SafeCall,
@@ -283,7 +288,6 @@ export async function createSafeProposalAtNextNonce(input: {
   build: (nonce: bigint) => SafeProposalRecord;
 }) {
   return mutate((records) => {
-    if (records.length >= MAX_PROPOSALS) throw new Error("Too many Safe proposals");
     const nonce = getNextAvailableSafeNonce({ ...input, proposals: records });
     const decoded = decodeSafeProposal(input.build(nonce));
     if (
@@ -293,18 +297,39 @@ export async function createSafeProposalAtNextNonce(input: {
     ) {
       throw new Error("Allocated Safe proposal scope changed");
     }
-    if (records.some((record) => record.id === decoded.id)) {
+    const existingIndex = records.findIndex((record) => record.id === decoded.id);
+    if (existingIndex >= 0) {
+      if (isLocallyCancelledUnsignedSafeProposal(records[existingIndex])) {
+        const next = [...records];
+        // Local cancellation never consumed the nonce. Revive the same Safe
+        // identity with the fresh route instead of treating it as active.
+        next[existingIndex] = decoded;
+        return { records: next, result: decoded };
+      }
       throw new Error("Safe proposal already exists");
     }
+    if (records.length >= MAX_PROPOSALS) throw new Error("Too many Safe proposals");
     return { records: [...records, decoded], result: decoded };
   });
 }
 
+/** Recovers effect claims left durable when a previous service worker stopped. */
+export async function recoverInterruptedSafeProposalEffects(
+  input: { minimumAgeMs?: number; now?: number; safeAccountId?: string } = {},
+): Promise<SafeProposalRecord[]> {
+  const now = input.now ?? Date.now();
+  const minimumAgeMs = input.minimumAgeMs ?? 0;
+  return mutate((records) => {
+    const recovered = recoverInterruptedSafeProposalRecords({ records, minimumAgeMs, now, safeAccountId: input.safeAccountId });
+    return {
+      records: recovered.records,
+      result: recovered.recovered.map(decodeSafeProposal),
+    };
+  });
+}
+
 /** Atomically replaces only an unsigned, editable proposal with a new nonce. */
-export async function replaceUnsignedSafeProposal(
-  id: string,
-  replacement: SafeProposalRecord,
-) {
+export async function replaceUnsignedSafeProposal(id: string, replacement: SafeProposalRecord) {
   const decoded = decodeSafeProposal(replacement);
   return mutate((records) => {
     const index = records.findIndex((record) => record.id === id);
@@ -345,7 +370,7 @@ export async function updateSafeProposal(id: string, updater: (record: SafePropo
 }
 export async function claimSafeProposalEffect(id: string, input: { kind: "approve" | "publish" | "execute"; ownerAddress?: SafeAddress }) {
   return updateSafeProposal(id, (record) => {
-    if (record.effectClaim) throw new Error("Safe proposal operation already in progress");
+    assertSafeProposalEffectClaimable(record, input);
     return { ...record, effectClaim: { ...input, claimId: crypto.randomUUID(), claimedAt: Date.now() }, updatedAt: Date.now() };
   });
 }
