@@ -29,6 +29,7 @@ import {
 import { truncateAddress } from "@/lib/addressUtils";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { formatTokenBalance } from "@/lib/tokenFormatUtils";
+import { TokenPickerNetworkButton } from "@/components/shared/TokenPickerNetworkButton";
 
 interface TokenPickerContentProps {
   inputRef: RefObject<HTMLInputElement>;
@@ -52,7 +53,9 @@ interface TokenPickerContentProps {
   isAddressSearch: boolean;
   isLoadingHoldings: boolean;
   hasResults: boolean;
+  chainId?: number;
   chainName?: string;
+  onOpenNetworkPicker?: () => void;
 }
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -144,7 +147,9 @@ export function TokenPickerContent({
   isAddressSearch,
   isLoadingHoldings,
   hasResults,
+  chainId,
   chainName,
+  onOpenNetworkPicker,
 }: TokenPickerContentProps) {
   const searchTerm = search.trim();
 
@@ -157,6 +162,15 @@ export function TokenPickerContent({
           <FullScreenPickerSearch
             ref={inputRef}
             label="Search tokens"
+            labelTrailing={
+              chainId !== undefined && chainName && onOpenNetworkPicker ? (
+                <TokenPickerNetworkButton
+                  chainId={chainId}
+                  chainName={chainName}
+                  onClick={onOpenNetworkPicker}
+                />
+              ) : undefined
+            }
             placeholder="Name, symbol, or token address"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}

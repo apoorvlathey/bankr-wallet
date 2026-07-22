@@ -80,6 +80,23 @@ function TokenTransfer({
     [networksInfo],
   );
   const chainName = getChainName(catalog.selectedChainId);
+  const networkOptions = useMemo(
+    () =>
+      allChains.map((candidateChainId) => ({
+        chainId: candidateChainId,
+        name: getChainName(candidateChainId),
+        nativeSymbol: getNativeSymbol(candidateChainId),
+        balanceUsd: catalog.chainBalances.get(candidateChainId) ?? 0,
+        isFunded: catalog.fundedChainIds.has(candidateChainId),
+      })),
+    [
+      allChains,
+      catalog.chainBalances,
+      catalog.fundedChainIds,
+      getChainName,
+      getNativeSymbol,
+    ],
+  );
   const chainEnvironmentLabel = getChainEnvironmentLabel(
     catalog.selectedChainId,
     chainName,
@@ -219,7 +236,9 @@ function TokenTransfer({
             resolvedCustomToken={catalog.resolvedCustomToken}
             customTokenLoading={catalog.customTokenLoading}
             customTokenError={catalog.customTokenError}
+            networkOptions={networkOptions}
             onOpenNetworkPicker={() => setIsNetworkPickerOpen(true)}
+            onSelectChain={handleChainChange}
             onSelectToken={handleTokenSelect}
             onResolveCustomAddress={catalog.resolveCustomAddress}
             onSelectCustomToken={handleCustomTokenSelect}

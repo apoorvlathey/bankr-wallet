@@ -242,6 +242,14 @@
 
 ## Slop audit
 
+- 2026-07-22 Token-picker network navigation audit: Send and Swap/Bridge now
+  share one compact, semantic `on <network> v` trigger with a full accessible
+  label. Its 24px geometry and subtle default border preserve the original
+  context-pill hierarchy. The nested shared network browser returns directly to token discovery,
+  updates only the owning Send, sell, or receive field, clears stale search and
+  token state, preserves visible focus, and avoids adding a second verbose
+  network label to the constrained mobile header. Result: pass.
+
 - 2026-07-22 Unshield recipient-account audit: added one established 44px
   header action to the full-screen address chooser, using the existing semantic
   icon-button and theme-token treatment. The action appears only in Unshield,
@@ -922,6 +930,11 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-22: unified Send and Swap/Bridge token-picker network context with a
+  compact clickable pill. Selecting a network now updates the owning field and
+  returns to the refreshed token list instead of silently selecting a default
+  token or closing the picker.
 
 - 2026-07-20: brought WCHAN stake, unstake, WETH claim, penalty disclosure,
   amount slider, and atomic/sequential review into the Warm Midnight extension.

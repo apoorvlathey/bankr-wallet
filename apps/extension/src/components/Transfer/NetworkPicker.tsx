@@ -23,7 +23,7 @@ export function NetworkPicker({
 }: NetworkPickerProps) {
   return (
     <NetworkSelectorScreen
-      title="Send network"
+      title="Select send chain"
       networks={chainIds.map((chainId) => ({
         chainId,
         name: getChainName(chainId),

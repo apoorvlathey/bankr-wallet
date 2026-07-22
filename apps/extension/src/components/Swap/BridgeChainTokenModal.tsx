@@ -21,7 +21,6 @@ import { KNOWN_TOKEN_LOGOS } from "@/chrome/txSimulation";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { BridgeChainTokenPickerScreen } from "./BridgeChainTokenPickerScreen";
-import { pickDefaultSwapSellToken } from "./swapViewUtils";
 import { TOKEN_PICKER_PAGE_SIZE } from "@/chrome/portfolio/consumerPolicy";
 
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -121,6 +120,8 @@ interface BridgeChainTokenModalProps {
   excludeChainId?: number;
   /** Fires when the user picks a token. Carries the chain they navigated to. */
   onSelect: (chainId: number, token: PortfolioToken) => void;
+  /** Updates the owning sell/receive chain while keeping token discovery open. */
+  onSelectChain: (chainId: number) => void;
   /** Wallet address — for onchain balance lookup of pasted custom tokens. */
   fromAddress: string;
   /** Catalog of held tokens across ALL chains. Drives portfolio totals on the
@@ -147,6 +148,7 @@ export default function BridgeChainTokenModal({
   excludeAddress,
   excludeChainId,
   onSelect,
+  onSelectChain,
   fromAddress,
   holdingsAllChains,
   initialTokenSearch = "",
@@ -172,13 +174,19 @@ export default function BridgeChainTokenModal({
   const [customLoading, setCustomLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const lastResolvedAddrRef = useRef<string>("");
+  const wasOpenRef = useRef(false);
 
   const tokenSearchRef = useRef<HTMLInputElement>(null);
 
   // Reset state every time the dropdown opens. Honours the parent's
   // `initialChainId` so reopening from a different side picks up.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setCurrentChainId(initialChainId);
     setPanel(initialPanel);
     setTokenSearch(initialTokenSearch);
@@ -607,35 +615,26 @@ export default function BridgeChainTokenModal({
     onClose();
   };
   const handleSelectChain = (chainId: number) => {
-    const chain = chains.find((item) => item.chainId === chainId);
-    const native = chainHasNativeToken(chainId)
-      ? nativeMetaFromBungeeChain(chain) ?? getNativeAssetMeta(chainId, networksInfo)
-      : null;
-    const excluded = (token: PortfolioToken) => {
-      if (excludeChainId !== chainId || !excludeAddress) return false;
-      const tokenAddress =
-        token.contractAddress === "native" ? NATIVE_TOKEN_ADDRESS : token.contractAddress;
-      return tokenAddress.toLowerCase() === excludeAddress.toLowerCase();
-    };
-    const eligibleHoldings = holdingsAllChains.filter(
-      (token) => token.chainId === chainId && !excluded(token),
-    );
-    const heldDefault = pickDefaultSwapSellToken(eligibleHoldings, chainId);
-    const existingNative = eligibleHoldings.find(
-      (token) => token.contractAddress === "native",
-    );
-    const nativeDefault =
-      native &&
-      buildNativePortfolioToken(native, chainId, existingNative);
-    const picked = mode === "sell" ? heldDefault ?? nativeDefault : nativeDefault ?? heldDefault;
-    if (picked && !excluded(picked)) {
-      onSelect(chainId, picked);
-      onClose();
-      return;
-    }
     setCurrentChainId(chainId);
     setPanel("tokens");
     setTokenSearch("");
+    if (chainId !== currentChainId) onSelectChain(chainId);
+    window.setTimeout(() => tokenSearchRef.current?.focus(), 30);
+  };
+
+  const handleOpenChainPicker = () => {
+    setTokenSearch("");
+    setPanel("chains");
+  };
+
+  const handleBack = () => {
+    if (panel === "chains" && initialPanel === "tokens") {
+      setTokenSearch("");
+      setPanel("tokens");
+      window.setTimeout(() => tokenSearchRef.current?.focus(), 30);
+      return;
+    }
+    onClose();
   };
 
   const isSelectedToken = (token: PortfolioToken) => {
@@ -652,7 +651,7 @@ export default function BridgeChainTokenModal({
     <BridgeChainTokenPickerScreen
       mode={mode}
       panel={panel}
-      onBack={onClose}
+      onBack={handleBack}
       tokenSearch={tokenSearch}
       onTokenSearchChange={setTokenSearch}
       tokenSearchRef={tokenSearchRef}
@@ -664,6 +663,7 @@ export default function BridgeChainTokenModal({
       chainTotals={portfolioByChain}
       fundedChainIds={fundedChainIds}
       onSelectChain={handleSelectChain}
+      onOpenChainPicker={handleOpenChainPicker}
       popularTokens={popularTokens}
       customToken={
         resolvedCustom?.chainId === currentChainId

@@ -143,6 +143,22 @@ function SwapView({
       quotes.setQuote(null);
     }
   };
+  const handlePickerChainSelect = (pickedChainId: number) => {
+    if (picker?.side === "sell") {
+      const previousSellChainId = sellChainId;
+      setSellChainId(pickedChainId);
+      setSellToken(null);
+      const buyWasImplicit =
+        buyChainId === previousSellChainId && !buyToken.buyTokenAddress;
+      if (buyWasImplicit) setBuyChainId(pickedChainId);
+      amount.resetAmount();
+      amount.setIsUsdMode(false);
+    } else if (picker?.side === "buy") {
+      setBuyChainId(pickedChainId);
+      buyToken.clearBuyToken();
+    }
+    quotes.clearQuotes();
+  };
   const sellAmountNumber = parseFloat(amount.sellTokenAmount) || 0;
   const insufficientBalance = sellAmountNumber > amount.sellBalance;
   const unifiedBuyAmount = isBridge
@@ -303,6 +319,7 @@ function SwapView({
         }
         excludeChainId={selectedIsBuy ? sellChainId : buyChainId}
         onSelect={handleTokenSelect}
+        onSelectChain={handlePickerChainSelect}
         fromAddress={fromAddress}
         holdingsAllChains={holdingsAllChains}
       />

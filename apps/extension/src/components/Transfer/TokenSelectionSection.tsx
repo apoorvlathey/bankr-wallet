@@ -4,6 +4,7 @@ import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import ChainIcon from "@/components/ChainIcon";
 import TokenSelector from "@/components/Swap/TokenSelector";
+import type { NetworkSelectorOption } from "@/components/shared/NetworkSelector";
 import { useTheme } from "@/theme";
 import { AdaptiveBalance } from "./AdaptiveBalance";
 
@@ -19,7 +20,9 @@ interface TokenSelectionSectionProps {
   resolvedCustomToken: PortfolioToken | null;
   customTokenLoading: boolean;
   customTokenError: string | null;
+  networkOptions: readonly NetworkSelectorOption[];
   onOpenNetworkPicker: () => void;
+  onSelectChain: (chainId: number) => void;
   onSelectToken: (token: PortfolioToken) => void;
   onResolveCustomAddress: (address: string) => Promise<void>;
   onSelectCustomToken: (token: PortfolioToken) => void;
@@ -38,7 +41,9 @@ export function TokenSelectionSection({
   resolvedCustomToken,
   customTokenLoading,
   customTokenError,
+  networkOptions,
   onOpenNetworkPicker,
+  onSelectChain,
   onSelectToken,
   onResolveCustomAddress,
   onSelectCustomToken,
@@ -132,6 +137,8 @@ export function TokenSelectionSection({
             dropdownAlign="right"
             isLoadingHoldings={holdingsLoading}
             onOpenChange={onTokenSelectorOpenChange}
+            networkOptions={networkOptions}
+            onSelectChain={onSelectChain}
           />
         </Box>
       </HStack>

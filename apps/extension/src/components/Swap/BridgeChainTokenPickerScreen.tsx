@@ -1,17 +1,11 @@
 import type { RefObject } from "react";
-import {
-  Box,
-  Button,
-  HStack,
-  Text,
-  VStack,
-} from "@chakra-ui/react";
+import { Box, Button, Text, VStack } from "@chakra-ui/react";
 import { CheckIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { EnrichedBridgeChain } from "@/chrome/bridgeChainsResolver";
-import ChainIcon from "@/components/ChainIcon";
 import SafeImage from "@/components/SafeImage";
 import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
+import { TokenPickerNetworkButton } from "@/components/shared/TokenPickerNetworkButton";
 import {
   FullScreenPicker,
   FullScreenPickerEmpty,
@@ -46,6 +40,7 @@ interface BridgeChainTokenPickerScreenProps {
   chainTotals: ReadonlyMap<number, number>;
   fundedChainIds: ReadonlySet<number>;
   onSelectChain: (chainId: number) => void;
+  onOpenChainPicker: () => void;
   popularTokens: readonly PortfolioToken[];
   customToken?: PortfolioToken;
   customLoading: boolean;
@@ -179,6 +174,7 @@ export function BridgeChainTokenPickerScreen({
   chainTotals,
   fundedChainIds,
   onSelectChain,
+  onOpenChainPicker,
   popularTokens,
   customToken,
   customLoading,
@@ -197,7 +193,7 @@ export function BridgeChainTokenPickerScreen({
   if (panel === "chains") {
     return (
       <NetworkSelectorScreen
-        title={mode === "sell" ? "Pay network" : "Receive network"}
+        title={mode === "sell" ? "Select sell chain" : "Select receive chain"}
         networks={chains.map((chain) => ({
           chainId: chain.chainId,
           name: chain.name,
@@ -232,38 +228,11 @@ export function BridgeChainTokenPickerScreen({
         ref={tokenSearchRef}
         label="Search tokens"
         labelTrailing={
-          <HStack
-            as="span"
-            maxW="220px"
-            minW={0}
-            minH="24px"
-            px={2}
-            spacing={1}
-            border="1px solid"
-            borderColor="border.default"
-            borderRadius="full"
-            bg="surface.raised"
-          >
-            <Text as="span" flexShrink={0} fontSize="2xs" color="fg.muted">
-              on
-            </Text>
-            <ChainIcon
-              chainId={currentChainId}
-              chainName={currentChainName}
-              size="14px"
-              withChip
-            />
-            <Text
-              as="span"
-              minW={0}
-              fontSize="xs"
-              fontWeight="600"
-              color="fg.secondary"
-              noOfLines={1}
-            >
-              {currentChainName}
-            </Text>
-          </HStack>
+          <TokenPickerNetworkButton
+            chainId={currentChainId}
+            chainName={currentChainName}
+            onClick={onOpenChainPicker}
+          />
         }
         placeholder="Search by name, symbol, or paste address"
         value={tokenSearch}

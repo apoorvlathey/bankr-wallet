@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { HStack, Text, Image, Button } from "@chakra-ui/react";
-import { ChevronDownIcon } from "@chakra-ui/icons";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { TokenListEntry } from "@/chrome/swapApi";
 import { getNativeAssetMeta } from "@/lib/chains";
 import { chainHasNativeToken } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { TokenSymbolFallback } from "@/components/Swap/TokenSymbolFallback";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
 import { TokenPickerContent } from "@/components/Swap/TokenPickerContent";
 import { TOKEN_PICKER_PAGE_SIZE } from "@/chrome/portfolio/consumerPolicy";
+import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
+import { TokenSelectorTrigger } from "./TokenSelectorTrigger";
+import type { TokenSelectorProps } from "./TokenSelectorTypes";
 const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 /** Popular token symbols per chain — same list as BuyTokenSelector so the
  *  buy/sell dropdowns offer parity. */
@@ -41,32 +41,6 @@ function entryToPortfolioToken(
     chainId,
   };
 }
-interface TokenSelectorProps {
-  holdings: PortfolioToken[];
-  tokenList: TokenListEntry[];
-  selectedToken: PortfolioToken | null;
-  onSelect: (token: PortfolioToken) => void;
-  excludeAddress?: string;
-  chainId: number;
-  onCustomAddress?: (address: string) => void;
-  onSelectCustomToken?: (token: PortfolioToken) => void;
-  resolvedCustomToken?: PortfolioToken | null;
-  customTokenLoading?: boolean;
-  /** Error message from custom token resolution */
-  customTokenError?: string | null;
-  /** Chain name shown in empty state */
-  chainName?: string;
-  /** Alignment of the token identity inside the trigger button. */
-  triggerContentAlign?: "left" | "right";
-  dropdownAlign?: "left" | "right";
-  /** Holdings are still being fetched (portfolio API + onchain balances).
-   *  When true and no holdings are present yet, the dropdown shows a spinner
-   *  instead of the "No tokens" empty state — important for custom chains
-   *  where the portfolio API returns nothing and the native balance only
-   *  appears once the onchain RPC call resolves. */
-  isLoadingHoldings?: boolean;
-  onOpenChange?: (isOpen: boolean) => void;
-}
 export default function TokenSelector({
   holdings,
   tokenList,
@@ -83,9 +57,12 @@ export default function TokenSelector({
   triggerContentAlign = "left",
   isLoadingHoldings = false,
   onOpenChange,
+  networkOptions,
+  onSelectChain,
 }: TokenSelectorProps) {
   const { networksInfo } = useNetworks();
   const [isOpen, setIsOpen] = useState(false);
+  const [panel, setPanel] = useState<"tokens" | "chains">("tokens");
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(TOKEN_PICKER_PAGE_SIZE);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -95,6 +72,7 @@ export default function TokenSelector({
   const excludeLower = excludeAddress?.toLowerCase();
   const closeDropdown = useCallback((restoreFocus = true) => {
     setIsOpen(false);
+    setPanel("tokens");
     setSearch("");
     onOpenChange?.(false);
     if (restoreFocus) {
@@ -102,6 +80,7 @@ export default function TokenSelector({
     }
   }, [onOpenChange]);
   const handleTriggerClick = () => {
+    setPanel("tokens");
     setIsOpen(true);
     onOpenChange?.(true);
   };
@@ -114,7 +93,7 @@ export default function TokenSelector({
     }
   }, [isOpen]);
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || panel !== "tokens") return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -123,7 +102,7 @@ export default function TokenSelector({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [closeDropdown, isOpen]);
+  }, [closeDropdown, isOpen, panel]);
 
   useEffect(() => {
     setVisibleCount(TOKEN_PICKER_PAGE_SIZE);
@@ -299,6 +278,19 @@ export default function TokenSelector({
     closeDropdown();
   };
 
+  const handleOpenNetworkPicker = () => {
+    setSearch("");
+    setPanel("chains");
+  };
+
+  const handleSelectChain = (nextChainId: number | null) => {
+    if (nextChainId === null || !onSelectChain) return;
+    if (nextChainId !== chainId) onSelectChain(nextChainId);
+    setSearch("");
+    setPanel("tokens");
+    window.setTimeout(() => inputRef.current?.focus(), 30);
+  };
+
   const isSelectedAddr = (addr: string) => {
     if (!selectedToken) return false;
     const selAddr =
@@ -314,84 +306,72 @@ export default function TokenSelector({
 
   return (
     <>
-      <Button
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        variant="outline"
-        h="44px"
-        minW={0}
-        px={3}
-        borderWidth="1px"
-        borderColor="border.default"
-        bg="surface.raised"
-        justifyContent={
-          triggerContentAlign === "right" ? "flex-end" : "flex-start"
-        }
-        _hover={{ bg: "surface.raisedHover", borderColor: "border.strong" }}
+      <TokenSelectorTrigger
+        triggerRef={triggerRef}
+        isOpen={isOpen}
+        selectedToken={selectedToken}
+        resolveLogo={resolveLogo}
+        contentAlign={triggerContentAlign}
         onClick={handleTriggerClick}
-      >
-        <HStack minW={0} spacing={2}>
-          {selectedToken &&
-            (selectedToken.logoUrl ? (
-              <Image
-                src={resolveLogo(selectedToken.logoUrl)}
-                alt=""
-                boxSize="22px"
-                borderRadius="full"
-                fallback={
-                  <TokenSymbolFallback symbol={selectedToken.symbol} size="22px" />
-                }
-              />
-            ) : (
-              <TokenSymbolFallback symbol={selectedToken.symbol} size="22px" />
-            ))}
-          <Text minW={0} fontWeight="600" fontSize="md" noOfLines={1}>
-            {selectedToken?.symbol || "Select token"}
-          </Text>
-          <ChevronDownIcon flexShrink={0} color="fg.muted" />
-        </HStack>
-      </Button>
+      />
 
       {isOpen && (
         <FullScreenPickerLayer>
-          <TokenPickerContent
-            inputRef={inputRef}
-            search={search}
-            onSearchChange={setSearch}
-            onBack={() => closeDropdown()}
-            popularTokens={popularTokens}
-            visibleHoldings={visibleHoldings}
-            visibleRest={visibleRest}
-            remainingTokenCount={
-              Math.max(0, filteredHoldings.length - visibleHoldings.length) +
-              Math.max(0, filteredRest.length - visibleRest.length)
-            }
-            onShowMore={() =>
-              setVisibleCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
-            }
-            onSelectHolding={handleSelectHolding}
-            onSelectListEntry={handleSelectListEntry}
-            onSelectPortfolio={handleSelectPortfolio}
-            isSelectedAddress={isSelectedAddr}
-            resolveLogo={resolveLogo}
-            customTokenLoading={customTokenLoading}
-            customTokenError={customTokenError}
-            resolvedCustomToken={resolvedCustomToken}
-            onSelectResolvedCustomToken={
-              resolvedCustomToken && onSelectCustomToken
-                ? () => {
-                    onSelectCustomToken(resolvedCustomToken);
-                    closeDropdown();
-                  }
-                : undefined
-            }
-            isAddressSearch={isAddressSearch}
-            isLoadingHoldings={isLoadingHoldings}
-            hasResults={hasResults}
-            chainName={chainName}
-          />
+          {panel === "chains" && networkOptions && onSelectChain ? (
+            <NetworkSelectorScreen
+              title="Select send chain"
+              networks={networkOptions}
+              selectedChainId={chainId}
+              onSelect={handleSelectChain}
+              onBack={() => {
+                setPanel("tokens");
+                window.setTimeout(() => inputRef.current?.focus(), 30);
+              }}
+            />
+          ) : (
+            <TokenPickerContent
+              inputRef={inputRef}
+              search={search}
+              onSearchChange={setSearch}
+              onBack={() => closeDropdown()}
+              popularTokens={popularTokens}
+              visibleHoldings={visibleHoldings}
+              visibleRest={visibleRest}
+              remainingTokenCount={
+                Math.max(0, filteredHoldings.length - visibleHoldings.length) +
+                Math.max(0, filteredRest.length - visibleRest.length)
+              }
+              onShowMore={() =>
+                setVisibleCount((count) => count + TOKEN_PICKER_PAGE_SIZE)
+              }
+              onSelectHolding={handleSelectHolding}
+              onSelectListEntry={handleSelectListEntry}
+              onSelectPortfolio={handleSelectPortfolio}
+              isSelectedAddress={isSelectedAddr}
+              resolveLogo={resolveLogo}
+              customTokenLoading={customTokenLoading}
+              customTokenError={customTokenError}
+              resolvedCustomToken={resolvedCustomToken}
+              onSelectResolvedCustomToken={
+                resolvedCustomToken && onSelectCustomToken
+                  ? () => {
+                      onSelectCustomToken(resolvedCustomToken);
+                      closeDropdown();
+                    }
+                  : undefined
+              }
+              isAddressSearch={isAddressSearch}
+              isLoadingHoldings={isLoadingHoldings}
+              hasResults={hasResults}
+              chainId={chainId}
+              chainName={chainName}
+              onOpenNetworkPicker={
+                networkOptions && onSelectChain
+                  ? handleOpenNetworkPicker
+                  : undefined
+              }
+            />
+          )}
         </FullScreenPickerLayer>
       )}
     </>

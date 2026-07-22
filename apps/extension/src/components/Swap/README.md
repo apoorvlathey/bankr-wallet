@@ -22,6 +22,11 @@ feature-local hooks below. Keep it free of RPC/storage implementations.
   token/address search, balance-prioritized network chips, compact popular-token
   shortcuts, then wallet holdings and the remaining catalog.
 
+Send and Swap/Bridge token discovery share the compact `on <network> v`
+network button. It opens the shared searchable network selector as a nested
+screen; selection updates the owning Send, sell, or receive chain and returns
+to the refreshed token list without committing a token choice.
+
 The compact wallet form gives each amount field a full row, keeps its fiat
 conversion inside that field, and separates network and token into compact
 header pills above the amount. Network pills open a searchable vertical browser
