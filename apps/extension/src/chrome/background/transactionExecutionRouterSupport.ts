@@ -22,7 +22,8 @@ export type BackgroundTransactionExecutionDependencies = {
   getFeePaymentOptions: (txId: string) => Promise<any>;
   getBatchFeePaymentOptions: (bundleId: string) => Promise<any>;
   getSafeExecutionFeePaymentOptions: (proposalId: string, executorAccountId: string) => Promise<any>;
-  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction" | "safeExecution", requestId: string, tokenId: unknown, accountId?: string) => Promise<any>;
+  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap", requestId: string, tokenId: unknown, accountId?: string, requestPayload?: unknown) => Promise<any>;
+  getInternalSwapFeePaymentOptions: (accountId: string, requestPayload: unknown) => Promise<any>;
 };
 
 export const HANDLED_TRANSACTION_EXECUTION_ASYNC: BackgroundTransactionExecutionRouteResult = {
@@ -46,6 +47,54 @@ export function respondToTransactionExecution(
     }),
   );
   return HANDLED_TRANSACTION_EXECUTION_ASYNC;
+}
+
+export function getFeePaymentOptionsForMessage(
+  dependencies: BackgroundTransactionExecutionDependencies,
+  message: any,
+): Promise<any> {
+  const requestId = typeof message.txId === "string" ? message.txId : "";
+  if (message.requestKind === "batch") {
+    return dependencies.getBatchFeePaymentOptions(requestId);
+  }
+  if (message.requestKind === "safe") {
+    return dependencies.getSafeExecutionFeePaymentOptions(
+      requestId,
+      typeof message.accountId === "string" ? message.accountId : "",
+    );
+  }
+  if (message.requestKind === "swap") {
+    return dependencies.getInternalSwapFeePaymentOptions(
+      typeof message.accountId === "string" ? message.accountId : "",
+      message.requestPayload,
+    );
+  }
+  return dependencies.getFeePaymentOptions(requestId);
+}
+
+export function prepareFeePaymentQuoteForMessage(
+  dependencies: BackgroundTransactionExecutionDependencies,
+  message: any,
+): Promise<any> {
+  const requestId = typeof message.requestId === "string" ? message.requestId : "";
+  const family = message.requestKind === "batch" ? "batchTransaction"
+    : message.requestKind === "safe" ? "safeExecution"
+      : message.requestKind === "swap" ? "internalSwap" : "transaction";
+  const accountId = typeof message.accountId === "string" ? message.accountId : undefined;
+  return family === "internalSwap"
+    ? dependencies.prepareFeePaymentQuote(
+        family,
+        requestId,
+        message.feePaymentToken,
+        accountId,
+        message.requestPayload,
+      )
+    : dependencies.prepareFeePaymentQuote(
+        family,
+        requestId,
+        message.feePaymentToken,
+        accountId,
+      );
 }
 
 function feePaymentToken(value: unknown): "native" | "token" {

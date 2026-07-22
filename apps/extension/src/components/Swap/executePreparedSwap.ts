@@ -12,6 +12,9 @@ interface ExecutePreparedSwapOptions {
   delegation: PreparedDelegation | null;
   accountLock: PreparedAccountLock | null;
   gasEstimates: GasEstimate[] | null;
+  feePaymentRequestId: string;
+  feePaymentToken: "native" | "token";
+  feePaymentQuoteId: string | null;
   chainId: number;
   chainName: string;
   toast: ReturnType<typeof useThemedToast>;
@@ -23,13 +26,32 @@ export async function executePreparedSwap({
   delegation,
   accountLock,
   gasEstimates,
+  feePaymentRequestId,
+  feePaymentToken,
+  feePaymentQuoteId,
   chainId,
   chainName,
   toast,
 }: ExecutePreparedSwapOptions): Promise<boolean> {
   try {
     let result: { success: boolean; txIds?: string[]; error?: string };
-    if (batchTx && delegation) {
+    if (feePaymentToken === "token") {
+      result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "executeSwapWithFeeToken",
+            requestId: feePaymentRequestId,
+            quoteId: feePaymentQuoteId,
+            originalTransactions: transactions,
+            chainId,
+            chainName,
+            accountId: accountLock?.accountId,
+            fromAddress: accountLock?.fromAddress,
+          },
+          resolve,
+        );
+      });
+    } else if (batchTx && delegation) {
       const gasOverrides =
         gasEstimates && gasEstimates.length > 0
           ? {

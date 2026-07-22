@@ -666,8 +666,9 @@ Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any termina
 
 Token fee payment is an extension-only confirmation capability, never a new
 provider signing method. `getFeePaymentOptions` and `prepareFeePaymentQuote`
-are wallet-UI messages, and the existing transaction/batch/Safe execution claim
-remains the sole terminal decision. Quotes live only in service-worker memory
+are wallet-UI messages. Normal transaction/batch/Safe execution claims remain
+their sole terminal decisions; the in-wallet Swap route uses the same one-shot
+quote boundary under a reset-aware internal-operation claim. Quotes live only in service-worker memory
 for 45 seconds and bind request family/id, exact calls, account identity,
 chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum. Safe
 quotes bind the proposal ID, selected private-key/seed executor, proposal chain,
@@ -676,6 +677,16 @@ quote, and the background independently resolves the submitted executor ID.
 They are consumed once before pending request removal; a missing/restarted
 worker, edited call, account switch, nonce race, allowance change, or delegate
 change leaves the review retryable and requires a fresh quote.
+
+Internal Swap quote input is accepted only from the trusted wallet UI and is
+bounded to 50 calls, positive safe-integer chain IDs, exact 20-byte destinations,
+even-length calldata, and hex quantities. The quote family is `internalSwap`,
+separate from provider request families. Execution re-resolves the pinned
+account ID/address, requires every reviewed transaction to retain that `from`
+and chain, and consumes a matching request ID/account/call fingerprint before
+any credential is used. PK/seed and already-delegated Bankr accounts reuse the
+atomic fee-payment batch signer; Ledger, impersonator, and Safe accounts cannot
+enter this internal Swap token-payment path.
 
 The confirmation renderer bounds option discovery to 10 seconds and quote
 preparation to 30 seconds. Timeout invalidates late callbacks and enters an

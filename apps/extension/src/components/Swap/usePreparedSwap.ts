@@ -54,6 +54,7 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
     useState<PreparedDelegation | null>(null);
   const [preparedQuote, setPreparedQuote] =
     useState<SwapQuoteResponse | null>(null);
+  const [preparedRequestId, setPreparedRequestId] = useState<string | null>(null);
   const [swapGasEstimates, setSwapGasEstimates] =
     useState<GasEstimate[] | null>(null);
   const [swapGasValid, setSwapGasValid] = useState(true);
@@ -140,6 +141,7 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
       );
       setPrepared7702(plan.delegation);
       setPreparedQuote(plan.quote);
+      setPreparedRequestId(crypto.randomUUID());
       setShowConfirmation(true);
     } catch (error) {
       toast({
@@ -155,8 +157,11 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
     }
   };
 
-  const confirm = async () => {
-    if (submittingRef.current || !preparedTransactions?.length) return;
+  const confirm = async (
+    feePaymentToken: "native" | `0x${string}`,
+    feePaymentQuoteId: string | null,
+  ) => {
+    if (submittingRef.current || !preparedTransactions?.length || !preparedRequestId) return;
     submittingRef.current = true;
     setIsSubmitting(true);
     try {
@@ -166,6 +171,9 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
         delegation: prepared7702,
         accountLock: preparedAccountLock,
         gasEstimates: swapGasEstimates,
+        feePaymentRequestId: preparedRequestId,
+        feePaymentToken: feePaymentToken === "native" ? "native" : "token",
+        feePaymentQuoteId,
         chainId: options.sellChainId,
         chainName: options.chainName,
         toast,
@@ -184,6 +192,7 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
     setPreparedAccountLock(null);
     setPrepared7702(null);
     setPreparedQuote(null);
+    setPreparedRequestId(null);
     setSwapGasEstimates(null);
     setSwapGasValid(true);
   };
@@ -195,6 +204,7 @@ export function usePreparedSwap(options: UsePreparedSwapOptions) {
     preparedBatchTx,
     prepared7702,
     preparedQuote,
+    preparedRequestId,
     swapGasValid,
     setSwapGasEstimates,
     setSwapGasValid,

@@ -29,8 +29,12 @@ interface FeePaymentSelectorProps {
   value: FeePaymentTokenId;
   quote: FeePaymentQuoteSummary | null;
   disabled?: boolean;
-  requestKind?: "transaction" | "batch" | "safe";
+  requestKind?: "transaction" | "batch" | "safe" | "swap";
   accountId?: string;
+  requestPayload?: {
+    chainId: number;
+    calls: Array<{ to: string; data?: string; value?: string }>;
+  };
   nativeSummary?: NativeFeePaymentSummary | null;
   onChange: (value: FeePaymentTokenId) => void;
   onQuoteChange: (quote: FeePaymentQuoteSummary | null) => void;
@@ -62,6 +66,7 @@ export function FeePaymentSelector({
   disabled,
   requestKind = "transaction",
   accountId,
+  requestPayload,
   nativeSummary,
   onChange,
   onQuoteChange,
@@ -114,6 +119,7 @@ export function FeePaymentSelector({
         requestId: txId,
         requestKind,
         accountId,
+        requestPayload,
         feePaymentToken: tokenId,
       },
       (result: Partial<FeePaymentQuoteSummary> & { success?: boolean; error?: string }) => {
@@ -168,7 +174,7 @@ export function FeePaymentSelector({
         setQuoteLoading(false);
       },
     );
-  }, [accountId, clearQuoteTimeout, onQuoteChange, options, requestKind, txId, value]);
+  }, [accountId, clearQuoteTimeout, onQuoteChange, options, requestKind, requestPayload, txId, value]);
 
   useEffect(() => {
     if (previousRequestIdentity.current === requestIdentity) return;
@@ -196,7 +202,7 @@ export function FeePaymentSelector({
       setLoading(false);
     }, OPTIONS_REQUEST_TIMEOUT_MS);
     chrome.runtime.sendMessage(
-      { type: "getFeePaymentOptions", txId, requestKind, accountId },
+      { type: "getFeePaymentOptions", txId, requestKind, accountId, requestPayload },
       (result: { success: boolean; options?: FeePaymentOption[] }) => {
         if (!active) return;
         window.clearTimeout(timeout);
@@ -208,7 +214,7 @@ export function FeePaymentSelector({
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [accountId, requestKind, txId]);
+  }, [accountId, requestKind, requestPayload, txId]);
 
   const isTokenPayment = value !== "native";
   useEffect(() => {

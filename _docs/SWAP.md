@@ -43,7 +43,7 @@ Uses **0x Swap API v2** with the **AllowanceHolder** flow (single-signature UX, 
 
 ### Slippage
 - `slippageBps` passed from client → API routes → 0x API
-- Default: 500 (5%) — optimized for memecoin trading
+- Default: 100 (1%); an existing user-selected sync-storage value takes precedence
 - Presets: 1%, 3%, 5%
 - Custom input supports any value up to 50%
 
@@ -173,5 +173,5 @@ Both defined in `apps/website/.env.local` (see `.env.local.example`).
 | `STAKING_FEE_TIERS_ENABLED` | `false` | `api/swap/feeResolver.ts` | Keeps dormant staking tiers off and avoids indexer calls |
 | `NATIVE_TOKEN_ADDRESS` | `0xEeee...eEEeE` | `swap/constants.ts` | Native ETH placeholder for 0x |
 | `WETH_ADDRESS` | `0x4200...0006` | `swap/constants.ts` | WETH on Base |
-| `DEFAULT_SLIPPAGE_BPS` | `500` | `swap/constants.ts` | 5% default slippage |
+| `DEFAULT_SLIPPAGE_BPS` | `100` | `swap/constants.ts` | 1% default slippage |
 | `SLIPPAGE_PRESETS` | `[100, 300, 500]` | `swap/constants.ts` | 1%, 3%, 5% |

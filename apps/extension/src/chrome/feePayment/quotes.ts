@@ -22,13 +22,14 @@ import type { FeePaymentCall } from "./userOperation";
 import { getSafeProposal } from "../safe/proposalRepository";
 import { buildSafeExecutionData } from "../safe/executionData";
 import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
+import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
 
 const QUOTE_TTL_MS = 45_000;
 const MAX_QUOTES = 30;
 
 export interface PreparedFeePaymentQuote {
   id: string;
-  family: "transaction" | "batchTransaction" | "safeExecution";
+  family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap";
   requestId: string;
   accountId: string;
   accountAddress: Address;
@@ -215,10 +216,11 @@ async function prepareQuote(input: {
 }
 
 export async function prepareFeePaymentQuote(
-  family: "transaction" | "batchTransaction" | "safeExecution",
+  family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap",
   requestId: string,
   tokenId: unknown,
   accountId?: string,
+  requestPayload?: unknown,
 ) {
   if (family === "transaction") {
     const pending = await getPendingTxRequestById(requestId);
@@ -261,6 +263,23 @@ export async function prepareFeePaymentQuote(
         safeAddress: proposal.safeAddress,
         executionData: buildSafeExecutionData(proposal),
       }),
+      tokenId,
+    });
+  }
+  if (family === "internalSwap") {
+    const [account, payload] = await Promise.all([
+      accountId ? getAccountById(accountId) : null,
+      Promise.resolve().then(() => parseInternalSwapFeePaymentPayload(requestPayload)),
+    ]);
+    if (!account || account.type === "impersonator" || account.type === "ledger") {
+      throw new Error("Swap account cannot pay gas with a token");
+    }
+    return prepareQuote({
+      family,
+      requestId,
+      account,
+      chainId: payload.chainId,
+      calls: payload.calls,
       tokenId,
     });
   }

@@ -1,6 +1,8 @@
 /** Trusted-UI transport for single-transaction confirmation and transfer intake. */
 import {
   HANDLED_TRANSACTION_EXECUTION_ASYNC as HANDLED_ASYNC,
+  getFeePaymentOptionsForMessage,
+  prepareFeePaymentQuoteForMessage,
   respondToTransactionExecution,
   transactionExecutionError as errorMessage,
   validatedFeePaymentToken,
@@ -29,24 +31,14 @@ export function createBackgroundTransactionExecutionMessageRouter(
           sendResponse, "Failed to load transaction nonce");
       }
       case "getFeePaymentOptions": {
-        const txId = typeof message.txId === "string" ? message.txId : "";
-        const query = message.requestKind === "batch"
-          ? dependencies.getBatchFeePaymentOptions(txId)
-          : message.requestKind === "safe"
-            ? dependencies.getSafeExecutionFeePaymentOptions(txId,
-                typeof message.accountId === "string" ? message.accountId : "")
-            : dependencies.getFeePaymentOptions(txId);
-        return respondToTransactionExecution(query, sendResponse,
+        return respondToTransactionExecution(
+          getFeePaymentOptionsForMessage(dependencies, message), sendResponse,
           "Failed to load gas-payment options");
       }
 
       case "prepareFeePaymentQuote": {
-        const requestId = typeof message.requestId === "string" ? message.requestId : "";
-        const family = message.requestKind === "batch" ? "batchTransaction"
-          : message.requestKind === "safe" ? "safeExecution" : "transaction";
         return respondToTransactionExecution(
-          dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken,
-            typeof message.accountId === "string" ? message.accountId : undefined),
+          prepareFeePaymentQuoteForMessage(dependencies, message),
           sendResponse, "Failed to prepare fee-token quote",
         );
       }

@@ -11,6 +11,7 @@ import {
   type PendingRequestEffectLease,
 } from "../requests/pendingRequestResolution";
 import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
+import type { BridgeMeta, SwapMeta } from "../txHistoryStorage";
 import { writeResultToStorage } from "../transactions/runtime";
 import { signFeePaymentEip7702Authorization } from "./authorization";
 import {
@@ -116,8 +117,9 @@ export async function processUsdcBatchInBackground(input: {
   functionNames?: string[];
   effectLease?: PendingRequestEffectLease;
   quote?: PreparedFeePaymentQuote;
+  historyMeta?: { swapMeta?: SwapMeta; bridge?: BridgeMeta };
 }): Promise<void> {
-  const { bundleId, pending, signer, functionNames, effectLease, quote } = input;
+  const { bundleId, pending, signer, functionNames, effectLease, quote, historyMeta } = input;
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   try {
     const sender = signer.account.address as Address;
@@ -148,6 +150,8 @@ export async function processUsdcBatchInBackground(input: {
       accountId: pending.accountId,
       functionName: displayName,
       feePaymentToken: token.symbol,
+      swapMeta: historyMeta?.swapMeta,
+      bridge: historyMeta?.bridge,
     });
 
     const context = await getFeePaymentChainContext(pending.chainId, sender);

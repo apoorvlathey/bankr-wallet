@@ -55,13 +55,26 @@ test("Swap uses a compact amber wallet-sized intent form", async () => {
   assert.match(controls, /token\?\.symbol \|\| "Select"/u);
   assert.match(sell, /<HStack minW=\{0\} flex="1 1 auto" spacing=\{1\}>/u);
   assert.match(buy, /<HStack minW=\{0\} flex="1 1 auto" spacing=\{1\}>/u);
-  assert.match(confirmation, /bg="accent\.highlight"[\s\S]*?\{titleLabel\}/u);
   assert.match(
     confirmation,
-    /aria-label="Go back"[\s\S]*?minW="44px"[\s\S]*?w="44px"[\s\S]*?h="44px"/u,
+    /<AppHeader[\s\S]*?title=\{titleLabel\}[\s\S]*?onBack=\{onCancel\}[\s\S]*?isBackDisabled=\{isSubmitting\}/u,
   );
+  assert.match(confirmation, /isBridge \? "Bridge Overview" : "Swap Overview"/u);
+  assert.match(confirmation, /as="h2"[\s\S]*?\{overviewLabel\}[\s\S]*?Swap summary card/u);
+  assert.doesNotMatch(confirmation, /Confirmation banner/u);
   assert.match(confirmation, /You get \(est\.\)/u);
   assert.match(confirmation, /<Button[\s\S]*?variant="brand"[\s\S]*?\{titleLabel\}/u);
+  assert.match(confirmation, /<StickyActionBar/u);
+  assert.match(confirmation, /<SwapDecisionSummary/u);
+  assert.match(confirmation, /const \[transactionsExpanded, setTransactionsExpanded\] = useState\(false\)/u);
+  assert.match(
+    confirmation,
+    /aria-controls="swap-transactions"[\s\S]*?<Collapse[\s\S]*?id="swap-transactions"[\s\S]*?in=\{transactionsExpanded\}/u,
+  );
+  assert.match(
+    confirmation,
+    /px=\{3\}[\s\S]*?pt="clamp\(24px, min\(12vh, 24vw\), 96px\)"[\s\S]*?pb=\{3\}/u,
+  );
   assert.doesNotMatch(confirmation, />\s*ATOMIC\s*</u);
   assert.doesNotMatch(confirmation, />\s*SEQUENTIAL\s*</u);
   assert.match(
@@ -98,16 +111,20 @@ test("view-only Swap stages review and gates execution on the selected developer
     view,
     /accountType === "impersonator"[\s\S]*?!canSendImpersonatedTransaction/u,
   );
-  assert.match(confirmation, /isDisabled=\{isConfirmDisabled\}/u);
+  assert.match(
+    confirmation,
+    /isConfirmDisabled \|\|[\s\S]*?feePaymentToken === "native" && !isNativeGasValid[\s\S]*?feePaymentToken !== "native"/u,
+  );
   assert.match(policy, /allowsImpersonatedTransactions\(chainId, rpcUrl\)/u);
 });
 
 test("Swap keeps custom slippage behind a compact settings control", async () => {
-  const [section, settings, sameChainQuote, bridgeQuote] = await Promise.all([
+  const [section, settings, sameChainQuote, bridgeQuote, preference] = await Promise.all([
     readSwapSource("SwapQuoteSection.tsx"),
     readSwapSource("SlippageSettings.tsx"),
     readSwapSource("SwapQuoteDisplay.tsx"),
     readSwapSource("BridgeQuoteDisplay.tsx"),
+    readSwapSource("useSwapSlippage.ts"),
   ]);
 
   assert.match(section, /Finding the best route/u);
@@ -123,6 +140,11 @@ test("Swap keeps custom slippage behind a compact settings control", async () =>
   assert.match(bridgeQuote, /<Collapse in=\{isOpen\}/u);
   assert.match(bridgeQuote, /Minimum received/u);
   assert.match(bridgeQuote, /formatQuoteSummaryAmount\(minBuyAmount\)/u);
+  assert.match(preference, /useState\(DEFAULT_SLIPPAGE_BPS\)/u);
+  assert.match(
+    preference,
+    /chrome\.storage\.sync\.get\("swapSlippageBps"[\s\S]*?setSlippageBpsState\(stored\)/u,
+  );
 });
 
 test("Swap separates the shared searchable network browser from token discovery", async () => {

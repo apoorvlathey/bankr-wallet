@@ -47,6 +47,8 @@ This directory owns the extracted, audit-sized transaction concerns:
   PK/seed EIP-7702 + ERC-7821 submission. Shared public shapes are in
   `swaps/types.ts`; `swaps/historyMetadata.ts` selects specialized metadata or
   the final user intent after setup and approval calls.
+- `swaps/feePayment.ts` consumes the exact reviewed internal-Swap quote and
+  hands its pinned calls/account to the shared token-funded batch executor.
 - `internalTransfer.ts`, `securityReset.ts`, `rpcConfig.ts`, and
   `accountMutations.ts` contain the smaller operations historically exposed by
   the transaction facade.

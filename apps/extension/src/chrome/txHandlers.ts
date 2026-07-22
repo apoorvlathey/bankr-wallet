@@ -42,6 +42,7 @@ export {
 export { handleExecuteSwapDirect } from "./transactions/swaps/direct";
 export { handleExecuteSwapBatch } from "./transactions/swaps/batch";
 export { handleExecuteSwapAtomicPK } from "./transactions/swaps/atomic";
+export { handleExecuteSwapWithFeeToken } from "./transactions/swaps/feePayment";
 export type {
   SwapAccountLock,
   SwapGasOverride,

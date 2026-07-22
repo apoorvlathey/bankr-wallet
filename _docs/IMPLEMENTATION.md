@@ -2848,8 +2848,8 @@ The implemented domain contains:
   mutations and reconcile deterministic hashes after MV3 restarts without
   persisting calldata, authorization tuples, or UserOperation signatures;
 - `capabilities.ts`: native/token eligibility for pinned single and batch
-  requests, including precise fresh-account, different-delegate, Bankr, RPC,
-  deployment, and unsupported-chain outcomes.
+  requests plus reviewed internal Swap calls, including precise fresh-account,
+  different-delegate, Bankr, RPC, deployment, and unsupported-chain outcomes.
 
 The client accepts only an HTTPS WalletChan proxy URL (localhost is allowed for
 development), uses the shared bounded HTTP reader, omits ambient credentials
@@ -2858,8 +2858,8 @@ rejects unrequested token quotes, and rejects a paymaster address that changes
 after quote selection. A Pimlico API key must never be compiled into the
 extension.
 
-`FeePaymentSelector.tsx` is shared by normal, ERC-5792, and executable Safe
-confirmation. Normal
+`FeePaymentSelector.tsx` is shared by normal, ERC-5792, executable Safe, and
+in-wallet Swap confirmation. Normal
 confirmation includes injected and WalletConnect transactions, extension-
 initiated Send requests, replacements, and other requests persisted through
 the pinned single-transaction queue. It uses
@@ -2893,10 +2893,19 @@ selected, the compact decision row is reserved for the bounded maximum fee;
 the balance is not repeated there. The shared estimating loader is centered
 across that row while preparation is pending.
 
-The in-wallet Swap coordinators are separate immediate-execution paths and
-remain native-gas-only; they do not render `FeePaymentSelector` or accept a
-fee-token quote. The zero-balance rule therefore applies to every path that can
-actually expose the picker without implying unsupported token-paid Swap gas.
+The in-wallet Swap confirmation puts the pinned signing account, shared fee
+selector, native gas editor, and final actions in the same non-scrolling bottom
+bar used by other transaction reviews. Its renderer creates a fresh internal
+request ID for the staged plan and sends only the reviewed chain and bounded
+calls for option discovery/quote preparation. The in-memory quote uses the
+`internalSwap` family and binds that ID, exact calls, pinned account/address,
+chain, nonce, delegate, token, and paymaster state. Final token-paid execution
+re-resolves the locked account, revalidates every prepared `from`/chain, consumes
+the exact quote once, and routes Bankr or PK/seed signing through the existing
+atomic fee-payment batch executor. Native Bankr batch, local EIP-7702, and
+sequential swap execution remain unchanged. Ledger and impersonator accounts
+cannot select token-paid gas; Safe swaps continue into the Safe proposal flow,
+whose executor-specific fee selection happens at quorum.
 
 When simulation shows that the requested transaction would spend too much of the selected token
 for the paymaster to collect its fee (`AA50 postOp reverted 0x7939f424`), the

@@ -206,6 +206,7 @@ function SwapView({
   });
   if (
     prepared.showConfirmation &&
+    prepared.preparedRequestId &&
     prepared.preparedTransactions &&
     sellToken &&
     buyToken.buyTokenInfo &&
@@ -213,6 +214,7 @@ function SwapView({
   ) {
     return (
       <SwapConfirmation
+        requestId={prepared.preparedRequestId}
         transactions={prepared.preparedTransactions}
         sellToken={sellToken}
         sellAmount={amount.sellTokenAmount}
@@ -235,6 +237,7 @@ function SwapView({
         chainId={sellChainId}
         chainName={chainName}
         fromAddress={fromAddress}
+        accountId={accountId}
         accountType={accountType}
         isBatched={!!prepared.preparedBatchTx}
         batchedTx={prepared.preparedBatchTx ?? undefined}
@@ -253,7 +256,8 @@ function SwapView({
         isSubmitting={prepared.isSubmitting}
         onGasEstimates={prepared.setSwapGasEstimates}
         onValidityChange={prepared.setSwapGasValid}
-        isConfirmDisabled={!prepared.swapGasValid || (accountType === "impersonator" && !canSendImpersonatedTransaction)}
+        isNativeGasValid={prepared.swapGasValid}
+        isConfirmDisabled={accountType === "impersonator" && !canSendImpersonatedTransaction}
         bridgeMeta={
           isBridge
             ? {

@@ -12,6 +12,7 @@ import { getSafeProposal } from "../safe/proposalRepository";
 import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
 import { WALLETCHAN_OFFICIAL_DELEGATE } from "./constants";
 import { getFeeTokenBalanceAtRpc } from "./chainState";
+import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
 import {
   getFeePaymentTokens,
   getPimlicoFeeTokens,
@@ -206,6 +207,24 @@ export async function getSafeExecutionFeePaymentOptions(
   }
   return getOptionsForRequest({
     chainId: proposal.chainId,
+    account,
+    hasDeployment: false,
+  });
+}
+
+export async function getInternalSwapFeePaymentOptions(
+  accountId: string,
+  requestPayload: unknown,
+) {
+  const [account, payload] = await Promise.all([
+    getAccountById(accountId),
+    Promise.resolve().then(() => parseInternalSwapFeePaymentPayload(requestPayload)),
+  ]);
+  if (!account) {
+    return { success: false as const, error: "Swap account is no longer available" };
+  }
+  return getOptionsForRequest({
+    chainId: payload.chainId,
     account,
     hasDeployment: false,
   });

@@ -237,7 +237,7 @@ Syncs across Chrome profiles (if signed in). Persists across restarts.
 | `followDappNetwork` | `boolean`               | Default-on preference controlling whether Assets and Activity follow the active connected dapp's network. Disabling shows all networks until the user chooses a filter manually; missing or malformed values resolve to `true`. | next |
 | `walletHomeModeV1`   | `"public" \| "private"`   | Local unlocked-home presentation mode. Missing or malformed values fail to `public`; this setting changes no active account, dapp permission, provider routing, signing authority, or privacy capability. Reset removes it. | next |
 | `defaultGasTier`     | `"slow" \| "standard" \| "fast"` | User's last preset gas-tier choice from the tx-confirmation tier picker. Absent = default `"standard"`. The Custom tier is intentionally not persisted — it's always a one-shot opt-in for the current confirmation. | v3.4.0 |
-| `swapSlippageBps`    | `number` (BPS, 1–10000) | User's last slippage tolerance in basis points (e.g. `500` = 5%). Absent = `DEFAULT_SLIPPAGE_BPS` (5%). Read once on SwapView mount; persisted on every SlippageSettings change so a user who tunes it down (or up) doesn't see it reset to 5% next session. | next |
+| `swapSlippageBps`    | `number` (BPS, 1–10000) | User's last slippage tolerance in basis points (e.g. `100` = 1%). Absent = `DEFAULT_SLIPPAGE_BPS` (1%). Read once on SwapView mount; persisted on every SlippageSettings change so a user-selected tolerance is preserved across sessions. | next |
 
 ---
 

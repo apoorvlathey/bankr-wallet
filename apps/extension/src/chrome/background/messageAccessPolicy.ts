@@ -231,7 +231,6 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "walletConnectPair",
   "walletConnectDisconnectSession",
   "walletConnectSwitchChain",
-
   // Injected-dapp permission management
   "getDappPermissions",
   "getDappConnectionContext",
@@ -245,6 +244,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "executeSwapDirect",
   "executeSwapBatch",
   "executeSwapAtomicPK",
+  "executeSwapWithFeeToken",
   "executeStakingDirect",
   "executeStakingBatch",
   "executeStakingAtomicPK",

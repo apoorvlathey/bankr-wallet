@@ -2,7 +2,7 @@ import { WALLETCHAN_SWAP_API_BASE } from "@/constants/externalUrls";
 
 export const NATIVE_TOKEN_ADDRESS =
   "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-export const DEFAULT_SLIPPAGE_BPS = 500;
+export const DEFAULT_SLIPPAGE_BPS = 100;
 export const SLIPPAGE_PRESETS = [100, 300, 500];
 
 export const SWAP_API_BASE = WALLETCHAN_SWAP_API_BASE;

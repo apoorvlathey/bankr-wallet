@@ -39,6 +39,13 @@ const swapExecutionSource = readFileSync(
   new URL("../../src/components/Swap/executePreparedSwap.ts", import.meta.url),
   "utf8",
 );
+const swapSummarySource = readFileSync(
+  new URL(
+    "../../src/components/Swap/SwapDecisionSummary.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("fee quote loading has a bounded renderer deadline and explicit retry", () => {
   assert.match(source, /QUOTE_REQUEST_TIMEOUT_MS = 30_000/u);
@@ -84,10 +91,10 @@ test("fee-option discovery cannot spin forever", () => {
   assert.match(source, /setLoading\(false\)/u);
 });
 
-test("single, batch, Safe, and internal-send reviews share the fee-option boundary", () => {
+test("single, batch, Safe, Swap, and internal-send reviews share the fee-option boundary", () => {
   assert.equal(
     [...capabilitiesSource.matchAll(/return getOptionsForRequest\(/gu)].length,
-    3,
+    4,
   );
   assert.match(
     capabilitiesSource,
@@ -101,10 +108,14 @@ test("single, batch, Safe, and internal-send reviews share the fee-option bounda
   assert.match(safeSummarySource, /accountId=\{selectedAccount\.id\}/u);
   assert.match(internalTransferSource, /pinnedTxRequest\(activeAccount,/u);
   assert.match(internalTransferSource, /savePendingTxRequest\(pendingRequest\)/u);
+  assert.match(swapSummarySource, /<FeePaymentSelector/u);
+  assert.match(swapSummarySource, /requestKind="swap"/u);
+  assert.match(swapSummarySource, /accountId=\{accountId\}/u);
 });
 
-test("in-wallet swap execution stays native-only and exposes no fee-token picker", () => {
-  assert.doesNotMatch(swapExecutionSource, /FeePaymentSelector/u);
-  assert.doesNotMatch(swapExecutionSource, /feePaymentToken/u);
-  assert.doesNotMatch(swapExecutionSource, /prepareFeePaymentQuote/u);
+test("in-wallet swap execution routes token gas through the quote-bound handler", () => {
+  assert.match(swapExecutionSource, /feePaymentToken === "token"/u);
+  assert.match(swapExecutionSource, /type: "executeSwapWithFeeToken"/u);
+  assert.match(swapExecutionSource, /requestId: feePaymentRequestId/u);
+  assert.match(swapExecutionSource, /quoteId: feePaymentQuoteId/u);
 });

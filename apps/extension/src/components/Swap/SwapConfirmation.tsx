@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useMemo, useState, memo } from "react";
 import {
   Box,
   VStack,
@@ -14,7 +14,6 @@ import {
   usePrefersReducedMotion,
 } from "@chakra-ui/react";
 import {
-  ArrowBackIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
 } from "@chakra-ui/icons";
@@ -25,7 +24,6 @@ import { getChainConfig } from "@/constants/chainConfig";
 import CalldataDecoder from "@/components/CalldataDecoder";
 import { CalldataDigestDisplay } from "@/components/DigestDisplay";
 import { CopyButton } from "@/components/CopyButton";
-import MultiTxGasEstimateDisplay from "@/components/MultiTxGasEstimateDisplay";
 import SmartAccountSetupBanner from "@/components/SmartAccountSetupBanner";
 import { omitOuterValueForEip7702 } from "@/chrome/batchTxHandlers";
 import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
@@ -40,6 +38,9 @@ import { getNativeAssetMeta } from "@/lib/chains";
 // multi-step swap reads as the same kind of "stack of independent calls" in
 // either palette (Bauhaus red/blue/yellow, Midnight indigo/cyan/amber).
 import { CALL_ACCENTS, CALL_ACCENT_FGS } from "@/components/BatchCallsList";
+import { AppHeader, StickyActionBar } from "@/components/ui";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
+import { SwapDecisionSummary } from "./SwapDecisionSummary";
 
 export type PreparedSwapTxEntry = Omit<SwapTxEntry, "tx"> & {
   tx: Omit<SwapTxEntry["tx"], "to" | "data" | "value"> & {
@@ -50,6 +51,7 @@ export type PreparedSwapTxEntry = Omit<SwapTxEntry, "tx"> & {
 };
 
 interface SwapConfirmationProps {
+  requestId: string;
   transactions: PreparedSwapTxEntry[];
   sellToken: PortfolioToken;
   sellAmount: string;
@@ -69,6 +71,7 @@ interface SwapConfirmationProps {
   chainId: number;
   chainName: string;
   fromAddress: string;
+  accountId?: string;
   accountType: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator" | "safe";
   isBatched: boolean;
   batchedTx?: { to: string; data: string; value: string };
@@ -91,7 +94,10 @@ interface SwapConfirmationProps {
    * delegation" variant. Undefined / null = fresh setup.
    */
   eip7702OnchainDelegate?: `0x${string}` | null;
-  onConfirm: () => void;
+  onConfirm: (
+    feePaymentToken: "native" | `0x${string}`,
+    feePaymentQuoteId: string | null,
+  ) => void;
   onCancel: () => void;
   isSubmitting: boolean;
   /**
@@ -105,6 +111,8 @@ interface SwapConfirmationProps {
   /** Bubbles invalid Custom-tier state up so the parent disables Confirm. */
   onValidityChange?: (valid: boolean) => void;
   /** Disables Confirm Swap when the gas editor is in an inconsistent state. */
+  isNativeGasValid?: boolean;
+  /** Disables every execution mode (for example a view-only account). */
   isConfirmDisabled?: boolean;
   /**
    * Bridge-mode metadata. When set, this screen renders the cross-chain
@@ -144,6 +152,7 @@ const ArrowDownIcon = (props: React.ComponentProps<typeof Icon>) => (
 );
 
 function SwapConfirmation({
+  requestId,
   transactions,
   sellToken,
   sellAmount,
@@ -157,6 +166,7 @@ function SwapConfirmation({
   chainId,
   chainName,
   fromAddress,
+  accountId,
   accountType,
   isBatched,
   batchedTx,
@@ -167,6 +177,7 @@ function SwapConfirmation({
   isSubmitting,
   onGasEstimates,
   onValidityChange,
+  isNativeGasValid = true,
   isConfirmDisabled,
   bridgeMeta,
 }: SwapConfirmationProps) {
@@ -180,6 +191,7 @@ function SwapConfirmation({
     sellToken.contractAddress === "0x0000000000000000000000000000000000000000";
   const buyChainId = bridgeMeta?.destinationChainId ?? chainId;
   const titleLabel = isBridge ? "Confirm Bridge" : "Confirm Swap";
+  const overviewLabel = isBridge ? "Bridge Overview" : "Swap Overview";
 
   // Shared data-URL cache used by ENS avatars + batch summary + portfolio.
   // Paints sell/buy icons synchronously from chrome.storage on reopen.
@@ -192,7 +204,10 @@ function SwapConfirmation({
   const { networksInfo } = useNetworks();
   const isDarkTheme = isDarkThemeId(themeId);
   const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
+  const [transactionsExpanded, setTransactionsExpanded] = useState(false);
   const [decodedFunctionNames, setDecodedFunctionNames] = useState<Record<number, string>>({});
+  const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>("native");
+  const [feePaymentQuote, setFeePaymentQuote] = useState<FeePaymentQuoteSummary | null>(null);
   const sourceNativeSymbol =
     getNativeAssetMeta(chainId, networksInfo)?.symbol ?? "ETH";
 
@@ -213,10 +228,10 @@ function SwapConfirmation({
   };
 
   // Build gas estimation inputs
-  const gasTransactions = transactions.map((entry) => ({
+  const gasTransactions = useMemo(() => transactions.map((entry) => ({
     tx: { ...entry.tx, from: fromAddress },
     label: entry.origin,
-  }));
+  })), [fromAddress, transactions]);
   const isEip7702Batched =
     isBatched &&
     (accountType === "privateKey" || accountType === "seedPhrase");
@@ -285,11 +300,19 @@ function SwapConfirmation({
   })();
 
   return (
+    <Box h="100%" display="flex" flexDirection="column" bg="surface.base">
+    <AppHeader
+      title={titleLabel}
+      onBack={onCancel}
+      isBackDisabled={isSubmitting}
+    />
     <Box
-      p={3}
-      h="100%"
+      px={3}
+      pt="clamp(24px, min(12vh, 24vw), 96px)"
+      pb={3}
+      flex="1"
+      minH={0}
       overflowY="auto"
-      bg="surface.base"
       css={{
         "&::-webkit-scrollbar": { width: "4px" },
         "&::-webkit-scrollbar-track": { background: "transparent" },
@@ -300,51 +323,15 @@ function SwapConfirmation({
       }}
     >
       <VStack spacing={2} align="stretch">
-        {/* Header */}
-        <HStack spacing={2} ml={-1}>
-          <IconButton
-            aria-label="Go back"
-            icon={<ArrowBackIcon boxSize={5} />}
-            variant="ghost"
-            onClick={onCancel}
-            isDisabled={isSubmitting}
-            minW="44px" w="44px" h="44px" flexShrink={0}
-          />
-        </HStack>
-
-        {/* Confirmation banner — amber marks the final wallet commitment. */}
-        <Box
-          bg="accent.highlight"
-          border="1px solid"
-          borderColor="border.default"
-          borderRadius="lg"
-          boxShadow="card"
-          py={1.5}
-          px={3}
-          position="relative"
+        <Text
+          as="h2"
+          px={1}
+          fontSize="sm"
+          fontWeight="700"
+          color="text.secondary"
         >
-          {!isDarkTheme && (
-            <Box
-              position="absolute"
-              top="-3px"
-              right="-3px"
-              w="8px"
-              h="8px"
-              bg="accent.highlight"
-              border="1px solid"
-              borderColor="border.default"
-            />
-          )}
-          <HStack justify="center">
-            <Text
-              fontWeight="700"
-              fontSize="sm"
-              color="accentFg.highlight"
-            >
-              {titleLabel}
-            </Text>
-          </HStack>
-        </Box>
+          {overviewLabel}
+        </Text>
 
         {/* Swap summary card */}
         <Box
@@ -585,10 +572,41 @@ function SwapConfirmation({
 
         {/* Transaction list — expandable cards with calldata */}
         <VStack spacing={1.5} align="stretch">
-          <Text fontSize="xs" fontWeight="600" color="text.secondary" px={1}>
-            Transactions{isBatched ? " (batched)" : ""}
-          </Text>
+          <Button
+            type="button"
+            variant="unstyled"
+            display="flex"
+            w="full"
+            minH="44px"
+            px={1}
+            gap={2}
+            onClick={() => setTransactionsExpanded((expanded) => !expanded)}
+            aria-expanded={transactionsExpanded}
+            aria-controls="swap-transactions"
+            borderRadius="md"
+            fontWeight="inherit"
+            textTransform="none"
+            textAlign="left"
+            _hover={{ bg: "surface.raisedHover" }}
+          >
+            <Text fontSize="xs" fontWeight="600" color="text.secondary" flex={1}>
+              Transactions{isBatched ? " (batched)" : ""}
+            </Text>
+            <ChevronDownIcon
+              boxSize={4}
+              color="text.secondary"
+              transform={transactionsExpanded ? "rotate(180deg)" : "rotate(0deg)"}
+              transition={prefersReducedMotion ? "none" : "transform 150ms cubic-bezier(0.23, 1, 0.32, 1)"}
+              aria-hidden
+            />
+          </Button>
 
+          <Collapse
+            id="swap-transactions"
+            in={transactionsExpanded}
+            animateOpacity={!prefersReducedMotion}
+          >
+          <VStack spacing={1.5} align="stretch">
           {transactions.map((entry, i) => {
             const accent = CALL_ACCENTS[i % CALL_ACCENTS.length];
             const accentFg = CALL_ACCENT_FGS[i % CALL_ACCENT_FGS.length];
@@ -750,47 +768,41 @@ function SwapConfirmation({
               </Box>
             );
           })}
+          </VStack>
+          </Collapse>
         </VStack>
 
-        {/* Gas estimate */}
-        <MultiTxGasEstimateDisplay
-          transactions={gasTransactions}
-          accountType={accountType}
-          batchedTx={gasBatchedTx}
-          // Mirror BatchTransactionConfirmation: when this is a non-atomic
-          // swap (PK / Seed signing each tx separately), use sequential
-          // estimation so the picker has tier data to render. Atomic Bankr
-          // swaps keep server-managed gas (the picker stays hidden inside
-          // MultiTxGasEstimateDisplay because batchedTx is set). For atomic
-          // PK/SP via 7702, the picker IS used (gas comes from local
-          // estimation), so plumb onGasEstimates + onValidityChange through.
-          isNonAtomic={!isBatched}
-          eip7702Delegate={eip7702Delegate}
-          onGasEstimates={
+      </VStack>
+    </Box>
+
+    <StickyActionBar
+      summary={<SwapDecisionSummary
+        requestId={requestId}
+        transactions={gasTransactions}
+        fromAddress={fromAddress}
+        accountId={accountId}
+        accountType={accountType}
+        chainId={chainId}
+        isBatched={isBatched}
+        batchedTx={gasBatchedTx?.tx}
+        eip7702Delegate={eip7702Delegate}
+        feePaymentToken={feePaymentToken}
+        feePaymentQuote={feePaymentQuote}
+        onFeePaymentTokenChange={setFeePaymentToken}
+        onFeePaymentQuoteChange={setFeePaymentQuote}
+        onGasEstimates={
             !isBatched || eip7702Delegate || accountType === "privateKey" || accountType === "seedPhrase"
               ? onGasEstimates
               : undefined
           }
-          onValidityChange={
+        onValidityChange={
             !isBatched || eip7702Delegate || accountType === "privateKey" || accountType === "seedPhrase"
               ? onValidityChange
               : undefined
           }
-        />
-
-        {/* Action buttons */}
-        <Box
-          position="sticky"
-          bottom={-3}
-          bg="surface.base"
-          pt={1}
-          pb={1}
-          mx={-3}
-          px={3}
-          zIndex={1}
-        >
-          {isSubmitting ? (
-            <HStack
+      />}
+      primaryAction={isSubmitting ? (
+        <HStack
               justify="center"
               py={3}
               bg="accent.highlight"
@@ -802,25 +814,25 @@ function SwapConfirmation({
               <Text fontSize="sm" color="accentFg.highlight" fontWeight="600">
                 {isBridge ? "Bridging..." : "Submitting swap..."}
               </Text>
-            </HStack>
-          ) : (
-            <HStack spacing={3} pb={1}>
-              <Button variant="secondary" flex={1} onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button
-                variant="brand"
-                flex={1}
-                onClick={onConfirm}
-                isDisabled={isConfirmDisabled}
-              >
-                {titleLabel}
-              </Button>
-            </HStack>
-          )}
-        </Box>
-      </VStack>
-    </Box>
+        </HStack>
+      ) : (
+        <Button
+          variant="brand"
+          onClick={() => onConfirm(feePaymentToken, feePaymentQuote?.quoteId ?? null)}
+          isDisabled={
+            isConfirmDisabled ||
+            (feePaymentToken === "native" && !isNativeGasValid) ||
+            (feePaymentToken !== "native" && !feePaymentQuote?.quoteId)
+          }
+        >
+          {titleLabel}
+        </Button>
+      )}
+      secondaryAction={isSubmitting ? undefined : (
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+      )}
+    />
+  </Box>
   );
 }
 

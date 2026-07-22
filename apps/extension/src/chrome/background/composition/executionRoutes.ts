@@ -7,7 +7,7 @@ import {
   resolveHistoryNftMetadata,
 } from "../../history/detailResolution";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
-import { getBatchFeePaymentOptions, getSafeExecutionFeePaymentOptions, getTransactionFeePaymentOptions } from "../../feePayment/capabilities";
+import { getBatchFeePaymentOptions, getInternalSwapFeePaymentOptions, getSafeExecutionFeePaymentOptions, getTransactionFeePaymentOptions } from "../../feePayment/capabilities";
 import { prepareFeePaymentQuote } from "../../feePayment/quotes";
 import { handleCheckPremiumStatus } from "../../sponsoredTransfers/premiumStatus";
 import {
@@ -33,6 +33,7 @@ import {
   handleExecuteSwapAtomicPK,
   handleExecuteSwapBatch,
   handleExecuteSwapDirect,
+  handleExecuteSwapWithFeeToken,
   handleInitiateTransfer,
   writeResultToStorage,
 } from "../../txHandlers";
@@ -68,6 +69,7 @@ export function composeExecutionRoutes(
       getFeePaymentOptions: getTransactionFeePaymentOptions,
       getBatchFeePaymentOptions,
       getSafeExecutionFeePaymentOptions,
+      getInternalSwapFeePaymentOptions,
       prepareFeePaymentQuote,
     });
   const runInternalIrreversibleOperation =
@@ -82,6 +84,7 @@ export function composeExecutionRoutes(
       handleExecuteSwapDirect,
       handleExecuteSwapBatch,
       handleExecuteSwapAtomicPK,
+      handleExecuteSwapWithFeeToken,
     });
 
   const routeBackgroundSponsoredTransferMessage =
@@ -117,7 +120,6 @@ export function composeExecutionRoutes(
           submitArbitrumForceInclusion(txId),
         ),
     });
-
   return {
     routeBackgroundTransactionExecutionMessage,
     routeBackgroundSwapExecutionMessage,

@@ -15,6 +15,8 @@ feature-local hooks below. Keep it free of RPC/storage implementations.
 - `SwapTokenControls.tsx` contains the shared token trigger, address actions,
   and direction icon.
 - `SwapConfirmation.tsx` reviews staged same-chain and bridge actions.
+- `SwapDecisionSummary.tsx` keeps the pinned signer, shared fee-token selector,
+  and native multi-call gas editor in the non-scrolling confirmation footer.
 - Picker modules (`BridgeChainToken*`, `TokenPicker*`, and `TokenSelector`) own
   token/chain discovery and selection presentation. The bridge picker uses one
   token/address search, balance-prioritized network chips, compact popular-token
@@ -65,8 +67,8 @@ message, RPC, or storage effects except the existing explorer/copy actions in
 - `swapBatchPlan.ts` preserves the Bankr atomic, private-key/seed EIP-7702, and
   sequential fallback decision.
 - `executePreparedSwap.ts` is the irreversible runtime-message boundary for
-  Bankr batch, local EIP-7702, sequential signed execution, and developer-RPC
-  impersonated execution.
+  Bankr batch, local EIP-7702, sequential signed execution, quote-bound
+  token-paid execution, and developer-RPC impersonated execution.
 - `swapViewTypes.ts` and `swapViewUtils.ts` contain shared contracts and pure
   adapters (apart from the documented delegate-status runtime message).
 

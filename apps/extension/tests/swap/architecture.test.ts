@@ -19,6 +19,7 @@ async function source(path: string): Promise<string> {
 }
 
 test("swap compatibility facade preserves every public runtime identity", () => {
+  assert.equal(constants.DEFAULT_SLIPPAGE_BPS, 100);
   assert.equal(facade.NATIVE_TOKEN_ADDRESS, constants.NATIVE_TOKEN_ADDRESS);
   assert.equal(facade.DEFAULT_SLIPPAGE_BPS, constants.DEFAULT_SLIPPAGE_BPS);
   assert.equal(facade.SLIPPAGE_PRESETS, constants.SLIPPAGE_PRESETS);
