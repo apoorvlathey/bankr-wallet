@@ -791,6 +791,24 @@ test("public recovery preview is read-only and returns every bounded commitment"
   assert.deepEqual(response, { success: true, previews });
 });
 
+test("public recovery preview returns an empty successful collection when no deposits exist", async () => {
+  const capture = responseCapture();
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => ({
+      status: "current",
+      materialized: 0,
+    }),
+    previewPrivacyRagequits: async () => [],
+  });
+
+  route({
+    type: "privacyPreviewRagequit",
+    preferredOperationId: null,
+  }, capture.sendResponse);
+
+  assert.deepEqual(await capture.response, { success: true, previews: [] });
+});
+
 test("privacy operation route rejects malformed and agent-gated requests", async () => {
   const invalidCapture = responseCapture();
   const failedCapture = responseCapture();

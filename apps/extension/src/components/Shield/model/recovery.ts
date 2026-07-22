@@ -209,7 +209,7 @@ export function parsePublicRecoveryPreviewsResponse(
 ): PublicRecoveryPreview[] | null {
   if (!exact(value, ["previews", "success"]) || value.success !== true) return null;
   if (
-    !Array.isArray(value.previews) || value.previews.length === 0 ||
+    !Array.isArray(value.previews) ||
     value.previews.length > MAX_PUBLIC_RECOVERY_PREVIEWS
   ) return null;
   const previews = value.previews.map(parsePublicRecoveryPreview);

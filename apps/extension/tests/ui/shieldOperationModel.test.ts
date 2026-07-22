@@ -416,4 +416,8 @@ test("public recovery preview accepts every bounded whole-commitment projection"
     ...response,
     previews: [response.previews[0], response.previews[0]],
   }), null);
+  assert.deepEqual(parsePublicRecoveryPreviewsResponse({
+    success: true,
+    previews: [],
+  }), []);
 });

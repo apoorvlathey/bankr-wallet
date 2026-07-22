@@ -146,6 +146,10 @@ test("Private home exposes three actions with direct deposits and no Settings du
   assert.match(statusSource, /recovery\.inspect\(null\)/);
   assert.match(statusSource, /<PublicRecoveryReviewScreen/);
   assert.match(statusSource, /recovery\.prepare\(signer, previews\)/);
+  assert.match(statusSource, /recovery\.status === "ready" && recovery\.previews\.length === 0/);
+  assert.match(statusSource, /No active deposits/);
+  assert.match(statusSource, /Shielded deposits will appear here\./);
+  assert.match(statusSource, /\{!isEmpty && \(/);
   assert.match(routerSource, /<PrivateWithdrawalScreen/);
   assert.doesNotMatch(routerSource, /intent=\{mode\}|"send"/);
   assert.match(routerSource, /unshieldTarget=\{unshieldTarget\}/);

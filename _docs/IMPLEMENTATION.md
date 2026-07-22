@@ -475,7 +475,9 @@ plus original-account/source binding. It has no proof, recovery-intent
 persistence, claim, pending request, or transaction effect. The router first
 advances the bounded event cache, reconciles a fully current partial-withdrawal
 lineage, and materializes indexed encrypted state so the displayed remainder
-is current.
+is current. A valid lookup with no current eligible commitments returns an
+empty successful collection so Deposits can render `No active deposits`;
+authorization, storage, and lookup failures remain explicit retryable errors.
 `privacyPrepareRagequit` requires the same live master session
 and control of the exact original depositor. It repeats the selected commitment
 ID, reviewed amount, and source binding before any mutation. When transaction details supplies
@@ -4962,7 +4964,7 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `privacyPrepareUnshieldQuote`      | Master-only selection of one sufficient ready commitment plus strict signed pinned-relayer quote validation |
 | `privacyExecuteUnshield`           | Recheck roots/quote/auth, locally prove and verify, persist the effect transition, then submit the exact relayer payload |
 | `privacyPrepareDirectUnshield`     | Master-only direct proof preparation for an exact recipient-owned signer; simulate exact pool calldata, claim the commitment, and queue normal pinned confirmation with rollback on queue failure |
-| `privacyPreviewRagequit`           | List every current ragequittable whole commitment as a bounded opaque ID/timestamp/current-original-consumed amount projection and original-account/source binding; may materialize indexed encrypted state but creates no proof, recovery intent, claim, or pending request |
+| `privacyPreviewRagequit`           | List every current ragequittable whole commitment as a bounded opaque ID/timestamp/current-original-consumed amount projection and original-account/source binding; a valid empty lookup returns an empty success collection; may materialize indexed encrypted state but creates no proof, recovery intent, claim, or pending request |
 | `privacyPrepareRagequit`           | Master-only original-depositor commitment proof, encrypted recovery intent, and trusted local-wallet confirmation queue |
 | `privacyPrepareRagequitBatch`      | Master-only selection of 2–8 distinct whole commitments from one original account; persist exact encrypted intents and queue one immutable atomic batch confirmation |
 | `privacyGetRecoveryStatus`         | Return non-secret Shield identity and backup status for Settings |

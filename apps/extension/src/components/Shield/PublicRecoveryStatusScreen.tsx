@@ -86,6 +86,8 @@ export default function PublicRecoveryStatusScreen({
   const isLoading = initialization.status === "loading" ||
     initialization.status === "ready" &&
       (recovery.status === "idle" || recovery.status === "previewing");
+  const isEmpty = initialization.status === "ready" &&
+    recovery.status === "ready" && recovery.previews.length === 0;
 
   return (
     <AppScreen>
@@ -104,30 +106,36 @@ export default function PublicRecoveryStatusScreen({
               <Text fontSize="sm" fontWeight="700" color="fg.primary">
                 {initialization.status === "auth-required"
                   ? "Unlock WalletChan to continue"
+                  : isEmpty
+                  ? "No active deposits"
                   : "Deposit status unavailable"}
               </Text>
               <Text fontSize="xs" color="fg.secondary">
                 {initialization.status === "action-required"
                   ? initialization.error
+                  : isEmpty
+                  ? "Shielded deposits will appear here."
                   : recovery.error ?? "No deposits are currently available for public exit."}
               </Text>
-              <Button
-                size="sm"
-                variant="brand"
-                onClick={initialization.status === "auth-required"
-                  ? onUnlockRequired
-                  : () => {
-                      if (initialization.status === "action-required") {
-                        requestedRef.current = false;
-                        retry();
-                        return;
-                      }
-                      requestedRef.current = true;
-                      recovery.inspect(null);
-                    }}
-              >
-                {initialization.status === "auth-required" ? "Unlock wallet" : "Try again"}
-              </Button>
+              {!isEmpty && (
+                <Button
+                  size="sm"
+                  variant="brand"
+                  onClick={initialization.status === "auth-required"
+                    ? onUnlockRequired
+                    : () => {
+                        if (initialization.status === "action-required") {
+                          requestedRef.current = false;
+                          retry();
+                          return;
+                        }
+                        requestedRef.current = true;
+                        recovery.inspect(null);
+                      }}
+                >
+                  {initialization.status === "auth-required" ? "Unlock wallet" : "Try again"}
+                </Button>
+              )}
             </VStack>
           )}
         </Center>

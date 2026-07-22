@@ -301,9 +301,6 @@ export async function previewPrivacyRagequits(
     operations,
     preferredOperationId,
   });
-  if (previews.length === 0) {
-    throw new PrivacyRagequitPrepareError("recovery-unavailable");
-  }
   return previews;
 }
 
