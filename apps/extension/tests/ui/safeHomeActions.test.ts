@@ -179,18 +179,18 @@ test("Safe home reuses only the canonical wallet actions", async () => {
   assert.equal(
     source.match(/<HomeQuickActions\b/g)?.length,
     1,
-    "Safe home must render the shared Send / Swap / Receive / More component",
+    "Safe home must render the shared wallet action component",
   );
   assert.doesNotMatch(
     source,
-    /label="(?:Send|Swap|Receive|More)"/,
+    /label="(?:Send|Swap|More)"/,
     "Safe home must not recreate the standard action buttons",
   );
   assert.doesNotMatch(source, /label="Approvals"/);
   assert.doesNotMatch(source, /label="Security"/);
   assert.match(source, /swap: actionDisabledReason \|\| undefined/);
   assert.doesNotMatch(source, /Safe swaps are not available yet/);
-  assert.match(source, /onReceive=\{onReceive\}/);
+  assert.doesNotMatch(source, /onReceive/);
   assert.doesNotMatch(source, /shield:/);
 });
 

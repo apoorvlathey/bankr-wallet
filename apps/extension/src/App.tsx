@@ -3507,7 +3507,6 @@ function App() {
                       hasConnectedApps={walletConnectSessionCount > 0}
                       onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
                       onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
-                      onReceive={onQROpen}
                       onShield={activeAccount && isPrivacyPoolsMutationAccount(activeAccount) ? () => openPrivacyAction("shield") : undefined}
                       onMore={() => setView("more")}
                     />
@@ -3518,7 +3517,6 @@ function App() {
                       hasConnectedApps={walletConnectSessionCount > 0}
                       onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
                       onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
-                      onReceive={onQROpen}
                       onMore={() => setView("more")}
                     />
                   ) : undefined

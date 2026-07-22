@@ -58,6 +58,19 @@ test("home quick actions remain visible for view-only accounts", async () => {
   assert.doesNotMatch(quickActions, /impersonator/u);
 });
 
+test("public home keeps Receive out of the quick action rail", async () => {
+  const source = await readFile(
+    new URL("../../src/components/HomeQuickActions.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /onReceive|ReceiveIcon|label: "Receive"/u);
+  assert.match(source, /label: "Send"/u);
+  assert.match(source, /label: "Swap"/u);
+  assert.match(source, /label: "Shield"/u);
+  assert.match(source, /label: "More"/u);
+});
+
 test("Send balance slider uses a compact amber rounded-square visual thumb", async () => {
   const source = await readFile(
     new URL("../../src/components/Transfer/AmountSection.tsx", import.meta.url),

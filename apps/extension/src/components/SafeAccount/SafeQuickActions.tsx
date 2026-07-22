@@ -5,7 +5,6 @@ import HomeQuickActions from "@/components/HomeQuickActions";
 export function SafeQuickActions({
   onSend,
   onSwap,
-  onReceive,
   onMore,
   safeAccountId,
   chainId,
@@ -13,7 +12,6 @@ export function SafeQuickActions({
 }: {
   onSend: () => void;
   onSwap: () => void;
-  onReceive: () => void;
   onMore: () => void;
   safeAccountId: string;
   chainId: number;
@@ -46,7 +44,6 @@ export function SafeQuickActions({
       hasConnectedApps={hasConnectedApps}
       onSend={onSend}
       onSwap={onSwap}
-      onReceive={onReceive}
       onMore={onMore}
       disabledActions={{
         send: actionDisabledReason || undefined,

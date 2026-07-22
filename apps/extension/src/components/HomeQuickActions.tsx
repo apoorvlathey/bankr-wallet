@@ -8,12 +8,11 @@ import {
 interface HomeQuickActionsProps {
   onSend: () => void;
   onSwap: () => void;
-  onReceive: () => void;
   onShield?: () => void;
   onMore: () => void;
   hasConnectedApps?: boolean;
   disabledActions?: Partial<
-    Record<"send" | "swap" | "receive" | "shield" | "more", string>
+    Record<"send" | "swap" | "shield" | "more", string>
   >;
 }
 
@@ -30,18 +29,6 @@ const SwapIcon = () => (
   </Icon>
 );
 
-const ReceiveIcon = () => (
-  <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
-    <path
-      d="m17 7-10 10m0-7v7h7"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Icon>
-);
 const MoreIcon = () => (
   <Icon viewBox="0 0 24 24" boxSize="20px" aria-hidden="true">
     <path
@@ -58,7 +45,6 @@ const MoreIcon = () => (
 export default function HomeQuickActions({
   onSend,
   onSwap,
-  onReceive,
   onShield,
   onMore,
   hasConnectedApps = false,
@@ -67,14 +53,12 @@ export default function HomeQuickActions({
   const handlers = {
     send: onSend,
     swap: onSwap,
-    receive: onReceive,
     shield: onShield,
     more: onMore,
   };
   const actions = [
     { id: "send", label: "Send", icon: <HomeSendIcon /> },
     { id: "swap", label: "Swap", icon: <SwapIcon /> },
-    { id: "receive", label: "Receive", icon: <ReceiveIcon /> },
     ...(onShield
       ? [{ id: "shield" as const, label: "Shield", icon: <PrivacyShieldIcon /> }]
       : []),

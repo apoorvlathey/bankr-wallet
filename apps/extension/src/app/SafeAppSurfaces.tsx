@@ -21,8 +21,8 @@ export function SafeHomeApprovalRail({ accountId, onOpen }: { accountId: string;
   return <SafeHomeAlert safeAccountId={accountId} onOpen={onOpen} />;
 }
 
-export function SafeHomeQuickActions({ accountId, chainId, hasConnectedApps, onSend, onSwap, onReceive, onMore }: { accountId: string; chainId: number; hasConnectedApps?: boolean; onSend: () => void; onSwap: () => void; onReceive: () => void; onMore: () => void }) {
-  return <SafeQuickActions safeAccountId={accountId} chainId={chainId} hasConnectedApps={hasConnectedApps} onSend={onSend} onSwap={onSwap} onReceive={onReceive} onMore={onMore} />;
+export function SafeHomeQuickActions({ accountId, chainId, hasConnectedApps, onSend, onSwap, onMore }: { accountId: string; chainId: number; hasConnectedApps?: boolean; onSend: () => void; onSwap: () => void; onMore: () => void }) {
+  return <SafeQuickActions safeAccountId={accountId} chainId={chainId} hasConnectedApps={hasConnectedApps} onSend={onSend} onSwap={onSwap} onMore={onMore} />;
 }
 
 export function SafeHomeActivity({ accountId, accounts, chainId, onOpen, onVisibilityChange }: { accountId: string; accounts: Account[]; chainId: number | null; onOpen: (proposalId: string) => void; onVisibilityChange: (visible: boolean) => void }) {
