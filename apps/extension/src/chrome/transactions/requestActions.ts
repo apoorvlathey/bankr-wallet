@@ -28,6 +28,14 @@ export async function handleRejectTransaction(
   } catch (error) {
     console.warn("[privacy-ragequit] failed to persist wallet rejection", error);
   }
+  try {
+    const { recordPrivacyDirectUnshieldWalletRejected } = await import(
+      "../privacy/withdrawals/lifecycle"
+    );
+    await recordPrivacyDirectUnshieldWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-unshield] failed to persist wallet rejection", error);
+  }
   await removePendingTxRequest(txId);
   try {
     const { discardRejectedPrivacyShieldOperation } = await import(

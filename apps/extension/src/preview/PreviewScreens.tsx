@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Box,
-  Container,
-} from "@chakra-ui/react";
+import { Box, Container } from "@chakra-ui/react";
 import App from "@/App";
 import Onboarding from "@/pages/Onboarding";
 import UnlockScreen from "@/components/UnlockScreen";
@@ -138,6 +135,7 @@ function SettingsPreview({ scenario }: { scenario: string }) {
           initialChainsTab={scenario === "network-add" ? "add" : "list"}
           initialEditChainName={scenario === "network-edit" ? "Base" : undefined}
           initialQuery={scenario === "no-results" ? "not-a-real-setting" : ""}
+          accountsView={{ accounts: previewAccounts, activeAccount: previewAccounts[0] ?? null, onAddAccount: () => {}, onAccountSettings: () => {} }}
         />
       </Container>
     </PreviewShell>

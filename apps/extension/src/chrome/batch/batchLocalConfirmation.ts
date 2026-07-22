@@ -3,6 +3,7 @@ import { getAccountById } from "../accountStorage";
 import { handleUnlockWallet } from "../authHandlers";
 import { hasEncryptedApiKey, loadDecryptedApiKey } from "../crypto";
 import { resolveActiveDelegate } from "../../utils/delegationResolution";
+import { handleBatchFailure } from "./batchFailure";
 import { getStoredResolvedChainById } from "../../lib/chains";
 import { updateBundleStatus } from "./bundleStatusStorage";
 import { processingBundleIds } from "./batchExecutionRuntime";
@@ -40,6 +41,27 @@ export async function confirmLocalBatchWithExecutors(
   if (!pending) return { success: false, error: "Batch request not found" };
   if (pending.intakeStatus === "validating") {
     return { success: false, error: "Batch request is still being validated" };
+  }
+  if (pending.privacyRagequitMeta) {
+    if (forceInclusion || feePaymentToken === "token") {
+      return {
+        success: false,
+        error: "Privacy Pools public exits require normal network gas payment",
+      };
+    }
+    try {
+      const { authorizePrivacyRagequitBatchConfirmation } = await import(
+        "../privacy/ragequit/submission"
+      );
+      await authorizePrivacyRagequitBatchConfirmation(pending);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message === "auth-required"
+          ? "Unlock with your main password or biometrics and try again"
+          : "Privacy Pools public exit is no longer available",
+      };
+    }
   }
 
   processingBundleIds.add(bundleId);
@@ -301,6 +323,16 @@ export async function confirmLocalBatchWithExecutors(
       effectLease,
     );
     return { success: true };
+  }
+
+  if (pending.privacyRagequitMeta) {
+    await handleBatchFailure(
+      bundleId,
+      pending,
+      "Atomic execution is no longer available for this account",
+    );
+    processingBundleIds.delete(bundleId);
+    return { success: false, error: "Atomic execution is no longer available for this account" };
   }
 
   // Process in background (non-atomic: sequential nonces, individual

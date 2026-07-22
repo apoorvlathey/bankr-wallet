@@ -1,12 +1,10 @@
 import {
   Box,
-  Button,
   HStack,
   Image,
   Input,
   InputGroup,
   InputLeftElement,
-  InputRightElement,
   Slider,
   SliderFilledTrack,
   SliderMark,
@@ -16,18 +14,20 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { ArrowDownIcon } from "@chakra-ui/icons";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { formatEther, parseEther } from "viem";
 import {
   BALANCE_SLIDER_SNAP_POINTS,
   snapBalanceSliderValue,
   useSliderValueSound,
 } from "@/sounds/useSliderValueSound";
+import LoadingDots from "@/components/LoadingDots";
 import {
   SHIELDED_ETH_LOGO_URL,
   SHIELDED_ETH_NETWORK_NAME,
 } from "./model/shieldedAsset";
 import { formatShieldWei } from "./model/shieldQuote";
+import ShieldAmountConversion from "./ShieldAmountConversion";
 
 const ETH_LOGO_URL = "/chainIcons/ethereum.svg";
 
@@ -68,6 +68,7 @@ interface ShieldSourceCardProps {
   maxWei: bigint;
   balanceLabel?: string;
   balanceLabelColor?: string;
+  balanceSummary?: ReactNode;
   error?: string | null;
   errorId?: string;
   errorPlacement?: "inline" | "external";
@@ -89,6 +90,7 @@ export function ShieldSourceCard({
   maxWei,
   balanceLabel,
   balanceLabelColor,
+  balanceSummary,
   error,
   errorId,
   errorPlacement = "inline",
@@ -127,6 +129,7 @@ export function ShieldSourceCard({
   const displayedAmount = dragValue === null
     ? amount
     : amountForPercentage(dragValue);
+  const hasConversion = Boolean(onToggleAmountMode || conversionLabel);
   const setPercentage = (percentage: number) => {
     onAmountChange(amountForPercentage(percentage));
   };
@@ -173,66 +176,55 @@ export function ShieldSourceCard({
           bg="surface.sunken"
           borderColor="border.default"
           pl={isUsdMode ? "30px" : undefined}
-          pr={onToggleAmountMode ? (isUsdMode ? "168px" : "112px") : undefined}
+          pr={hasConversion ? (isUsdMode ? "168px" : "112px") : undefined}
           onChange={(event) => {
             if (/^\d*\.?\d*$/.test(event.target.value)) {
               onAmountChange(event.target.value);
             }
           }}
         />
-        {onToggleAmountMode && (
-          <InputRightElement
-            w={isUsdMode ? "164px" : "108px"}
-            h="calc(100% - 6px)"
-            top="3px"
-            right="3px"
-          >
-            <Button
-              aria-label={isUsdMode ? "Enter amount in ETH" : "Enter amount in USD"}
-              title={conversionLabel ?? (isUsdMode ? "ETH" : "USD")}
-              size="xs"
-              variant="ghost"
-              w="full"
-              h="full"
-              minW={0}
-              px={1.5}
-              justifyContent="flex-end"
-              fontFamily="mono"
-              fontSize="xs"
-              fontWeight="600"
-              color="fg.secondary"
-              onClick={onToggleAmountMode}
-              _hover={{ color: "accent.secondary", bg: "surface.sunken" }}
-            >
-              <Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
-                {conversionLabel ?? (isUsdMode ? "ETH" : "USD")}
-              </Text>
-            </Button>
-          </InputRightElement>
-        )}
+        <ShieldAmountConversion
+          isUsdMode={isUsdMode}
+          conversionLabel={conversionLabel}
+          onToggleAmountMode={onToggleAmountMode}
+        />
       </InputGroup>
 
-      <HStack justify="space-between" minH="18px" mt={1.25} spacing={3}>
+      {balanceSummary ?? (
+        <HStack justify="space-between" minH="18px" mt={1.25} spacing={3}>
+          <Text
+            id={errorPlacement === "inline" && error ? errorId : undefined}
+            role={errorPlacement === "inline" && error ? "alert" : undefined}
+            color={errorPlacement === "inline" && error
+              ? "status.error.fg"
+              : balanceLabelColor ?? "fg.muted"}
+            fontSize="xs"
+            noOfLines={2}
+          >
+            {errorPlacement === "inline" && error ? error : balanceLabel ?? ""}
+          </Text>
+          <Text
+              flexShrink={0}
+              color="fg.secondary"
+              fontSize="xs"
+              sx={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              Balance {formatShieldWei(balanceWei)} ETH
+            </Text>
+        </HStack>
+      )}
+
+      {balanceSummary && errorPlacement === "inline" && error ? (
         <Text
-          id={errorPlacement === "inline" && error ? errorId : undefined}
-          role={errorPlacement === "inline" && error ? "alert" : undefined}
-          color={errorPlacement === "inline" && error
-            ? "status.error.fg"
-            : balanceLabelColor ?? "fg.muted"}
+          id={errorId}
+          role="alert"
+          mt={1.25}
+          color="status.error.fg"
           fontSize="xs"
-          noOfLines={2}
         >
-          {errorPlacement === "inline" && error ? error : balanceLabel ?? ""}
+          {error}
         </Text>
-        <Text
-          flexShrink={0}
-          color="fg.secondary"
-          fontSize="xs"
-          sx={{ fontVariantNumeric: "tabular-nums" }}
-        >
-          Balance {formatShieldWei(balanceWei)} ETH
-        </Text>
-      </HStack>
+      ) : null}
 
       {maxWei > 0n && (
         <Box px={1} pt={2.5} pb={5}>
@@ -293,6 +285,7 @@ interface ShieldDestinationCardProps {
   amount: string | null;
   label?: string;
   detail?: string;
+  isLoading?: boolean;
 }
 
 export function ShieldDestinationCard({
@@ -300,6 +293,7 @@ export function ShieldDestinationCard({
   amount,
   label = "You get",
   detail,
+  isLoading = false,
 }: ShieldDestinationCardProps) {
   return (
     <Box
@@ -318,6 +312,7 @@ export function ShieldDestinationCard({
         <FixedAssetIdentity shielded={shielded} />
       </HStack>
       <Box
+        position="relative"
         minH="48px"
         px={3}
         display="flex"
@@ -327,15 +322,29 @@ export function ShieldDestinationCard({
         borderColor="border.default"
         borderRadius="md"
       >
-        <Text
-          fontFamily="mono"
-          fontSize="xl"
-          fontWeight="600"
-          color={amount ? "fg.primary" : "fg.muted"}
-          sx={{ fontVariantNumeric: "tabular-nums" }}
-        >
-          {amount ?? "0.0"}
-        </Text>
+        {isLoading ? (
+          <Box
+            position="absolute"
+            left="50%"
+            top="50%"
+            transform="translate(-50%, -50%)"
+            pointerEvents="none"
+            zIndex={1}
+            role="status"
+          >
+            <LoadingDots />
+          </Box>
+        ) : (
+          <Text
+            fontFamily="mono"
+            fontSize="xl"
+            fontWeight="600"
+            color={amount ? "fg.primary" : "fg.muted"}
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {amount ?? "0.0"}
+          </Text>
+        )}
       </Box>
       <Text mt={1.25} minH="16px" textAlign="right" color="fg.muted" fontSize="xs">
         {detail ?? (shielded ? "Confirmed after the public deposit" : "Delivered by the verified relay")}

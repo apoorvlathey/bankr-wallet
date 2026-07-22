@@ -40,28 +40,48 @@ export function recoveryBadgeVariant(
   return "warning";
 }
 
-export function unshieldStatusCopy(state: UnshieldOperation["state"]): string {
+export function unshieldStatusCopy(
+  state: UnshieldOperation["state"],
+  method: UnshieldOperation["method"] = "relay",
+  errorCode: UnshieldOperation["errorCode"] = null,
+): string {
   if (state === "quote_ready") return "Ready to confirm";
+  if (state === "awaiting_wallet_confirmation") return "Waiting for wallet confirmation";
   if (state === "proof_preparing" || state === "proof_verified") return "Preparing withdrawal";
-  if (state === "submitting_to_relayer" || state === "submission_unknown") return "Checking submission";
+  if (state === "submitting_to_relayer") return "Checking submission";
+  if (state === "submission_unknown") {
+    return method === "direct" ? "Processing" : "Checking submission";
+  }
   if (state === "submitted" || state === "public_confirmed") {
     return `Confirming on ${SHIELDED_ETH_NETWORK_NAME}`;
   }
-  if (state === "private_balance_updated") return "Private balance updated";
+  if (state === "private_balance_updated") return "Confirmed";
   if (state === "quote_expired") return "Quote expired";
   if (state === "relayer_rejected") return "Relay rejected";
   if (state === "public_reverted") return "Transaction reverted";
+  if (
+    method === "direct" && state === "failed_recoverable" &&
+    (errorCode === "submission-failed" ||
+      errorCode === "interrupted-before-confirmation" ||
+      errorCode === "interrupted-before-submission")
+  ) return "Transaction was not submitted";
   return "Needs attention";
 }
 
 export function unshieldBadgeVariant(
   state: UnshieldOperation["state"],
+  method: UnshieldOperation["method"] = "relay",
+  errorCode: UnshieldOperation["errorCode"] = null,
 ): "success" | "error" | "warning" {
   if (state === "private_balance_updated") return "success";
   if (
     state === "relayer_rejected" ||
     state === "public_reverted" ||
-    state === "proof_failed"
+    state === "proof_failed" ||
+    (method === "direct" && state === "failed_recoverable" &&
+      (errorCode === "submission-failed" ||
+        errorCode === "interrupted-before-confirmation" ||
+        errorCode === "interrupted-before-submission"))
   ) return "error";
   return "warning";
 }
@@ -75,7 +95,11 @@ export function shieldOperationStatusCopy(
     return `Confirming on ${SHIELDED_ETH_NETWORK_NAME}`;
   }
   if (state === "awaiting_event") return "Finding the confirmed deposit";
-  if (state === "awaiting_asp") return "Waiting for eligibility";
+  if (state === "awaiting_asp" || state === "asp_unavailable") {
+    return "Compliance check pending";
+  }
+  if (state === "asp_poi_required") return "Proof of Association required";
+  if (state === "asp_approved") return "Compliance check complete";
   if (state === "private_ready") return "Available to unshield";
   if (state === "wallet_rejected") return "Cancelled in wallet";
   if (state === "public_reverted") return "Transaction reverted";
@@ -90,7 +114,7 @@ export function shieldOperationStatusCopy(
 export function shieldOperationBadgeCopy(
   state: ShieldPendingOperation["state"],
 ): string {
-  if (state === "private_ready") return "Ready";
+  if (state === "asp_approved" || state === "private_ready") return "Ready";
   if (state === "ragequit_recovered") return "Done";
   if (
     state === "wallet_rejected" ||
@@ -100,6 +124,7 @@ export function shieldOperationBadgeCopy(
   if (
     state === "asp_declined" ||
     state === "asp_removed" ||
+    state === "asp_poi_required" ||
     state === "ragequit_available" ||
     state === "failed_recoverable" ||
     state === "failed_needs_support"
@@ -110,7 +135,11 @@ export function shieldOperationBadgeCopy(
 export function shieldOperationBadgeVariant(
   state: ShieldPendingOperation["state"],
 ): "success" | "error" | "warning" {
-  if (state === "private_ready" || state === "ragequit_recovered") {
+  if (
+    state === "asp_approved" ||
+    state === "private_ready" ||
+    state === "ragequit_recovered"
+  ) {
     return "success";
   }
   if (

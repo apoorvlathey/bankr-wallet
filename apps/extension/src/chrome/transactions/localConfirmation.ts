@@ -231,6 +231,7 @@ export async function handleConfirmTransactionAsyncPK(
       expectedDelegatedAuthorityAuthEpoch,
       privacyAuthorization.shield,
       privacyAuthorization.ragequit,
+      privacyAuthorization.directUnshield,
     );
   }
   return { success: true };

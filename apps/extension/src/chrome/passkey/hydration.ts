@@ -26,13 +26,13 @@ import { stalePasskeyCeremonyResult } from "./status";
 import {
   clearAllAuthState,
   setCurrentSessionId,
-  storePasskeySessionAtomic,
 } from "../sessionCache";
+import { storeSessionCapabilityAtomic } from "../session/capabilityPersistence";
+import { getActiveWalletUiSurfaceIds } from "../session/uiSurfaceLease";
 import {
   readStoredAutoLockTimeout,
   setCachedAutoLockTimeout,
 } from "../session/autoLockPolicy";
-import { getPasskeySessionBinding } from "./sessionBinding";
 import { unlockPrivacyVaultForPasskeySession } from "../privacy/passkey";
 
 export async function handleUnlockWithPasskey(
@@ -127,16 +127,18 @@ export async function handleUnlockWithPasskey(
     await clearAllAuthState();
     const autoLockTimeout = await readStoredAutoLockTimeout();
     setCachedAutoLockTimeout(autoLockTimeout);
-    const sessionStartedAt = Date.now();
-    const expiresAt =
-      autoLockTimeout === 0 ? null : sessionStartedAt + autoLockTimeout;
     const persistedSessionId = crypto.randomUUID();
-    await storePasskeySessionAtomic(
-      persistedSessionId,
-      unwrapped.vaultKeyBytes,
-      await getPasskeySessionBinding(record),
-      { autoLockTimeout, startedAt: sessionStartedAt, expiresAt },
-    );
+    await storeSessionCapabilityAtomic({
+      sessionId: persistedSessionId,
+      unlockMethod: "passkey",
+      passwordType: "master",
+      vaultKeyBytes: unwrapped.vaultKeyBytes,
+      privacyKey: privacyKey
+        ? { keyBytes: privacyKey.keyBytes, keyId: privacyKey.keyId }
+        : null,
+      autoLockTimeout,
+      activeSurfaceIds: getActiveWalletUiSurfaceIds(),
+    });
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       unwrapped.vaultKeyBytes,
       "master",
@@ -155,7 +157,7 @@ export async function handleUnlockWithPasskey(
         error: "Auto-lock setting changed during biometric unlock",
       };
     }
-    setCurrentSessionId(persistedSessionId, expiresAt);
+    setCurrentSessionId(persistedSessionId);
     invalidateAuthCeremonies();
 
     // Usage metadata is non-essential. Never turn successful hydration into a

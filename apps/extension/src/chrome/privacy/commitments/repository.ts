@@ -16,6 +16,19 @@ import {
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
+export interface PrivacyCommitmentStatusGuard {
+  revision: number;
+  status: PrivacyCommitmentStatus;
+}
+
+export function matchesPrivacyCommitmentStatusGuard(
+  revision: number,
+  status: PrivacyCommitmentStatus,
+  expected: PrivacyCommitmentStatusGuard,
+): boolean {
+  return revision === expected.revision && status === expected.status;
+}
+
 function result<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -28,59 +41,62 @@ export async function updatePrivacyCommitmentStatus(
   keyId: string,
   commitmentId: string,
   status: PrivacyCommitmentStatus,
-): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const records = await readPrivacyCommitmentRecords();
-    const current = records.find((record) => record.id === commitmentId);
-    if (!current || current.keyId !== keyId) {
-      throw new Error("Private commitment is unavailable");
-    }
-    const details = await decryptPrivacyCommitmentDetails(key, current);
-    if (!details) throw new Error("Private commitment recovery failed");
-    if (details.status === status) return;
-    const terminal = status === "spent" || status === "ragequit_recovered";
-    const nextDetails: PrivacyCommitmentDetailsV1 = {
-      ...details,
-      status,
-      balanceWei: terminal ? "0" : details.balanceWei,
-    };
-    const header = {
-      version: 1 as const,
-      id: current.id,
-      keyId,
-      revision: current.revision + 1,
-      createdAt: current.createdAt,
-      updatedAt: Math.max(Date.now(), current.updatedAt),
-    };
-    const next: StoredPrivacyCommitmentV1 = {
-      ...header,
-      encryptedDetails: await encryptPrivacyCommitmentDetails(key, header, nextDetails),
-    };
-    const database = await openDatabase();
-    const transaction = database.transaction(PRIVACY_COMMITMENTS_STORE, "readwrite");
-    const completion = complete(transaction);
-    const store = transaction.objectStore(PRIVACY_COMMITMENTS_STORE);
-    try {
-      const latest = await result(store.get(commitmentId));
-      if (
-        !isValidStoredPrivacyCommitment(latest) ||
-        latest.keyId !== keyId ||
-        latest.revision !== current.revision
-      ) {
-        transaction.abort();
-        await completion.catch(() => undefined);
-        continue;
-      }
-      store.put(next);
-      await completion;
-      return;
-    } catch (error) {
-      try { transaction.abort(); } catch { /* already settled */ }
-      await completion.catch(() => undefined);
-      throw error;
-    }
+  expected: PrivacyCommitmentStatusGuard,
+): Promise<boolean> {
+  const records = await readPrivacyCommitmentRecords();
+  const current = records.find((record) => record.id === commitmentId);
+  if (!current || current.keyId !== keyId) {
+    throw new Error("Private commitment is unavailable");
   }
-  throw new Error("Private commitment changed during update");
+  const details = await decryptPrivacyCommitmentDetails(key, current);
+  if (!details) throw new Error("Private commitment recovery failed");
+  if (!matchesPrivacyCommitmentStatusGuard(
+    current.revision,
+    details.status,
+    expected,
+  )) return false;
+  if (details.status === status) return true;
+  const terminal = status === "spent" || status === "ragequit_recovered";
+  const nextDetails: PrivacyCommitmentDetailsV1 = {
+    ...details,
+    status,
+    balanceWei: terminal ? "0" : details.balanceWei,
+  };
+  const header = {
+    version: 1 as const,
+    id: current.id,
+    keyId,
+    revision: current.revision + 1,
+    createdAt: current.createdAt,
+    updatedAt: Math.max(Date.now(), current.updatedAt),
+  };
+  const next: StoredPrivacyCommitmentV1 = {
+    ...header,
+    encryptedDetails: await encryptPrivacyCommitmentDetails(key, header, nextDetails),
+  };
+  const database = await openDatabase();
+  const transaction = database.transaction(PRIVACY_COMMITMENTS_STORE, "readwrite");
+  const completion = complete(transaction);
+  const store = transaction.objectStore(PRIVACY_COMMITMENTS_STORE);
+  try {
+    const latest = await result(store.get(commitmentId));
+    if (
+      !isValidStoredPrivacyCommitment(latest) ||
+      latest.keyId !== keyId ||
+      latest.revision !== current.revision
+    ) {
+      transaction.abort();
+      await completion.catch(() => undefined);
+      return false;
+    }
+    store.put(next);
+    await completion;
+    return true;
+  } catch (error) {
+    try { transaction.abort(); } catch { /* already settled */ }
+    await completion.catch(() => undefined);
+    throw error;
+  }
 }
 
 /** Mark older encrypted records from the same deposit lineage as spent. */
@@ -97,10 +113,17 @@ export async function markPrivacyCommitmentLineageSuperseded(
       details.depositIndex === current.depositIndex &&
       details.depositTxHash.toLowerCase() === current.depositTxHash.toLowerCase() &&
       details.label === current.label &&
+      BigInt(details.withdrawalIndex) < BigInt(current.withdrawalIndex) &&
       details.status !== "spent" &&
       details.status !== "ragequit_recovered"
     ) {
-      await updatePrivacyCommitmentStatus(key, keyId, details.id, "spent");
+      await updatePrivacyCommitmentStatus(
+        key,
+        keyId,
+        details.id,
+        "spent",
+        { revision: item.record.revision, status: details.status },
+      );
     }
   }
 }
@@ -122,17 +145,21 @@ export async function applyPrivacyCommitmentWithdrawal(
 ): Promise<void> {
   const records = await readPrivacyCommitmentRecords();
   const current = records.find((record) => record.id === input.commitmentId);
-  if (
-    !current || current.keyId !== keyId ||
-    current.revision !== input.expectedRevision
-  ) throw new Error("Private commitment changed during Unshield");
+  if (!current || current.keyId !== keyId) {
+    throw new Error("Private commitment changed during Unshield");
+  }
   const details = await decryptPrivacyCommitmentDetails(key, current);
   if (
-    !details || details.commitment !== input.expectedCommitment ||
-    details.balanceWei !== input.expectedBalanceWei ||
-    details.withdrawalIndex !== input.expectedWithdrawalIndex ||
-    details.status !== "withdrawal_pending"
-  ) throw new Error("Private commitment changed during Unshield");
+    details?.commitment === input.newCommitment &&
+    details.balanceWei === input.newBalanceWei &&
+    details.withdrawalIndex === input.newWithdrawalIndex &&
+    (details.status === "private_ready" || details.status === "spent")
+  ) return;
+  if (!details || !canApplyPrivacyCommitmentWithdrawal(
+    current.revision,
+    details,
+    input,
+  )) throw new Error("Private commitment changed during Unshield");
   const balance = BigInt(input.newBalanceWei);
   const nextDetails: PrivacyCommitmentDetailsV1 = {
     ...details,
@@ -172,6 +199,23 @@ export async function applyPrivacyCommitmentWithdrawal(
   }
 }
 
+export function canApplyPrivacyCommitmentWithdrawal(
+  currentRevision: number,
+  details: PrivacyCommitmentDetailsV1,
+  input: {
+    expectedRevision: number;
+    expectedCommitment: string;
+    expectedBalanceWei: string;
+    expectedWithdrawalIndex: string;
+  },
+): boolean {
+  return currentRevision >= input.expectedRevision &&
+    details.commitment === input.expectedCommitment &&
+    details.balanceWei === input.expectedBalanceWei &&
+    details.withdrawalIndex === input.expectedWithdrawalIndex &&
+    (details.status === "withdrawal_pending" || details.status === "private_ready");
+}
+
 /** Finalize a public recovery only after its exact Ragequit event is verified. */
 export async function applyPrivacyCommitmentRagequit(
   key: CryptoKey,
@@ -195,12 +239,11 @@ export async function applyPrivacyCommitmentRagequit(
     details.balanceWei === "0" &&
     details.commitment === input.expectedCommitment
   ) return;
-  if (
-    current.revision !== input.expectedRevision || !details ||
-    details.commitment !== input.expectedCommitment ||
-    details.balanceWei !== input.expectedBalanceWei ||
-    details.status !== "ragequit_pending"
-  ) {
+  if (!details || !canApplyPrivacyCommitmentRagequit(
+    current.revision,
+    details,
+    input,
+  )) {
     throw new Error("Private commitment changed during public recovery");
   }
   const nextDetails: PrivacyCommitmentDetailsV1 = {
@@ -238,6 +281,26 @@ export async function applyPrivacyCommitmentRagequit(
     await completion.catch(() => undefined);
     throw error;
   }
+}
+
+export function canApplyPrivacyCommitmentRagequit(
+  currentRevision: number,
+  details: PrivacyCommitmentDetailsV1,
+  input: {
+    expectedRevision: number;
+    expectedCommitment: string;
+    expectedBalanceWei: string;
+  },
+): boolean {
+  return currentRevision >= input.expectedRevision &&
+    details.commitment === input.expectedCommitment &&
+    details.balanceWei === input.expectedBalanceWei &&
+    (details.status === "ragequit_pending" ||
+      details.status === "awaiting_asp" ||
+      details.status === "asp_unavailable" ||
+      details.status === "private_ready" ||
+      details.status === "asp_declined" ||
+      details.status === "asp_removed");
 }
 
 function complete(transaction: IDBTransaction): Promise<void> {

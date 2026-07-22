@@ -45,6 +45,17 @@ import {
   markPrivacyRecoveryBackedUp,
   readPrivacyRecoveryBackup,
 } from "./backup";
+import { addPrivacyKeyToSessionCapability } from "../../session/capabilityPersistence";
+
+async function cachePrivacySessionKey(unlocked: UnlockedPrivacyKey): Promise<void> {
+  setCachedPrivacyKey(unlocked);
+  await addPrivacyKeyToSessionCapability({
+    keyBytes: unlocked.keyBytes,
+    keyId: unlocked.keyId,
+  }).catch((error) => {
+    console.warn("[privacy] Failed to refresh the live session capability:", error);
+  });
+}
 
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -325,7 +336,7 @@ export async function restorePrivacyRecovery(
           created.record.keyId,
           created.record.revision,
         );
-        setCachedPrivacyKey(created.unlocked);
+        await cachePrivacySessionKey(created.unlocked);
         return { status: "restored" };
       } finally {
         created.unlocked.keyBytes.fill(0);
@@ -381,7 +392,7 @@ export async function restorePrivacyRecovery(
             await savePrivacyVault(stored.record);
             throw new PrivacyRecoveryError("recovery-unavailable");
           }
-          setCachedPrivacyKey(resolved.unlocked);
+          await cachePrivacySessionKey(resolved.unlocked);
           return { status: "restored" };
         }
         const current = await ensureMasterWrapper(
@@ -394,7 +405,7 @@ export async function restorePrivacyRecovery(
           current.keyId,
           current.revision,
         );
-        setCachedPrivacyKey(resolved.unlocked);
+        await cachePrivacySessionKey(resolved.unlocked);
         return { status: "already-current" };
       }
 
@@ -414,7 +425,7 @@ export async function restorePrivacyRecovery(
       assertCurrentMasterAuthorization(expectedEpoch);
       await savePrivacyVault(next);
       await markPrivacyRecoveryBackedUp(next.keyId, next.revision);
-      setCachedPrivacyKey(resolved.unlocked);
+      await cachePrivacySessionKey(resolved.unlocked);
       return { status: "restored" };
     } finally {
       if (resolved.ownsBytes) resolved.unlocked.keyBytes.fill(0);

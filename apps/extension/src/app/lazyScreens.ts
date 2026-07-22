@@ -53,6 +53,9 @@ export const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 export const TxDetailScreen = lazy(
   () => import("@/components/TxDetailScreen"),
 );
+export const UnshieldDetailScreen = lazy(
+  () => import("@/components/Shield/UnshieldDetailScreen"),
+);
 
 /** Starts the exact approval chunk while its durable request is being prepared. */
 export function preloadApprovalRequestScreen(
@@ -103,5 +106,6 @@ if (typeof window !== "undefined") {
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
     void import("@/components/TxDetailScreen");
+    void import("@/components/Shield/UnshieldDetailScreen");
   });
 }

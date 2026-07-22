@@ -9,17 +9,15 @@ import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
-import { ArrowDownIcon } from "@chakra-ui/icons";
+import { ArrowDownIcon, InfoOutlineIcon } from "@chakra-ui/icons";
 import {
   SHIELDED_ETH_LOGO_URL,
   SHIELDED_ETH_NETWORK_NAME,
 } from "@/components/Shield/model/shieldedAsset";
+import ShieldComplianceInfoPopover from "@/components/Shield/ShieldComplianceInfoPopover";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
-import {
-  privacyShieldNetAmountWei,
-  privacyShieldProtocolFeeWei,
-} from "@/lib/privacyShieldAmounts";
+import { privacyShieldNetAmountWei } from "@/lib/privacyShieldAmounts";
 
 interface TransactionOutcomeProps {
   txRequest: PendingTxRequest;
@@ -60,9 +58,7 @@ export function PrivacyShieldTransactionOutcome({
     amountWei = 0n;
   }
   const feeBPS = PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
-  const feeWei = privacyShieldProtocolFeeWei(amountWei, feeBPS);
   const shieldedWei = privacyShieldNetAmountWei(amountWei, feeBPS);
-  const feePercent = Number(feeBPS) / 100;
 
   return (
     <Box
@@ -94,14 +90,6 @@ export function PrivacyShieldTransactionOutcome({
         </VStack>
         <Image src={SHIELDED_ETH_LOGO_URL} alt="" boxSize="38px" />
       </HStack>
-      <HStack mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle" justify="space-between">
-        <Text fontSize="xs" color="fg.secondary">
-          Protocol fee ({feePercent}%, added on top)
-        </Text>
-        <Text fontSize="xs" fontWeight="600" fontFamily="mono">
-          {formatShieldWei(feeWei)} ETH
-        </Text>
-      </HStack>
     </Box>
   );
 }
@@ -123,6 +111,33 @@ export function PrivacyShieldRequestContext() {
       <HStack mt={2.5} justify="space-between" spacing={3}>
         <Text fontSize="sm" color="fg.secondary">Route</Text>
         <Text fontSize="sm" fontWeight="600">Privacy Pools</Text>
+      </HStack>
+      <HStack mt={2.5} justify="space-between" spacing={3}>
+        <Text fontSize="sm" color="fg.secondary">Est. time</Text>
+        <ShieldComplianceInfoPopover placement="top-end">
+          <HStack
+            as="button"
+            type="button"
+            spacing={1.5}
+            minH="24px"
+            px={1}
+            bg="transparent"
+            border={0}
+            borderRadius="sm"
+            cursor="help"
+            color="fg.primary"
+            aria-label="About the estimated one-hour compliance check"
+            _hover={{ color: "accent.highlight" }}
+            _focusVisible={{
+              outline: "2px solid",
+              outlineColor: "border.focus",
+              outlineOffset: "2px",
+            }}
+          >
+            <Text as="span" fontSize="sm" fontWeight="600">1 hr</Text>
+            <InfoOutlineIcon boxSize="13px" aria-hidden />
+          </HStack>
+        </ShieldComplianceInfoPopover>
       </HStack>
       <Text mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle" fontSize="xs" color="fg.secondary">
         This deposit account, amount, and timing will be public. A later relayed withdrawal does not directly link back to it.

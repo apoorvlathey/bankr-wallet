@@ -8,6 +8,7 @@ import {
 import { PrivacyShieldQuoteError } from "../../src/chrome/privacy/deposit/quotePolicy";
 import { PrivacyShieldReviewError } from "../../src/chrome/privacy/deposit/prepare";
 import { PrivacyShieldOperationError } from "../../src/chrome/privacy/operations/prepare";
+import { PrivacyUnshieldPrepareError } from "../../src/chrome/privacy/withdrawals/prepare";
 
 function responseCapture() {
   let resolve!: (value: unknown) => void;
@@ -29,7 +30,10 @@ test("privacy router declares only the reviewed Shield routes", () => {
     "privacySyncShield",
     "privacyPrepareUnshieldQuote",
     "privacyExecuteUnshield",
+    "privacyPrepareDirectUnshield",
+    "privacyPreviewRagequit",
     "privacyPrepareRagequit",
+    "privacyPrepareRagequitBatch",
   ]);
 });
 
@@ -167,6 +171,166 @@ test("privacy operation routes expose only durable public summaries", async () =
   assert.equal(listed.series.priceUsd, 3400);
 });
 
+test("Shield sync recovers receipts before event and ASP refreshes", async () => {
+  const capture = responseCapture();
+  const calls: string[] = [];
+  let resolveEventSync!: () => void;
+  const eventSyncCanFinish = new Promise<void>((resolve) => {
+    resolveEventSync = resolve;
+  });
+  let announceEventSync!: () => void;
+  const eventSyncAnnounced = new Promise<void>((resolve) => {
+    announceEventSync = resolve;
+  });
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => {
+      calls.push("materialize");
+      return { status: "current", materialized: 1 };
+    },
+    refreshPrivacyAspEligibility: async () => {
+      calls.push("asp");
+      return { status: "current", reviewed: 1, ready: 1 };
+    },
+    refreshPrivacyCommitmentEligibility: async () => {
+      calls.push("commitments");
+      return { status: "current", reviewed: 1, ready: 1 };
+    },
+    resumePrivacyUnshieldTracking: async () => {
+      calls.push("unshield");
+    },
+    resumePrivacyRagequitTracking: async () => {
+      calls.push("ragequit");
+    },
+    listPrivacyShieldOperationSummaries: async () => [{ state: "awaiting_event" }] as any,
+    syncPrivacyDepositEvents: async () => {
+      calls.push("event-sync");
+      announceEventSync();
+      await eventSyncCanFinish;
+      return {
+        chainId: 1,
+        status: "partial",
+        safeHead: "1",
+        nextBlock: "1",
+        eventsAdded: 0,
+        lastSyncAt: 1,
+      };
+    },
+    matchPrivacyShieldOperationsFromEvents: async () => {
+      calls.push("match");
+      return 0;
+    },
+  });
+
+  route({ type: "privacySyncShield" }, capture.sendResponse);
+  await eventSyncAnnounced;
+  assert.deepEqual(calls, [
+    "materialize",
+    "unshield",
+    "ragequit",
+    "event-sync",
+  ]);
+  resolveEventSync();
+  const response = await capture.response as any;
+  assert.equal(response.success, true);
+  assert.equal(response.sync.eligibility, "current");
+  assert.deepEqual(calls, [
+    "materialize",
+    "unshield",
+    "ragequit",
+    "event-sync",
+    "match",
+    "materialize",
+    "unshield",
+    "ragequit",
+    "asp",
+    "commitments",
+  ]);
+});
+
+test("Shield sync keeps local lifecycle and ASP refresh available when event backfill fails", async () => {
+  const capture = responseCapture();
+  const calls: string[] = [];
+  const warnings: string[] = [];
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => {
+      calls.push("materialize");
+      return { status: "current", materialized: 1 };
+    },
+    resumePrivacyUnshieldTracking: async () => {
+      calls.push("unshield");
+    },
+    resumePrivacyRagequitTracking: async () => {
+      calls.push("ragequit");
+    },
+    listPrivacyShieldOperationSummaries: async () => [{ state: "awaiting_event" }] as any,
+    syncPrivacyDepositEvents: async () => {
+      calls.push("event-sync");
+      throw new Error("RPC unavailable");
+    },
+    refreshPrivacyAspEligibility: async () => {
+      calls.push("asp");
+      return { status: "current", reviewed: 1, ready: 1 };
+    },
+    refreshPrivacyCommitmentEligibility: async () => {
+      calls.push("commitments");
+      return { status: "current", reviewed: 1, ready: 1 };
+    },
+    warnPrivacyEventSyncFailure: (surface) => warnings.push(surface),
+  });
+
+  route({ type: "privacySyncShield" }, capture.sendResponse);
+  const response = await capture.response as any;
+  assert.equal(response.success, true);
+  assert.equal(response.sync.status, "unavailable");
+  assert.equal(response.sync.lastSyncAt, 0);
+  assert.deepEqual(warnings, ["portfolio"]);
+  assert.deepEqual(calls, [
+    "materialize",
+    "unshield",
+    "ragequit",
+    "event-sync",
+    "materialize",
+    "unshield",
+    "ragequit",
+    "asp",
+    "commitments",
+  ]);
+});
+
+test("Shield sync skips global event backfill when no deposit is awaiting its event", async () => {
+  const capture = responseCapture();
+  let eventSyncCalled = false;
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => ({
+      status: "current",
+      materialized: 0,
+    }),
+    resumePrivacyUnshieldTracking: async () => {},
+    resumePrivacyRagequitTracking: async () => {},
+    listPrivacyShieldOperationSummaries: async () => [],
+    syncPrivacyDepositEvents: async () => {
+      eventSyncCalled = true;
+      throw new Error("global backfill must stay idle");
+    },
+    refreshPrivacyAspEligibility: async () => ({
+      status: "idle",
+      reviewed: 0,
+      ready: 0,
+    }),
+    refreshPrivacyCommitmentEligibility: async () => ({
+      status: "idle",
+      reviewed: 0,
+      ready: 0,
+    }),
+  });
+
+  route({ type: "privacySyncShield" }, capture.sendResponse);
+  const response = await capture.response as any;
+  assert.equal(response.success, true);
+  assert.equal(response.sync.status, "idle");
+  assert.equal(eventSyncCalled, false);
+});
+
 test("Unshield routes expose the reviewed quote but no commitment linkage", async () => {
   const quoteCapture = responseCapture();
   const invalidCapture = responseCapture();
@@ -250,9 +414,168 @@ test("Unshield routes expose the reviewed quote but no commitment linkage", asyn
   assert.equal("encryptedDetails" in submitted.operation, false);
 });
 
+test("an over-cap relay quote returns a bounded warning instead of a generic error", async () => {
+  const capture = responseCapture();
+  const route = createBackgroundPrivacyMessageRouter({
+    preparePrivacyUnshieldQuote: (async () => {
+      throw new PrivacyUnshieldPrepareError("relay-fee-cap-exceeded", {
+        relayerName: "Testnet Relay",
+        quotedFeeBPS: "2788",
+        maxFeeBPS: "100",
+      });
+    }) as any,
+  });
+  route({
+    type: "privacyPrepareUnshieldQuote",
+    requestId: "00000000-0000-4000-8000-000000000012",
+    amountWei: "2500000000000000",
+    recipient: "0x2222222222222222222222222222222222222222",
+  }, capture.sendResponse);
+  assert.deepEqual(await capture.response, {
+    success: false,
+    code: "relay-fee-cap-exceeded",
+    warning: {
+      kind: "relay-fee-cap-exceeded",
+      relayerName: "Testnet Relay",
+      quotedFeeBPS: "2788",
+      maxFeeBPS: "100",
+    },
+  });
+});
+
+test("receiver-paid Unshield queues every signing account type and rejects view-only accounts", async () => {
+  const address = "0x2222222222222222222222222222222222222222";
+  const requestId = "00000000-0000-4000-8000-000000000013";
+  for (const accountType of ["bankr", "privateKey", "seedPhrase"] as const) {
+    const capture = responseCapture();
+    let preparedInput: unknown;
+    let queuedId: string | null = null;
+    const record = {
+      summary: {
+        schema: "walletchan-privacy-unshield-v1",
+        version: 1,
+        method: "direct",
+        id: "00000000-0000-4000-8000-000000000014",
+        requestId,
+        createdAt: 1,
+        chainId: 11_155_111,
+        amountWei: "1000000000000000",
+        netRecipientAmountWei: "1000000000000000",
+        relayFeeWei: "0",
+        feeBPS: "0",
+        recipient: address,
+        relayerName: "None",
+        expiresAt: 300_001,
+        recipientMatchesDepositor: false,
+        accountId: `${accountType}-1`,
+        accountAddress: address,
+        accountType,
+        gasLimit: "300000",
+        maxFeePerGas: "1000000000",
+        gasFeeEstimateWei: "300000000000000",
+      },
+      keyId: "must-not-leave-background",
+      encryptedDetails: { version: 1, scheme: "privacy-unshield-key", ciphertext: "secret", iv: "secret" },
+      tracking: {
+        version: 1,
+        revision: 0,
+        state: "awaiting_wallet_confirmation",
+        updatedAt: 1,
+        relayerRequestId: null,
+        txHash: null,
+        blockNumber: null,
+        errorCode: null,
+      },
+    };
+    const route = createBackgroundPrivacyMessageRouter({
+      preparePrivacyDirectUnshield: (async (input: unknown) => {
+        preparedInput = input;
+        return record;
+      }) as any,
+      queuePrivacyDirectUnshieldConfirmation: (async (operationId: string) => {
+        queuedId = operationId;
+        return record;
+      }) as any,
+    });
+    const message = {
+      type: "privacyPrepareDirectUnshield",
+      requestId,
+      amountWei: record.summary.amountWei,
+      recipient: address,
+      accountId: record.summary.accountId,
+      accountAddress: address,
+      accountType,
+    };
+    route(message, capture.sendResponse);
+    const response = await capture.response as any;
+    assert.deepEqual(preparedInput, {
+      requestId: message.requestId,
+      amountWei: message.amountWei,
+      recipient: message.recipient,
+      accountId: message.accountId,
+      accountAddress: message.accountAddress,
+      accountType: message.accountType,
+    });
+    assert.equal(queuedId, record.summary.id);
+    assert.equal(response.success, true);
+    assert.equal(response.operation.method, "direct");
+    assert.equal(response.operation.accountType, accountType);
+    assert.equal(JSON.stringify(response).includes("must-not-leave-background"), false);
+    assert.equal(JSON.stringify(response).includes("encryptedDetails"), false);
+  }
+
+  const invalid = responseCapture();
+  const route = createBackgroundPrivacyMessageRouter();
+  route({
+    type: "privacyPrepareDirectUnshield",
+    requestId,
+    amountWei: "1000",
+    recipient: address,
+    accountId: "watch-1",
+    accountAddress: address,
+    accountType: "impersonator",
+  }, invalid.sendResponse);
+  assert.deepEqual(await invalid.response, {
+    success: false,
+    code: "invalid-request",
+    error: "Invalid request",
+  });
+});
+
+test("receiver-paid Unshield releases its prepared claim when confirmation cannot queue", async () => {
+  const capture = responseCapture();
+  const operationId = "00000000-0000-4000-8000-000000000015";
+  let rolledBack: string | null = null;
+  const route = createBackgroundPrivacyMessageRouter({
+    preparePrivacyDirectUnshield: (async () => ({ summary: { id: operationId } })) as any,
+    queuePrivacyDirectUnshieldConfirmation: (async () => {
+      throw new Error("queue-failed");
+    }) as any,
+    rollbackPreparedPrivacyDirectUnshield: async (id: string) => {
+      rolledBack = id;
+    },
+  });
+  route({
+    type: "privacyPrepareDirectUnshield",
+    requestId: "00000000-0000-4000-8000-000000000016",
+    amountWei: "1000",
+    recipient: "0x2222222222222222222222222222222222222222",
+    accountId: "pk-1",
+    accountAddress: "0x2222222222222222222222222222222222222222",
+    accountType: "privateKey",
+  }, capture.sendResponse);
+  assert.deepEqual(await capture.response, {
+    success: false,
+    code: "operation-unavailable",
+    error: "Receiver-paid withdrawal is unavailable. Try again.",
+  });
+  assert.equal(rolledBack, operationId);
+});
+
 test("public recovery route queues only a bounded public operation", async () => {
   const capture = responseCapture();
   let materialized = false;
+  let preparedInput: Record<string, unknown> | null = null;
   const record = {
     summary: {
       schema: "walletchan-privacy-ragequit-v1",
@@ -297,7 +620,10 @@ test("public recovery route queues only a bounded public operation", async () =>
       materialized = true;
       return { status: "current", materialized: 1 };
     },
-    preparePrivacyRagequit: (async () => record) as any,
+    preparePrivacyRagequit: (async (_requestId: string, input: Record<string, unknown>) => {
+      preparedInput = input;
+      return record;
+    }) as any,
     queuePrivacyRagequitConfirmation: async () => publicOperation as any,
   });
   route({
@@ -306,13 +632,163 @@ test("public recovery route queues only a bounded public operation", async () =>
     accountId: record.summary.accountId,
     accountAddress: record.summary.accountAddress,
     accountType: record.summary.accountType,
+    commitmentId: "00000000-0000-4000-8000-000000000024",
+    sourceOperationId: "00000000-0000-4000-8000-000000000023",
+    expectedAmountWei: record.summary.amountWei,
   }, capture.sendResponse);
   const response = await capture.response as any;
   assert.equal(response.success, true);
   assert.equal(materialized, true);
+  assert.deepEqual(preparedInput, {
+    accountId: record.summary.accountId,
+    accountAddress: record.summary.accountAddress,
+    accountType: record.summary.accountType,
+    commitmentId: "00000000-0000-4000-8000-000000000024",
+    sourceOperationId: "00000000-0000-4000-8000-000000000023",
+    expectedAmountWei: record.summary.amountWei,
+  });
   assert.deepEqual(response.operation, publicOperation);
   assert.equal(JSON.stringify(response).includes("must-not-leave-background"), false);
   assert.equal(JSON.stringify(response).includes("encryptedDetails"), false);
+
+  const missingTarget = responseCapture();
+  route({
+    type: "privacyPrepareRagequit",
+    requestId: record.summary.requestId,
+    accountId: record.summary.accountId,
+    accountAddress: record.summary.accountAddress,
+    accountType: record.summary.accountType,
+    expectedAmountWei: record.summary.amountWei,
+  }, missingTarget.sendResponse);
+  assert.deepEqual(await missingTarget.response, {
+    success: false,
+    code: "invalid-request",
+    error: "Invalid request",
+  });
+});
+
+test("public recovery batch preserves one exact same-account selection array", async () => {
+  const capture = responseCapture();
+  const requestId = "00000000-0000-4000-8000-000000000041";
+  const operationIds = [
+    "00000000-0000-4000-8000-000000000042",
+    "00000000-0000-4000-8000-000000000043",
+  ];
+  const selections = operationIds.map((_, index) => ({
+    accountId: "seed-1",
+    accountAddress: "0x2222222222222222222222222222222222222222",
+    accountType: "seedPhrase" as const,
+    commitmentId: `00000000-0000-4000-8000-00000000005${index}`,
+    sourceOperationId: null,
+    expectedAmountWei: `${index + 1}000`,
+  }));
+  let observedSelections: unknown;
+  let observedOperationIds: unknown;
+  const operations = operationIds.map((id, index) => ({
+    summary: { id, batchId: requestId, amountWei: selections[index].expectedAmountWei },
+  }));
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => ({
+      status: "current", materialized: 2,
+    }),
+    preparePrivacyRagequitBatch: (async (batchId: string, input: unknown) => {
+      assert.equal(batchId, requestId);
+      observedSelections = input;
+      return { batchId, operations };
+    }) as any,
+    queuePrivacyRagequitBatchConfirmation: (async (batchId: string, ids: string[]) => {
+      assert.equal(batchId, requestId);
+      observedOperationIds = ids;
+      return ids.map((id, index) => ({
+        id,
+        state: "awaiting_wallet_confirmation",
+        amountWei: selections[index].expectedAmountWei,
+      }));
+    }) as any,
+    rollbackPreparedPrivacyRagequitBatch: async () => {
+      throw new Error("successful batch must not roll back");
+    },
+  });
+
+  route({ type: "privacyPrepareRagequitBatch", requestId, selections }, capture.sendResponse);
+  const response = await capture.response as any;
+  assert.equal(response.success, true);
+  assert.deepEqual(observedSelections, selections);
+  assert.deepEqual(observedOperationIds, operationIds);
+  assert.equal(response.operations.length, 2);
+  assert.equal(JSON.stringify(response).includes("encryptedDetails"), false);
+
+  const malformed = responseCapture();
+  route({
+    type: "privacyPrepareRagequitBatch",
+    requestId,
+    selections: [{ ...selections[0], extra: true }, selections[1]],
+  }, malformed.sendResponse);
+  assert.deepEqual(await malformed.response, {
+    success: false,
+    code: "invalid-request",
+    error: "Invalid request",
+  });
+});
+
+test("public recovery preview is read-only and returns every bounded commitment", async () => {
+  const capture = responseCapture();
+  let materialized = 0;
+  let eventSyncCalled = false;
+  let observed: unknown;
+  const previews = [{
+    commitmentId: "00000000-0000-4000-8000-000000000024",
+    createdAt: 2,
+    accountId: "pk-1",
+    accountAddress: "0x1111111111111111111111111111111111111111",
+    accountType: "privateKey" as const,
+    amountWei: "5000000000000000",
+    originalAmountWei: "6000000000000000",
+    withdrawnAmountWei: "1000000000000000",
+    withdrawalCount: 1,
+    sourceOperationId: "00000000-0000-4000-8000-000000000023",
+  }, {
+    commitmentId: "00000000-0000-4000-8000-000000000025",
+    createdAt: 1,
+    accountId: "pk-1",
+    accountAddress: "0x1111111111111111111111111111111111111111",
+    accountType: "privateKey" as const,
+    amountWei: "2000000000000000",
+    originalAmountWei: "2000000000000000",
+    withdrawnAmountWei: "0",
+    withdrawalCount: 0,
+    sourceOperationId: "00000000-0000-4000-8000-000000000026",
+  }];
+  const route = createBackgroundPrivacyMessageRouter({
+    materializeIndexedPrivacyShieldCommitments: async () => {
+      materialized += 1;
+      return { status: "current", materialized: 1 };
+    },
+    syncPrivacyDepositEvents: async () => {
+      eventSyncCalled = true;
+      throw new Error("preview must not start a global backfill");
+    },
+    previewPrivacyRagequits: async (input) => {
+      observed = input;
+      return previews;
+    },
+    preparePrivacyRagequit: async () => {
+      throw new Error("preview must not prepare");
+    },
+    queuePrivacyRagequitConfirmation: async () => {
+      throw new Error("preview must not queue");
+    },
+  });
+
+  route({
+    type: "privacyPreviewRagequit",
+    preferredOperationId: null,
+  }, capture.sendResponse);
+  const response = await capture.response as any;
+  assert.equal(materialized, 1);
+  assert.equal(eventSyncCalled, false);
+  assert.equal(observed, null);
+  assert.deepEqual(response, { success: true, previews });
 });
 
 test("privacy operation route rejects malformed and agent-gated requests", async () => {
@@ -561,6 +1037,7 @@ test("privacy router returns a bounded repair state on failure", async () => {
   assert.deepEqual(await capture.response, {
     success: false,
     status: "action-required",
+    code: "recovery-required",
     error: "Shield recovery needs attention before you continue.",
   });
 });

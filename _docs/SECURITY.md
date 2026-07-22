@@ -16,17 +16,17 @@ and pending release gates are recorded in
 
 | Secret          | Storage                                                                                          | In-Memory Cache                                    |
 | --------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| Master password | Never stored (except encrypted native-session restore for "Never" auto-lock; fallback browsers keep it in memory only, and stale fallback ciphertext is removed across browser capability upgrades) | `cachedPassword` in `session/inMemoryCache.ts` via the `sessionCache.ts` facade |
+| Master password | Never stored by current sessions. Released encrypted password-Never envelopes are accepted only as migration input; fallback-browser residue is removed across capability upgrades. | `cachedPassword` in `session/inMemoryCache.ts` via the `sessionCache.ts` facade |
 | Agent password  | Never stored directly (encrypts vault key)                                                       | Not cached separately (same `cachedPassword` slot) |
 | Password type   | `chrome.storage.session` (for session restoration)                                               | `cachedPasswordType` in `session/inMemoryCache.ts` |
 | Passkey PRF output | Never stored. Produced by WebAuthn in a trusted extension page and sent over extension-internal runtime messaging for immediate service-worker wrap/unwrap; never forwarded to content scripts, webpages, or inpage code | Not cached after use |
 | Bankr API key   | `encryptedApiKeyVault` (AES-256-GCM via vault key) or `encryptedApiKey` (legacy, password-based) | `cachedApiKey` in `session/inMemoryCache.ts`       |
 | Private keys    | `pkVault` entries (AES-256-GCM via vault key or password, indicated by `salt` field)             | `cachedVault` in `session/inMemoryCache.ts`        |
 | Seed phrases    | V2 `mnemonicVault` entries encrypted by a dedicated mnemonic key; V1 entries encrypted by the master password (plus read-only transitional shared-vault compatibility) | `cachedMnemonicKey` only in master/password or V2 passkey sessions; never in agent sessions. Reveal still requires explicit master-password verification |
-| Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped); a native finite-or-Never passkey session may also hold one encrypted, factor-bound general-key capability split across session/local storage | `cachedVaultKey` in `session/inMemoryCache.ts`     |
+| Vault key       | `encryptedVaultKeyMaster` / `encryptedVaultKeyAgent` (PBKDF2-wrapped); native password/passkey sessions also hold one encrypted, factor-bound general-key capability split across session/local storage | `cachedVaultKey` in `session/inMemoryCache.ts`     |
 | Mnemonic key    | Master wrapper in V2 `mnemonicVault.masterWrappedKey`; independent V2 passkey wrapper in `passkeyUnlock.wrappedMnemonicKey` | `cachedMnemonicKey` as a non-extractable CryptoKey in password-master and fresh V2 passkey-assertion sessions only; it is deliberately absent after any cold passkey restoration |
 | Privacy Pools phrase | `privacyVault.recovery`, encrypted by a dedicated privacy key with key-ID-bound AES-GCM AAD | Decrypted transiently for background derivation/rescan. It leaves the service worker only through the explicit main-password-gated trusted Settings reveal route, never through Private-mode initialization, ordinary Shield, or page/provider routes. |
-| Privacy key | At least one master or purpose-separated passkey wrapper inside `privacyVault`; normal setup stores both | `cachedPrivacyKey` as a non-extractable CryptoKey plus a zeroed-on-teardown 32-byte rewrap copy in master-password and fresh matching passkey sessions only; never in agent sessions or persisted session envelopes |
+| Privacy key | At least one master or purpose-separated passkey wrapper inside `privacyVault`; normal setup stores both. A native unified master session may include the exact verified key inside its split AES-GCM envelope; agent sessions never do. | `cachedPrivacyKey` as a non-extractable CryptoKey plus a zeroed-on-teardown 32-byte rewrap/session copy in master-password, matching passkey, and restored master sessions only; never in agent sessions |
 | Privacy operation details | IndexedDB Shield, commitment, Unshield, ragequit, and private-portfolio records encrypted by the dedicated privacy key with complete-summary/key-ID/revision or record-header AES-GCM AAD | Note linkage, secrets, proof inputs, relayer payloads, calldata, and stored balance/price values remain background-only; the trusted renderer receives aggregates, bounded activity, and bounded decrypted chart points only |
 
 ### Trust Boundaries
@@ -198,7 +198,8 @@ The agent password model restricts what operations are available when the wallet
 | Persist an active-chain Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, verifies the accepted public gross quote pin against the entered net amount, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
 | Confirm/submit active-chain Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, account, and master epoch are rechecked at confirmation and the final effect boundary. Sepolia blocks Bankr; mainnet supports Bankr/private-key/seed-phrase. Impersonators never submit. |
 | Prepare/submit private Unshield | Yes | **BLOCKED** | Wallet-wide privacy authority: no active public account is accepted in the request or consulted during quote/proof work. `privacy/withdrawals/` validates the dedicated master capability, signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST. |
-| Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, locally verifies the commitment proof/calldata, and rechecks the encrypted commitment claim at the raw-RPC boundary |
+| Preview public Shield recovery | Yes | **BLOCKED** | `privacyPreviewRagequit` requires live master authorization and returns every locally verified ragequittable deposit as only a bounded opaque commitment-record ID, timestamp, account metadata, source-operation binding, and current whole-commitment amount. Preview does not start the disposable global-event backfill; preparation still fail-closes by checking the selected current nullifier onchain before proof generation and again inside the final claim. Preview may materialize already-indexed encrypted commitment state but creates no proof, recovery intent, claim, pending request, or external effect. |
+| Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, repeats every selected opaque commitment ID plus optional transaction-detail source binding, and rejects duplicates, mixed accounts, stale status, or account/source/amount drift. A single exit uses the normal pinned request; 2–8 same-account exits use one immutable EIP-7702/ERC-7821/Bankr atomic batch whose operation-ID/call order and encrypted claims are rechecked at the final effect boundary. Impersonators never submit. |
 | Reveal/restore/rescan Privacy Pools recovery | Yes | **BLOCKED** | `background/privacyRecoveryRouter.ts` requires the exact trusted UI plus explicit main-password proof or a live master epoch; plaintext reveal is confined to the Settings leaf and restore resets only rebuildable privacy state |
 | Initiate token transfer          | Yes    | Yes         | `txHandlers.ts` - creates PendingTxRequest                                     |
 | Reset extension                  | Yes    | **BLOCKED** | `background/resetRouter.ts` requires an explicit boolean Shield-loss acknowledgement when Shield data exists, then uses the exact `storage/resetManifest.ts` |
@@ -374,15 +375,18 @@ rejects embedded credentials, and creates one active tab. Embedded launchers,
 ordinary sites, HTTP URLs, and malformed values cannot use the route. The
 adjacent star action writes only the existing non-secret, origin-normalized
 bookmark projection and never grants or changes dapp permissions.
-`popup-wake` and
-`ui-keepalive` ports use the same sender check so a content script or embedded
-web-accessible page cannot suppress worker suspension. A trusted wallet UI sends
-an exact, secret-free heartbeat every 20 seconds because Chrome 114+ does not
-count an opened-but-silent port as service-worker activity. The background
-accepts only `{ type: "wallet-ui-keepalive" }` on that port. Heartbeats do not
-refresh credential timestamps, bypass cache getters, or alter the
-authenticated finite passkey deadline, so they preserve rather than extend the
-configured auto-lock boundary.
+`popup-wake`, `ui-keepalive`, and onboarding worker-only ports use the same
+sender check so a content script or embedded web-accessible page cannot forge
+wallet presence. Each main wallet document creates one random,
+renderer-memory-only `surfaceId`, registers it exactly once, and includes it in
+the secret-free 20-second heartbeat. The background rejects malformed,
+duplicate, or changing IDs and tracks a bounded ID set. A registered wallet
+surface pauses finite inactivity expiry; its last disconnect starts the timer.
+Authenticated heartbeat/lease metadata lets the same renderer prove continuous
+presence after a worker restart, while a new renderer ID cannot revive an
+expired session. Onboarding uses a separate heartbeat and never holds an auth
+lease. Manual lock and revoking auth transitions ignore presence and remain
+immediate.
 
 | Handler Class | Examples | Why Extension-Only |
 | --- | --- | --- |
@@ -823,7 +827,11 @@ simulates that exact gross value before using it.
 `privacyPrepareShield` performs one fresh deployment verification and quote,
 then rechecks the master epoch and exact account under the wallet-secret lock.
 Its exact-shape request carries the same public gross quote pin, which is
-revalidated against the entered net amount and used in the durable dedupe key.
+revalidated against the entered net amount and included in the durable
+account/amount correlation key. That non-unique key is authenticated summary
+metadata, never operation identity. Only the request UUID is idempotent, so an
+exact UUID retry resumes its pinned operation while every fresh UUID atomically
+reserves a new index even if an equal deposit is still in flight.
 The real durable index is distinct from the review-only reserved index. Its
 precommitment and exact calldata are encrypted with the dedicated privacy key
 before the IndexedDB operation row and next-index counter commit atomically.
@@ -835,8 +843,12 @@ onchain mutation.
 The same exact trusted-UI list route may return at most 193 decrypted private
 portfolio points only after the service worker verifies the cached privacy key
 against the current vault record. IndexedDB stores their balance, price, and
-USD value encrypted; malformed/tampered snapshots are ignored. Public mode
-does not request or combine these values with any public account portfolio.
+USD value encrypted; malformed/tampered snapshots are ignored. When that key
+is cold, the route may still aggregate confirmed and ASP-pending amounts from
+the bounded public Shield operation summaries it returns in the same response.
+It keeps private-ready, recoverable, and spendable balances at zero and releases
+no commitment lineage or encrypted portfolio point. Public mode does not
+request or combine these values with any public account portfolio.
 
 Private Unshield is owned by the wallet-wide Privacy Pools identity, not the
 currently selected public account. The prepare request accepts only request ID,
@@ -848,6 +860,19 @@ display accounts cannot redirect the withdrawal or select different notes.
 Agent sessions remain blocked. This is distinct from Shield deposits and
 public ragequit, which still need an explicit transaction signer and remain
 account-pinned through broadcast.
+
+Receiver-paid Unshield is the explicit signer-bound exception. Its exact
+wallet-UI request includes the receiving account snapshot and requires that
+snapshot to resolve to a Bankr, private-key, or seed-phrase account whose
+address is exactly the recipient. Impersonators fail request validation. The
+background proves with that recipient as `processooor`, validates all eight
+public signals, simulates the exact encrypted calldata from the same address,
+and checks its native gas balance before creating a trusted pending request.
+The standard pinned-account signer path repeats account, calldata, roots,
+deployment, and master-epoch authorization before its irreversible boundary.
+Queue failure releases the commitment claim; rejection and pre-broadcast
+failure become recoverable and release it immediately when unlocked or during
+startup reconciliation.
 
 `network/boundedHttp.ts` is the secure-default boundary for fixed WalletChan,
 Bankr, swap/bridge, portfolio, CoinGecko, labels, clear-signing, and ABI lookup
@@ -1224,7 +1249,7 @@ accessible resources.
 | `encryptedApiKey`          | Yes (encrypted)  | Legacy API key encrypted with password                  |
 | `encryptedVaultKeyMaster`  | Yes (encrypted)  | Vault key encrypted with master password                |
 | `encryptedVaultKeyAgent`   | Yes (encrypted)  | Vault key encrypted with agent password                 |
-| `sessionEncKey`            | Yes (random key half) | AES key for native-session Never-password or finite/Never passkey-vault restoration. The matching ciphertext is memory-backed in `chrome.storage.session`; fallback browsers never persist either secret half. |
+| `sessionEncKey`            | Yes (random key half) | AES key for the native unified password/passkey capability (and released-envelope migration). The matching ciphertext is memory-backed in `chrome.storage.session`; fallback browsers never persist either secret half. |
 | `passkeyUnlock`            | Yes (encrypted)  | V1 general-key wrapper or V2 purpose-separated general/mnemonic key wrappers |
 | `pkVault`                  | Yes (encrypted)  | Private key vault with encrypted entries                |
 | `agentPasswordEnabled`     | No               | Boolean flag                                            |
@@ -1255,7 +1280,7 @@ accessible resources.
 | `sigResult:{sigId}`        | No               | Transient sig result (written on confirm/reject, read+deleted by content script) |
 | `erc7715PermissionResult:{id}` | No           | Transient ERC-7715 approval result, read+deleted by the waiting injected content script or used by the WalletConnect result bridge |
 | `rpcResult:{id}`           | No               | Transient RPC result (written after RPC call, read+deleted by content script)    |
-| `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata. Exact-bound Shield entries may include only the public lifecycle projection `{version, operationId, state, updatedAt, amountWei, shieldedAmountWei}`; no commitment, label, index, note, proof, calldata, or recovery material. |
+| `txHistory`                | No               | Completed transaction log. Cross-dapp batch entries may include per-call `{ origin, favicon }` display metadata. Exact-bound Shield entries may include only the public lifecycle projection `{version, operationId, state, updatedAt, amountWei, shieldedAmountWei}`. Public-exit entries may add only `{privacyRagequitMeta: {version: 1}}`; it carries no ragequit operation ID. Neither marker contains a commitment, label, index, note, proof, calldata, or recovery material. |
 | `chatHistory`              | No               | Chat conversation history                               |
 | `hiddenPortfolioTokens`    | No               | Global list of ERC-20 token keys the user hid from portfolio totals. Contains public token metadata only. |
 | `portfolioSnapshotsV2`     | No               | Aggregate USD portfolio chart points keyed by public wallet address, with one-hour deduplication and eight-day retention. Legacy `portfolioSnapshots` data is purge-only because it may contain unrecoverable Tempo sentinel totals. |
@@ -1269,13 +1294,15 @@ accessible resources.
 
 | Key                        | Contains Secrets | Description                                                      |
 | -------------------------- | ---------------- | ---------------------------------------------------------------- |
-| `encryptedSessionPassword` | Yes (encrypted)  | Password for "Never" auto-lock restore (AES-GCM with random key), only with native memory-backed `storage.session` |
-| `encryptedSessionVaultKey` | Yes (encrypted)  | Exact 32-byte general vault capability for native finite-or-Never restore after a passkey assertion. V2 AES-GCM AAD binds it to the session ID, master authority, current validated passkey-record fingerprint, start time, timeout, and absolute expiry. It never contains the PRF output, password, API key, private keys, mnemonic key, or seed phrase. |
-| `sessionCredentialKind`    | No               | Exact discriminator: `"password"` or `"passkey-vault"`; ambiguous/mismatched records fail closed. |
+| `encryptedSessionCapabilities` | Yes (encrypted) | Current exact V1 payload: 32-byte general key plus optional verified 32-byte privacy key for master sessions. AES-GCM AAD binds session ID, password/passkey method, master/agent type, current factor fingerprint, timeout, lease state, bounded surface IDs, last activity/idle expiry, and privacy key ID. It never contains a password, PRF output, API/private/seed key, mnemonic key/phrase, or privacy recovery phrase. |
+| `encryptedSessionPassword` | Yes (encrypted)  | Released password-Never migration input only; current unlocks never write it. |
+| `encryptedSessionVaultKey` | Yes (encrypted)  | Released passkey V1/V2 general-key migration input only; current unlocks never write it. |
+| `sessionCredentialKind`    | No               | Released-envelope discriminator used only by migration. |
 | `sessionId`                | No               | Session identifier (UUID)                                        |
 | `sessionStartedAt`         | No               | Session timestamp (milliseconds since epoch)                     |
 | `autoLockNever`            | No               | Outer consistency marker; authenticated passkey timing remains authoritative |
 | `passwordType`             | No               | `"master" \| "agent"` - which password was used to unlock. Restored to maintain agent password access control guards after service worker restart (v1.3.0+) |
+| `privacyPortfolioViewV1`   | No signing secret | Deployment-bound, strictly validated aggregate ready/pending/recoverable balances and at most 193 already-released USD chart points. It intentionally survives automatic auth expiry for read-only Private mode, but explicit lock/reset/recovery replacement and browser shutdown clear it. It contains no commitments, note linkage, depositor, proof, key, phrase, or signing authority. |
 
 ### chrome.storage.sync (synced, no secrets)
 
@@ -1297,10 +1324,10 @@ accessible resources.
 
 | Database / store | Contains Secrets | Description |
 | --- | --- | --- |
-| Active operations DB (`walletchan-privacy-v1` Sepolia / `walletchan-privacy-mainnet-v1` mainnet) | Yes (encrypted) | At most 100 exact Shield lifecycle records plus the atomic `nextDepositIndex`. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. A pre-effect wallet rejection is marked before pending-request removal, then its encrypted record is deleted without rewinding the derivation cursor; startup performs the same ordered cleanup for rejected rows left by older or interrupted builds. |
+| Active operations DB (`walletchan-privacy-v1` Sepolia / `walletchan-privacy-mainnet-v1` mainnet) | Yes (encrypted) | At most 100 exact Shield lifecycle records plus the atomic `nextDepositIndex`. Public summaries contain account/amount/fee/route/state data; deposit index, precommitment, and calldata use fresh-IV AES-GCM under the privacy key with full-summary/key-ID AAD. The unique request-ID index is the sole retry identity; the non-unique account/amount index is correlation metadata and cannot block a fresh request. A pre-effect wallet rejection is marked before pending-request removal, then its encrypted record is deleted without rewinding the derivation cursor; startup performs the same ordered cleanup for rejected rows left by older or interrupted builds. |
 | Active commitments DB (`walletchan-privacy-commitments-*-v1`) | Yes (encrypted) | Current commitment hash/value lineage, depositor recovery dependency, status, and derivation indexes with revision-bound AAD. Only aggregate balances leave the background. |
 | Active withdrawals DB (`walletchan-privacy-withdrawals-*-v1`) | Yes (encrypted) | At most 256 restart-safe Unshield intents; commitment linkage, expected nullifier/replacement, signed quote, and relayer payload remain encrypted. |
-| Active ragequits DB (`walletchan-privacy-ragequits-*-v1`) | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
+| Active ragequits DB (`walletchan-privacy-ragequits-*-v1`) | Yes (encrypted) | At most 256 original-depositor public-recovery intents and proof calldata; optional same-account batch IDs are public AAD-bound routing metadata. Renderer receives only bounded public recovery activity, with user-rejected prompts omitted after their claims are safely released. |
 | Active portfolio DB (`walletchan-privacy-portfolio-*-v1`) | Yes (encrypted) | At most 193 eight-day private balance/price/USD points. Values use fresh-IV AES-GCM under the dedicated privacy key with record/key/timestamp-bound AAD; only identifiers and creation time remain public metadata. |
 | Active events DB (`walletchan-privacy-events-*-v1`) | No | Disposable bounded public Deposited/Withdrawn/Ragequit logs plus an active-profile checkpoint; rebuilt from the pinned pool and never treated as note authority without local derivation checks. |
 
@@ -1316,7 +1343,7 @@ secrets cannot survive wallet replacement.
 | Setting                    | Value                                                        | Security Note                                                                  |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | `manifest_version`         | 3                                                            | MV3 enforces CSP, no `eval()`, no remote code                                  |
-| `permissions`              | `activeTab`, `favicon`, `storage`, `sidePanel`, `offscreen`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `offscreen` hosts only the bounded local proof worker; `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
+| `permissions`              | `activeTab`, `alarms`, `favicon`, `storage`, `sidePanel`, `offscreen`, `notifications`, `tabs`, `declarativeNetRequestWithHostAccess`, `unlimitedStorage` | No `webRequest`, no `debugger`; `alarms` wakes only pending Shield compliance refreshes and clears after the work is terminal; `offscreen` hosts only the bounded local proof worker; `favicon` reads Chrome's processed icon for exact local IPFS/IPNS and approved ENS/GNS/onchain gateway pages; `unlimitedStorage` protects wallet-critical writes from optional cache growth |
 | `host_permissions`         | `https://*/*`, `http://*/*`                                  | Broad, needed for content-script coverage and configured RPCs; egress is method/URL/origin/redirect/timeout/size/concurrency bounded |
 | `content_scripts.matches`  | All URLs                                                     | Wallet must inject on all pages for dapp detection                             |
 | `externally_connectable`   | Not defined                                                  | External websites cannot send messages to background                           |
@@ -1363,25 +1390,25 @@ These must always hold true. Violations indicate a security bug.
 
 4. **Encryption uses fresh randomness** - Every encryption operation generates a new random salt and IV. Never reuse salt/IV pairs.
 
-5. **Service worker suspend clears credentials** - `background/lifecycle/maintenance.ts`, registered by lifecycle composition, calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, general vault key, mnemonic key, password type, and session ID together.
+5. **Service worker suspend clears plaintext memory** - `background/lifecycle/maintenance.ts`, registered by lifecycle composition, calls `clearInMemoryAuthCache()`, which clears the API key, password, private-key vault, general/privacy/mnemonic keys, password type, and session ID together. An eligible split native-session capability may rehydrate afterward only through the restoration policy below.
 
-6. **Timed auto-lock clears every in-memory credential** - All cached credential getters, including `getCachedVaultKey()`, `getCachedMnemonicKey()`, and `getPasswordType()`, enforce the configured timeout. Expiry clears the API key, password, private-key vault, both keys, and password type together.
+6. **Timed auto-lock clears every in-memory credential after wallet-surface inactivity** - All cached credential getters, including `getCachedVaultKey()`, `getCachedMnemonicKey()`, `getCachedPrivacyKey()`, and `getPasswordType()`, enforce one coherent lease. Any registered trusted popup, side panel, or full-page wallet surface pauses finite expiry; the last close starts the configured timer. Expiry clears the API key, password, private-key vault, every cached key, and password type together.
    Missing or invalid settings resolve to the finite 15-minute default and are
-   initialized on install/update. Only an exact stored `0` enables Never and
-   Never password restoration. Finite passkey restoration is independently
-   bounded by authenticated timeout metadata and never interprets absent or
-   corrupt state as indefinite unlock.
+   initialized on install/update. Only an exact stored `0` enables Never.
+   Registration evaluates any previous idle deadline before adding presence,
+   so opening a surface cannot revive an expired capability.
 
-7. **Passkey restoration is deadline- and policy-bound** -
+7. **Unified restoration is lease-, factor-, and policy-bound** -
    `tryRestoreSession()` re-reads the authoritative timeout before restoration.
-   Password envelopes remain valid only for explicit Never. Passkey V2
-   envelopes authenticate `{ sessionId, master authority, passkey binding,
-   startedAt, autoLockTimeout, expiresAt }` as AES-GCM AAD. A finite envelope
-   restores only when its timeout exactly equals the current setting and
-   `Date.now() < expiresAt`; the original hard deadline is installed in memory
-   and preserved when the envelope is re-encrypted, so worker restarts cannot
-   grant a fresh timeout. Any timeout change revokes the old envelope. Legacy
-   V1 passkey envelopes remain Never-only.
+   The V1 unified envelope authenticates session ID, unlock method,
+   master/agent type, current wrapper/passkey fingerprint, timeout, lease
+   state, bounded renderer IDs, last active time, exact idle expiry, and
+   privacy-key identity as AES-GCM AAD. The same persisted renderer ID may prove
+   continuous presence across a worker restart. Without that match, an active
+   record is treated conservatively as closed at its last authenticated
+   heartbeat and an idle record must satisfy `Date.now() < idleExpiresAt`.
+   Every heartbeat/lease rewrite uses a fresh IV. Any timeout change revokes
+   the old envelope.
    After the authoritative timeout read, a coherent live authorization
    generation makes restoration an idempotent success: no persisted envelope
    is consumed, no unlock callback runs, no auth epoch rotates, and a fresh V2
@@ -1392,22 +1419,24 @@ These must always hold true. Violations indicate a security bug.
    import, preview, derive, and persistence must query the live capability and
    complete a fresh WebAuthn assertion before continuing; persisted V2 record
    capability alone is not sufficient.
-   Password and passkey-vault restoration additionally require native
+   Password and passkey restoration require native
    memory-backed `chrome.storage.session` (available in WalletChan's supported
    Chrome and Firefox versions). The fallback for browsers/forks without it
    stores only non-secret state; old fallback password/vault ciphertext and key
    halves are proactively removed, and both finite and Never sessions relock
    after a worker restart.
-   Native session envelopes are allocation-bounded before base64 decoding: the
-   key and IV must be exactly 32 and 12 bytes, and the authenticated password
-   ciphertext cannot exceed 1 MiB plus the AES-GCM tag. Passkey capabilities
-   require exact 32-byte plaintext, IV, tag, and binding sizes; exact record
-   fields; `passwordType === "master"`; and a fingerprint match against the
-   current validated `passkeyUnlock` factor. Malformed, ambiguous, stale,
-   tampered, or torn records return a locked session and delete both recovery
-   halves; there is no permissive fallback. The decrypted capability crosses
-   restoration only as a symbol-branded, non-enumerable call-stack object, so
-   a runtime message or structured clone cannot forge it.
+   Native unified envelopes are exact-field and allocation-bounded before
+   base64 decoding: recovery key and IV are exactly 32 and 12 bytes; plaintext
+   is exactly 32 bytes for general-only or 64 bytes for general+privacy, plus
+   the AES-GCM tag. Agent records with privacy material fail closed. Current
+   factor fingerprints must match, and the restored general/private capability
+   must pass normal vault/privacy integrity checks. Malformed, ambiguous,
+   stale, tampered, or torn records return locked and delete both recovery
+   halves. The decrypted capability crosses restoration only as a
+   symbol-branded, non-enumerable call-stack object, so a runtime message or
+   structured clone cannot forge it. Released password-Never/passkey records
+   are read only for one-time migration; a released passkey record cannot cold
+   restore a configured Shield identity without a fresh assertion.
 
 7a. **Factor removal revokes restoration before commit** - Passkey and agent
    removal first prove master recovery, including the privacy key/recovery when
@@ -1593,7 +1622,17 @@ These must always hold true. Violations indicate a security bug.
     shieldedAmountWei}` onto the normal transaction-history row so main
     Activity can render the current stage. Matching transaction-history
     notifications only trigger a bounded reload/sync and convey no Shield
-    secret. A pre-effect Shield rejection removes the pending request before
+    secret. A one-shot MV3 alarm may restore an eligible browser session, but
+    does not depend on it: the public operation sidecar is sufficient to bind
+    the returned deposit and locally verify both Merkle memberships against the
+    onchain association root and a known pool state root. That locked-safe path
+    may advance only to `asp_approved`; it cannot derive private note lineage or
+    spendable balance. The first atomic `asp_approved` transition emits one
+    native notification whose generic copy contains no amount, account, chain,
+    label, commitment, or other Shield metadata. `private_ready` still requires
+    the authenticated privacy key and full secret-derived lineage verification.
+    The alarm reschedules only for pending/retry/Proof-of-Association states.
+    A pre-effect Shield rejection removes the pending request before
     deleting its encrypted operation, while its already-advanced derivation
     cursor is never rewound. A user-rejected public-withdrawal record remains
     encrypted in the background long enough to release its commitment claim safely, but
@@ -1607,27 +1646,78 @@ These must always hold true. Violations indicate a security bug.
     all public signals, and the auth epoch immediately before POST. The durable
     state moves to submission-unknown before that irreversible boundary, and
     restart recovery uses receipt plus nullifier state instead of blind retry.
-    Public recovery is offered as soon as an exact confirmed deposit is indexed,
-    including while ASP review is pending, after decline/removal, and when its
-    ASP endpoint/root cannot currently be verified. Pending review or ASP outage
+    A cold privacy key does not block receipt observation: the public Withdrawn
+    event must match the durable amount and pinned Entrypoint processooor before
+    the operation reaches `public_confirmed`. Secret spent-nullifier and
+    replacement-commitment reconciliation remains unlock-gated and alone may
+    advance `private_balance_updated`.
+    Receiver-paid Unshield skips the relayer but not these proof or membership
+    checks. Its exact recipient-owned signer pays gas and is the public
+    `processooor`; normal transaction confirmation is mandatory, all three
+    signing account types reuse their existing pinned paths, impersonators are
+    rejected, and Sepolia Bankr mutation remains disabled. A direct receipt is
+    accepted only when amount, recipient processooor, spent nullifier, and new
+    commitment match the encrypted intent.
+    ASP and materialization status writes are guarded by the exact encrypted
+    commitment revision and status they inspected. They cannot replay a stale
+    eligibility decision over a newer Unshield or ragequit claim; exit claims
+    and releases use the same compare-and-set boundary.
+    Every relayed, receiver-paid, and ragequit preparation also derives the
+    selected note's current one-input nullifier hash and reads the pool's
+    `nullifierHashes` mapping before proof generation and immediately before
+    the encrypted claim. A spent note, an invalid local derivation, or an RPC
+    failure is fail-closed as bounded balance synchronization; stale local
+    state cannot proceed to gas simulation or publication.
+    The ASP root must equal `Entrypoint.latestRoot()`; the state root must
+    equal the pool's current root or one of the remaining 63 entries in its
+    64-slot root history, matching the contract's exact latest-ASP/known-state
+    acceptance rules. Both conditions are re-read immediately before relayer
+    submission. Public recovery is offered as soon as an exact confirmed
+    deposit is indexed, including while ASP review is pending, when Proof of
+    Association is required, after decline/removal, and when its ASP
+    endpoint/root cannot currently be verified. Pending review or ASP outage
     never grants private spendability. Local commitment materialization runs
     before ASP transport and repeats at the public-recovery preparation boundary;
     the renderer may keep the action visible from the bounded account-bound
     indexed-operation summary, but that summary cannot authorize proof or
-    signing. Recovery requires the exact original
+    signing. Transaction-detail recovery additionally sends the bounded source
+    Shield operation ID; the background matches it against the decrypted
+    commitment's `sourceOperationId` and never falls back to a different
+    deposit. A successful ASP response that omits a newly confirmed label is
+    treated only as not-yet-indexed and remains pending. ASP transport,
+    malformed/injected response, deposit-binding, or local verification
+    failures are projected internally as retryable `asp_unavailable`, not as
+    an ASP compliance decision;
+    `poi_required` is projected separately as action required. A transient
+    refresh failure does not erase previously verified private-ready
+    membership. Background diagnostics log only controlled phase names and
+    aggregate counts, never labels, commitments, transaction hashes, accounts,
+    or amounts. Recovery requires the exact original
     depositor, verifies the current partial-withdrawal
     lineage and four commitment signals, then uses the same trusted local
     confirmation boundary. Commitment-signal binding distinguishes the deposit
     precommitment `Poseidon(nullifier, secret)` from the spent-nullifier hash
     `Poseidon(nullifier)` and checks the exact circuit order against the pinned
-    artifacts. Rejection restores the claimed commitment's prior
-    ASP status; success requires the exact Ragequit event before the source
-    activity becomes terminal. Agent and impersonator accounts fail before
+    artifacts. Rejection restores the claimed commitment's prior ASP status.
+    An atomic same-account batch binds 2–8 distinct commitments to one immutable
+    operation-ID/call order and cannot be edited, split, or paid through an
+    alternate fee path. Success decodes every Ragequit log and requires a
+    one-to-one exact event match before each source activity becomes terminal.
+    Agent and impersonator accounts fail before
     relayer quote/proof publication or signing. Sepolia Bankr accounts also
     fail before mutation. Production Bankr, private-key, and seed-phrase
     accounts may act only for an exact pinned original depositor; local
     accounts share one bounded raw-RPC path and Bankr uses its separately
     authorized submission path.
+    Local note records are canonicalized by immutable deposit lineage and the
+    greatest withdrawal index. Same-index commitment forks fail closed;
+    materialization cannot recreate a superseded index-zero note for an already
+    represented Shield operation. When the confirmation-safe event cache is
+    current, authenticated sync deterministically follows every Withdrawn and
+    Ragequit event to reconstruct the current note, preserves the source
+    operation binding, and quarantines only strictly older indices. Receipt
+    recovery runs before ASP refresh, so ASP transport or duplicate-label
+    failures cannot strand an already-confirmed receiver-paid operation.
 
 12i. **Account removal and reset cannot silently orphan Shield funds** -
     Account deletion checks Shield safety once before any dapp revocation and
@@ -1827,9 +1917,11 @@ When reviewing or making changes to extension code, verify the following:
 - [ ] Does manual lock acquire the wallet-secret operation lock before clearing cached vault/mnemonic keys?
 - [ ] Does manual lock attempt the local recovery key first and the session half independently, accepting either confirmed deletion but showing a blocking retry state if neither succeeds?
 - [ ] On simultaneous recovery-half failure, do all open wallet surfaces purge renderer auth state, suppress passkey auto-prompting, and receive the retry state while the worker blocks routine restoration?
-- [ ] Does password restore still require `autoLockTimeout === 0`, and does a
-      finite passkey restore require an authenticated exact timeout plus a
-      non-expired absolute deadline that cannot be reset by restoration?
+- [ ] Does unified password/passkey restore require an authenticated exact
+      timeout, current factor binding, and either same-surface continuity or a
+      non-expired inactivity deadline?
+- [ ] Can a newly opened renderer ID ever revive a record whose last
+      authenticated heartbeat/idle deadline has expired? It must not.
 - [ ] Does a coherent live passkey session make restoration a no-op that
       preserves its auth epoch and V2 mnemonic key?
 - [ ] Does factor removal revoke the local restorable-session recovery half before
@@ -1840,8 +1932,8 @@ When reviewing or making changes to extension code, verify the following:
 ### If you added a message handler that uses cached authorization capabilities:
 
 - [ ] Does the handler call the central restoration primitive only when the
-      coherent wallet capability generation is absent, leaving password-Never
-      and finite/Never passkey policy inside that primitive?
+      coherent wallet capability generation is absent, leaving unified
+      factor/lease/timeout policy inside that primitive?
 - [ ] Does it avoid treating a null cached password as a lock signal? Fresh
       passkey sessions intentionally have no plaintext password.
 - [ ] Does it re-read the operation-specific capability after a necessary cold
@@ -1897,9 +1989,10 @@ Quick reference for which files to examine based on what area of security you're
 - `session/cacheAccess.ts` - Expiry-aware capability selectors and wallet predicates
 - `session/teardown.ts` - All-or-nothing memory and persisted-session clearing
 - `session/timeoutTransitions.ts` - Finite default and serialized timed/Never transitions
-- `session/restoration.ts` - Authoritative password-Never/passkey finite-or-Never restore, password-type binding, deadline enforcement, and race rechecks
-- `session/persistence.ts` - Native Never-session encrypted password envelope
-- `session/passkeyPersistence.ts` / `session/passkeyCredentialRecord.ts` - Exact native passkey-vault envelope and bounded codec
+- `session/restoration.ts` - Authoritative unified/released restore, password-type binding, lease enforcement, migration, and race rechecks
+- `session/persistence.ts` - Split recovery-key authority plus released password-Never compatibility
+- `session/capabilityPersistence.ts` / `session/uiSurfaceLease.ts` - Exact unified general/privacy session envelope, factor binding, and trusted renderer inactivity lease
+- `session/passkeyPersistence.ts` / `session/passkeyCredentialRecord.ts` - Released passkey-vault envelope migration compatibility
 - `session/storage.ts` - Cross-browser native/fallback storage adapter
 - `crypto.ts`, `cryptoUtils.ts` - Stable compatibility facades
 - `cryptography/` - Released envelope, bounded codecs, PBKDF2 policy,
@@ -1914,7 +2007,7 @@ Quick reference for which files to examine based on what area of security you're
 
 ### Access control (agent vs master password)
 
-- `auth/walletUnlock.ts` / `auth/sessionHydration.ts` - Unlock and complete cache hydration
+- `auth/walletUnlock.ts` / `auth/restoredSessionUnlock.ts` / `auth/sessionHydration.ts` - Explicit unlock, restored factor/privacy proof, and complete cache hydration
 - `auth/masterPasswordVerification.ts` - Side-effect-free explicit master proof
 - `secrets/masterAuthorization.ts` / `secrets/revealHandlers.ts` - Exact
   epoch/live-master authorization and lock-held plaintext release

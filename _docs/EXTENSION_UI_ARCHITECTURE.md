@@ -33,10 +33,11 @@ apps/extension/src/
 ├── components/
 │   ├── README.md           # Root component audit map
 │   ├── Activity/           # Feature domain
+│   ├── AccountPicker/      # Shared select/manage account browser
 │   ├── BatchConfirmation/  # ERC-5792 review and confirmation
 │   ├── ClearSigning/       # Feature domain
 │   ├── Portfolio/Holdings/ # Portfolio loading and holdings presentation
-│   ├── Shield/             # Separate Shield/Unshield/Send screens over shared privacy controllers
+│   ├── Shield/             # Separate Shield and Unshield screens over privacy controllers
 │   ├── Settings/           # Feature domain
 │   ├── Swap/               # Feature domain
 │   ├── TransactionConfirmation/ # Single-request review and confirmation

@@ -33,6 +33,7 @@ import {
   updatePrivacyUnshieldTracking,
 } from "./repository";
 import type {
+  PrivacyUnshieldSummaryV1,
   PrivacyUnshieldState,
   PrivacyUnshieldTrackingV1,
   StoredPrivacyUnshieldV1,
@@ -95,7 +96,9 @@ export async function executePrivacyUnshield(
       throw new Error("quote-expired");
     }
     const details = await decryptPrivacyUnshieldDetails(material.key, operation);
-    if (!details) throw new Error("operation-unavailable");
+    if (!details || operation.summary.method === "direct" || "method" in details) {
+      throw new Error("operation-unavailable");
+    }
     const commitment = (await readPrivacyCommitments(material.key, material.keyId))
       .find((item) => item.record.id === details.commitmentId);
     if (
@@ -116,12 +119,17 @@ export async function executePrivacyUnshield(
       lineage.newBalanceWei.toString() !== details.expectedNewBalanceWei ||
       lineage.newWithdrawalIndex.toString() !== details.expectedNewWithdrawalIndex
     ) throw new Error("operation-unavailable");
-    await updatePrivacyCommitmentStatus(
+    const claimedCommitment = await updatePrivacyCommitmentStatus(
       material.key,
       material.keyId,
       commitment.record.id,
       "withdrawal_pending",
+      {
+        revision: commitment.record.revision,
+        status: commitment.details.status,
+      },
     );
+    if (!claimedCommitment) throw new Error("operation-unavailable");
     try {
       await setState(operationId, "proof_preparing");
     } catch (error) {
@@ -130,6 +138,10 @@ export async function executePrivacyUnshield(
         material.keyId,
         commitment.record.id,
         "private_ready",
+        {
+          revision: commitment.record.revision + 1,
+          status: "withdrawal_pending",
+        },
       );
       throw error;
     }
@@ -138,14 +150,16 @@ export async function executePrivacyUnshield(
 
   let effectStarted = false;
   try {
-    const [roots, leaves, onchain] = await Promise.all([
+    const [roots, leaves] = await Promise.all([
       fetchPrivacyAspRoots(),
       fetchPrivacyAspLeaves(),
-      readPrivacyAspOnchainRoots(),
     ]);
+    const onchain = await readPrivacyAspOnchainRoots({
+      expectedStateRoot: BigInt(roots.onchainMtRoot),
+    });
     if (
       BigInt(roots.mtRoot) !== onchain.associationRoot ||
-      BigInt(roots.onchainMtRoot) !== onchain.stateRoot
+      BigInt(roots.onchainMtRoot) !== onchain.verifiedStateRoot
     ) throw new Error("privacy-roots-changed");
     const aspProof = generateMerkleProof(
       leaves.aspLeaves.map(BigInt),
@@ -155,7 +169,10 @@ export async function executePrivacyUnshield(
       leaves.stateTreeLeaves.map(BigInt),
       BigInt(claimed.details.commitmentHash),
     );
-    if (aspProof.root !== onchain.associationRoot || stateProof.root !== onchain.stateRoot) {
+    if (
+      aspProof.root !== onchain.associationRoot ||
+      stateProof.root !== onchain.verifiedStateRoot
+    ) {
       throw new Error("privacy-membership-changed");
     }
     const context = BigInt(calculateContext(
@@ -199,14 +216,19 @@ export async function executePrivacyUnshield(
     ) throw new Error("proof-public-signals-mismatch");
     assertPrivacyMasterAuthorization(expectedEpoch);
     if (claimed.operation.summary.expiresAt <= Date.now()) throw new Error("quote-expired");
-    const currentRoots = await readPrivacyAspOnchainRoots();
-    if (currentRoots.associationRoot !== aspProof.root) throw new Error("privacy-roots-changed");
+    const currentRoots = await readPrivacyAspOnchainRoots({
+      expectedStateRoot: stateProof.root,
+    });
+    if (
+      currentRoots.associationRoot !== aspProof.root ||
+      currentRoots.verifiedStateRoot !== stateProof.root
+    ) throw new Error("privacy-roots-changed");
     await setState(operationId, "proof_verified");
     assertPrivacyMasterAuthorization(expectedEpoch);
     await setState(operationId, "submitting_to_relayer");
     effectStarted = true;
     const submitted = await submitPrivacyUnshieldToRelayer({
-      summary: claimed.operation.summary,
+      summary: claimed.operation.summary as PrivacyUnshieldSummaryV1,
       details: claimed.details,
       proof: proof.proof,
       publicSignals: proof.publicSignals,
@@ -245,6 +267,10 @@ export async function executePrivacyUnshield(
             material.keyId,
             commitment.record.id,
             "private_ready",
+            {
+              revision: claimed.details.commitmentRevision + 1,
+              status: "withdrawal_pending",
+            },
           );
         }
       }).catch(() => undefined);

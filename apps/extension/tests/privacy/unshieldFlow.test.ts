@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { encodeAbiParameters, encodeEventTopics, parseAbi } from "viem";
 
 import { generateVaultKey, importVaultKey } from "../../src/chrome/crypto";
 import type { PrivacyCommitmentDetailsV1 } from "../../src/chrome/privacy/commitments/types";
+import {
+  canApplyPrivacyCommitmentWithdrawal,
+  matchesPrivacyCommitmentStatusGuard,
+} from "../../src/chrome/privacy/commitments/repository";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import {
   derivePrivacyPoolCommitment,
@@ -15,6 +20,12 @@ import {
   decryptPrivacyUnshieldDetails,
   encryptPrivacyUnshieldDetails,
 } from "../../src/chrome/privacy/withdrawals/crypto";
+import {
+  decodePrivacyUnshieldReceiptEvent,
+  getPrivacyDirectUnshieldFailureTracking,
+  isAbandonedPrivacyDirectUnshieldConfirmation,
+  isPrivacyUnshieldPublicEventMatch,
+} from "../../src/chrome/privacy/withdrawals/lifecycle";
 import { derivePrivacyWithdrawalLineage } from "../../src/chrome/privacy/withdrawals/lineage";
 import {
   defaultPrivacyUnshieldTracking,
@@ -144,6 +155,49 @@ test("full and partial Unshield lineage derive deterministic replacement commitm
   assert.notEqual(full.newCommitment, 0n);
 });
 
+test("verified Unshield can finalize after a released pending claim", () => {
+  const { details } = commitment();
+  const expected = {
+    expectedRevision: 0,
+    expectedCommitment: details.commitment,
+    expectedBalanceWei: details.balanceWei,
+    expectedWithdrawalIndex: details.withdrawalIndex,
+  };
+  assert.equal(canApplyPrivacyCommitmentWithdrawal(
+    2,
+    { ...details, status: "private_ready" },
+    expected,
+  ), true);
+  assert.equal(canApplyPrivacyCommitmentWithdrawal(
+    2,
+    { ...details, commitment: (BigInt(details.commitment) + 1n).toString() },
+    expected,
+  ), false);
+});
+
+test("a stale ASP decision cannot overwrite a newer Unshield claim", () => {
+  const reviewedSnapshot = {
+    revision: 7,
+    status: "private_ready" as const,
+  };
+  assert.equal(
+    matchesPrivacyCommitmentStatusGuard(
+      7,
+      "private_ready",
+      reviewedSnapshot,
+    ),
+    true,
+  );
+  assert.equal(
+    matchesPrivacyCommitmentStatusGuard(
+      8,
+      "withdrawal_pending",
+      reviewedSnapshot,
+    ),
+    false,
+  );
+});
+
 test("Unshield intent details stay encrypted and AAD-bound", async () => {
   const fixture = recordFixture();
   assert.equal(isValidPrivacyUnshieldDetails(fixture.details, ID), true);
@@ -177,5 +231,120 @@ test("Unshield codecs reject injected secrets and inconsistent replacement indic
   assert.equal(
     isValidPrivacyUnshieldDetails({ ...fixture.details, expectedNewWithdrawalIndex: "2" }),
     false,
+  );
+});
+
+test("locked Unshield status binds the public receipt before confirmation", () => {
+  const { summary } = recordFixture();
+  const operation = { summary } as any;
+  assert.equal(isPrivacyUnshieldPublicEventMatch(operation, {
+    processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+    valueWei: summary.amountWei,
+  }), true);
+  assert.equal(isPrivacyUnshieldPublicEventMatch(operation, {
+    processooor: DEPOSITOR,
+    valueWei: summary.amountWei,
+  }), false);
+  assert.equal(isPrivacyUnshieldPublicEventMatch(operation, {
+    processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+    valueWei: (BigInt(summary.amountWei) + 1n).toString(),
+  }), false);
+});
+
+test("canonical Unshield receipt decoding accepts viem typed quantities", () => {
+  const txHash = `0x${"55".repeat(32)}` as const;
+  const [event] = parseAbi([
+    "event Withdrawn(address indexed _processooor, uint256 _value, uint256 _spentNullifier, uint256 _newCommitment)",
+  ]);
+  const decoded = decodePrivacyUnshieldReceiptEvent({
+    blockNumber: 123n,
+    blockHash: `0x${"66".repeat(32)}`,
+    logs: [{
+      address: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
+      logIndex: 0,
+      topics: encodeEventTopics({
+        abi: [event],
+        eventName: "Withdrawn",
+        args: { _processooor: RECIPIENT },
+      }),
+      data: encodeAbiParameters(
+        [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
+        [400n, 500n, 600n],
+      ),
+    }],
+  }, txHash);
+
+  assert.equal(decoded?.transactionHash, txHash);
+  assert.equal(decoded?.blockNumber, "123");
+  assert.equal(decoded?.logIndex, 0);
+  assert.equal(decoded?.processooor.toLowerCase(), RECIPIENT.toLowerCase());
+  assert.equal(decoded?.valueWei, "400");
+  assert.equal(decoded?.spentNullifier, "500");
+  assert.equal(decoded?.newCommitment, "600");
+});
+
+test("receiver-paid Unshield releases definite non-submissions but preserves ambiguous broadcasts", () => {
+  const summary = recordFixture().summary;
+  const awaiting = defaultPrivacyUnshieldTracking(
+    { ...summary, method: "direct" } as any,
+    "awaiting_wallet_confirmation",
+  );
+  const submissionUnknown = {
+    ...awaiting,
+    revision: awaiting.revision + 1,
+    state: "submission_unknown" as const,
+    errorCode: "submission-unknown",
+  };
+
+  const failedBeforeBroadcast = getPrivacyDirectUnshieldFailureTracking(awaiting, false);
+  assert.equal(failedBeforeBroadcast?.state, "failed_recoverable");
+  assert.equal(failedBeforeBroadcast?.errorCode, "submission-failed");
+
+  const rejectedSubmission = getPrivacyDirectUnshieldFailureTracking(submissionUnknown, false);
+  assert.equal(rejectedSubmission?.state, "failed_recoverable");
+  assert.equal(rejectedSubmission?.errorCode, "submission-failed");
+
+  assert.equal(
+    getPrivacyDirectUnshieldFailureTracking(submissionUnknown, true),
+    null,
+  );
+  assert.equal(
+    getPrivacyDirectUnshieldFailureTracking({
+      ...submissionUnknown,
+      txHash: `0x${"44".repeat(32)}`,
+    }, false),
+    null,
+  );
+});
+
+test("receiver-paid confirmation recovery cannot cancel the live submission handoff", () => {
+  const summary = {
+    ...recordFixture().summary,
+    method: "direct" as const,
+    expiresAt: 300_000,
+  };
+  const operation = {
+    summary,
+    tracking: defaultPrivacyUnshieldTracking(
+      summary as any,
+      "awaiting_wallet_confirmation",
+    ),
+  };
+
+  assert.equal(
+    isAbandonedPrivacyDirectUnshieldConfirmation(operation as any, false, 300_000),
+    false,
+  );
+  assert.equal(
+    isAbandonedPrivacyDirectUnshieldConfirmation(operation as any, false, 359_999),
+    false,
+  );
+  assert.equal(
+    isAbandonedPrivacyDirectUnshieldConfirmation(operation as any, true, 360_000),
+    false,
+  );
+  assert.equal(
+    isAbandonedPrivacyDirectUnshieldConfirmation(operation as any, false, 360_000),
+    true,
   );
 });

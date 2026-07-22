@@ -41,7 +41,12 @@ export interface PrivacyVaultRecordV1 {
 
 export type PrivacyInitializationStatus =
   | { success: true; status: "ready" }
-  | { success: false; status: "action-required"; error: string };
+  | {
+      success: false;
+      status: "action-required";
+      code: "auth-required" | "account-required" | "recovery-required";
+      error: string;
+    };
 
 export interface UnlockedPrivacyKey {
   key: CryptoKey;

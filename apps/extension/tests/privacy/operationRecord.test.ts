@@ -13,10 +13,8 @@ import {
   decodePrivacyShieldOperationIntent,
 } from "../../src/chrome/privacy/operations/intent";
 import {
-  newestActivePrivacyShieldOperation,
-} from "../../src/chrome/privacy/operations/repository";
-import { isRejectedPrivacyShieldOperation } from "../../src/chrome/privacy/operations/rejectionRepository";
-import { cleanupRejectedPrivacyShieldOperations } from "../../src/chrome/privacy/operations/rejectionLifecycle";
+  cleanupRejectedPrivacyShieldOperations,
+} from "../../src/chrome/privacy/operations/rejectionLifecycle";
 import {
   defaultPrivacyShieldOperationTracking,
   isValidStoredPrivacyShieldOperation,
@@ -125,62 +123,33 @@ test("operation details encrypt with summary-bound AAD", async () => {
     ),
     null,
   );
-});
 
-test("terminal Shield records do not dedupe a fresh intent for the same amount", async () => {
-  const key = await importVaultKey(generateVaultKey());
-  const operationSummary = summary();
-  const details: PrivacyShieldOperationDetailsV1 = {
-    version: 1,
-    operationId: OPERATION_ID,
-    depositIndex: "7",
-    precommitment: "123456789",
-    callData: `0xb6b55f25${123_456_789n.toString(16).padStart(64, "0")}`,
+  const indexedTracking = {
+    ...defaultPrivacyShieldOperationTracking(operationSummary),
+    revision: 1,
+    updatedAt: 2,
+    txHash: `0x${"22".repeat(32)}` as const,
+    blockNumber: "100",
+    commitment: "123",
+    label: "456",
+    poolValueWei: operationSummary.shieldedAmountWei,
   };
-  const encryptedDetails = await encryptPrivacyShieldOperationDetails(
-    key,
-    "privacy-key-1",
-    operationSummary,
-    details,
-  );
-  const base: StoredPrivacyShieldOperationV1 = {
-    summary: operationSummary,
-    keyId: "privacy-key-1",
-    encryptedDetails,
-    tracking: defaultPrivacyShieldOperationTracking(operationSummary),
-  };
-  const initialTracking = defaultPrivacyShieldOperationTracking(operationSummary);
-  const rejected: StoredPrivacyShieldOperationV1 = {
-    ...base,
+  assert.equal(isValidStoredPrivacyShieldOperation({
+    ...stored,
     tracking: {
-      ...initialTracking,
-      revision: 1,
-      state: "wallet_rejected",
-      updatedAt: 2,
-      errorCode: "wallet-rejected",
+      ...indexedTracking,
+      state: "asp_unavailable",
+      errorCode: "asp-unavailable",
     },
-  };
-
-  assert.equal(newestActivePrivacyShieldOperation([rejected]), null);
-  assert.equal(isRejectedPrivacyShieldOperation(rejected), true);
-  assert.equal(isRejectedPrivacyShieldOperation(base), false);
-
-  const activeSummary = {
-    ...operationSummary,
-    id: "00000000-0000-4000-8000-000000000003",
-    requestId: "00000000-0000-4000-8000-000000000004",
-    createdAt: 3,
-    updatedAt: 3,
-  };
-  const active: StoredPrivacyShieldOperationV1 = {
-    ...base,
-    summary: activeSummary,
-    tracking: defaultPrivacyShieldOperationTracking(activeSummary),
-  };
-  assert.equal(
-    newestActivePrivacyShieldOperation([rejected, active])?.summary.id,
-    active.summary.id,
-  );
+  }), true);
+  assert.equal(isValidStoredPrivacyShieldOperation({
+    ...stored,
+    tracking: {
+      ...indexedTracking,
+      state: "asp_poi_required",
+      errorCode: "asp-poi-required",
+    },
+  }), true);
 });
 
 test("Shield rejection removes pending state before deleting encrypted operation data", async () => {

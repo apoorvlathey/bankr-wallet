@@ -18,12 +18,16 @@ import { updateBadge } from "../../requests/pendingTxStorage";
 import {
   AUTO_LOCK_STORAGE_KEY,
   clearInMemoryAuthCache,
-  decrementUIConnections,
   getAutoLockTimeout,
   handleAutoLockTimeoutStorageChange,
-  incrementUIConnections,
   initializeAutoLockTimeoutDefault,
 } from "../../sessionCache";
+import {
+  disconnectWalletUiSurface,
+  heartbeatWalletUiSurface,
+  isValidWalletUiSurfaceId,
+  registerWalletUiSurface,
+} from "../../session/uiSurfaceLease";
 import {
   getSidePanelMode,
   initSidePanel,
@@ -49,6 +53,7 @@ import { resumePendingFeePaymentOperations } from "../../feePayment/recovery";
 import { resumePrivacyShieldTracking } from "../../privacy/operations/lifecycle";
 import { resumePrivacyUnshieldTracking } from "../../privacy/withdrawals/lifecycle";
 import { resumePrivacyRagequitTracking } from "../../privacy/ragequit/lifecycle";
+import { runPrivacyAspScheduledRefresh } from "../../privacy/asp/scheduledRefresh";
 import { isTrustedWalletUiSender } from "../../trustedWalletUiSender";
 import { initWalletConnect } from "../../walletConnect/client";
 import { clearExpiredWalletConnectPendingRequests } from "../../walletConnect/storage";
@@ -62,6 +67,7 @@ import { startRecoveryLifecycle } from "../lifecycle/startupRecovery";
 import { registerStorageAuthLockLifecycle } from "../lifecycle/storageAuthLock";
 import { registerTabAccountLifecycle } from "../lifecycle/tabAccounts";
 import { registerTrustedUiPortLifecycle } from "../lifecycle/trustedUiPorts";
+import { registerPrivacyAspRefreshLifecycle } from "../lifecycle/privacyAspRefresh";
 
 export type BackgroundMessageListener = (
   message: any,
@@ -77,6 +83,12 @@ export function registerBackgroundLifecycle(
     autoLockStorageKey: AUTO_LOCK_STORAGE_KEY,
     refreshErc7715PermissionRequestLockFromStorage,
     handleAutoLockTimeoutStorageChange,
+  });
+
+  registerPrivacyAspRefreshLifecycle({
+    alarmEvent: chrome.alarms.onAlarm,
+    runScheduledRefresh: runPrivacyAspScheduledRefresh,
+    warn: (message, error) => console.warn(message, error),
   });
 
   registerTabAccountLifecycle({
@@ -166,8 +178,10 @@ export function registerBackgroundLifecycle(
   registerTrustedUiPortLifecycle({
     connectEvent: chrome.runtime.onConnect,
     isTrustedWalletUiSender,
-    incrementUIConnections,
-    decrementUIConnections,
+    isValidSurfaceId: isValidWalletUiSurfaceId,
+    registerUiSurface: registerWalletUiSurface,
+    heartbeatUiSurface: heartbeatWalletUiSurface,
+    disconnectUiSurface: disconnectWalletUiSurface,
     log: (message) => console.log(message),
   });
 

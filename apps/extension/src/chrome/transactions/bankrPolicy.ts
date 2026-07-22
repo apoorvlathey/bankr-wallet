@@ -8,7 +8,7 @@ import { resolvePinnedAccount } from "./runtime";
 export function bankrPrivacyConfirmationError(
   pending: PendingTxRequest,
 ): string | null {
-  return (pending.privacyShieldMeta || pending.privacyRagequitMeta) &&
+  return (pending.privacyShieldMeta || pending.privacyRagequitMeta || pending.privacyUnshieldMeta) &&
       !isPrivacyPoolsMutationAccountType("bankr")
     ? `Bankr cannot submit Privacy Pools transactions on ${PRIVACY_POOLS_DEPLOYMENT.chainName}`
     : null;

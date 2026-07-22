@@ -84,6 +84,8 @@ export function useTransactionActions({
             ? "Contract Deployment"
             : txRequest.privacyRagequitMeta
               ? "Recover Shield balance"
+              : txRequest.privacyUnshieldMeta
+                ? "Receiver-paid Unshield"
               : txRequest.privacyShieldMeta
                 ? "Shield ETH"
               : decodedFunctionName || undefined;
@@ -95,11 +97,11 @@ export function useTransactionActions({
         password: "",
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
-        ...(forceInclusion && !txRequest.privacyShieldMeta && !txRequest.privacyRagequitMeta
+        ...(forceInclusion && !txRequest.privacyShieldMeta && !txRequest.privacyRagequitMeta && !txRequest.privacyUnshieldMeta
           ? { forceInclusion: true }
           : {}),
         feePaymentToken:
-          txRequest.privacyShieldMeta || txRequest.privacyRagequitMeta || feePaymentToken === "native"
+          txRequest.privacyShieldMeta || txRequest.privacyRagequitMeta || txRequest.privacyUnshieldMeta || feePaymentToken === "native"
             ? "native"
             : "token",
         ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),

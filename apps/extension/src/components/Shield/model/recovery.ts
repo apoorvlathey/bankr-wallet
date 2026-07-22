@@ -22,6 +22,8 @@ export function getPublicWithdrawalCopy(waitingForAsp: boolean): {
 
 const PUBLIC_WITHDRAW_OPERATION_STATES = new Set([
   "awaiting_asp",
+  "asp_unavailable",
+  "asp_poi_required",
   "asp_declined",
   "asp_removed",
   "ragequit_available",
@@ -33,9 +35,11 @@ export interface PublicWithdrawalOffer {
   readonly accountAddress: string;
   readonly accountType: "bankr" | "privateKey" | "seedPhrase";
   readonly activeAccountMatches: boolean;
+  readonly sourceOperationId: string | null;
 }
 
 interface PublicWithdrawalOperation {
+  readonly id: string;
   readonly accountId: string;
   readonly accountAddress: string;
   readonly accountType: string;
@@ -69,46 +73,58 @@ export function getPublicWithdrawalOffer(input: {
   account: { id: string; address: string; type: string } | null;
   recoverableBalanceWei: bigint;
   operations: readonly PublicWithdrawalOperation[];
+  preferredOperationId?: string | null;
+  allowPrivateReady?: boolean;
 }): PublicWithdrawalOffer | null {
-  const grouped = new Map<string, PublicWithdrawalOffer & { createdAt: number }>();
-  for (const operation of input.operations) {
+  if (input.preferredOperationId) {
+    const preferred = input.operations.find((operation) =>
+      operation.id === input.preferredOperationId
+    );
     if (
-      !isRecoverableAccountType(operation.accountType) ||
-      !PUBLIC_WITHDRAW_OPERATION_STATES.has(operation.state) ||
-      operation.shieldedAmountWei <= 0n
-    ) continue;
-    const key = `${operation.accountType}:${operation.accountId}:${operation.accountAddress.toLowerCase()}`;
-    const existing = grouped.get(key);
-    if (existing) {
-      grouped.set(key, {
-        ...existing,
-        amountWei: existing.amountWei + operation.shieldedAmountWei,
-        createdAt: Math.min(existing.createdAt, operation.createdAt),
-      });
-      continue;
-    }
-    grouped.set(key, {
+      !preferred ||
+      !isRecoverableAccountType(preferred.accountType) ||
+      (!PUBLIC_WITHDRAW_OPERATION_STATES.has(preferred.state) &&
+        !(input.allowPrivateReady && preferred.state === "private_ready")) ||
+      preferred.shieldedAmountWei <= 0n
+    ) return null;
+    const offer = {
+      amountWei: preferred.shieldedAmountWei,
+      accountId: preferred.accountId,
+      accountAddress: preferred.accountAddress,
+      accountType: preferred.accountType,
+      sourceOperationId: preferred.id,
+    } as const;
+    return {
+      ...offer,
+      activeAccountMatches: accountMatches(input.account, offer),
+    };
+  }
+
+  const offers = input.operations
+    .filter((operation) =>
+      isRecoverableAccountType(operation.accountType) &&
+      (PUBLIC_WITHDRAW_OPERATION_STATES.has(operation.state) ||
+        (input.allowPrivateReady && operation.state === "private_ready")) &&
+      operation.shieldedAmountWei > 0n
+    )
+    .sort((left, right) =>
+      left.createdAt - right.createdAt || left.accountId.localeCompare(right.accountId)
+    )
+    .map((operation): PublicWithdrawalOffer => ({
       amountWei: operation.shieldedAmountWei,
       accountId: operation.accountId,
       accountAddress: operation.accountAddress,
-      accountType: operation.accountType,
-      activeAccountMatches: false,
-      createdAt: operation.createdAt,
-    });
-  }
-
-  const offers = [...grouped.values()].sort((left, right) =>
-    left.createdAt - right.createdAt || left.accountId.localeCompare(right.accountId),
-  );
+      accountType: operation.accountType as PublicWithdrawalOffer["accountType"],
+      activeAccountMatches: accountMatches(input.account, {
+        accountId: operation.accountId,
+        accountAddress: operation.accountAddress,
+        accountType: operation.accountType as PublicWithdrawalOffer["accountType"],
+      }),
+      sourceOperationId: operation.id,
+    }));
   const matchingOffer = offers.find((offer) => accountMatches(input.account, offer));
   if (matchingOffer) {
-    return {
-      amountWei: matchingOffer.amountWei,
-      accountId: matchingOffer.accountId,
-      accountAddress: matchingOffer.accountAddress,
-      accountType: matchingOffer.accountType,
-      activeAccountMatches: true,
-    };
+    return matchingOffer;
   }
 
   if (
@@ -122,17 +138,87 @@ export function getPublicWithdrawalOffer(input: {
       accountAddress: input.account.address,
       accountType: input.account.type,
       activeAccountMatches: true,
+      sourceOperationId: null,
     };
   }
 
   const offer = offers[0];
-  return offer ? {
-    amountWei: offer.amountWei,
-    accountId: offer.accountId,
-    accountAddress: offer.accountAddress,
-    accountType: offer.accountType,
-    activeAccountMatches: false,
-  } : null;
+  return offer ?? null;
+}
+
+export interface PublicRecoveryPreview {
+  readonly commitmentId: string;
+  readonly createdAt: number;
+  readonly accountId: string;
+  readonly accountAddress: string;
+  readonly accountType: "bankr" | "privateKey" | "seedPhrase";
+  readonly amountWei: bigint;
+  readonly originalAmountWei: bigint;
+  readonly withdrawnAmountWei: bigint;
+  readonly withdrawalCount: number;
+  readonly sourceOperationId: string | null;
+}
+
+const MAX_PUBLIC_RECOVERY_PREVIEWS = 1_024;
+
+function parsePublicRecoveryPreview(
+  value: unknown,
+): PublicRecoveryPreview | null {
+  if (!exact(value, [
+    "accountAddress", "accountId", "accountType", "amountWei", "commitmentId",
+    "createdAt", "originalAmountWei", "sourceOperationId", "withdrawalCount",
+    "withdrawnAmountWei",
+  ])) return null;
+  if (
+    typeof value.commitmentId !== "string" || !UUID.test(value.commitmentId) ||
+    typeof value.createdAt !== "number" || !Number.isSafeInteger(value.createdAt) ||
+    value.createdAt < 0 ||
+    typeof value.accountId !== "string" || value.accountId.length === 0 ||
+    typeof value.accountAddress !== "string" || !ADDRESS.test(value.accountAddress) ||
+    (value.accountType !== "bankr" && value.accountType !== "privateKey" &&
+      value.accountType !== "seedPhrase") ||
+    typeof value.amountWei !== "string" || !UINT.test(value.amountWei) ||
+    BigInt(value.amountWei) <= 0n ||
+    typeof value.originalAmountWei !== "string" || !UINT.test(value.originalAmountWei) ||
+    BigInt(value.originalAmountWei) < BigInt(value.amountWei) ||
+    typeof value.withdrawnAmountWei !== "string" || !UINT.test(value.withdrawnAmountWei) ||
+    BigInt(value.withdrawnAmountWei) !==
+      BigInt(value.originalAmountWei) - BigInt(value.amountWei) ||
+    typeof value.withdrawalCount !== "number" ||
+    !Number.isSafeInteger(value.withdrawalCount) || value.withdrawalCount < 0 ||
+    value.withdrawalCount > 0xffff_ffff ||
+    (value.sourceOperationId !== null &&
+      (typeof value.sourceOperationId !== "string" || !UUID.test(value.sourceOperationId)))
+  ) return null;
+  return {
+    commitmentId: value.commitmentId,
+    createdAt: value.createdAt,
+    accountId: value.accountId,
+    accountAddress: value.accountAddress,
+    accountType: value.accountType,
+    amountWei: BigInt(value.amountWei),
+    originalAmountWei: BigInt(value.originalAmountWei),
+    withdrawnAmountWei: BigInt(value.withdrawnAmountWei),
+    withdrawalCount: value.withdrawalCount,
+    sourceOperationId: value.sourceOperationId,
+  };
+}
+
+export function parsePublicRecoveryPreviewsResponse(
+  value: unknown,
+): PublicRecoveryPreview[] | null {
+  if (!exact(value, ["previews", "success"]) || value.success !== true) return null;
+  if (
+    !Array.isArray(value.previews) || value.previews.length === 0 ||
+    value.previews.length > MAX_PUBLIC_RECOVERY_PREVIEWS
+  ) return null;
+  const previews = value.previews.map(parsePublicRecoveryPreview);
+  if (previews.some((preview) => preview === null)) return null;
+  const parsed = previews as PublicRecoveryPreview[];
+  if (new Set(parsed.map((preview) => preview.commitmentId)).size !== parsed.length) {
+    return null;
+  }
+  return parsed;
 }
 
 export type PublicRecoveryState =

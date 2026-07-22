@@ -1,15 +1,5 @@
 import { useState, useEffect, useRef, memo } from "react";
-import {
-  Text,
-  Button,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-} from "@chakra-ui/react";
+import { useDisclosure } from "@chakra-ui/react";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import { clearChatHistory } from "@/chrome/bankr/chat/storage";
@@ -20,6 +10,8 @@ import AutoLockSettings from "./AutoLockSettings";
 import AgentPasswordSettings from "./AgentPasswordSettings";
 import BiometricUnlockSettings from "./BiometricUnlockSettings";
 import AppearanceSettings from "./AppearanceSettings";
+import AccountsSettings, { type AccountsSettingsProps } from "./AccountsSettings";
+import ClearChatHistoryDialog from "./ClearChatHistoryDialog";
 import SoundsSettings from "./SoundsSettings";
 import ClearSigningSettings from "./ClearSigningSettings";
 import EnsBrowsingSettings from "./EnsBrowsingSettings";
@@ -43,6 +35,7 @@ import {
   ShieldIcon,
   DatabaseIcon,
   LinkChainIcon,
+  AccountsIcon,
 } from "./icons";
 export type SettingsTab =
   | "main"
@@ -56,6 +49,7 @@ export type SettingsTab =
   | "biometricUnlock"
   | "privacyRecovery"
   | "appearance"
+  | "accounts"
   | "sounds"
   | "ensBrowsing"
   | "clearSigning"
@@ -72,6 +66,7 @@ interface SettingsProps {
   initialQuery?: string;
   onChainSaved?: (chain: { chainName: string; chainId: number }) => void;
   onInitialAddChainCancelled?: () => void;
+  accountsView: Omit<AccountsSettingsProps, "onBack">;
 }
 
 function Settings({
@@ -85,6 +80,7 @@ function Settings({
   initialQuery = "",
   onChainSaved,
   onInitialAddChainCancelled,
+  accountsView,
 }: SettingsProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [isAgentPasswordEnabled, setIsAgentPasswordEnabled] = useState(false);
@@ -261,6 +257,8 @@ function Settings({
     body = <PrivacyRecoverySettings onBack={() => returnFromLeaf("privacyRecovery")} />;
   } else if (tab === "appearance") {
     body = <AppearanceSettings onCancel={() => setTab("main")} />;
+  } else if (tab === "accounts") {
+    body = <AccountsSettings {...accountsView} onBack={() => setTab("main")} />;
   } else if (tab === "sounds") {
     body = <SoundsSettings onBack={() => setTab("main")} />;
   } else if (tab === "clearSigning") {
@@ -305,8 +303,22 @@ function Settings({
       return renderLeafRow(id, rowCtx);
     };
 
+    const accountsRow = (
+      <SettingsRow
+        key="accounts"
+        title="Accounts"
+        subtitle="View, add, and manage wallet accounts"
+        icon={<AccountsIcon boxSize={5} />}
+        iconBg="accent.secondary"
+        iconColor="accentFg.secondary"
+        cornerAccent="secondary"
+        showChevron
+        onClick={() => setTab("accounts")}
+      />
+    );
     const defaultRows = [
       renderRootLeaf("appearance"),
+      accountsRow,
       renderRootLeaf("chains"),
       <SettingsRow
         key="security"
@@ -336,9 +348,11 @@ function Settings({
       renderRootLeaf("about"),
     ];
 
-    const searchRows = matches
+    const accountSearchMatch = ["accounts", "wallet", "address", "import", "reorder", "manage"]
+      .some((keyword) => keyword.includes(trimmedQuery.toLowerCase()));
+    const searchRows = [accountSearchMatch ? accountsRow : null, ...matches
       .map((entry) => renderRootLeaf(entry.id))
-      .filter((row) => row != null);
+    ].filter((row) => row != null);
     const rows = trimmedQuery ? searchRows : defaultRows;
 
     const clearSearch = () => {
@@ -364,38 +378,11 @@ function Settings({
     <>
       {body}
 
-      {/* Delete Chat History Confirmation Modal */}
-      <Modal isOpen={isChatDeleteModalOpen} onClose={onChatDeleteModalClose} isCentered>
-        <ModalOverlay bg="surface.overlay" />
-        <ModalContent mx={4}>
-          <ModalHeader
-            color="fg.primary"
-            fontWeight="600"
-            fontSize="md"
-            borderBottomWidth="1px"
-            borderColor="border.subtle"
-          >
-            Clear Bankr chat history?
-          </ModalHeader>
-          <ModalBody py={4}>
-            <Text color="text.secondary" fontSize="sm" fontWeight="500">
-              This permanently deletes every chat conversation. This action cannot be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap={2} borderTopWidth="1px" borderColor="border.subtle">
-            <Button variant="secondary" size="sm" onClick={onChatDeleteModalClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={handleClearChatHistory}
-            >
-              Delete
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <ClearChatHistoryDialog
+        isOpen={isChatDeleteModalOpen}
+        onClose={onChatDeleteModalClose}
+        onConfirm={handleClearChatHistory}
+      />
     </>
   );
 }

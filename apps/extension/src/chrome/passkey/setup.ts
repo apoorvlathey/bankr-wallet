@@ -52,6 +52,7 @@ import {
 } from "../storageLock";
 import { PRIVACY_VAULT_STORAGE_KEY } from "../privacy/record";
 import { preparePrivacyVaultForPasskeySetup } from "../privacy/vault";
+import { addPrivacyKeyToSessionCapability } from "../session/capabilityPersistence";
 
 async function prepareAndCommitPasskeyState(
   payload: PasskeyCredentialPayload,
@@ -197,6 +198,12 @@ async function prepareAndCommitPasskeyState(
           key: preparedPrivacy.unlocked.key,
           keyBytes: preparedPrivacy.unlocked.keyBytes,
           keyId: preparedPrivacy.unlocked.keyId,
+        });
+        await addPrivacyKeyToSessionCapability({
+          keyBytes: preparedPrivacy.unlocked.keyBytes,
+          keyId: preparedPrivacy.unlocked.keyId,
+        }).catch((error) => {
+          console.warn("[passkey] Failed to refresh the live session capability:", error);
         });
         invalidateAuthCeremonies();
         return { success: true };

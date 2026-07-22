@@ -19,6 +19,9 @@ export interface ShieldPendingOperation {
     | "public_confirmed"
     | "awaiting_event"
     | "awaiting_asp"
+    | "asp_unavailable"
+    | "asp_poi_required"
+    | "asp_approved"
     | "private_ready"
     | "wallet_rejected"
     | "submission_failed"
@@ -73,6 +76,9 @@ const OPERATION_STATES = new Set<ShieldPendingOperation["state"]>([
   "public_confirmed",
   "awaiting_event",
   "awaiting_asp",
+  "asp_unavailable",
+  "asp_poi_required",
+  "asp_approved",
   "private_ready",
   "wallet_rejected",
   "submission_failed",

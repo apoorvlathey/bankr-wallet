@@ -11,7 +11,6 @@ const sourceUrl = new URL("../../src/", import.meta.url);
 const transitionalBudgets: Record<string, number> = {
   "App.tsx": 3_566,
   "components/AccountSettings.tsx": 1_170,
-  "components/AccountSwitcher.tsx": 472,
   "components/AddAccount.tsx": 813,
   "components/BatchCallsList.tsx": 839,
   "components/CalldataDecoder.tsx": 468,
@@ -30,7 +29,6 @@ const transitionalBudgets: Record<string, number> = {
   "components/Settings/AddChain.tsx": 550,
   "components/Settings/Chains.tsx": 478,
   "components/Settings/EnsBrowsingSettings.tsx": 666,
-  "components/Settings/index.tsx": 406,
   "components/Settings/settingsRegistry.tsx": 455,
   "components/Swap/BridgeChainTokenModal.tsx": 709,
   "components/Swap/BridgeChainTokenPickerScreen.tsx": 460,

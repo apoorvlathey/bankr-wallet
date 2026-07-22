@@ -1,5 +1,6 @@
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 import { Box, HStack, Image, Text, VStack } from "@chakra-ui/react";
+import type { ReactNode } from "react";
 import SafeImage from "@/components/SafeImage";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
@@ -12,6 +13,8 @@ interface RequestIdentityProps {
   isInternalWalletChan?: boolean;
   originInitials?: string;
   onOpenOrigin?: () => void;
+  labelOverride?: string;
+  identityIcon?: ReactNode;
 }
 
 /** Shared requesting-app identity used by transaction and batch decisions. */
@@ -23,10 +26,12 @@ export function RequestIdentity({
   isInternalWalletChan = false,
   originInitials = "?",
   onOpenOrigin,
+  labelOverride,
+  identityIcon,
 }: RequestIdentityProps) {
   const formatOrigin = useDappOriginFormatter();
   const displayOrigin = formatOrigin(origin);
-  const displayLabel = displayOrigin.label;
+  const displayLabel = labelOverride ?? displayOrigin.label;
   const displayFavicon = displayOrigin.faviconSrc || favicon;
   const displayFaviconFallback =
     displayOrigin.faviconFallbackSrc ||
@@ -53,8 +58,8 @@ export function RequestIdentity({
       <Box
         boxSize="36px"
         borderRadius="md"
-        bg={isInternalWalletChan ? "transparent" : iconChipBg}
-        borderWidth={isInternalWalletChan ? 0 : "1px"}
+        bg={isInternalWalletChan && !identityIcon ? "transparent" : iconChipBg}
+        borderWidth={isInternalWalletChan && !identityIcon ? 0 : "1px"}
         borderStyle="solid"
         borderColor="border.subtle"
         display="flex"
@@ -62,7 +67,9 @@ export function RequestIdentity({
         justifyContent="center"
         overflow="hidden"
       >
-        {isInternalWalletChan ? (
+        {identityIcon ? (
+          identityIcon
+        ) : isInternalWalletChan ? (
           <Image src="/walletchan-icon.png" alt="WalletChan" boxSize="28px" />
         ) : displayFavicon || displayFaviconFallback ? (
           <SafeImage

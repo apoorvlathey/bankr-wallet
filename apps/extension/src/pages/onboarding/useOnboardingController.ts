@@ -3,7 +3,7 @@ import { isAddress } from "@ethersproject/address";
 import { isResolvableName, resolveNameToAddress } from "@/lib/ensUtils";
 import { validateAndDeriveAddress } from "@/utils/privateKeyUtils";
 import { newPasswordPolicyError } from "@/constants/securityPolicy";
-import { startUiKeepaliveHeartbeat } from "@/app/uiKeepalive";
+import { startWorkerKeepaliveHeartbeat } from "@/app/uiKeepalive";
 
 export type OnboardingStep =
   | "welcome"
@@ -125,7 +125,7 @@ export function useOnboardingController() {
       if (!disposed && !keepAlivePortRef.current) {
         try {
           const port = chrome.runtime.connect({
-            name: "ui-keepalive",
+            name: "onboarding-keepalive",
           });
           keepAlivePortRef.current = port;
           port.onDisconnect.addListener(() => {
@@ -135,7 +135,7 @@ export function useOnboardingController() {
             keepAlivePortRef.current = null;
           });
           stopKeepaliveHeartbeatRef.current =
-            startUiKeepaliveHeartbeat(port);
+            startWorkerKeepaliveHeartbeat(port);
         } catch {
           // Ignore connection errors.
         }

@@ -126,9 +126,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
 
   assert.match(timeoutTransitions, /from "\.\.\/authTransition"/);
   assert.match(timeoutTransitions, /from "\.\/autoLockPolicy"/);
-  assert.match(timeoutTransitions, /from "\.\/cacheAccess"/);
   assert.match(timeoutTransitions, /from "\.\/inMemoryCache"/);
-  assert.match(timeoutTransitions, /from "\.\/persistence"/);
   assert.match(timeoutTransitions, /from "\.\/teardown"/);
 
   assert.match(restoration, /from "\.\.\/authTransition"/);

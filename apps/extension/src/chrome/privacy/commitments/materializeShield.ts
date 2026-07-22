@@ -15,6 +15,10 @@ import {
   updatePrivacyCommitmentStatus,
   upsertPrivacyCommitment,
 } from "./repository";
+import {
+  canonicalPrivacyCommitments,
+  privacyCommitmentLineageKey,
+} from "./lineageIntegrity";
 import type {
   PrivacyCommitmentDetailsV1,
   PrivacyCommitmentStatus,
@@ -110,6 +114,20 @@ export async function persistPrivacyShieldCommitment(
   material: PrivacyCommitmentMaterial,
   commitment: PrivacyCommitmentDetailsV1,
 ): Promise<void> {
+  const before = await readPrivacyCommitments(material.key, material.keyId);
+  const represented = canonicalPrivacyCommitments(before).find((item) =>
+    privacyCommitmentLineageKey(item.details) ===
+      privacyCommitmentLineageKey(commitment) ||
+    (commitment.sourceOperationId !== null &&
+      item.details.sourceOperationId === commitment.sourceOperationId)
+  );
+  if (represented && represented.details.commitment !== commitment.commitment) {
+    if (
+      privacyCommitmentLineageKey(represented.details) !==
+      privacyCommitmentLineageKey(commitment)
+    ) throw new Error("Shield operation commitment lineage changed");
+    return;
+  }
   await upsertPrivacyCommitment(material.key, material.keyId, commitment);
   const stored = (await readPrivacyCommitments(material.key, material.keyId))
     .find((item) => item.details.commitment === commitment.commitment);
@@ -125,6 +143,10 @@ export async function persistPrivacyShieldCommitment(
     material.keyId,
     stored.record.id,
     commitment.status,
+    {
+      revision: stored.record.revision,
+      status: stored.details.status,
+    },
   );
 }
 

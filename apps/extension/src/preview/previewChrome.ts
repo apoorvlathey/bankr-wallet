@@ -4,6 +4,8 @@ import type { SimulationResult } from "@/chrome/txSimulation";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
 import { createPrivacyShieldQuoteValues } from "@/chrome/privacy/deposit/quotePolicy";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import { formatEther } from "viem";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
@@ -207,10 +209,11 @@ function activeAccount(environment: PreviewEnvironment) {
 
 const PREVIEW_SHIELD_BALANCE_WEI = 250_000_000_000_000_000n;
 const PREVIEW_SHIELD_GAS_RESERVE_WEI = 50_000_000_000_000n;
-const PREVIEW_SHIELD_MINIMUM_WEI = 1_000_000_000_000_000n;
+const PREVIEW_SHIELD_MINIMUM_WEI =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
 const PREVIEW_MAX_UINT256 = (1n << 256n) - 1n;
 const PREVIEW_SHIELD_ENTRYPOINT =
-  "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB";
+  PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address;
 
 function parsePreviewShieldAmount(value: unknown): bigint | null {
   if (
@@ -265,7 +268,7 @@ function previewPrivacyShieldQuote(
     return {
       success: false,
       code: "amount-below-minimum",
-      error: "Minimum amount to shield is 0.001 ETH. The protocol fee is added on top.",
+      error: `Minimum amount to shield is ${formatEther(PREVIEW_SHIELD_MINIMUM_WEI)} ETH. The protocol fee is added on top.`,
     };
   }
   return {
@@ -289,7 +292,7 @@ function previewPrivacyShieldReview(
     return {
       success: false,
       code: "insufficient-funds",
-      error: "Not enough Sepolia ETH for this amount and gas.",
+      error: `Not enough ${PRIVACY_POOLS_DEPLOYMENT.chainName} ETH for this amount and gas.`,
     };
   }
   const account = activeAccount(environment);
@@ -297,7 +300,7 @@ function previewPrivacyShieldReview(
     success: true,
     status: "ready",
     review: {
-      chainId: 11_155_111,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
       accountId: account.id,
       accountAddress: account.address.toLowerCase(),
       accountType: account.type,

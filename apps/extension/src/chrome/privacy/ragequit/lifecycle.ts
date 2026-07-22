@@ -2,6 +2,7 @@ import { decodeEventLog, parseAbi, type Hex } from "viem";
 
 import { startReceiptPolling } from "../../forceInclusion/receiptPoller";
 import type { PendingTxRequest } from "../../requests/pendingTxStorage";
+import type { PendingBatchTxRequest } from "../../erc5792Types";
 import {
   applyPrivacyCommitmentRagequit,
   readPrivacyCommitments,
@@ -19,8 +20,10 @@ import {
 } from "./repository";
 import {
   assertPrivacyRagequitAuthorization,
+  revalidatePrivacyRagequitBatchConfirmation,
   isPrivacyRagequitPendingTransaction,
   revalidatePrivacyRagequitConfirmation,
+  type PrivacyRagequitBatchAuthorization,
   type PrivacyRagequitAuthorization,
 } from "./submission";
 import type {
@@ -82,6 +85,10 @@ async function releaseClaim(operation: StoredPrivacyRagequitV1): Promise<void> {
       material.keyId,
       details.commitmentId,
       details.previousStatus,
+      {
+        revision: details.commitmentRevision + 1,
+        status: "ragequit_pending",
+      },
     );
   }
 }
@@ -151,26 +158,152 @@ export async function recordPrivacyRagequitSubmissionFailure(
   if (operation?.tracking.state === "submission_failed") await releaseClaim(operation);
 }
 
+function isPrivacyRagequitBatch(
+  pending: PendingBatchTxRequest,
+): pending is PendingBatchTxRequest & {
+  privacyRagequitMeta: { version: 1; operationIds: string[] };
+} {
+  return pending.privacyRagequitMeta?.version === 1 &&
+    pending.privacyRagequitMeta.operationIds.length >= 2;
+}
+
+async function updateBatchOperations(
+  pending: PendingBatchTxRequest,
+  update: Parameters<typeof updatePrivacyRagequitTracking>[1],
+): Promise<StoredPrivacyRagequitV1[]> {
+  if (!isPrivacyRagequitBatch(pending)) return [];
+  const records = await listAllPrivacyRagequits();
+  const batchRecords = records.filter((operation) =>
+    operation.summary.batchId === pending.id
+  );
+  const operationIds = pending.privacyRagequitMeta.operationIds;
+  if (
+    new Set(operationIds).size !== operationIds.length ||
+    batchRecords.length !== operationIds.length ||
+    pending.params.atomicRequired !== true ||
+    pending.params.calls.length !== operationIds.length ||
+    operationIds.some((id, index) => batchRecords.find(
+      (operation) => operation.summary.id === id,
+    )?.summary.id !== id || !pending.params.calls[index]) ||
+    batchRecords.some((operation) =>
+      operation.summary.accountId !== pending.accountId ||
+      operation.summary.accountType !== pending.accountType ||
+      operation.summary.accountAddress.toLowerCase() !==
+        pending.accountAddress?.toLowerCase() ||
+      operation.summary.accountAddress.toLowerCase() !==
+        pending.params.from?.toLowerCase()
+    )
+  ) throw new Error("Public recovery batch binding is invalid");
+  const updated: StoredPrivacyRagequitV1[] = [];
+  for (const operationId of operationIds) {
+    const operation = await updatePrivacyRagequitTracking(operationId, update);
+    if (!operation) throw new Error("Public recovery is unavailable");
+    updated.push(operation);
+  }
+  return updated;
+}
+
+export async function beginPrivacyRagequitBatchSubmission(
+  pending: PendingBatchTxRequest,
+  authorization: PrivacyRagequitBatchAuthorization | null,
+): Promise<void> {
+  if (!isPrivacyRagequitBatch(pending)) return;
+  if (!authorization || authorization.batchId !== pending.id) {
+    throw new Error("Public recovery authorization is unavailable");
+  }
+  await revalidatePrivacyRagequitBatchConfirmation(pending, authorization);
+  await updateBatchOperations(pending, (current) => {
+    if (current.state === "submission_unknown") return null;
+    if (current.state !== "awaiting_wallet_confirmation") {
+      throw new Error("Public recovery is no longer confirmable");
+    }
+    return advance(current, "submission_unknown", { errorCode: "submission-unknown" });
+  });
+  assertPrivacyRagequitAuthorization({
+    operationId: authorization.operationIds[0],
+    expectedAuthEpoch: authorization.expectedAuthEpoch,
+  });
+}
+
+export async function recordPrivacyRagequitBatchSubmitted(
+  pending: PendingBatchTxRequest,
+  txHash: unknown,
+): Promise<void> {
+  if (!isPrivacyRagequitBatch(pending)) return;
+  const normalized = normalizedHash(txHash);
+  if (!normalized) throw new Error("Public recovery transaction hash is invalid");
+  await updateBatchOperations(pending, (current) => {
+    if (current.txHash && current.txHash.toLowerCase() !== normalized) {
+      throw new Error("Public recovery transaction hash changed");
+    }
+    if (current.state !== "submission_unknown" && current.state !== "submitted") {
+      throw new Error("Public recovery cannot accept a transaction hash");
+    }
+    if (current.state === "submitted" && current.txHash === normalized) return null;
+    return advance(current, "submitted", { txHash: normalized, errorCode: null });
+  });
+}
+
+export async function recordPrivacyRagequitBatchWalletRejected(
+  pending: PendingBatchTxRequest,
+): Promise<void> {
+  if (!isPrivacyRagequitBatch(pending)) return;
+  const operations = await updateBatchOperations(pending, (current) =>
+    current.state === "awaiting_wallet_confirmation"
+      ? advance(current, "wallet_rejected", { errorCode: "wallet-rejected" })
+      : null,
+  );
+  for (const operation of operations) {
+    if (operation.tracking.state === "wallet_rejected") await releaseClaim(operation);
+  }
+}
+
+export async function recordPrivacyRagequitBatchSubmissionFailure(
+  pending: PendingBatchTxRequest,
+): Promise<void> {
+  if (!isPrivacyRagequitBatch(pending)) return;
+  const operations = await updateBatchOperations(pending, (current) => {
+    if (current.state === "submission_unknown" || current.state === "submitted") return null;
+    return current.state === "awaiting_wallet_confirmation"
+      ? advance(current, "submission_failed", { errorCode: "submission-failed" })
+      : null;
+  });
+  for (const operation of operations) {
+    if (operation.tracking.state === "submission_failed") await releaseClaim(operation);
+  }
+}
+
 export async function recordPrivacyRagequitDropped(
   operationId: string,
   txHash: unknown,
 ): Promise<void> {
   const normalized = normalizedHash(txHash);
   if (!normalized) return;
-  await updatePrivacyRagequitTracking(operationId, (current) => {
-    if (current.txHash && current.txHash.toLowerCase() !== normalized) {
-      throw new Error("Public recovery transaction hash changed");
-    }
-    if (current.state !== "submitted" && current.state !== "submission_unknown") return null;
-    return advance(current, "failed_recoverable", {
-      txHash: normalized,
-      errorCode: "submission-failed",
+  const operations = await listAllPrivacyRagequits();
+  const ids = operations
+    .filter((operation) =>
+      operation.summary.id === operationId || operation.summary.batchId === operationId
+    )
+    .map((operation) => operation.summary.id);
+  for (const id of ids) {
+    await updatePrivacyRagequitTracking(id, (current) => {
+      if (current.txHash && current.txHash.toLowerCase() !== normalized) {
+        throw new Error("Public recovery transaction hash changed");
+      }
+      if (current.state !== "submitted" && current.state !== "submission_unknown") return null;
+      return advance(current, "failed_recoverable", {
+        txHash: normalized,
+        errorCode: "submission-failed",
+      });
     });
-  });
+  }
 }
 
-export function decodePrivacyRagequitReceiptEvent(receipt: any): Omit<PrivacyRagequitEventV1, "version" | "id" | "chainId" | "blockHash" | "blockNumber" | "logIndex" | "transactionHash"> | null {
-  if (!Array.isArray(receipt?.logs)) return null;
+type DecodedRagequitEvent = Omit<PrivacyRagequitEventV1, "version" | "id" | "chainId" | "blockHash" | "blockNumber" | "logIndex" | "transactionHash">;
+
+export function decodePrivacyRagequitReceiptEvents(receipt: any): DecodedRagequitEvent[] {
+  if (!Array.isArray(receipt?.logs)) return [];
+  const events: DecodedRagequitEvent[] = [];
   for (const log of receipt.logs) {
     try {
       if (
@@ -191,17 +324,21 @@ export function decodePrivacyRagequitReceiptEvent(receipt: any): Omit<PrivacyRag
         _label: bigint;
         _value: bigint;
       };
-      return {
+      events.push({
         ragequitter: args._ragequitter,
         commitment: args._commitment.toString(),
         label: args._label.toString(),
         valueWei: args._value.toString(),
-      };
+      });
     } catch {
       // Ignore unrelated logs.
     }
   }
-  return null;
+  return events;
+}
+
+export function decodePrivacyRagequitReceiptEvent(receipt: any): DecodedRagequitEvent | null {
+  return decodePrivacyRagequitReceiptEvents(receipt)[0] ?? null;
 }
 
 async function finalizeRecovery(
@@ -245,48 +382,58 @@ export async function applyPrivacyRagequitReceipt(args: {
   const normalized = normalizedHash(args.txHash);
   if (!normalized || args.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId) return;
   const operations = await listAllPrivacyRagequits();
-  const operation = operations.find((item) => item.summary.id === args.txId);
-  if (!operation) return;
-  if (operation.tracking.txHash && operation.tracking.txHash.toLowerCase() !== normalized) {
-    throw new Error("Public recovery receipt transaction hash changed");
-  }
+  const matchingOperations = operations.filter((item) =>
+    item.summary.id === args.txId || item.summary.batchId === args.txId
+  );
+  if (matchingOperations.length === 0) return;
+  if (matchingOperations.some((operation) =>
+    operation.tracking.txHash && operation.tracking.txHash.toLowerCase() !== normalized
+  )) throw new Error("Public recovery receipt transaction hash changed");
   if (!args.succeeded) {
-    const updated = await updatePrivacyRagequitTracking(args.txId, (current) =>
-      advance(current, "public_reverted", {
-        txHash: normalized,
-        errorCode: "public-reverted",
-      }),
-    );
-    if (updated) await releaseClaim(updated);
+    for (const operation of matchingOperations) {
+      const updated = await updatePrivacyRagequitTracking(operation.summary.id, (current) =>
+        advance(current, "public_reverted", {
+          txHash: normalized,
+          errorCode: "public-reverted",
+        }),
+      );
+      if (updated) await releaseClaim(updated);
+    }
     return;
   }
   const blockNumber = serializedUint(args.receipt?.blockNumber);
-  const event = decodePrivacyRagequitReceiptEvent(args.receipt);
-  if (!blockNumber || !event) {
-    await updatePrivacyRagequitTracking(args.txId, (current) =>
-      advance(current, "public_confirmed", {
-        txHash: normalized,
-        blockNumber,
-        errorCode: "event-unavailable",
-      }),
-    );
+  const events = decodePrivacyRagequitReceiptEvents(args.receipt);
+  if (!blockNumber || events.length < matchingOperations.length) {
+    for (const operation of matchingOperations) {
+      await updatePrivacyRagequitTracking(operation.summary.id, (current) =>
+        advance(current, "public_confirmed", {
+          txHash: normalized,
+          blockNumber,
+          errorCode: "event-unavailable",
+        }),
+      );
+    }
     return;
   }
-  try {
-    const finalized = await finalizeRecovery(operation, event);
-    await updatePrivacyRagequitTracking(args.txId, (current) =>
-      advance(current, finalized ? "recovered" : "public_confirmed", {
+  const unused = [...events];
+  for (const operation of matchingOperations) {
+    let matchedIndex = -1;
+    for (let index = 0; index < unused.length; index += 1) {
+      try {
+        if (await finalizeRecovery(operation, unused[index])) {
+          matchedIndex = index;
+          break;
+        }
+      } catch {
+        // Keep searching: another event in this atomic receipt may be exact.
+      }
+    }
+    if (matchedIndex >= 0) unused.splice(matchedIndex, 1);
+    await updatePrivacyRagequitTracking(operation.summary.id, (current) =>
+      advance(current, matchedIndex >= 0 ? "recovered" : "failed_recoverable", {
         txHash: normalized,
         blockNumber,
-        errorCode: finalized ? null : "event-unavailable",
-      }),
-    );
-  } catch {
-    await updatePrivacyRagequitTracking(args.txId, (current) =>
-      advance(current, "failed_recoverable", {
-        txHash: normalized,
-        blockNumber,
-        errorCode: "event-mismatch",
+        errorCode: matchedIndex >= 0 ? null : "event-mismatch",
       }),
     );
   }
@@ -297,14 +444,29 @@ export async function reconcilePrivacyRagequitEvents(): Promise<void> {
     listAllPrivacyRagequits(),
     listPrivacyRagequitEvents(),
   ]);
-  const byHash = new Map(events.map((event) => [event.transactionHash.toLowerCase(), event]));
+  const byHash = new Map<string, PrivacyRagequitEventV1[]>();
+  for (const event of events) {
+    const hash = event.transactionHash.toLowerCase();
+    byHash.set(hash, [...(byHash.get(hash) ?? []), event]);
+  }
   for (const operation of operations) {
     const txHash = operation.tracking.txHash?.toLowerCase();
     if (!txHash || operation.tracking.state === "recovered") continue;
-    const event = byHash.get(txHash);
-    if (!event) continue;
+    const candidates = byHash.get(txHash);
+    if (!candidates?.length) continue;
     try {
-      if (!(await finalizeRecovery(operation, event))) continue;
+      let event: PrivacyRagequitEventV1 | null = null;
+      for (const candidate of candidates) {
+        try {
+          if (await finalizeRecovery(operation, candidate)) {
+            event = candidate;
+            break;
+          }
+        } catch {
+          // Search every event sharing the atomic batch hash.
+        }
+      }
+      if (!event) throw new Error("Public recovery event does not match");
       await updatePrivacyRagequitTracking(operation.summary.id, (current) =>
         advance(current, "recovered", {
           txHash: event.transactionHash,
@@ -324,14 +486,18 @@ export async function reconcilePrivacyRagequitEvents(): Promise<void> {
 
 export async function resumePrivacyRagequitTracking(): Promise<void> {
   const operations = await listAllPrivacyRagequits();
+  const resumed = new Set<string>();
   for (const operation of operations) {
     if (
       operation.tracking.txHash &&
       (operation.tracking.state === "submitted" ||
         operation.tracking.state === "submission_unknown")
     ) {
+      const trackingId = operation.summary.batchId ?? operation.summary.id;
+      if (resumed.has(trackingId)) continue;
+      resumed.add(trackingId);
       startReceiptPolling(
-        operation.summary.id,
+        trackingId,
         operation.tracking.txHash,
         operation.summary.chainId,
       );

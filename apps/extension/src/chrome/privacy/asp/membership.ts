@@ -40,8 +40,67 @@ export interface PrivacyCommitmentAspMembershipInput {
   masterKeys: PrivacyPoolMasterKeys;
 }
 
+export type PrivacyAspPublicMembershipInput = Omit<
+  PrivacyAspMembershipInput,
+  "details" | "masterKeys"
+>;
+
 function bigintLeaves(values: readonly string[]): bigint[] {
   return values.map((value) => BigInt(value));
+}
+
+function verifyPublicTreeMembership(input: {
+  label: string;
+  commitment: string;
+  roots: PrivacyAspRoots;
+  leaves: PrivacyAspLeaves;
+  onchain: PrivacyAspOnchainRoots;
+}): void {
+  const endpointAspRoot = BigInt(input.roots.mtRoot);
+  const endpointStateRoot = BigInt(input.roots.onchainMtRoot);
+  if (
+    endpointAspRoot !== input.onchain.associationRoot ||
+    endpointStateRoot !== input.onchain.verifiedStateRoot
+  ) {
+    throw new Error("ASP roots do not match the active Privacy Pools deployment");
+  }
+  const aspProof = generateMerkleProof(
+    bigintLeaves(input.leaves.aspLeaves),
+    BigInt(input.label),
+  );
+  const stateProof = generateMerkleProof(
+    bigintLeaves(input.leaves.stateTreeLeaves),
+    BigInt(input.commitment),
+  );
+  if (aspProof.root !== endpointAspRoot || stateProof.root !== endpointStateRoot) {
+    throw new Error("ASP membership roots do not match");
+  }
+}
+
+/** Verify the public deposit binding and current onchain ASP membership while locked. */
+export function verifyPrivacyAspPublicMembership(
+  input: PrivacyAspPublicMembershipInput,
+): void {
+  const { operation, tracking, deposit } = input;
+  if (
+    tracking.txHash === null ||
+    tracking.commitment === null ||
+    tracking.label === null ||
+    tracking.poolValueWei === null ||
+    BigInt(deposit.label) !== BigInt(tracking.label) ||
+    deposit.amount !== tracking.poolValueWei ||
+    deposit.address.toLowerCase() !== operation.summary.accountAddress.toLowerCase() ||
+    deposit.txHash.toLowerCase() !== tracking.txHash.toLowerCase()
+  ) {
+    throw new Error("ASP deposit does not match the Shield operation");
+  }
+  verifyPublicTreeMembership({
+    label: tracking.label,
+    commitment: tracking.commitment,
+    roots: input.roots,
+    leaves: input.leaves,
+    onchain: input.onchain,
+  });
 }
 
 /** Verify service metadata, local lineage, both memberships, and both chain roots. */
@@ -132,23 +191,11 @@ export function verifyPrivacyCommitmentAspMembership(
     throw new Error("Shield commitment lineage does not match");
   }
 
-  const endpointAspRoot = BigInt(roots.mtRoot);
-  const endpointStateRoot = BigInt(roots.onchainMtRoot);
-  if (
-    endpointAspRoot !== onchain.associationRoot ||
-    endpointStateRoot !== onchain.stateRoot
-  ) {
-    throw new Error("ASP roots do not match the active Privacy Pools deployment");
-  }
-  const aspProof = generateMerkleProof(
-    bigintLeaves(leaves.aspLeaves),
-    BigInt(details.label),
-  );
-  const stateProof = generateMerkleProof(
-    bigintLeaves(leaves.stateTreeLeaves),
-    BigInt(details.commitment),
-  );
-  if (aspProof.root !== endpointAspRoot || stateProof.root !== endpointStateRoot) {
-    throw new Error("ASP membership roots do not match");
-  }
+  verifyPublicTreeMembership({
+    label: details.label,
+    commitment: details.commitment,
+    roots,
+    leaves,
+    onchain,
+  });
 }

@@ -103,7 +103,7 @@ test("agent and impersonator sessions cannot create privacy recovery", async () 
   }
 });
 
-test("ready status is non-secret and remains visible to restricted sessions", async () => {
+test("an existing private identity still requires a live master session", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
   const selected = account("bankr");
   const harness = createChromeStorageHarness({
@@ -117,8 +117,10 @@ test("ready status is non-secret and remains visible to restricted sessions", as
     session.setCachedPasswordType("agent");
     session.setCachedPasswordDirect("agent-password");
     assert.deepEqual(await identity.ensurePrivacyIdentityInitialized(), {
-      success: true,
-      status: "ready",
+      success: false,
+      status: "action-required",
+      code: "auth-required",
+      error: "Use your main password to finish Shield setup.",
     });
     assert.deepEqual(harness.stores.local.privacyVault, before);
   } finally {

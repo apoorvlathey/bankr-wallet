@@ -1,6 +1,7 @@
 /** Trusted-UI transport for explicit Privacy Pools backup, restore, and rescan. */
 
 import { rescanPrivacyCommitmentsWithActiveIdentity } from "../privacy/commitments/rescan";
+import { PRIVACY_POOLS_DEPLOYMENT } from "../privacy/deployment/manifest";
 import {
   PrivacyRecoveryError,
   readPrivacyRecoveryStatus,
@@ -157,7 +158,7 @@ export function createBackgroundPrivacyRecoveryMessageRouter(
           .catch(() => sendResponse({
             success: false,
             code: "recovery-unavailable",
-            error: "Couldn’t scan Sepolia right now. Your recovery phrase is still saved.",
+            error: `Couldn’t scan ${PRIVACY_POOLS_DEPLOYMENT.chainName} right now. Your recovery phrase is still saved.`,
           }));
         return { handled: true, keepChannelOpen: true };
 

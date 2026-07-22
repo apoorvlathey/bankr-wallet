@@ -1,4 +1,16 @@
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import { privacyShieldGrossAmountWei } from "@/lib/privacyShieldAmounts";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
+
+const previewPendingShieldedWei =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
+const previewPendingGrossWei = privacyShieldGrossAmountWei(
+  previewPendingShieldedWei,
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS,
+);
+const previewPendingProtocolFeeWei =
+  previewPendingGrossWei - previewPendingShieldedWei;
+const previewPendingGasReserveWei = 120_000_000_000_000n;
 
 interface PreviewShieldAccount {
   id: string;
@@ -15,9 +27,9 @@ export function previewShieldPortfolioResponse(
   },
 ) {
   const pendingEligibility = scenario === "pending-eligibility" || scenario === "unshield-pending" || scenario === "private";
-  const readyToSend = scenario === "unshield" || scenario === "send" || scenario === "private";
-  const readyBalanceWei = readyToSend ? 10_000_000_000_000_000n : 0n;
-  const pendingBalanceWei = pendingEligibility ? 1_980_000_000_000_000n : 0n;
+  const readyToUnshield = scenario === "unshield" || scenario === "private";
+  const readyBalanceWei = readyToUnshield ? 10_000_000_000_000_000n : 0n;
+  const pendingBalanceWei = pendingEligibility ? previewPendingShieldedWei : 0n;
   return {
     success: true,
     operations: pendingEligibility
@@ -26,19 +38,21 @@ export function previewShieldPortfolioResponse(
           revision: 4,
           state: "awaiting_asp",
           createdAt: PREVIEW_EPOCH_MS - 90_000,
-          chainId: 11_155_111,
+          chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
           accountId: account.id,
           accountAddress: account.address,
           accountType: account.type,
-          amountWei: "2000000000000000",
-          protocolFeeWei: "20000000000000",
-          shieldedAmountWei: "1980000000000000",
-          gasReserveWei: "120000000000000",
-          totalRequiredWei: "2120000000000000",
-          destinationAddress: "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB",
-          poolAddress: "0x644d5A2554d36e27509254F32ccfeBe8cd58861f",
+          amountWei: previewPendingGrossWei.toString(),
+          protocolFeeWei: previewPendingProtocolFeeWei.toString(),
+          shieldedAmountWei: previewPendingShieldedWei.toString(),
+          gasReserveWei: previewPendingGasReserveWei.toString(),
+          totalRequiredWei:
+            (previewPendingGrossWei + previewPendingGasReserveWei).toString(),
+          destinationAddress:
+            PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+          poolAddress: PRIVACY_POOLS_DEPLOYMENT.contracts.ethPool.address,
           txHash: `0x${"ab".repeat(32)}`,
-          blockNumber: "11305183",
+          blockNumber: PRIVACY_POOLS_DEPLOYMENT.observedAt.blockNumber.toString(),
           errorCode: null,
         }]
       : [],
@@ -48,18 +62,20 @@ export function previewShieldPortfolioResponse(
       status: "ready",
       confirmedBalanceWei: (readyBalanceWei + pendingBalanceWei).toString(),
       readyBalanceWei: readyBalanceWei.toString(),
-      maxPrivateSendWei: readyToSend ? "10000000000000000" : "0",
+      maxPrivateSendWei: readyToUnshield ? "10000000000000000" : "0",
       pendingBalanceWei: pendingBalanceWei.toString(),
-      recoverableBalanceWei: pendingEligibility ? "1980000000000000" : "0",
+      recoverableBalanceWei: pendingEligibility
+        ? previewPendingShieldedWei.toString()
+        : "0",
       attentionCount: 0,
       lastUpdatedAt: PREVIEW_EPOCH_MS,
     },
     series: {
       priceUsd: 3_420,
-      totalValueUsd: readyToSend ? 34.2 : 0,
+      totalValueUsd: readyToUnshield ? 34.2 : 0,
       snapshots: [
         { timestamp: PREVIEW_EPOCH_MS - 3_600_000, totalValueUsd: 0 },
-        { timestamp: PREVIEW_EPOCH_MS, totalValueUsd: readyToSend ? 34.2 : 0 },
+        { timestamp: PREVIEW_EPOCH_MS, totalValueUsd: readyToUnshield ? 34.2 : 0 },
       ],
     },
   };

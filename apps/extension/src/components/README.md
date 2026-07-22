@@ -32,6 +32,8 @@ integration boundary, not the default home for new implementations.
 ## Feature domains
 
 - `Activity/` owns transaction-history list presentation.
+- `AccountPicker/` owns the shared searchable and reorderable account browser;
+  public-home selection and Settings management remain explicit parent modes.
 - `AssetChanges/` owns simulation lifecycle, retry projection, asset rows, and
   sanitized NFT preview presentation.
 - `BatchConfirmation/` owns ERC-5792 batch review, editing, and decisions.
@@ -41,7 +43,7 @@ integration boundary, not the default home for new implementations.
 - `Portfolio/Holdings/` owns portfolio hydration, display transforms, and asset rows.
 - `Settings/` owns settings navigation and configuration screens.
 - `Shield/` owns the balance-first private-balance screen, status-only automatic
-  recovery initialization, Sepolia Shield review/activity, aggregate balance,
+  recovery initialization, active-profile Shield review/activity, aggregate balance,
   private Unshield, and original-depositor public-withdrawal presentation. All
   custody, proving, RPC, signing, and submission effects remain in background
   domains.

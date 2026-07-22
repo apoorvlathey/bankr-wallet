@@ -51,6 +51,26 @@ export class PrivacyRelayerSubmissionError extends Error {
   }
 }
 
+/** A fully verified quote that the active Entrypoint would reject onchain. */
+export class PrivacyRelayerFeeCapError extends Error {
+  readonly relayerName: string;
+  readonly feeBPS: bigint;
+  readonly maxFeeBPS: bigint;
+  readonly expiresAt: number;
+
+  constructor(selection: Pick<
+    PrivacyRelayerQuoteSelection,
+    "relayerName" | "feeBPS" | "expiresAt"
+  >) {
+    super("relay-fee-cap-exceeded");
+    this.name = "PrivacyRelayerFeeCapError";
+    this.relayerName = selection.relayerName;
+    this.feeBPS = selection.feeBPS;
+    this.maxFeeBPS = PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS;
+    this.expiresAt = selection.expiresAt;
+  }
+}
+
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
@@ -130,7 +150,6 @@ export async function verifyPrivacyRelayerQuote(input: {
     !sameAddress(quote.feeCommitment.asset, PRIVACY_POOLS_DEPLOYMENT.nativeAsset) ||
     quote.baseFeeBPS !== details.feeBPS ||
     quote.feeBPS < quote.baseFeeBPS ||
-    quote.feeBPS > PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS ||
     quote.gasPrice > details.maxGasPrice ||
     quote.relayCostWei !== quote.relayGas * quote.gasPrice ||
     quote.feeCommitment.expiration <= now ||
@@ -177,9 +196,16 @@ export async function verifyPrivacyRelayerQuote(input: {
     throw new Error("Relayer quote signature did not match");
   }
 
+  if (quote.feeBPS > PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS) {
+    throw new PrivacyRelayerFeeCapError({
+      relayerName: input.pin.name,
+      feeBPS: quote.feeBPS,
+      expiresAt: quote.feeCommitment.expiration,
+    });
+  }
   const relayFeeWei = input.amountWei * quote.feeBPS / 10_000n;
   if (relayFeeWei >= input.amountWei) throw new Error("Relayer fee consumed the withdrawal");
-  return Object.freeze({
+  const selection = Object.freeze({
     ...quote,
     relayerName: input.pin.name,
     relayerUrl: input.pin.url,
@@ -188,6 +214,7 @@ export async function verifyPrivacyRelayerQuote(input: {
     expiresAt: quote.feeCommitment.expiration,
     netRecipientAmountWei: input.amountWei - relayFeeWei,
   });
+  return selection;
 }
 
 async function quoteOneRelayer(
@@ -214,10 +241,30 @@ export async function quotePrivacyUnshield(
       quoteOneRelayer(pin, amountWei, recipient)
     ),
   );
+  settled.forEach((result, index) => {
+    if (result.status !== "rejected") return;
+    console.warn("[privacy-unshield] relayer quote rejected", {
+      relayer: PRIVACY_POOLS_DEPLOYMENT.services.relayers[index]?.name ?? "unknown",
+      reason: result.reason instanceof Error ? result.reason.message : "unknown",
+    });
+  });
   const valid = settled.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : []
   );
-  if (valid.length === 0) throw new Error("No valid Privacy Pools relayer quote");
+  if (valid.length === 0) {
+    const overCap = settled.flatMap((result) =>
+      result.status === "rejected" && result.reason instanceof PrivacyRelayerFeeCapError
+        ? [result.reason]
+        : []
+    );
+    overCap.sort((left, right) =>
+      left.feeBPS < right.feeBPS ? -1 :
+        left.feeBPS > right.feeBPS ? 1 :
+          left.expiresAt - right.expiresAt
+    );
+    if (overCap[0]) throw overCap[0];
+    throw new Error("No valid Privacy Pools relayer quote");
+  }
   valid.sort((left, right) =>
     left.feeBPS < right.feeBPS ? -1 :
       left.feeBPS > right.feeBPS ? 1 :

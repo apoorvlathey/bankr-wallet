@@ -6,14 +6,14 @@ import {
 import {
   isValidPrivacyUnshieldDetails,
   type PrivacyEncryptedUnshieldDetailsV1,
-  type PrivacyUnshieldDetailsV1,
-  type PrivacyUnshieldSummaryV1,
+  type PrivacyAnyUnshieldDetailsV1,
+  type PrivacyAnyUnshieldSummaryV1,
 } from "./types";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
-function aad(keyId: string, summary: PrivacyUnshieldSummaryV1): Uint8Array {
+function aad(keyId: string, summary: PrivacyAnyUnshieldSummaryV1): Uint8Array {
   return encoder.encode(JSON.stringify({
     domain: "walletchan/privacy-unshield/v1",
     keyId,
@@ -25,8 +25,8 @@ function aad(keyId: string, summary: PrivacyUnshieldSummaryV1): Uint8Array {
 export async function encryptPrivacyUnshieldDetails(
   key: CryptoKey,
   keyId: string,
-  summary: PrivacyUnshieldSummaryV1,
-  details: PrivacyUnshieldDetailsV1,
+  summary: PrivacyAnyUnshieldSummaryV1,
+  details: PrivacyAnyUnshieldDetailsV1,
 ): Promise<PrivacyEncryptedUnshieldDetailsV1> {
   if (!isValidPrivacyUnshieldDetails(details, summary.id)) {
     throw new Error("Invalid Unshield details");
@@ -51,8 +51,8 @@ export async function encryptPrivacyUnshieldDetails(
 
 export async function decryptPrivacyUnshieldDetails(
   key: CryptoKey,
-  record: { summary: PrivacyUnshieldSummaryV1; keyId: string; encryptedDetails: PrivacyEncryptedUnshieldDetailsV1 },
-): Promise<PrivacyUnshieldDetailsV1 | null> {
+  record: { summary: PrivacyAnyUnshieldSummaryV1; keyId: string; encryptedDetails: PrivacyEncryptedUnshieldDetailsV1 },
+): Promise<PrivacyAnyUnshieldDetailsV1 | null> {
   try {
     const iv = decodeBase64Exact(record.encryptedDetails.iv, 12);
     const ciphertext = decodeBase64Bounded(record.encryptedDetails.ciphertext, 17, 16_384);

@@ -19,6 +19,39 @@ const validVault = {
   },
 };
 
+function commitment(status: "private_ready" | "ragequit_recovered") {
+  return {
+    record: {
+      version: 1,
+      id: "00000000-0000-4000-8000-000000000001",
+      keyId: "privacy-key",
+      revision: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      encryptedDetails: {},
+    },
+    details: {
+      version: 1,
+      id: "00000000-0000-4000-8000-000000000001",
+      chainId: 11_155_111,
+      scope: "1",
+      poolAddress: "0x2222222222222222222222222222222222222222",
+      commitment: "1",
+      label: "2",
+      valueWei: "1000",
+      balanceWei: status === "ragequit_recovered" ? "0" : "1000",
+      precommitment: "3",
+      depositIndex: "0",
+      depositor: ACCOUNT.accountAddress,
+      depositTxHash: `0x${"11".repeat(32)}`,
+      depositBlockNumber: "1",
+      withdrawalIndex: "0",
+      status,
+      sourceOperationId: null,
+    },
+  };
+}
+
 function dependencies(overrides: Record<string, unknown> = {}) {
   return {
     readPrivacyVault: async () => ({ status: "missing" as const }),
@@ -60,26 +93,14 @@ test("an encrypted active balance blocks removal and a recovered balance does no
   await assert.rejects(
     assertPrivacyAccountRemovalSafe(ACCOUNT, dependencies({
       ...base,
-      readPrivacyCommitments: async () => [{
-        record: { id: "commitment-1" },
-        details: {
-          depositor: ACCOUNT.accountAddress,
-          status: "private_ready",
-        },
-      }],
+      readPrivacyCommitments: async () => [commitment("private_ready")],
     })),
     PrivacyAccountRemovalError,
   );
   await assert.doesNotReject(
     assertPrivacyAccountRemovalSafe(ACCOUNT, dependencies({
       ...base,
-      readPrivacyCommitments: async () => [{
-        record: { id: "commitment-1" },
-        details: {
-          depositor: ACCOUNT.accountAddress,
-          status: "ragequit_recovered",
-        },
-      }],
+      readPrivacyCommitments: async () => [commitment("ragequit_recovered")],
     })),
   );
 });

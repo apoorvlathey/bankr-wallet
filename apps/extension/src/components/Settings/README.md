@@ -2,6 +2,11 @@
 
 - `index.tsx` is the Settings screen router/composition root.
 - `settingsRegistry.tsx` declares settings destinations and metadata.
+- `AccountsSettings.tsx` adapts the shared account picker into a manage-only
+  Settings destination; row activation opens account settings and never
+  changes the active account.
+- `ClearChatHistoryDialog.tsx` owns the root-level chat-history confirmation
+  dialog while the Settings router retains the action state and deletion effect.
 - `EditChain.tsx` composes the edit form and save/validation flow.
 - `NetworkIdentityFields.tsx` renders the editable/read-only network name and
   chain-ID controls.

@@ -1,12 +1,25 @@
-/** Wallet-UI wake and keepalive port registration. */
+/** Wallet-UI wake, authenticated-surface, and onboarding keepalive ports. */
 
 export type TrustedUiPortLifecycleDependencies = {
   connectEvent: { addListener: (listener: (port: any) => void) => void };
   isTrustedWalletUiSender: (sender: chrome.runtime.MessageSender) => boolean;
-  incrementUIConnections: () => void;
-  decrementUIConnections: () => void;
+  isValidSurfaceId: (surfaceId: unknown) => surfaceId is string;
+  registerUiSurface: (surfaceId: string) => Promise<boolean>;
+  heartbeatUiSurface: (surfaceId: string) => Promise<boolean>;
+  disconnectUiSurface: (surfaceId: string) => Promise<void>;
   log: (message: string) => void;
 };
+
+function exactMessage(
+  value: unknown,
+  type: string,
+  keys: readonly string[],
+): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null &&
+    (value as { type?: unknown }).type === type &&
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
 
 export function registerTrustedUiPortLifecycle(
   dependencies: TrustedUiPortLifecycleDependencies,
@@ -18,24 +31,61 @@ export function registerTrustedUiPortLifecycle(
     }
     if (port.name === "popup-wake") {
       dependencies.log("Service worker woken up by popup");
-    } else if (port.name === "ui-keepalive") {
-      dependencies.incrementUIConnections();
+      return;
+    }
+    if (port.name === "onboarding-keepalive") {
       port.onMessage.addListener((message: unknown) => {
-        // Receiving this exact secret-free pulse resets Chrome's MV3 worker
-        // idle timer. Authentication timestamps remain untouched, so the
-        // configured finite auto-lock duration is still authoritative.
-        if (
-          typeof message !== "object" ||
-          message === null ||
-          (message as { type?: unknown }).type !== "wallet-ui-keepalive" ||
-          Object.keys(message).length !== 1
-        ) {
+        if (!exactMessage(message, "wallet-worker-keepalive", ["type"])) {
           port.disconnect();
         }
       });
-      port.onDisconnect.addListener(() => {
-        dependencies.decrementUIConnections();
-      });
+      return;
     }
+    if (port.name !== "ui-keepalive") return;
+
+    let registeredSurfaceId: string | null = null;
+    let disconnected = false;
+    let messageTail: Promise<void> = Promise.resolve();
+    const disconnectInvalidPort = (): void => {
+      try { port.disconnect(); } catch { /* Already disconnected. */ }
+    };
+
+    port.onMessage.addListener((message: unknown) => {
+      messageTail = messageTail.then(async () => {
+        if (disconnected) return;
+        if (exactMessage(message, "wallet-ui-register", ["type", "surfaceId"])) {
+          const surfaceId = message.surfaceId;
+          if (
+            registeredSurfaceId !== null ||
+            !dependencies.isValidSurfaceId(surfaceId) ||
+            !(await dependencies.registerUiSurface(surfaceId))
+          ) {
+            disconnectInvalidPort();
+            return;
+          }
+          registeredSurfaceId = surfaceId;
+          if (disconnected) {
+            await dependencies.disconnectUiSurface(surfaceId);
+            return;
+          }
+          port.postMessage({ type: "wallet-ui-registered", surfaceId });
+          return;
+        }
+        if (exactMessage(message, "wallet-ui-keepalive", ["type", "surfaceId"])) {
+          if (
+            !registeredSurfaceId ||
+            message.surfaceId !== registeredSurfaceId ||
+            !(await dependencies.heartbeatUiSurface(registeredSurfaceId))
+          ) disconnectInvalidPort();
+          return;
+        }
+        disconnectInvalidPort();
+      }).catch(() => disconnectInvalidPort());
+    });
+    port.onDisconnect.addListener(() => {
+      disconnected = true;
+      const surfaceId = registeredSurfaceId;
+      if (surfaceId) void dependencies.disconnectUiSurface(surfaceId);
+    });
   });
 }

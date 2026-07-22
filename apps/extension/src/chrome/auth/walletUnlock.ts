@@ -8,24 +8,23 @@ import { migrateToVaultKeySystem } from "./legacyVaultKeyMigration";
 import { unlockMnemonicKeyWithPassword } from "../mnemonicStorage";
 import {
   clearAllAuthState,
-  getAutoLockTimeout,
   setCachedApiKey,
-  setCachedPasswordDirect,
-  setCachedPasswordType,
   setCachedVault,
-  setCurrentSessionId,
-  storeSessionAtomic,
 } from "../sessionCache";
 import type { PasswordType } from "../types";
 import { decryptAllKeys, hasVaultEntries } from "../vaultCrypto";
 import {
   isRestoredPasskeySessionCredential,
+  isRestoredSessionCapabilityCredential,
   type RestoredPasskeySessionCredential,
+  type RestoredSessionCapabilityCredential,
 } from "../session/restoration";
-import { loadPasskeyUnlockRecord } from "../passkey/repository";
-import { getPasskeySessionBinding } from "../passkey/sessionBinding";
 import { clearManualLockRestorationBlock } from "../authTransition";
 import { unlockPrivacyVaultWithPassword } from "../privacy/vault";
+import {
+  unlockWithRestoredPasskeySession,
+  unlockWithRestoredSessionCapability,
+} from "./restoredSessionUnlock";
 export interface UnlockWalletResult {
   success: boolean;
   error?: string;
@@ -33,8 +32,11 @@ export interface UnlockWalletResult {
 }
 /** Unlock with either the current vault-key system or the legacy format. */
 export async function handleUnlockWallet(
-  credential: string | RestoredPasskeySessionCredential,
+  credential: string | RestoredPasskeySessionCredential | RestoredSessionCapabilityCredential,
 ): Promise<UnlockWalletResult> {
+  if (isRestoredSessionCapabilityCredential(credential)) {
+    return unlockWithRestoredSessionCapability(credential);
+  }
   if (isRestoredPasskeySessionCredential(credential)) {
     return unlockWithRestoredPasskeySession(credential);
   }
@@ -47,31 +49,6 @@ export async function handleUnlockWallet(
     : await unlockWithLegacySystem(credential);
   if (result.success) clearManualLockRestorationBlock();
   return result;
-}
-
-async function unlockWithRestoredPasskeySession(
-  credential: RestoredPasskeySessionCredential,
-): Promise<UnlockWalletResult> {
-  try {
-    const record = await loadPasskeyUnlockRecord();
-    if (
-      !record ||
-      (await getPasskeySessionBinding(record)) !== credential.passkeyBinding
-    ) {
-      return { success: false, error: "Biometric session is no longer valid" };
-    }
-
-    const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
-      credential.vaultKeyBytes,
-      "master",
-      { password: null },
-    );
-    return hydrated.success
-      ? { success: true, passwordType: "master" }
-      : hydrated;
-  } catch {
-    return { success: false, error: "Biometric session could not be restored" };
-  }
 }
 
 /** Checks if the general vault-key system is in use. */
@@ -198,18 +175,9 @@ async function unlockWithLegacySystem(
     }
 
     await migrateToVaultKeySystem(password, apiKey);
-
-    setCachedPasswordType("master");
-    setCachedPasswordDirect(password);
-
-    const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      const sessionId = crypto.randomUUID();
-      await storeSessionAtomic(sessionId, true, "master", password);
-      setCurrentSessionId(sessionId);
-    }
-
-    return { success: true, passwordType: "master" };
+    // Re-enter the modern path so the migrated wallet receives the same
+    // key-only unified session capability as every existing vault-key wallet.
+    return await unlockWithVaultKeySystem(password);
   } catch (error) {
     // A failed migration/persistence must not leave decrypted credentials live.
     await clearAllAuthState().catch(() => undefined);

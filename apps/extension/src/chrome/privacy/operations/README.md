@@ -15,7 +15,8 @@ transaction.
 - `database.ts`: shared IndexedDB connection, schema, validated record reads,
   transaction completion, and reset deletion.
 - `repository.ts`: atomic operation/index commit, idempotent lookup, and bounded
-  activity reads.
+  activity reads. Request UUID is the sole idempotency identity; equal amounts
+  remain independent user intents.
 - `rejectionRepository.ts`: exact rejected-record deletion without derivation
   metadata access.
 - `rejectionLifecycle.ts`: post-pending deletion and interrupted-rejection
@@ -25,10 +26,12 @@ transaction.
 - `submission.ts`: converts only an exact encrypted operation into the trusted,
   account-pinned normal WalletChan confirmation; it does not sign or broadcast.
 - `lifecycle.ts`: receipt, exact pool-event, ASP, rejection, revert, and restart
-  state transitions. A rejection is marked before its pending request is
+  state transitions. Public/onchain membership first records `asp_approved`
+  and notifies independently of the secret-derived `private_ready` transition.
+  A rejection is marked before its pending request is
   removed, then its encrypted operation is deleted without rewinding the
   derivation cursor. Other terminal records remain available to activity
-  history but do not participate in account/amount dedupe.
+  history; no lifecycle state blocks a fresh request UUID for an equal amount.
 - `historyProjection.ts`: exact operation/transaction/account/chain/value
   binding before the public lifecycle subset is mirrored onto `txHistory`.
 
@@ -38,8 +41,11 @@ The final protocol uint32 derivation index is reserved for ephemeral review
 material. Persisted operations reserve indices from zero through
 `0xfffffffe`. The next index and its operation record commit in one IndexedDB
 transaction, so worker restarts and concurrent WalletChan views cannot reuse an
-index. A stable request UUID and pending account/amount dedupe key make retries
-idempotent.
+index. A stable request UUID makes retries idempotent. The persisted
+account/amount correlation key is validation metadata only: a new request UUID
+always reserves a fresh operation even if another equal deposit is awaiting
+wallet confirmation, submission, receipt indexing, ASP review, a retryable ASP
+verification outage, or a Proof-of-Association requirement.
 
 Only the sanitized summary may cross the background message boundary. The
 deposit index, precommitment, and calldata are encrypted with the dedicated

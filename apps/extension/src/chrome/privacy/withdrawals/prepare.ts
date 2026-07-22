@@ -10,8 +10,16 @@ import {
 } from "../authorization";
 import { readPrivacyAspMasterMaterial } from "../asp/eligibility";
 import { readPrivacyCommitments } from "../commitments/repository";
+import {
+  canonicalPrivacyCommitments,
+  repairPrivacyCommitmentLineages,
+} from "../commitments/lineageIntegrity";
+import { assertPrivacyCommitmentSpendable } from "../commitments/spendability";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
-import { quotePrivacyUnshield } from "../relayer/client";
+import {
+  PrivacyRelayerFeeCapError,
+  quotePrivacyUnshield,
+} from "../relayer/client";
 import { encryptPrivacyUnshieldDetails } from "./crypto";
 import { derivePrivacyWithdrawalLineage } from "./lineage";
 import { commitPrivacyUnshield } from "./repository";
@@ -29,11 +37,22 @@ export type PrivacyUnshieldPrepareErrorCode =
   | "invalid-request"
   | "auth-required"
   | "balance-unavailable"
+  | "balance-syncing"
+  | "relay-fee-cap-exceeded"
   | "quote-unavailable"
   | "operation-unavailable";
 
+export interface PrivacyUnshieldFeeCapWarning {
+  readonly relayerName: string;
+  readonly quotedFeeBPS: string;
+  readonly maxFeeBPS: string;
+}
+
 export class PrivacyUnshieldPrepareError extends Error {
-  constructor(readonly code: PrivacyUnshieldPrepareErrorCode) {
+  constructor(
+    readonly code: PrivacyUnshieldPrepareErrorCode,
+    readonly feeCapWarning: PrivacyUnshieldFeeCapWarning | null = null,
+  ) {
     super(code);
     this.name = "PrivacyUnshieldPrepareError";
   }
@@ -59,8 +78,9 @@ export async function preparePrivacyUnshieldQuote(input: {
   });
   const material = await readPrivacyAspMasterMaterial();
   if (!material) throw new PrivacyUnshieldPrepareError("auth-required");
+  await repairPrivacyCommitmentLineages(material);
   const commitments = await readPrivacyCommitments(material.key, material.keyId);
-  const selected = commitments
+  const selected = canonicalPrivacyCommitments(commitments)
     .filter((item) =>
       item.details.status === "private_ready" &&
       BigInt(item.details.balanceWei) >= amountWei
@@ -71,12 +91,25 @@ export async function preparePrivacyUnshieldQuote(input: {
       return leftBalance < rightBalance ? -1 : leftBalance > rightBalance ? 1 : 0;
     })[0];
   if (!selected) throw new PrivacyUnshieldPrepareError("balance-unavailable");
+  await assertPrivacyCommitmentSpendable({
+    commitment: selected.details,
+    masterKeys: material.masterKeys,
+  }).catch(() => {
+    throw new PrivacyUnshieldPrepareError("balance-syncing");
+  });
   const lineage = derivePrivacyWithdrawalLineage({
     commitment: selected.details,
     masterKeys: material.masterKeys,
     amountWei,
   });
-  const quote = await quotePrivacyUnshield(amountWei, recipient).catch(() => {
+  const quote = await quotePrivacyUnshield(amountWei, recipient).catch((error: unknown) => {
+    if (error instanceof PrivacyRelayerFeeCapError) {
+      throw new PrivacyUnshieldPrepareError("relay-fee-cap-exceeded", {
+        relayerName: error.relayerName,
+        quotedFeeBPS: error.feeBPS.toString(),
+        maxFeeBPS: error.maxFeeBPS.toString(),
+      });
+    }
     throw new PrivacyUnshieldPrepareError("quote-unavailable");
   });
   const operationId = crypto.randomUUID();
@@ -152,6 +185,12 @@ export async function preparePrivacyUnshieldQuote(input: {
       latest.details.commitment !== selected.details.commitment ||
       latest.details.balanceWei !== selected.details.balanceWei
     ) throw new PrivacyUnshieldPrepareError("operation-unavailable");
+    await assertPrivacyCommitmentSpendable({
+      commitment: latest.details,
+      masterKeys: material.masterKeys,
+    }).catch(() => {
+      throw new PrivacyUnshieldPrepareError("balance-syncing");
+    });
     assertPrivacyMasterAuthorization(expectedEpoch);
     return (await commitPrivacyUnshield(record)).record;
   });

@@ -101,6 +101,7 @@ export async function processAtomic7702LocalBatch(
       accountType: account.type as "privateKey" | "seedPhrase",
       functionName: displayName,
       accountId: pending.accountId,
+      privacyRagequitMeta: pending.privacyRagequitMeta ? { version: 1 } : undefined,
       swapMeta: historyMeta?.swapMeta,
       bridge: historyMeta?.bridge,
     };
@@ -259,6 +260,12 @@ export async function processAtomic7702LocalBatch(
     effectGuard.settleEffect();
 
     const txHash = result.txHash;
+    if (pending.privacyRagequitMeta) {
+      const { recordPrivacyRagequitBatchSubmitted } = await import(
+        "../privacy/ragequit/lifecycle"
+      );
+      await recordPrivacyRagequitBatchSubmitted(pending, txHash);
+    }
 
     if (result.receipt) {
       const success =

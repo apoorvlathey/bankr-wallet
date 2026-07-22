@@ -5,7 +5,10 @@ import { encodeAbiParameters, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
-import { verifyPrivacyRelayerQuote } from "../../src/chrome/privacy/relayer/client";
+import {
+  PrivacyRelayerFeeCapError,
+  verifyPrivacyRelayerQuote,
+} from "../../src/chrome/privacy/relayer/client";
 import {
   parsePrivacyRelayerDetails,
   parsePrivacyRelayerQuote,
@@ -22,14 +25,18 @@ const relayGas = 650_000n;
 const relayCost = gasPrice * relayGas;
 const feeBPS = baseFee + relayCost * 10_000n / amount;
 
-async function fixture(now = 1_750_000_000_000) {
+async function fixture(
+  now = 1_750_000_000_000,
+  withdrawalAmount = amount,
+) {
+  const quotedFeeBPS = baseFee + relayCost * 10_000n / withdrawalAmount;
   const withdrawalData = encodeAbiParameters(
     [
       { name: "recipient", type: "address" },
       { name: "feeRecipient", type: "address" },
       { name: "relayFeeBPS", type: "uint256" },
     ],
-    [recipient, account.address, feeBPS],
+    [recipient, account.address, quotedFeeBPS],
   );
   const expiration = now + 60_000;
   const signature = await account.signTypedData({
@@ -52,7 +59,7 @@ async function fixture(now = 1_750_000_000_000) {
       withdrawalData,
       asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
       expiration: BigInt(expiration),
-      amount,
+      amount: withdrawalAmount,
       extraGas: false,
     },
   });
@@ -66,13 +73,13 @@ async function fixture(now = 1_750_000_000_000) {
   };
   const rawQuote = {
     baseFeeBPS: baseFee.toString(),
-    feeBPS: feeBPS.toString(),
+    feeBPS: quotedFeeBPS.toString(),
     gasPrice: gasPrice.toString(),
     feeCommitment: {
       expiration,
       withdrawalData,
       asset: PRIVACY_POOLS_DEPLOYMENT.nativeAsset,
-      amount: amount.toString(),
+      amount: withdrawalAmount.toString(),
       extraGas: false,
       signedRelayerCommitment: signature,
     },
@@ -84,7 +91,15 @@ async function fixture(now = 1_750_000_000_000) {
   const quote = parsePrivacyRelayerQuote(rawQuote);
   assert.ok(details);
   assert.ok(quote);
-  return { now, details, quote, rawDetails, rawQuote };
+  return {
+    now,
+    withdrawalAmount,
+    quotedFeeBPS,
+    details,
+    quote,
+    rawDetails,
+    rawQuote,
+  };
 }
 
 test("strict relayer codecs accept the live Sepolia response shape", async () => {
@@ -155,5 +170,54 @@ test("quote validation rejects a signature not controlled by the fee recipient",
       now: value.now,
     }),
     /withdrawal data did not match/,
+  );
+});
+
+test("a signed quote above the Entrypoint cap is retained as a verified diagnostic", async () => {
+  const value = await fixture(1_750_000_000_000, 100_000_000_000_000_000n);
+  await assert.rejects(
+    verifyPrivacyRelayerQuote({
+      pin: {
+        name: "Fixture Relay",
+        url: "https://fixture.invalid",
+        signerPolicy: "fee-recipient",
+      } as typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[1],
+      details: value.details,
+      quote: value.quote,
+      amountWei: value.withdrawalAmount,
+      recipient,
+      now: value.now,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof PrivacyRelayerFeeCapError);
+      assert.equal(error.relayerName, "Fixture Relay");
+      assert.equal(error.feeBPS, value.quotedFeeBPS);
+      assert.equal(error.maxFeeBPS, PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS);
+      return true;
+    },
+  );
+});
+
+test("a signed quote above 100 percent still becomes a fee-cap diagnostic", async () => {
+  const value = await fixture(1_750_000_000_000, 5_000_000_000_000_000n);
+  assert.ok(value.quotedFeeBPS > 10_000n);
+  await assert.rejects(
+    verifyPrivacyRelayerQuote({
+      pin: {
+        name: "Fixture Relay",
+        url: "https://fixture.invalid",
+        signerPolicy: "fee-recipient",
+      } as typeof PRIVACY_POOLS_DEPLOYMENT.services.relayers[1],
+      details: value.details,
+      quote: value.quote,
+      amountWei: value.withdrawalAmount,
+      recipient,
+      now: value.now,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof PrivacyRelayerFeeCapError);
+      assert.equal(error.feeBPS, value.quotedFeeBPS);
+      return true;
+    },
   );
 });

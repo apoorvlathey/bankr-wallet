@@ -29,13 +29,20 @@ map, not the release checklist.
 - `operations/`: encrypted, account-bound Shield intent, normal WalletChan
   confirmation, receipt/event tracking, and ASP lifecycle.
 - `events/`: bounded rebuildable active-pool log index and canonical checkpoints.
-- `commitments/`: exact-event commitment materialization, encrypted current
-  note lineage, and aggregate portfolio facade.
+- `commitments/`: exact-event commitment materialization, immutable-lineage
+  canonicalization/repair, onchain nullifier spendability preflight, encrypted
+  current notes, event-driven replacement recovery, and aggregate portfolio
+  facade.
 - `asp/`: strict endpoint codecs, lifecycle orchestration, and focused
   local/onchain root and membership checks.
 - `relayer/`: pinned quote signer/economics verification and bounded submission.
-- `withdrawals/`: encrypted, restart-safe full/partial relayed Unshield lifecycle.
-- `ragequit/`: original-depositor-only public recovery proof, confirmation, and receipt lifecycle.
+- `withdrawals/`: encrypted, restart-safe full/partial relayed and
+  recipient-paid Unshield lifecycle.
+- `ragequit/`: original-depositor-only whole-commitment listing, proof,
+  single or same-account atomic-batch confirmation, and multi-event receipt
+  lifecycle. Preview lists every currently ragequittable deposit with an opaque
+  commitment-record binding, but returns no commitment hash, secrets, proof,
+  calldata, recovery intent, or pending request.
 - `recovery/`: explicit main-password reveal/restore, key-ID-bound backup marker,
   passkey-only master-wrapper upgrade, and bounded rescan.
 - `prover/`: exact port codecs, public fixed fixtures, a Chrome offscreen host,
@@ -44,6 +51,10 @@ map, not the release checklist.
 - `resetSafety.ts`: public Shield-data/backup projection for reset acknowledgement.
 - `readiness.ts`: deployment-first composition of the onchain check and fixed
   local proof check.
+- `portfolioViewCache.ts`: exact, deployment-bound aggregate balance/chart
+  session cache. It survives automatic auth expiry for read-only rendering but
+  contains no commitment linkage or spending capability and is cleared by
+  explicit session teardown, reset/recovery replacement, or browser shutdown.
 - `rpcPolicy.ts`: immutable three-request batch ceiling shared by readiness and
   quotes for free-tier RPC compatibility.
 
@@ -74,13 +85,60 @@ private-key and seed-phrase accounts recheck the encrypted intent and master
 epoch at the raw-RPC boundary. Bankr is blocked in the Sepolia development
 profile; the production mainnet profile uses Bankr's normal pinned confirmation
 and submission coordinator with the same final privacy authorization boundary.
-Receipt and bounded pool-event sync recover the commitment,
-and local/onchain ASP membership makes it privately spendable.
+Receipt and bounded pool-event sync recover the commitment. Sync refreshes
+already-indexed commitments before paging historical pool events, so a mainnet
+backfill cannot delay a known deposit's ASP transition. Local/onchain ASP
+membership checks use an event scanner that pages `eth_getLogs` over at most
+1,000 inclusive blocks per request for compatibility with the default public RPC;
+an explicit range-limit response shrinks the page further, while HTTP 429 and
+other transport failures defer the batch without a retry burst. Each run
+remains capped. Private Home starts this fallback only when a Shield receipt is
+missing its Deposited event, then requests the next page batch after a partial
+result. Ordinary receipt-complete portfolios and Public Exit previews never
+start a global backfill. Public Exit preparation still probes the selected
+note's current onchain nullifier before proof generation and again at the final
+claim. ASP
+membership makes it privately spendable only after the association root equals
+`Entrypoint.latestRoot()` and the state root is found in the pool's 64-slot
+known-root history. A successful deposit-status response may omit a fresh label
+until ASP indexing catches up; that absence stays pending and is not an outage.
+Transport, response-validation, binding, and membership failures remain
+fail-closed internally, while background logs expose only their controlled
+phase and aggregate counts without deposit identifiers or values.
+Pending ASP work also owns one two-minute browser alarm, allowing the worker to
+refresh with no popup or sidepanel open. A cold privacy key does not block the
+public deposit binding, association-tree membership, state-tree membership, or
+onchain-root checks. Their first durable `asp_approved` transition sends one
+metadata-free native notification. Private lineage remains inaccessible and
+`private_ready` is reached only after the privacy key is authenticated; the
+alarm clears after no public compliance work remains.
 
 Full/partial Unshield verifies a signed pinned-relayer quote, both Merkle roots,
 the locally generated proof, and all public signals immediately before POST.
+Its receipt poller remains live while locked and may record `public_confirmed`
+only after the public amount and Entrypoint processooor match; encrypted
+nullifier/replacement-commitment reconciliation waits for authentication.
+Before proof work and again at the final claim boundary, every relayed,
+receiver-paid, and ragequit path verifies the locally current note and checks
+its derived nullifier against the pool. Spent or unverifiable state fails
+closed as balance synchronization rather than reaching simulation/submission.
+The receiver-paid alternative binds the recipient to an exact signing account,
+uses it as the proof context processooor, simulates the exact pool calldata and
+gas balance, and queues the normal pinned transaction confirmation. It repeats
+account, roots, calldata, deployment, and master-epoch checks at the final
+signing boundary; failed queueing, rejection, and pre-broadcast failure release
+the claimed commitment through rollback/reconciliation. Commitment status
+updates require the exact revision and status observed by the caller, so an ASP
+refresh that started earlier cannot overwrite an active Unshield or ragequit
+claim after its network work finishes.
+Sync resumes receipt reconciliation before ASP work, then uses a fully current
+event cache to follow each immutable deposit lineage through all Withdrawn and
+Ragequit events. Only the greatest withdrawal index is live; older indices are
+quarantined, same-index forks fail closed, source-operation bindings survive
+recovery, and materialization cannot recreate a consumed original note.
 An exact confirmed/indexed commitment is materialized before ASP approval so
-pending, declined, removed, or locally-derived ASP-unavailable commitments
+pending, Proof-of-Association-required, declined, removed, or locally-derived
+ASP-unavailable commitments
 expose one compact public-withdrawal action; its
 proof calls the ETH pool only from the exact original depositor through the same
 local confirmation path. A rejected prompt restores the prior ASP state, while

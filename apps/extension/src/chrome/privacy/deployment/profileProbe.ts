@@ -2,6 +2,19 @@ import {
   PRIVACY_POOLS_DEPLOYMENT,
   PRIVACY_POOLS_RELEASE_POLICY,
 } from "./manifest";
+import {
+  getPrivacyShieldActivityState,
+  getShieldOperationProgress,
+} from "../../../lib/privacyShieldLifecycle";
+
+const confirmationProgress = getShieldOperationProgress(
+  "submitted",
+  PRIVACY_POOLS_DEPLOYMENT.chainName,
+);
+const confirmationActivity = getPrivacyShieldActivityState(
+  "submitted",
+  PRIVACY_POOLS_DEPLOYMENT.chainName,
+);
 
 export const PRIVACY_POOLS_PROFILE_PROBE = Object.freeze({
   profile: PRIVACY_POOLS_DEPLOYMENT.profile,
@@ -18,4 +31,7 @@ export const PRIVACY_POOLS_PROFILE_PROBE = Object.freeze({
     PRIVACY_POOLS_DEPLOYMENT.assetConfig.maxRelayFeeBPS.toString(),
   mode: PRIVACY_POOLS_RELEASE_POLICY.mode,
   bankrMutations: PRIVACY_POOLS_RELEASE_POLICY.bankrMutations,
+  confirmationLabel: confirmationProgress?.label,
+  confirmationDescription: confirmationProgress?.description,
+  confirmationContext: confirmationActivity.context,
 });

@@ -33,6 +33,11 @@ import {
   recordPrivacyRagequitSubmissionFailure,
 } from "../privacy/ragequit/lifecycle";
 import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+  recordPrivacyDirectUnshieldSubmissionFailure,
+} from "../privacy/withdrawals/lifecycle";
+import {
   activeAbortControllers,
   processingTxIds,
   type TransactionResult,
@@ -77,6 +82,7 @@ export async function handleConfirmTransaction(
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
+  let publishedTxHash: string | null = null;
 
   try {
     const result = await submitTransactionDirect(
@@ -97,14 +103,20 @@ export async function handleConfirmTransaction(
               pending,
               privacyAuthorization.ragequit,
             );
+            await beginPrivacyDirectUnshieldSubmission(
+              pending,
+              privacyAuthorization.directUnshield,
+            );
           },
         ),
     );
     effectGuard.settleEffect();
     if (result.transactionHash) {
+      publishedTxHash = result.transactionHash;
       await recordPrivacyShieldSubmitted(pending, result.transactionHash);
       await recordPrivacyRagequitSubmitted(pending, result.transactionHash);
-      if (pending.privacyShieldMeta || pending.privacyRagequitMeta) {
+      await recordPrivacyDirectUnshieldSubmitted(pending, result.transactionHash);
+      if (pending.privacyShieldMeta || pending.privacyRagequitMeta || pending.privacyUnshieldMeta) {
         startReceiptPolling(txId, result.transactionHash, pending.tx.chainId);
       }
     }
@@ -115,6 +127,10 @@ export async function handleConfirmTransaction(
   } catch (error) {
     await recordPrivacyShieldSubmissionFailure(pending).catch(() => undefined);
     await recordPrivacyRagequitSubmissionFailure(pending).catch(() => undefined);
+    await recordPrivacyDirectUnshieldSubmissionFailure(pending, {
+      outcomeUncertain: publishedTxHash !== null ||
+        (error instanceof BankrApiError && error.outcomeUncertain),
+    }).catch(() => undefined);
     if (error instanceof Error && error.name === "AbortError") {
       return {
         success: false,
@@ -236,6 +252,7 @@ export async function handleConfirmTransactionAsync(
       effectLease,
       privacyAuthorization.shield,
       privacyAuthorization.ragequit,
+      privacyAuthorization.directUnshield,
     );
   }
   return { success: true };

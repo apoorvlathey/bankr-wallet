@@ -6,9 +6,16 @@ import {
   IconButton,
   Skeleton,
   Text,
+  Tooltip,
   VStack,
 } from "@chakra-ui/react";
-import { LockIcon, RepeatIcon, ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import {
+  InfoOutlineIcon,
+  LockIcon,
+  RepeatIcon,
+  ViewIcon,
+  ViewOffIcon,
+} from "@chakra-ui/icons";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import type { Account } from "@/chrome/types";
 import PortfolioChart from "@/components/PortfolioChart";
@@ -19,6 +26,7 @@ import { ListSurface } from "@/components/ui";
 import { useShieldInitialization } from "@/components/Shield/hooks/useShieldInitialization";
 import { useShieldOperations } from "@/components/Shield/hooks/useShieldOperations";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
+import type { UnshieldOperation } from "@/components/Shield/model/unshield";
 import { formatUsd } from "@/lib/currencyFormatUtils";
 import { usePortfolioValueVisibility } from "./usePortfolioValueVisibility";
 
@@ -27,8 +35,9 @@ interface PrivatePortfolioHomeProps {
   modeToggle: ReactNode;
   onShield: () => void;
   onUnshield: () => void;
-  onSend: () => void;
+  onDeposits: () => void;
   onTransactionClick: (tx: CompletedTransaction) => void;
+  onUnshieldTransactionClick: (operation: UnshieldOperation) => void;
   activeTab: "assets" | "activity";
   onTabChange: (tab: "assets" | "activity") => void;
 }
@@ -38,8 +47,9 @@ export default function PrivatePortfolioHome({
   modeToggle,
   onShield,
   onUnshield,
-  onSend,
+  onDeposits,
   onTransactionClick,
+  onUnshieldTransactionClick,
   activeTab,
   onTabChange,
 }: PrivatePortfolioHomeProps) {
@@ -48,7 +58,7 @@ export default function PrivatePortfolioHome({
   const { initialization, retry } = useShieldInitialization();
   const shield = useShieldOperations();
   const displayedValue = hoveredValue ?? shield.series.totalValueUsd ?? 0;
-  const isLoading = initialization.status === "loading" || shield.loading;
+  const isLoading = shield.loading;
 
   return (
     <VStack align="stretch" spacing={3}>
@@ -56,9 +66,37 @@ export default function PrivatePortfolioHome({
         <HStack justify="space-between" align="center" spacing={3}>
           <HStack spacing={1.5} minW={0}>
             <LockIcon boxSize="12px" color="accent.highlight" />
-            <Text fontSize="sm" color="fg.secondary" fontWeight="500">
-              Private balance
+            <Text
+              fontSize="sm"
+              color="fg.secondary"
+              fontWeight="500"
+              whiteSpace="nowrap"
+            >
+              Private Balance
             </Text>
+            <Tooltip
+              label={"Your total Privacy Pools balance.\nIt is not tied to any single account."}
+              fontSize="xs"
+              placement="bottom-start"
+              openDelay={250}
+              whiteSpace="pre-line"
+            >
+              <Box
+                as="span"
+                tabIndex={0}
+                aria-label="About global private balance"
+                boxSize="24px"
+                display="inline-flex"
+                alignItems="center"
+                justifyContent="center"
+                color="fg.muted"
+                borderRadius="sm"
+                cursor="help"
+                _focusVisible={{ boxShadow: "outline" }}
+              >
+                <InfoOutlineIcon boxSize="13px" />
+              </Box>
+            </Tooltip>
           </HStack>
           {modeToggle}
         </HStack>
@@ -86,21 +124,25 @@ export default function PrivatePortfolioHome({
             />
           </HStack>
           <VStack mt={2} align="start" spacing={0.5} sx={{ fontVariantNumeric: "tabular-nums" }}>
-            <Text fontSize="xs" color="fg.secondary">
+            <Text
+              fontSize="xs"
+              color="fg.secondary"
+              visibility={hoveredValue === null ? "visible" : "hidden"}
+              aria-hidden={hoveredValue !== null}
+            >
               <Text as="span" color="fg.primary" fontWeight="600">
                 {hideValue ? "••••" : `${formatShieldWei(shield.portfolio.readyBalanceWei)} ETH`}
               </Text>{" "}
               shielded
             </Text>
-            <Text
-              fontSize="xs"
-              color={shield.portfolio.pendingBalanceWei > 0n ? "accent.highlight" : "fg.muted"}
-            >
-              <Text as="span" fontWeight="600">
-                {hideValue ? "••••" : `${formatShieldWei(shield.portfolio.pendingBalanceWei)} ETH`}
-              </Text>{" "}
-              processing
-            </Text>
+            {shield.portfolio.pendingBalanceWei > 0n && (
+              <Text fontSize="xs" color="accent.highlight">
+                <Text as="span" fontWeight="600">
+                  {hideValue ? "••••" : `${formatShieldWei(shield.portfolio.pendingBalanceWei)} ETH`}
+                </Text>{" "}
+                processing
+              </Text>
+            )}
           </VStack>
       </Box>
 
@@ -114,7 +156,7 @@ export default function PrivatePortfolioHome({
       <PrivateHomeActions
         onShield={onShield}
         onUnshield={onUnshield}
-        onSend={onSend}
+        onDeposits={onDeposits}
       />
 
       {initialization.status === "action-required" && (
@@ -197,8 +239,7 @@ export default function PrivatePortfolioHome({
               portfolio={shield.portfolio}
               hideValue={hideValue}
               onAction={(action) => {
-                if (action === "send") onSend();
-                else if (action === "unshield") onUnshield();
+                if (action === "unshield") onUnshield();
                 else if (action === "shield") onShield();
                 else onTabChange("activity");
               }}
@@ -210,8 +251,9 @@ export default function PrivatePortfolioHome({
             hideHeader
             hideCard
             scope="private"
-            privateSendOperations={shield.withdrawals}
+            unshieldOperations={shield.withdrawals}
             onSelectTx={onTransactionClick}
+            onSelectUnshield={onUnshieldTransactionClick}
           />
         )}
       </Box>

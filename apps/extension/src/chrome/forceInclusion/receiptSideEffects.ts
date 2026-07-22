@@ -26,6 +26,14 @@ export async function applyReceiptStateMirrors(args: {
   } catch (error) {
     console.warn("[privacy-ragequit] receipt mirror failed", error);
   }
+  try {
+    const { applyPrivacyUnshieldReceiptMirror } = await import(
+      "../privacy/withdrawals/lifecycle"
+    );
+    await applyPrivacyUnshieldReceiptMirror(args);
+  } catch (error) {
+    console.warn("[privacy-unshield] receipt mirror failed", error);
+  }
   await syncDelegationMirrorFromChain(txId, chainId, rpcUrl);
   if (succeeded) await markErc7715PermissionRevokedFromReceipt(txId);
 }

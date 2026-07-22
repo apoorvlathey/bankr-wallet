@@ -17,6 +17,7 @@ export const MAX_VISIBLE_PRIVACY_WITHDRAWALS = 20;
 
 export type PrivacyUnshieldState =
   | "quote_ready"
+  | "awaiting_wallet_confirmation"
   | "proof_preparing"
   | "proof_verified"
   | "submitting_to_relayer"
@@ -47,7 +48,26 @@ export interface PrivacyUnshieldSummaryV1 {
   relayerName: string;
   expiresAt: number;
   recipientMatchesDepositor: boolean;
+  /** Missing on records written before receiver-paid withdrawals shipped. */
+  method?: "relay";
 }
+
+export interface PrivacyDirectUnshieldSummaryV1 extends Omit<
+  PrivacyUnshieldSummaryV1,
+  "method"
+> {
+  method: "direct";
+  accountId: string;
+  accountAddress: Address;
+  accountType: "bankr" | "privateKey" | "seedPhrase";
+  gasLimit: string;
+  maxFeePerGas: string;
+  gasFeeEstimateWei: string;
+}
+
+export type PrivacyAnyUnshieldSummaryV1 =
+  | PrivacyUnshieldSummaryV1
+  | PrivacyDirectUnshieldSummaryV1;
 
 export interface PrivacyUnshieldTrackingV1 {
   version: 1;
@@ -91,6 +111,30 @@ export interface PrivacyUnshieldDetailsV1 {
   };
 }
 
+export interface PrivacyDirectUnshieldDetailsV1 {
+  version: 1;
+  method: "direct";
+  operationId: string;
+  commitmentId: string;
+  commitmentRevision: number;
+  commitmentHash: string;
+  label: string;
+  balanceWei: string;
+  depositIndex: string;
+  withdrawalIndex: string;
+  expectedSpentNullifier: string;
+  expectedNewCommitment: string;
+  expectedNewBalanceWei: string;
+  expectedNewWithdrawalIndex: string;
+  stateRoot: string;
+  associationRoot: string;
+  callData: Hex;
+}
+
+export type PrivacyAnyUnshieldDetailsV1 =
+  | PrivacyUnshieldDetailsV1
+  | PrivacyDirectUnshieldDetailsV1;
+
 export interface PrivacyEncryptedUnshieldDetailsV1 {
   version: 1;
   scheme: "privacy-unshield-key";
@@ -99,7 +143,7 @@ export interface PrivacyEncryptedUnshieldDetailsV1 {
 }
 
 export interface StoredPrivacyUnshieldV1 {
-  summary: PrivacyUnshieldSummaryV1;
+  summary: PrivacyAnyUnshieldSummaryV1;
   keyId: string;
   encryptedDetails: PrivacyEncryptedUnshieldDetailsV1;
   tracking: PrivacyUnshieldTrackingV1;
@@ -112,6 +156,7 @@ const SIGNATURE = /^0x[0-9a-fA-F]{130}$/;
 const UINT = /^(?:0|[1-9]\d{0,79})$/;
 const STATES = new Set<PrivacyUnshieldState>([
   "quote_ready", "proof_preparing", "proof_verified", "submitting_to_relayer",
+  "awaiting_wallet_confirmation",
   "submission_unknown", "submitted", "public_confirmed", "private_balance_updated",
   "quote_expired", "proof_failed", "relayer_rejected", "public_reverted",
   "nullifier_already_spent", "failed_recoverable", "failed_needs_support",
@@ -133,12 +178,21 @@ function address(value: unknown): value is Address {
   return typeof value === "string" && ADDRESS.test(value) && !/^0x0{40}$/i.test(value);
 }
 
-export function isValidPrivacyUnshieldSummary(value: unknown): value is PrivacyUnshieldSummaryV1 {
-  if (!exact(value, [
+export function isValidPrivacyUnshieldSummary(value: unknown): value is PrivacyAnyUnshieldSummaryV1 {
+  const relayKeys = [
     "amountWei", "chainId", "createdAt", "expiresAt", "feeBPS", "id",
     "netRecipientAmountWei", "recipient", "recipientMatchesDepositor", "relayFeeWei",
     "relayerName", "requestId", "schema", "version",
-  ])) return false;
+  ] as const;
+  const directKeys = [
+    ...relayKeys,
+    "accountAddress", "accountId", "accountType", "gasFeeEstimateWei",
+    "gasLimit", "maxFeePerGas", "method",
+  ] as const;
+  const isDirect = exact(value, directKeys) && value.method === "direct";
+  if (!isDirect && !exact(value, relayKeys) && !exact(value, [...relayKeys, "method"])) {
+    return false;
+  }
   const amount = uint(value.amountWei);
   const net = uint(value.netRecipientAmountWei);
   const fee = uint(value.relayFeeWei);
@@ -153,12 +207,21 @@ export function isValidPrivacyUnshieldSummary(value: unknown): value is PrivacyU
     fee === amount * bps / 10_000n && address(value.recipient) &&
     typeof value.relayerName === "string" && value.relayerName.length > 0 && value.relayerName.length <= 64 &&
     typeof value.expiresAt === "number" && Number.isSafeInteger(value.expiresAt) && value.expiresAt >= value.createdAt &&
-    typeof value.recipientMatchesDepositor === "boolean";
+    typeof value.recipientMatchesDepositor === "boolean" &&
+    (isDirect
+      ? typeof value.accountId === "string" && value.accountId.length > 0 && value.accountId.length <= 128 &&
+        address(value.accountAddress) && value.accountAddress.toLowerCase() === value.recipient.toLowerCase() &&
+        (value.accountType === "bankr" || value.accountType === "privateKey" || value.accountType === "seedPhrase") &&
+        uint(value.gasLimit) !== null && uint(value.gasLimit)! > 0n &&
+        uint(value.maxFeePerGas) !== null && uint(value.maxFeePerGas)! > 0n &&
+        uint(value.gasFeeEstimateWei) === uint(value.gasLimit)! * uint(value.maxFeePerGas)! &&
+        net === amount && fee === 0n && bps === 0n && value.relayerName === "None"
+      : value.method === undefined || value.method === "relay");
 }
 
 export function isValidPrivacyUnshieldTracking(
   value: unknown,
-  summary: PrivacyUnshieldSummaryV1,
+  summary: PrivacyAnyUnshieldSummaryV1,
 ): value is PrivacyUnshieldTrackingV1 {
   if (!exact(value, [
     "blockNumber", "errorCode", "relayerRequestId", "revision", "state",
@@ -177,7 +240,30 @@ export function isValidPrivacyUnshieldTracking(
 export function isValidPrivacyUnshieldDetails(
   value: unknown,
   operationId?: string,
-): value is PrivacyUnshieldDetailsV1 {
+): value is PrivacyAnyUnshieldDetailsV1 {
+  if (exact(value, [
+    "associationRoot", "balanceWei", "callData", "commitmentHash", "commitmentId",
+    "commitmentRevision", "depositIndex", "expectedNewBalanceWei",
+    "expectedNewCommitment", "expectedNewWithdrawalIndex", "expectedSpentNullifier",
+    "label", "method", "operationId", "stateRoot", "version", "withdrawalIndex",
+  ])) {
+    const numeric = [
+      value.associationRoot, value.balanceWei, value.commitmentHash, value.depositIndex,
+      value.expectedNewBalanceWei, value.expectedNewCommitment,
+      value.expectedNewWithdrawalIndex, value.expectedSpentNullifier, value.label,
+      value.stateRoot, value.withdrawalIndex,
+    ].map(uint);
+    return value.version === 1 && value.method === "direct" &&
+      typeof value.operationId === "string" && UUID.test(value.operationId) &&
+      (!operationId || value.operationId === operationId) &&
+      typeof value.commitmentId === "string" && UUID.test(value.commitmentId) &&
+      typeof value.commitmentRevision === "number" && Number.isSafeInteger(value.commitmentRevision) && value.commitmentRevision >= 0 &&
+      numeric.every((item) => item !== null) && numeric[0]! > 0n && numeric[1]! > 0n &&
+      numeric[2]! > 0n && numeric[5]! > 0n && numeric[7]! > 0n && numeric[8]! > 0n &&
+      numeric[4]! <= numeric[1]! && numeric[6] === numeric[10]! + 1n &&
+      typeof value.callData === "string" && /^0x[0-9a-fA-F]+$/.test(value.callData) &&
+      value.callData.length <= 16_384;
+  }
   if (!exact(value, [
     "balanceWei", "baseFeeBPS", "commitmentHash", "commitmentId", "commitmentRevision",
     "depositIndex", "expectedNewBalanceWei", "expectedNewCommitment",
@@ -221,12 +307,13 @@ export function isValidStoredPrivacyUnshield(value: unknown): value is StoredPri
 }
 
 export function defaultPrivacyUnshieldTracking(
-  summary: PrivacyUnshieldSummaryV1,
+  summary: PrivacyAnyUnshieldSummaryV1,
+  state: PrivacyUnshieldState = "quote_ready",
 ): PrivacyUnshieldTrackingV1 {
   return {
     version: 1,
     revision: 0,
-    state: "quote_ready",
+    state,
     updatedAt: summary.createdAt,
     relayerRequestId: null,
     txHash: null,

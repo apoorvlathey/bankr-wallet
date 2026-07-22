@@ -30,10 +30,8 @@ existing direct and lazy imports retain the same default-export contract.
 - `model/sendEntry.ts` keeps Send entry semantics explicit: the homepage
   shortcut starts on Ethereum ETH, while an Assets-row entry preserves the
   clicked token and chain.
-- The Send token picker always includes a renderer-only `Shielded ETH` row.
-  Selecting it is intercepted before public transfer preparation and opens the
-  fixed Sepolia private-send flow; its sentinel can never be encoded as a
-  native or ERC-20 transfer.
+- The public Send token picker never receives Shielded ETH. Private Assets owns
+  that identity and exposes only Shield, Unshield, and Privacy Pools Activity.
 - `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
   cached-public-name matching, relevance ranking, and stored-order tie breaking
   for the recipient combobox. Suggestion rows reuse the shared safe avatar and

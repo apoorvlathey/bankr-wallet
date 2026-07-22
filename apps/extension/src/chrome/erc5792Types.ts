@@ -93,6 +93,15 @@ export interface PendingBatchTxRequest {
   requestChainId?: number;
   /** Explicit service-worker-authored request; never accepted from a webpage. */
   trustedInternal?: true;
+  /**
+   * Background-authored, same-depositor Privacy Pools public exit. Every id
+   * names one proof-backed whole commitment; call order must remain identical
+   * to operationIds so confirmation and receipt handling can fail closed.
+   */
+  privacyRagequitMeta?: {
+    version: 1;
+    operationIds: string[];
+  };
   /** Exact transport identity for session revocation and stale-request checks. */
   walletConnect?: WalletConnectRequestMetadata;
 }

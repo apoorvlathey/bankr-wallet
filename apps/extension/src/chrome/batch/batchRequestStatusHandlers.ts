@@ -29,6 +29,12 @@ export async function handleRejectBatchTransaction(
   if (!pending) {
     return { success: false, error: "Batch request not found" };
   }
+  if (pending.privacyRagequitMeta) {
+    const { recordPrivacyRagequitBatchWalletRejected } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitBatchWalletRejected(pending);
+  }
   await removePendingBatchTxRequest(bundleId);
 
   await updateBundleStatus(bundleId, {
@@ -50,6 +56,10 @@ export async function handleRemoveCallFromPendingBatch(
   bundleId: string,
   callIndex: number,
 ): Promise<{ success: boolean; error?: string; rejected?: boolean }> {
+  const pending = await getPendingBatchTxRequestById(bundleId);
+  if (pending?.privacyRagequitMeta) {
+    return { success: false, error: "Public exit calls cannot be changed" };
+  }
   const result = await removeCallFromPendingBatchTxRequest(bundleId, callIndex);
   if (!result.found) {
     return { success: false, error: "Pending batch not found" };
@@ -70,6 +80,10 @@ export async function handleUpdateCallInPendingBatch(
   callIndex: number,
   newData: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const pending = await getPendingBatchTxRequestById(bundleId);
+  if (pending?.privacyRagequitMeta) {
+    return { success: false, error: "Public exit calls cannot be changed" };
+  }
   const { updateCallInPendingBatchTxRequest } = await import(
     "../requests/pendingBatchTxStorage"
   );

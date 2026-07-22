@@ -18,11 +18,12 @@ export interface UiKeepaliveHeartbeatOptions {
 /**
  * Chrome 114+ does not treat opening a long-lived port as worker activity.
  * Send an immediate, then sub-30-second, secret-free pulse while trusted wallet
- * UI is open. This keeps the worker alive without refreshing auth timestamps
- * or an authenticated finite passkey deadline.
+ * UI is open. The exact renderer ID also lets the background authenticate the
+ * active surface lease without carrying any wallet secret.
  */
 export function startUiKeepaliveHeartbeat(
   port: UiKeepalivePort,
+  surfaceId: string,
   options: UiKeepaliveHeartbeatOptions = {},
 ): () => void {
   const schedule = options.setInterval ?? globalThis.setInterval;
@@ -40,13 +41,42 @@ export function startUiKeepaliveHeartbeat(
   const pulse = (): void => {
     if (stopped) return;
     try {
-      port.postMessage({ type: "wallet-ui-keepalive" });
+      port.postMessage({ type: "wallet-ui-keepalive", surfaceId });
     } catch {
       stop();
       options.onError?.();
     }
   };
 
+  interval = schedule(pulse, UI_KEEPALIVE_HEARTBEAT_MS);
+  pulse();
+  return stop;
+}
+
+/** Worker-only heartbeat for onboarding, which must not hold an auth lease. */
+export function startWorkerKeepaliveHeartbeat(
+  port: UiKeepalivePort,
+  options: UiKeepaliveHeartbeatOptions = {},
+): () => void {
+  const schedule = options.setInterval ?? globalThis.setInterval;
+  const cancel = options.clearInterval ?? globalThis.clearInterval;
+  let stopped = false;
+  let interval: IntervalHandle | null = null;
+  const stop = (): void => {
+    if (stopped) return;
+    stopped = true;
+    if (interval !== null) cancel(interval);
+    interval = null;
+  };
+  const pulse = (): void => {
+    if (stopped) return;
+    try {
+      port.postMessage({ type: "wallet-worker-keepalive" });
+    } catch {
+      stop();
+      options.onError?.();
+    }
+  };
   interval = schedule(pulse, UI_KEEPALIVE_HEARTBEAT_MS);
   pulse();
   return stop;

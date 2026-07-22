@@ -1,4 +1,4 @@
-import { HStack, Spinner, Text, VStack } from "@chakra-ui/react";
+import { HStack, Text, VStack } from "@chakra-ui/react";
 import { useEffect, useRef } from "react";
 import type { ShieldQuoteController } from "./hooks/useShieldQuote";
 import type { ShieldReviewController } from "./hooks/useShieldReview";
@@ -68,18 +68,12 @@ export default function ShieldAmountPanel({
       <ShieldDirectionMarker />
       <ShieldDestinationCard
         shielded
+        isLoading={quote.state.status === "loading"}
         amount={visibleQuote ? formatShieldWei(visibleQuote.shieldedAmountWei) : null}
         detail={visibleQuote
           ? `${formatShieldWei(visibleQuote.protocolFeeWei)} ETH protocol fee`
           : `${Number(SHIELD_VETTING_FEE_BPS) / 100}% protocol fee`}
       />
-
-      {quote.state.status === "loading" && (
-        <HStack justify="center" pt={3} spacing={2} role="status">
-          <Spinner size="xs" color="accent.secondary" />
-          <Text fontSize="xs" color="fg.secondary">Updating quote…</Text>
-        </HStack>
-      )}
       {visibleQuote && (
         <HStack justify="space-between" pt={3} spacing={3}>
           <Text fontSize="xs" color="fg.secondary">

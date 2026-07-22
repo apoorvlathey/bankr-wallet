@@ -1,5 +1,8 @@
 import { readPrivacyAspMasterMaterial } from "./asp/eligibility";
 import { readPrivacyCommitments } from "./commitments/repository";
+import {
+  canonicalPrivacyCommitments,
+} from "./commitments/lineageIntegrity";
 import { listAllPrivacyShieldOperations } from "./operations/repository";
 import type { PrivacyShieldTrackingState } from "./operations/types";
 import { listAllPrivacyRagequits } from "./ragequit/repository";
@@ -13,6 +16,8 @@ const SHIELD_OPERATION_REMOVAL_RISKS = new Set<PrivacyShieldTrackingState>([
   "public_confirmed",
   "awaiting_event",
   "awaiting_asp",
+  "asp_unavailable",
+  "asp_poi_required",
   "failed_recoverable",
   "failed_needs_support",
 ]);
@@ -89,10 +94,10 @@ export async function assertPrivacyAccountRemovalSafe(input: {
     // only after the live privacy capability proves that it does not.
     throw new PrivacyAccountRemovalError();
   }
-  const commitments = await dependencies.readPrivacyCommitments(
+  const commitments = canonicalPrivacyCommitments(await dependencies.readPrivacyCommitments(
     material.key,
     material.keyId,
-  );
+  ));
   const hasBalance = commitments.some(({ details }) =>
     details.depositor.toLowerCase() === address &&
     details.status !== "spent" &&

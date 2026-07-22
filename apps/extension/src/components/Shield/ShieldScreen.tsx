@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
 import { isPrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
@@ -16,6 +16,7 @@ interface ShieldScreenProps {
   onBack: () => void;
   account: ShieldSourceAccount | null;
   accounts?: Account[];
+  onUnlockRequired: () => void;
 }
 
 function isShieldSourceAccount(account: ShieldSourceAccount): boolean {
@@ -27,7 +28,9 @@ export default function ShieldScreen({
   onBack,
   account,
   accounts = [],
+  onUnlockRequired,
 }: ShieldScreenProps) {
+  const [runtimeAuthRequired, setRuntimeAuthRequired] = useState(false);
   const [sourceAccount, setSourceAccount] = useState<ShieldSourceAccount | null>(() => {
     if (account && isShieldSourceAccount(account)) {
       return account;
@@ -36,17 +39,28 @@ export default function ShieldScreen({
   });
   const { initialization, retry } = useShieldInitialization();
   const activity = useShieldOperations();
+  const markAuthRequired = useCallback(() => setRuntimeAuthRequired(true), []);
+  const authRequired = runtimeAuthRequired ||
+    initialization.status === "auth-required";
+  const dashboardInitialization = authRequired
+    ? { status: "auth-required" as const, error: null }
+    : initialization;
   const quote = useShieldQuote({
     account: sourceAccount,
-    enabled: true,
+    enabled: dashboardInitialization.status === "ready",
     priceUsd: activity.series.priceUsd,
   });
-  const review = useShieldReview({ account: sourceAccount, quote });
+  const review = useShieldReview({
+    account: sourceAccount,
+    quote,
+    onAuthRequired: markAuthRequired,
+  });
   const operation = useShieldOperation({
     account: sourceAccount,
     quote,
     review,
     onSaved: activity.refresh,
+    onAuthRequired: markAuthRequired,
   });
   const operationStatus = operation.state.status;
   const saveOperation = operation.save;
@@ -70,7 +84,7 @@ export default function ShieldScreen({
   const readyQuote = quote.state.status === "ready" ? quote.state.quote : null;
   const shieldBusy = review.state.status === "preparing" || operation.state.status === "saving";
   const canReviewShield = Boolean(
-    initialization.status === "ready" &&
+    dashboardInitialization.status === "ready" &&
     sourceAccount &&
     readyQuote?.canAfford &&
     review.state.status !== "ready" &&
@@ -93,8 +107,9 @@ export default function ShieldScreen({
           }}
         />
       )}
-      initialization={initialization}
+      initialization={dashboardInitialization}
       onRetryInitialization={retry}
+      onUnlockRequired={onUnlockRequired}
       content={(
         <ShieldAmountPanel
           account={sourceAccount}

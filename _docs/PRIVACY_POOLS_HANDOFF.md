@@ -1,6 +1,6 @@
 # Privacy Pools implementation handoff
 
-> **Handoff date:** 2026-07-20
+> **Handoff date:** 2026-07-21
 > **Build targets:** `dev:extension` uses Sepolia; normal/production builds use
 > Ethereum mainnet only
 > **Implementation status:** Dual-profile code and automated profile/wallet
@@ -24,14 +24,14 @@ mainnet rehearsal.
   shared Warm Midnight base canvas. Public remains the account-scoped wallet. Private removes the
   account selector, positions, public assets, public chart, and public Activity.
 - Private mode shows only the wallet-wide Shielded ETH balance and USD chart,
-  `Shield` / `Unshield` / `Send`, one Shielded ETH Assets row, and Privacy
+  `Shield` / `Unshield`, one Shielded ETH Assets row, and Privacy
   Pools Activity across all depositor accounts. The public side excludes all
   Shield/Unshield rows and never mixes the private balance into account totals.
-  The three private actions reuse the exact public-home action treatment and
+  The two private actions reuse the exact public-home action treatment and
   icons instead of introducing large action cards.
 - Shield now follows the wallet's Swap form grammar with compact fixed active-chain
-  ETH and Shielded ETH amount cards and one sticky review action. Shield,
-  Unshield, and Send are independent screens reached directly from Private;
+  ETH and Shielded ETH amount cards and one sticky review action. Shield and
+  Unshield are independent screens reached directly from Private;
   there is no internal mode selector. `Deposit from` names the signer without a redundant
   network subtitle, and the private balance is not repeated inside the form. There is no
   recovery wizard, protocol primer, local activity list, asset selector, or
@@ -39,7 +39,7 @@ mainnet rehearsal.
   account inside the form without changing the global public account.
 - `Shielded ETH` is permanent only in Private Assets, even at zero. It shows
   the compliance-cleared balance with amber processing subcopy, carries a
-  active deployment identity, and opens Shield, Unshield, Send privately, or Private Activity.
+  active deployment identity, and opens Shield, Unshield, or Private Activity.
   Generic public Send and Swap never receive this pseudo-asset.
 - First eligible Private-mode entry starts creation of a separate 12-word
   Privacy Pools phrase inside the background service worker without blocking
@@ -71,15 +71,16 @@ mainnet rehearsal.
   spendable Shielded ETH. The compact breakdown beneath it separately shows
   the shielded amount and amber processing ETH still waiting for the ASP
   compliance check.
-- Private Unshield and **Send privately** are separate entries over the same
-  relayed withdrawal engine. Both begin with an empty recipient and require an
-  explicit address or contact choice. Shielded ETH is debited and
+- Private Unshield is the sole relayed withdrawal entry. Privacy Pools v1 has
+  no in-pool transfer, so the duplicate Private Send action and screen are not
+  exposed. Unshield begins with an empty recipient and requires an explicit
+  address or contact choice. Shielded ETH is debited and
   public active-chain ETH is delivered through the shared Send recipient/contact/ENS
   flow through the pinned relay. Its concise review uses a normal button press,
   explains there is no direct onchain link to the deposit, and makes no claim
   that timing, amount matching, or address reuse are untraceable. No additional
   renderer password, biometric, or hold gesture is introduced.
-- Private send is available only for locally verified, ASP-approved
+- Relayed Unshield is available only for locally verified, ASP-approved
   commitments. It spends the wallet-wide privacy identity, so it intentionally
   has no public-account selector and works independently of whether Bankr,
   private-key, seed-phrase, or an impersonator is selected on the public side.
@@ -88,17 +89,36 @@ mainnet rehearsal.
 - After an exact deposit is confirmed and indexed, the original depositor may
   choose **Withdraw publicly** without waiting for the ASP. This produces the
   protocol ragequit transaction, returns funds to that original public
-  account, and publicly links the exit to the deposit.
-- Public Shield progress and relayed private-send outcomes live in Private
-  Activity only. Shield deposits keep their four real stages
+  account, and publicly links the exit to the deposit. The entry row now opens
+  a read-only Public exit review first. That preview lists every currently
+  ragequittable commitment with its exact current amount and saved
+  original-account identity without proving, persisting a recovery intent,
+  claiming, or queueing anything. The selector groups deposits by original
+  account. The user may check one or several whole commitments in one group;
+  multiple selections become one atomic EIP-7702/ERC-7821 (or production Bankr
+  atomic) transaction. Mixed original accounts are rejected. The acknowledged
+  final action is the first point that prepares proofs, claims, or a request.
+- Public Shield progress and relayed Unshield outcomes live in Private
+  Activity. Shield deposits keep their four real stages
   and ordinary active-chain transaction details; both the Activity row and detail
   screen use the same amber privacy mark and durable lifecycle projection.
   Successful Shield and public-recovery confirmations return to Private
   Activity instead of resetting to Assets. Deposit, lifecycle, and recovery
   rows all reuse the privacy mark; the recovery confirmation is titled
   `Shield Recovery`.
-  Private sends use sanitized withdrawal rows and concise route/fee/status
-  details. The matching Public Activity stays strictly account/public scoped.
+  Relayed Unshield uses sanitized withdrawal rows and concise route/fee/status
+  details. Shield and public-exit history rows carry bounded privacy markers
+  for their Private presentation, while the same real transaction also remains
+  in Public Activity for the signer account. Receiver-paid Unshield follows the
+  same dual rule: its sanitized operation is Private and its signer-owned
+  onchain transaction is Public. Relayed Unshield has no signer-owned wallet
+  transaction. Receiver-paid submission persists the returned hash into the
+  private operation; a definite non-submission releases the claimed commitment
+  and becomes retryable, while only an ambiguous broadcast remains under
+  nullifier reconciliation. Missing-prompt recovery observes a bounded handoff
+  grace so it cannot cancel a submission that just consumed its confirmation.
+  Exact legacy internal origins cover older stored rows; Public
+  Activity remains strictly selected-account scoped.
 - Shield quote loading retains the last verified public balance, maximum,
   output, and slider geometry. The source amount mirrors slider movement on
   every drag frame, but that draft remains renderer-local until release, so
@@ -119,11 +139,18 @@ mainnet rehearsal.
   quote/deployment RPC work, and queue creation performs no redundant
   deployment read. Confirm still revalidates deployment and authorization
   before submission.
-- Unshield always mirrors Shield's two-card amount grammar. When no Shielded
-  ETH is privately available but ragequit is, the same cards show the fixed
-  public-exit amount and original depositor. A required unchecked commitment
-  control identifies recovery to the original address as a public transaction;
-  only checking it enables the sticky `Withdraw publicly` action. The
+- Unshield is now an explicit two-step decision. Entry shows the Shielded ETH
+  amount followed by a boxed `Receive at` address control; exact public ETH
+  output, relay fee/identity, expiry, privacy warnings, and any over-cap state
+  appear only after `Review unshield`. The review avoids a duplicate Financial
+  impact block: Request details starts with the two-line relay percentage and
+  ETH/USD fee. When over cap, that row contains the contract-limit warning and
+  the public-exit alternative moves into the sticky action bar. When no Shielded
+  ETH is privately available but ragequit is, entry shows the fixed public-exit
+  amount and original depositor. Its action opens the same exact
+  whole-deposit review as the compact fallback row. That screen shows the
+  account name, avatar/blockie, and address, then requires a public-link
+  acknowledgement before enabling `Withdraw publicly`. The
   pending amount on the private home uses WalletChan's amber privacy status accent.
 - A public-withdrawal prompt rejected by the user is retained internally long
   enough to release its encrypted commitment claim safely, but is omitted
@@ -231,9 +258,9 @@ a self-consistent mock.
 | Proving | `apps/extension/src/chrome/privacy/prover/`, `apps/extension/privacy-prover-offscreen.html` | Nonce-bound offscreen host and packaged one-shot worker |
 | Private portfolio history | `apps/extension/src/chrome/privacy/portfolioHistory/` | Privacy-key-encrypted bounded USD history and reset/recovery cleanup |
 | Home mode | `apps/extension/src/app/home/`, `components/WalletModeToggle.tsx` | Persisted public/private presentation branch and private-only portfolio composition |
-| Shield renderer | `apps/extension/src/components/Shield/` | Fixed Shield/Unshield swap-style form, private-send review, and contextual public recovery |
-| Portfolio/Send integration | `apps/extension/src/app/home/PrivatePortfolioHome.tsx`, `components/Portfolio/Holdings/` | Private-only Shielded ETH asset; public Holdings/Send remain ordinary assets only |
-| Activity | `apps/extension/src/components/Activity/` | Mutually exclusive public versus Privacy Pools scopes plus private-send details |
+| Shield renderer | `apps/extension/src/components/Shield/` | Fixed Shield/Unshield swap-style forms, Unshield review, and contextual public recovery |
+| Portfolio integration | `apps/extension/src/app/home/PrivatePortfolioHome.tsx`, `components/Portfolio/Holdings/` | Private-only Shielded ETH asset; public Holdings/Send remain ordinary assets only |
+| Activity | `apps/extension/src/components/Activity/` | Mutually exclusive public versus Privacy Pools scopes plus relayed Unshield details |
 | Recovery settings | `apps/extension/src/components/Settings/PrivacyRecoverySettings.tsx` | Temporary phrase reveal/restore UI only |
 
 All privacy runtime messages are classified `wallet-ui` and must originate
@@ -273,6 +300,12 @@ passes that signer explicitly instead of changing the global active account.
   verification.
 - Relayers: the pinned testnet relay plus Freedom Relay under their respective
   signer policies in `privacy/deployment/manifest.ts`.
+- The `100` bps relay maximum is enforced by the Sepolia Entrypoint. Small
+  withdrawals can receive otherwise valid quotes above that hard cap when gas
+  dominates the amount. WalletChan shows the cheapest verified percentage as
+  a non-submittable warning, never offers an override that would revert, and
+  exposes explicit original-depositor public withdrawal when available. Future
+  public docs should distinguish this case from relay downtime.
 - User-configured Sepolia RPC is preferred; WalletChan's known-chain endpoint
   is the fallback. Every JSON-RPC batch is capped at three requests.
 - A quote necessarily exposes the selected public address, candidate amount,

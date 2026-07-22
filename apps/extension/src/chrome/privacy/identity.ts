@@ -19,6 +19,7 @@ import {
   setCachedPrivacyKey,
   tryRestoreSession,
 } from "../sessionCache";
+import { addPrivacyKeyToSessionCapability } from "../session/capabilityPersistence";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -45,8 +46,11 @@ const CUSTODY_ACCOUNT_REQUIRED =
 const RECOVERY_ATTENTION_REQUIRED =
   "Shield recovery needs attention before you continue.";
 
-function actionRequired(error: string): PrivacyInitializationStatus {
-  return { success: false, status: "action-required", error };
+function actionRequired(
+  code: "auth-required" | "account-required" | "recovery-required",
+  error: string,
+): PrivacyInitializationStatus {
+  return { success: false, status: "action-required", code, error };
 }
 
 async function createEmptyPrivacyVault(
@@ -88,29 +92,38 @@ export async function ensurePrivacyIdentityInitialized(): Promise<PrivacyInitial
   if (!isWalletUnlocked()) {
     await tryRestoreSession(handleUnlockWallet);
   }
-  if (!isWalletUnlocked()) return actionRequired(MASTER_REQUIRED);
+  if (!isWalletUnlocked()) return actionRequired("auth-required", MASTER_REQUIRED);
 
   const expectedAuthEpoch = getAuthCeremonyEpoch();
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     const stored = await readPrivacyVault();
     if (stored.status === "invalid") {
-      return actionRequired(RECOVERY_ATTENTION_REQUIRED);
+      return actionRequired("recovery-required", RECOVERY_ATTENTION_REQUIRED);
     }
     if (stored.status === "valid" && stored.record.recovery !== null) {
+      const privacyKey = getCachedPrivacyKey();
+      if (
+        getPasswordType() !== "master" ||
+        !privacyKey ||
+        privacyKey.keyId !== stored.record.keyId ||
+        !(await verifyPrivacyVaultWithKey(stored.record, privacyKey.key))
+      ) {
+        return actionRequired("auth-required", MASTER_REQUIRED);
+      }
       return { success: true, status: "ready" };
     }
 
     const activeAccount = await getActiveAccount();
     if (!activeAccount || activeAccount.type === "impersonator") {
-      return actionRequired(CUSTODY_ACCOUNT_REQUIRED);
+      return actionRequired("account-required", CUSTODY_ACCOUNT_REQUIRED);
     }
     if (getPasswordType() !== "master") {
-      return actionRequired(MASTER_REQUIRED);
+      return actionRequired("auth-required", MASTER_REQUIRED);
     }
     try {
       assertCurrentMasterAuthorization(expectedAuthEpoch);
     } catch {
-      return actionRequired(MASTER_REQUIRED);
+      return actionRequired("auth-required", MASTER_REQUIRED);
     }
 
     let record = stored.status === "valid" ? stored.record : null;
@@ -118,7 +131,7 @@ export async function ensurePrivacyIdentityInitialized(): Promise<PrivacyInitial
     let createdKeyBytes: Uint8Array | null = null;
     if (!record) {
       const masterPassword = getCachedPassword();
-      if (!masterPassword) return actionRequired(MASTER_REQUIRED);
+      if (!masterPassword) return actionRequired("auth-required", MASTER_REQUIRED);
       const created = await createEmptyPrivacyVault(masterPassword);
       record = created.record;
       privacyKey = {
@@ -129,9 +142,11 @@ export async function ensurePrivacyIdentityInitialized(): Promise<PrivacyInitial
       createdKeyBytes = created.keyBytes;
     } else if (!privacyKey || privacyKey.keyId !== record.keyId) {
       const masterPassword = getCachedPassword();
-      if (!masterPassword) return actionRequired(MASTER_REQUIRED);
+      if (!masterPassword) return actionRequired("auth-required", MASTER_REQUIRED);
       const unlocked = await unlockPrivacyVaultWithPassword(masterPassword);
-      if (!unlocked) return actionRequired(RECOVERY_ATTENTION_REQUIRED);
+      if (!unlocked) {
+        return actionRequired("recovery-required", RECOVERY_ATTENTION_REQUIRED);
+      }
       privacyKey = {
         key: unlocked.key,
         keyBytes: unlocked.keyBytes,
@@ -142,7 +157,7 @@ export async function ensurePrivacyIdentityInitialized(): Promise<PrivacyInitial
 
     try {
       if (!(await verifyPrivacyVaultWithKey(record, privacyKey.key))) {
-        return actionRequired(RECOVERY_ATTENTION_REQUIRED);
+        return actionRequired("recovery-required", RECOVERY_ATTENTION_REQUIRED);
       }
       const recovery = await encryptPrivacyRecovery(
         privacyKey.key,
@@ -156,9 +171,17 @@ export async function ensurePrivacyIdentityInitialized(): Promise<PrivacyInitial
         recovery,
       });
       setCachedPrivacyKey(privacyKey);
+      await addPrivacyKeyToSessionCapability({
+        keyBytes: privacyKey.keyBytes,
+        keyId: privacyKey.keyId,
+      }).catch((error) => {
+        // The live master session remains valid. A transient storage failure
+        // merely means a worker restart will require fresh master auth.
+        console.warn("[privacy] Failed to extend the session capability:", error);
+      });
       return { success: true, status: "ready" };
     } catch {
-      return actionRequired(RECOVERY_ATTENTION_REQUIRED);
+      return actionRequired("recovery-required", RECOVERY_ATTENTION_REQUIRED);
     } finally {
       createdKeyBytes?.fill(0);
     }

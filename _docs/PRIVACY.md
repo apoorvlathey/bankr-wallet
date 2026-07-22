@@ -171,9 +171,14 @@ withdrawal proves both ownership of a commitment and membership of its label in
 the ASP's approved set. A partial withdrawal creates a replacement commitment
 for the remaining amount. The original depositor can use **ragequit** to recover
 the remaining value without ASP approval, but that exit is public and is
-available only to the original depositor. WalletChan exposes this as
-**Withdraw publicly** as soon as the exact confirmed deposit is indexed, so a
-user can choose it while ASP review is still pending instead of waiting.
+available only to the original depositor. WalletChan exposes every current
+ragequittable deposit in a selector as soon as it is indexed. Deposits are
+grouped by original account. One or more whole commitments from the same group
+may exit in one atomic EIP-7702/ERC-7821 transaction; commitments belonging to
+different depositors cannot share a transaction because the pool authorizes
+and pays the original `msg.sender`. Ragequit is not an arbitrary partial-
+withdrawal path, so WalletChan reviews each exact amount and original account
+before preparation.
 
 The official deployment page currently lists one Ethereum mainnet ETH pool:
 

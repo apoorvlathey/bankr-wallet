@@ -49,15 +49,22 @@ test("Bankr Privacy Pools submission retains encrypted-intent and final-effect g
   );
   assert.match(confirmation, /privacyAuthorization\.shield/);
   assert.match(confirmation, /privacyAuthorization\.ragequit/);
+  assert.match(confirmation, /privacyAuthorization\.directUnshield/);
   assert.ok(
     pendingAuthorization.indexOf("await beforeEffect?.()") <
       pendingAuthorization.indexOf("beginEffect();"),
   );
   assert.match(processing, /beginPrivacyShieldSubmission/);
   assert.match(processing, /beginPrivacyRagequitSubmission/);
+  assert.match(processing, /beginPrivacyDirectUnshieldSubmission/);
   assert.match(processing, /recordPrivacyShieldSubmitted/);
   assert.match(processing, /recordPrivacyRagequitSubmitted/);
+  assert.match(processing, /recordPrivacyDirectUnshieldSubmitted/);
   assert.match(processing, /startReceiptPolling/);
+  assert.match(
+    processing,
+    /privacySubmissionOutcomeUncertain:[\s\S]*?error instanceof BankrApiError && error\.outcomeUncertain/,
+  );
 });
 
 test("local Privacy Pools confirmation still covers private-key and seed wallets", async () => {
@@ -72,4 +79,58 @@ test("local Privacy Pools confirmation still covers private-key and seed wallets
   assert.match(local, /authorizePrivacyConfirmation\(pending\)/);
   assert.match(local, /privacyAuthorization\.shield/);
   assert.match(local, /privacyAuthorization\.ragequit/);
+  assert.match(local, /privacyAuthorization\.directUnshield/);
+  const execution = await readFile(
+    new URL("transactions/localExecution.ts", sourceRoot),
+    "utf8",
+  );
+  assert.match(execution, /let publishedTxHash: string \| null = null/);
+  assert.match(
+    execution,
+    /recordPrivacyDirectUnshieldSubmissionFailure\(pending, \{[\s\S]*?outcomeUncertain: publishedTxHash !== null/,
+  );
+});
+
+test("every public-exit execution path marks history as private activity", async () => {
+  const sources = await Promise.all([
+    readFile(new URL("transactions/localExecution.ts", sourceRoot), "utf8"),
+    readFile(new URL("transactions/bankrProcessing.ts", sourceRoot), "utf8"),
+    readFile(new URL("batch/batchAtomic7702Execution.ts", sourceRoot), "utf8"),
+    readFile(new URL("batch/batchBankrExecution.ts", sourceRoot), "utf8"),
+  ]);
+
+  for (const source of sources) {
+    assert.match(
+      source,
+      /privacyRagequitMeta:\s*pending\.privacyRagequitMeta\s*\?\s*\{ version: 1 \}/,
+    );
+  }
+});
+
+test("single and batch public-exit requests retain the signer-bound history marker", async () => {
+  const source = await readFile(
+    new URL("privacy/ragequit/submission.ts", sourceRoot),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /pinnedTxRequest\(account,[\s\S]*?privacyRagequitMeta: \{ version: 1, operationId: operation\.summary\.id \}/,
+  );
+  assert.match(
+    source,
+    /pinnedBatchTxRequest\(account,[\s\S]*?privacyRagequitMeta: \{ version: 1, operationIds: \[\.\.\.operationIds\] \}/,
+  );
+});
+
+test("canonical receipt finalization mirrors receiver-paid Unshield into Private Activity", async () => {
+  const sideEffects = await readFile(
+    new URL("forceInclusion/receiptSideEffects.ts", sourceRoot),
+    "utf8",
+  );
+  assert.match(sideEffects, /applyPrivacyUnshieldReceiptMirror/);
+  assert.match(
+    sideEffects,
+    /await applyPrivacyUnshieldReceiptMirror\(args\)/,
+  );
 });

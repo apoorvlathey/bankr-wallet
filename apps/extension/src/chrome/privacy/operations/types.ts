@@ -43,6 +43,8 @@ export type PrivacyShieldTrackingErrorCode =
   | "public-reverted"
   | "event-mismatch"
   | "event-unavailable"
+  | "asp-unavailable"
+  | "asp-poi-required"
   | "asp-declined"
   | "asp-removed";
 
@@ -301,6 +303,9 @@ const TRACKING_STATES = new Set<PrivacyShieldTrackingState>([
   "public_confirmed",
   "awaiting_event",
   "awaiting_asp",
+  "asp_unavailable",
+  "asp_poi_required",
+  "asp_approved",
   "private_ready",
   "wallet_rejected",
   "submission_failed",
@@ -320,6 +325,8 @@ const TRACKING_ERROR_CODES = new Set<PrivacyShieldTrackingErrorCode>([
   "public-reverted",
   "event-mismatch",
   "event-unavailable",
+  "asp-unavailable",
+  "asp-poi-required",
   "asp-declined",
   "asp-removed",
 ]);
@@ -415,6 +422,9 @@ export function isValidPrivacyShieldOperationTracking(
       tracking.state === "public_confirmed" ||
       tracking.state === "awaiting_event" ||
       tracking.state === "awaiting_asp" ||
+      tracking.state === "asp_unavailable" ||
+      tracking.state === "asp_poi_required" ||
+      tracking.state === "asp_approved" ||
       tracking.state === "private_ready" ||
       tracking.state === "ragequit_recovered" ||
       tracking.state === "public_reverted") &&
@@ -424,6 +434,9 @@ export function isValidPrivacyShieldOperationTracking(
   }
   if (
     (tracking.state === "awaiting_asp" ||
+      tracking.state === "asp_unavailable" ||
+      tracking.state === "asp_poi_required" ||
+      tracking.state === "asp_approved" ||
       tracking.state === "private_ready" ||
       tracking.state === "ragequit_recovered") &&
     (commitment === null || label === null || poolValueWei === null || blockNumber === null)

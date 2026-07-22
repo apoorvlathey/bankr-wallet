@@ -22,8 +22,9 @@ here and should stay organized by one user-facing responsibility per file.
 | `TxDetailController.tsx` | Coordinate shared detail state and compose sections in the established visual/message order | Native-symbol lookup, delegate-label lookup, rebroadcast request, explorer navigation |
 | `TxDetailModal.tsx` | Adapt the shared controller to the modal host | None |
 | `TxDetailScreen.tsx` | Adapt the shared controller to navigation and refresh pending history | History messages, receipt polling, runtime listener |
-| `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status | Opens the requesting site and transaction explorer |
-| `PrivacyShieldLifecycleSummary.tsx` | Render the same durable Shield stage used by Activity, plus net Shielded ETH and four-step progress | None |
+| `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status; privacy transactions use the shared Shield mark and Activity label, and pending Shield status exposes the shared compliance-time explanation | Opens the requesting site and transaction explorer |
+| `PrivacyShieldLifecycleSummary.tsx` | Render the same durable Shield state used by Activity, plus net Shielded ETH, the receipt-timed compliance indicator and elapsed value, and locally bundled Privacy Pools attribution | Elapsed value delegates its renderer-only timer to the Shield compliance component |
+| `PrivacyShieldPendingAction.tsx` | Render the centered pending-only `Cancel Shielding and Withdraw?` navigation action | Invokes the host's existing Unshield-screen callback only; the host carries the selected operation and net amount |
 | `BridgeSummary.tsx` | Render source and destination bridge legs, status, amounts, and explorer actions | Explorer navigation |
 | `TransactionImpact.tsx` | Render source/destination asset changes in the shared request-review direction hierarchy | None |
 | `ClearSigningSummary.tsx` | Render ERC-7715 revoke, ERC-7821 batch, EIP-7702 delegation, and clear-signed summaries | Copy/explorer actions delegated to shared components |
@@ -97,8 +98,16 @@ large hook.
   execution.
 - Shield deposits replace the generic confirmed label with their durable
   Privacy Pools stage and show the same stage/context projection as Activity.
+  Their hero identity, plus Shield Recovery and Public Exit identities, also
+  reuse Activity's shared privacy mark and concise action label instead of the
+  mascot and internal persistence origin.
   The ordinary transaction, fee, account, explorer, and technical details stay
-  available beneath that lifecycle summary.
+  available beneath that lifecycle summary. While the compliance check is
+  pending, both its header loader and its Privacy Pools-attributed status card
+  expose the shared one-hour timing popover. The pending-only cancellation
+  action opens the existing Unshield screen with the selected operation ID and
+  exact net Shielded ETH amount; it never starts a withdrawal from the details
+  surface itself.
 - Confirmed ERC-7715 revocations use a receipt-specific ledger. The blue
   explanatory warning and nested allowance panel remain exclusive to the
   pre-confirmation review surface.

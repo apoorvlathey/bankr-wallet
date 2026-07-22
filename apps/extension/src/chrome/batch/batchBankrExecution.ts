@@ -40,6 +40,27 @@ export async function handleConfirmBatchTransaction(
   if (pending.intakeStatus === "validating") {
     return { success: false, error: "Batch request is still being validated" };
   }
+  if (pending.privacyRagequitMeta) {
+    if (forceInclusion || feePaymentToken === "token") {
+      return {
+        success: false,
+        error: "Privacy Pools public exits require normal network gas payment",
+      };
+    }
+    try {
+      const { authorizePrivacyRagequitBatchConfirmation } = await import(
+        "../privacy/ragequit/submission"
+      );
+      await authorizePrivacyRagequitBatchConfirmation(pending);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message === "auth-required"
+          ? "Unlock with your main password or biometrics and try again"
+          : "Privacy Pools public exit is no longer available",
+      };
+    }
+  }
 
   // SECURITY: resolve the pinned account; reject stale/missing bindings.
   if (!pending.accountId) {
@@ -233,6 +254,8 @@ async function processBatchTransactionInBackground(
       createdAt: pending.timestamp,
       accountType: "bankr",
       functionName: displayName,
+      accountId: pending.accountId,
+      privacyRagequitMeta: pending.privacyRagequitMeta ? { version: 1 } : undefined,
     });
 
     const authorization =
@@ -242,6 +265,17 @@ async function processBatchTransactionInBackground(
       );
     if (!authorization.authorized) {
       throw new Error(authorization.error);
+    }
+    if (pending.privacyRagequitMeta) {
+      const { authorizePrivacyRagequitBatchConfirmation } = await import(
+        "../privacy/ragequit/submission"
+      );
+      const { beginPrivacyRagequitBatchSubmission } = await import(
+        "../privacy/ragequit/lifecycle"
+      );
+      const privacyAuthorization =
+        await authorizePrivacyRagequitBatchConfirmation(pending);
+      await beginPrivacyRagequitBatchSubmission(pending, privacyAuthorization);
     }
 
     const result = await submitTransactionDirect(
@@ -257,6 +291,12 @@ async function processBatchTransactionInBackground(
     );
     effectGuard.settleEffect();
     const txHash = result.transactionHash;
+    if (pending.privacyRagequitMeta && txHash) {
+      const { recordPrivacyRagequitBatchSubmitted } = await import(
+        "../privacy/ragequit/lifecycle"
+      );
+      await recordPrivacyRagequitBatchSubmitted(pending, txHash);
+    }
 
     if (result.status === "reverted") {
       await handleBatchFailure(bundleId, pending, "Transaction reverted");
@@ -265,6 +305,18 @@ async function processBatchTransactionInBackground(
         txHash,
         completedAt: Date.now(),
       });
+      if (txHash) {
+        const { applyPrivacyRagequitReceipt } = await import(
+          "../privacy/ragequit/lifecycle"
+        );
+        await applyPrivacyRagequitReceipt({
+          txId: bundleId,
+          txHash,
+          chainId: pending.chainId,
+          receipt: { logs: [] },
+          succeeded: false,
+        });
+      }
     } else if (result.status === "success" && txHash) {
       // Fetch receipt once: sanitized shape goes to wallet_getCallsStatus,
       // raw shape feeds internal history enrichers such as asset changes.
@@ -273,6 +325,21 @@ async function processBatchTransactionInBackground(
         pending.chainId,
       );
       const receipt = rawReceipt ? toBundleReceipt(rawReceipt.receipt) : null;
+      if (pending.privacyRagequitMeta && rawReceipt) {
+        const { applyPrivacyRagequitReceipt } = await import(
+          "../privacy/ragequit/lifecycle"
+        );
+        await applyPrivacyRagequitReceipt({
+          txId: bundleId,
+          txHash,
+          chainId: pending.chainId,
+          receipt: rawReceipt.receipt,
+          succeeded: true,
+        });
+      }
+      if (pending.privacyRagequitMeta && !rawReceipt) {
+        startReceiptPolling(bundleId, txHash, pending.chainId);
+      }
 
       await updateBundleStatus(bundleId, {
         status: BUNDLE_STATUS.CONFIRMED,

@@ -5,6 +5,11 @@ import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
 import {
+  clearReleasedPrivacyPortfolioView,
+  readReleasedPrivacyPortfolioView,
+  storeReleasedPrivacyPortfolioSeries,
+} from "../portfolioViewCache";
+import {
   decryptPrivacyPortfolioSnapshot,
   encryptPrivacyPortfolioSnapshot,
 } from "./crypto";
@@ -100,7 +105,8 @@ async function readSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeri
   ]);
   if (vault.status !== "valid" || !privacyKey || privacyKey.keyId !== vault.record.keyId ||
     !(await verifyPrivacyVaultWithKey(vault.record, privacyKey.key))) {
-    return { priceUsd: null, totalValueUsd: null, snapshots: [] };
+    const released = await readReleasedPrivacyPortfolioView().catch(() => null);
+    return released?.series ?? { priceUsd: null, totalValueUsd: null, snapshots: [] };
   }
 
   const [records, priceResult] = await Promise.all([
@@ -155,7 +161,7 @@ async function readSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeri
   const overflowIds = current.slice(0, overflow).map((item) => item.record.id);
   const retained = current.slice(overflow);
   await commitRecord(nextRecord, [...expiredIds, ...overflowIds]);
-  return {
+  const series = {
     priceUsd,
     totalValueUsd,
     snapshots: retained.map(({ details }) => ({
@@ -163,6 +169,8 @@ async function readSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeri
       totalValueUsd: details.totalValueUsd,
     })),
   };
+  await storeReleasedPrivacyPortfolioSeries(series).catch(() => undefined);
+  return series;
 }
 
 export function readPrivacyPortfolioSeries(readyBalanceWei: string): Promise<PrivacyPortfolioSeries> {
@@ -176,6 +184,7 @@ export async function deletePrivacyPortfolioDatabase(): Promise<void> {
   const existing = databasePromise;
   databasePromise = null;
   if (existing) (await existing.catch(() => null))?.close();
+  await clearReleasedPrivacyPortfolioView();
   if (typeof indexedDB === "undefined") return;
   await Promise.all(PRIVACY_PORTFOLIO_DATABASES.map((name) =>
     new Promise<void>((resolve, reject) => {

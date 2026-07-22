@@ -60,6 +60,7 @@ function TransactionConfirmation({
   const isErc7715PermissionRevoke =
     !!txRequest.erc7715PermissionRevokeMeta;
   const isPrivacyShield = !!txRequest.privacyShieldMeta;
+  const isPrivacyDirectUnshield = !!txRequest.privacyUnshieldMeta;
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
@@ -126,6 +127,8 @@ function TransactionConfirmation({
 
   const screenTitle = isPrivacyShield
     ? "Review shield"
+    : isPrivacyDirectUnshield
+      ? "Review unshield"
     : is7702Revoke
     ? "Revoke smart account"
     : is7702SetDelegate

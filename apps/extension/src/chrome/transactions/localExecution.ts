@@ -36,6 +36,12 @@ import {
   recordPrivacyRagequitSubmissionFailure,
 } from "../privacy/ragequit/lifecycle";
 import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
+import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+  recordPrivacyDirectUnshieldSubmissionFailure,
+} from "../privacy/withdrawals/lifecycle";
+import type { PrivacyDirectUnshieldAuthorization } from "../privacy/withdrawals/directConfirmation";
 
 export interface GasOverrides {
   gasLimit: string;
@@ -63,10 +69,12 @@ export async function processLocalTransactionInBackground(
   expectedDelegatedAuthorityAuthEpoch?: string,
   privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
   privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
+  privacyDirectUnshieldAuthorization?: PrivacyDirectUnshieldAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
+  let publishedTxHash: string | null = null;
 
   try {
     const txForHistory = gasOverrides
@@ -95,6 +103,8 @@ export async function processLocalTransactionInBackground(
       delegation7702Meta: pending.delegation7702Meta,
       erc7715PermissionRevokeMeta: pending.erc7715PermissionRevokeMeta,
       accountId: pending.accountId,
+      privacyRagequitMeta: pending.privacyRagequitMeta ? { version: 1 } : undefined,
+      privacyUnshieldMeta: pending.privacyUnshieldMeta ? { version: 1 } : undefined,
     });
 
     if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
@@ -206,6 +216,10 @@ export async function processLocalTransactionInBackground(
           pending,
           privacyRagequitAuthorization ?? null,
         );
+        await beginPrivacyDirectUnshieldSubmission(
+          pending,
+          privacyDirectUnshieldAuthorization ?? null,
+        );
         effectGuard.beginEffect();
       },
     );
@@ -213,11 +227,15 @@ export async function processLocalTransactionInBackground(
 
     const txHash = result.txHash;
     if (txHash) {
+      publishedTxHash = txHash;
       await recordPrivacyShieldSubmitted(pending, txHash).catch((error) =>
         console.warn("[privacy-shield] failed to persist submitted hash", error),
       );
       await recordPrivacyRagequitSubmitted(pending, txHash).catch((error) =>
         console.warn("[privacy-ragequit] failed to persist submitted hash", error),
+      );
+      await recordPrivacyDirectUnshieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-unshield] failed to persist submitted hash", error),
       );
     }
     if (txHash && result.receipt) {
@@ -247,7 +265,14 @@ export async function processLocalTransactionInBackground(
     await recordPrivacyRagequitSubmissionFailure(pending).catch((trackingError) =>
       console.warn("[privacy-ragequit] failed to persist submission failure", trackingError),
     );
-    await handleTransactionFailure(txId, pending, errorMessage);
+    await recordPrivacyDirectUnshieldSubmissionFailure(pending, {
+      outcomeUncertain: publishedTxHash !== null,
+    }).catch((trackingError) =>
+      console.warn("[privacy-unshield] failed to persist submission failure", trackingError),
+    );
+    await handleTransactionFailure(txId, pending, errorMessage, {
+      privacySubmissionOutcomeUncertain: publishedTxHash !== null,
+    });
   } finally {
     effectGuard.releaseIfSafe();
     activeAbortControllers.delete(txId);

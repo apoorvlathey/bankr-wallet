@@ -5,9 +5,17 @@ import { listAllPrivacyShieldOperations } from "../operations/repository";
 import type { PrivacyShieldTrackingState } from "../operations/types";
 import { readPrivacyCommitments } from "./repository";
 import {
+  privacyCommitmentLineageKey,
+  repairPrivacyCommitmentLineages,
+} from "./lineageIntegrity";
+import {
   isPrivacyCommitmentPubliclyRecoverableStatus,
   type PrivacyCommitmentStatus,
 } from "./types";
+import {
+  readReleasedPrivacyPortfolioView,
+  storeReleasedPrivacyPortfolio,
+} from "../portfolioViewCache";
 
 export interface PrivacyCommitmentPortfolio {
   status: "ready" | "locked";
@@ -26,6 +34,8 @@ export interface PrivacyPortfolioCommitmentInput {
   status: PrivacyCommitmentStatus;
   balanceWei: string;
   updatedAt: number;
+  lineageKey?: string;
+  withdrawalIndex?: string;
 }
 
 export interface PrivacyPortfolioOperationInput {
@@ -40,6 +50,9 @@ const CONFIRMED_OPERATION_STATES = new Set<PrivacyShieldTrackingState>([
   "public_confirmed",
   "awaiting_event",
   "awaiting_asp",
+  "asp_unavailable",
+  "asp_poi_required",
+  "asp_approved",
   "private_ready",
   "asp_declined",
   "asp_removed",
@@ -59,8 +72,27 @@ export function aggregatePrivacyCommitmentPortfolio(
   let attentionCount = 0;
   let lastUpdatedAt: number | null = null;
   const representedOperations = new Set<string>();
+  const canonicalCommitments = new Map<string, PrivacyPortfolioCommitmentInput>();
 
   for (const commitment of commitments) {
+    if (!commitment.lineageKey) {
+      canonicalCommitments.set(`record:${canonicalCommitments.size}`, commitment);
+      continue;
+    }
+    const existing = canonicalCommitments.get(commitment.lineageKey);
+    if (!existing) {
+      canonicalCommitments.set(commitment.lineageKey, commitment);
+      continue;
+    }
+    const currentIndex = BigInt(commitment.withdrawalIndex ?? "0");
+    const existingIndex = BigInt(existing.withdrawalIndex ?? "0");
+    if (
+      currentIndex > existingIndex ||
+      (currentIndex === existingIndex && commitment.updatedAt > existing.updatedAt)
+    ) canonicalCommitments.set(commitment.lineageKey, commitment);
+  }
+
+  for (const commitment of canonicalCommitments.values()) {
     const balance = BigInt(commitment.balanceWei);
     confirmed += balance;
     if (commitment.status === "private_ready") {
@@ -86,6 +118,16 @@ export function aggregatePrivacyCommitmentPortfolio(
     const balance = BigInt(operation.poolValueWei ?? operation.shieldedAmountWei);
     confirmed += balance;
     if (operation.state === "awaiting_asp") pendingAsp += balance;
+    if (
+      operation.state === "asp_unavailable" ||
+      operation.state === "asp_poi_required" ||
+      operation.state === "asp_declined" ||
+      operation.state === "asp_removed" ||
+      operation.state === "ragequit_available"
+    ) {
+      recoverable += balance;
+      attentionCount += 1;
+    }
     lastUpdatedAt = Math.max(lastUpdatedAt ?? 0, operation.updatedAt);
   }
 
@@ -100,53 +142,67 @@ export function aggregatePrivacyCommitmentPortfolio(
   };
 }
 
+/**
+ * Keep public onchain deposit progress visible while encrypted commitment
+ * material is unavailable. These amounts already live in the sanitized Shield
+ * operation summaries; no commitment linkage or private-ready balance is
+ * released by this fallback.
+ */
+export function aggregateLockedPrivacyCommitmentPortfolio(
+  operations: readonly PrivacyPortfolioOperationInput[],
+): PrivacyCommitmentPortfolio {
+  return {
+    status: "locked",
+    ...aggregatePrivacyCommitmentPortfolio([], operations),
+  };
+}
+
+function portfolioOperation(
+  operation: Awaited<ReturnType<typeof listAllPrivacyShieldOperations>>[number],
+): PrivacyPortfolioOperationInput {
+  const tracking = operation.tracking;
+  return {
+    id: operation.summary.id,
+    state: tracking?.state ?? operation.summary.state,
+    shieldedAmountWei: operation.summary.shieldedAmountWei,
+    poolValueWei: tracking?.poolValueWei ?? null,
+    updatedAt: tracking?.updatedAt ?? operation.summary.updatedAt,
+  };
+}
+
 /** Release aggregates only; individual private commitment links remain encrypted. */
 export async function readPrivacyCommitmentPortfolio(): Promise<PrivacyCommitmentPortfolio> {
-  const [vault, privacyKey] = await Promise.all([
+  const [vault, privacyKey, operations] = await Promise.all([
     readPrivacyVault(),
     Promise.resolve(getCachedPrivacyKey()),
+    listAllPrivacyShieldOperations(),
   ]);
+  const publicOperations = operations.map(portfolioOperation);
   if (
     vault.status !== "valid" ||
     !privacyKey ||
     privacyKey.keyId !== vault.record.keyId ||
     !(await verifyPrivacyVaultWithKey(vault.record, privacyKey.key))
   ) {
-    return {
-      status: "locked",
-      confirmedBalanceWei: "0",
-      readyBalanceWei: "0",
-      maxPrivateSendWei: "0",
-      pendingBalanceWei: "0",
-      recoverableBalanceWei: "0",
-      attentionCount: 0,
-      lastUpdatedAt: null,
-    };
+    const released = await readReleasedPrivacyPortfolioView().catch(() => null);
+    return released?.portfolio
+      ? { status: "locked", ...released.portfolio }
+      : aggregateLockedPrivacyCommitmentPortfolio(publicOperations);
   }
-  const [commitments, operations] = await Promise.all([
-    readPrivacyCommitments(privacyKey.key, privacyKey.keyId),
-    listAllPrivacyShieldOperations(),
-  ]);
-  return {
-    status: "ready",
-    ...aggregatePrivacyCommitmentPortfolio(
-      commitments.map(({ record, details }) => ({
-        sourceOperationId: details.sourceOperationId,
-        depositor: details.depositor,
-        status: details.status,
-        balanceWei: details.balanceWei,
-        updatedAt: record.updatedAt,
-      })),
-      operations.map((operation) => {
-        const tracking = operation.tracking;
-        return {
-          id: operation.summary.id,
-          state: tracking?.state ?? operation.summary.state,
-          shieldedAmountWei: operation.summary.shieldedAmountWei,
-          poolValueWei: tracking?.poolValueWei ?? null,
-          updatedAt: tracking?.updatedAt ?? operation.summary.updatedAt,
-        };
-      }),
-    ),
-  };
+  await repairPrivacyCommitmentLineages(privacyKey);
+  const commitments = await readPrivacyCommitments(privacyKey.key, privacyKey.keyId);
+  const portfolio = aggregatePrivacyCommitmentPortfolio(
+    commitments.map(({ record, details }) => ({
+      sourceOperationId: details.sourceOperationId,
+      depositor: details.depositor,
+      status: details.status,
+      balanceWei: details.balanceWei,
+      updatedAt: record.updatedAt,
+      lineageKey: privacyCommitmentLineageKey(details),
+      withdrawalIndex: details.withdrawalIndex,
+    })),
+    publicOperations,
+  );
+  await storeReleasedPrivacyPortfolio(portfolio).catch(() => undefined);
+  return { status: "ready", ...portfolio };
 }

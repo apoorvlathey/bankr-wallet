@@ -135,11 +135,13 @@ test("Never-mode passkey sessions reopen every routine wallet path without persi
 
         const unlocked = await passkey.handleUnlockWithPasskey(payload);
         assert.deepEqual(unlocked, { success: true });
+        assert.ok(chromeHarness.stores.session.encryptedSessionCapabilities);
         assert.equal(
-          chromeHarness.stores.session.sessionCredentialKind,
-          "passkey-vault",
+          (chromeHarness.stores.session.encryptedSessionCapabilities as {
+            unlockMethod: string;
+          }).unlockMethod,
+          "passkey",
         );
-        assert.ok(chromeHarness.stores.session.encryptedSessionVaultKey);
         assert.equal(
           chromeHarness.stores.session.encryptedSessionPassword,
           undefined,
@@ -837,7 +839,7 @@ test("passkey session persistence failures never leave a half-unlocked wallet", 
             ? {
                 area: "session",
                 operation: "set",
-                key: "encryptedSessionVaultKey",
+                key: "encryptedSessionCapabilities",
               }
             : {
                 area: "local",

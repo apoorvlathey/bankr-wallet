@@ -35,8 +35,10 @@ export default function PortfolioChart({
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>(() =>
+    suppliedSnapshots ? [...suppliedSnapshots] : [],
+  );
+  const [loading, setLoading] = useState(suppliedSnapshots === undefined);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverIndexRef = useRef<number | null>(null);

@@ -1,23 +1,31 @@
-import { Box, HStack, Text, VStack } from "@chakra-ui/react";
+import { InfoOutlineIcon } from "@chakra-ui/icons";
+import {
+  Box,
+  Button,
+  HStack,
+  Popover,
+  PopoverBody,
+  PopoverContent,
+  PopoverTrigger,
+  Portal,
+  SimpleGrid,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
 import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import { RecipientSection } from "@/components/Transfer/RecipientSection";
 import type { TransferRecipient } from "@/components/Transfer/hooks/useTransferRecipient";
 import { truncateAddress } from "@/lib/addressUtils";
 import type { ReturnTypeUseUnshield } from "./hooks/useUnshield.types";
 import {
-  ShieldDestinationCard,
   ShieldDirectionMarker,
   ShieldSourceCard,
 } from "./ShieldAssetCards";
-import { formatShieldWei } from "./model/shieldQuote";
+import { formatShieldUsdValue, formatShieldWei } from "./model/shieldQuote";
 import { SHIELDED_ETH_NETWORK_NAME } from "./model/shieldedAsset";
-import {
-  getPrivateWithdrawalCopy,
-  type PrivateWithdrawalIntent,
-} from "./model/unshield";
+import { getUnshieldCopy } from "./model/unshield";
 
 interface Props {
-  intent: PrivateWithdrawalIntent;
   availableWei: bigint;
   totalReadyWei: bigint;
   confirmedWei: bigint;
@@ -25,17 +33,17 @@ interface Props {
   controller: ReturnTypeUseUnshield;
   recipientState: TransferRecipient;
   explorerUrl: string;
+  nativePriceUsd: number | null;
   publicExit?: {
     amountWei: bigint;
     depositAccountAddress: string;
     waitingForAsp: boolean;
-    status: "idle" | "preparing" | "queued" | "error";
-    error: string | null;
+    isPrimaryRoute: boolean;
   };
 }
 
+/** Amount and destination only; quote-dependent details belong to review. */
 export default function UnshieldAmountPanel({
-  intent,
   availableWei,
   totalReadyWei,
   confirmedWei,
@@ -43,130 +51,176 @@ export default function UnshieldAmountPanel({
   controller,
   recipientState,
   explorerUrl,
+  nativePriceUsd,
   publicExit,
 }: Props) {
-  const copy = getPrivateWithdrawalCopy(intent);
-  const operation = controller.state.operation;
-  const usesPublicExit = intent === "unshield" && availableWei === 0n && Boolean(publicExit);
+  const copy = getUnshieldCopy();
+  const usesPublicExit = Boolean(publicExit?.isPrimaryRoute);
   const publicExitAmount = publicExit ? formatShieldWei(publicExit.amountWei) : null;
-
-  const error = !usesPublicExit && controller.state.status === "error"
-    ? controller.state.error
-    : !usesPublicExit && controller.amount && !controller.validation.valid
-      ? "Enter an amount within your available balance."
-      : null;
+  const inputAmountWei = usesPublicExit
+    ? publicExit?.amountWei ?? 0n
+    : controller.amountValidation.valid
+      ? controller.amountValidation.amountWei
+      : 0n;
+  const inputAmountUsd = controller.amount || usesPublicExit
+    ? formatShieldUsdValue(inputAmountWei, nativePriceUsd)
+    : null;
+  const hasSplitReadyBalance = !usesPublicExit &&
+    totalReadyWei > availableWei &&
+    availableWei > 0n;
+  const error = !usesPublicExit && controller.amount && !controller.amountValidation.valid
+    ? "Enter an amount within your available balance."
+    : null;
   const balanceLabel = usesPublicExit
     ? publicExit?.waitingForAsp
       ? "Awaiting eligibility"
       : "Public exit available"
-    : pendingWei > 0n
-      ? `${formatShieldWei(pendingWei)} ETH is still awaiting its check`
-      : totalReadyWei > availableWei
-        ? `${formatShieldWei(totalReadyWei)} ETH ready · withdraw up to ${formatShieldWei(availableWei)} at a time`
-        : availableWei > 0n
-          ? copy.availableBalanceLabel
-          : confirmedWei > 0n
-            ? "No private balance is ready yet"
-            : "No Shielded ETH yet";
+    : availableWei > 0n
+      ? copy.availableBalanceLabel
+      : pendingWei > 0n
+        ? `${formatShieldWei(pendingWei)} ETH is still awaiting its check`
+        : confirmedWei > 0n
+          ? "No private balance is ready yet"
+          : "No Shielded ETH yet";
 
   return (
-    <VStack align="stretch" spacing={4}>
-      <Box>
-        <ShieldSourceCard
-          label="From"
-          shielded
-          amount={usesPublicExit ? publicExitAmount ?? "" : controller.amount}
-          balanceWei={usesPublicExit ? publicExit?.amountWei ?? 0n : availableWei}
-          maxWei={usesPublicExit ? 0n : availableWei}
-          balanceLabel={balanceLabel}
-          balanceLabelColor={pendingWei > 0n || usesPublicExit ? "accent.highlight" : undefined}
-          error={error}
-          isDisabled={!usesPublicExit && availableWei === 0n}
-          isReadOnly={usesPublicExit}
-          onAmountChange={controller.setAmount}
-        />
-        <ShieldDirectionMarker />
-        <ShieldDestinationCard
-          shielded={false}
-          label={copy.outcomeAmountLabel}
-          amount={usesPublicExit ? publicExitAmount : operation ? formatShieldWei(operation.netRecipientAmountWei) : null}
-          detail={usesPublicExit
-            ? "Returns to the original deposit account"
-            : operation
-            ? `${formatShieldWei(operation.relayFeeWei)} ETH relayer fee`
-            : "Exact amount appears after the relay quote"}
-        />
+    <VStack align="stretch" spacing={0}>
+      <ShieldSourceCard
+        label="From"
+        shielded
+        amount={usesPublicExit ? publicExitAmount ?? "" : controller.amount}
+        amountWei={inputAmountWei}
+        conversionLabel={inputAmountUsd}
+        balanceWei={usesPublicExit ? publicExit?.amountWei ?? 0n : availableWei}
+        maxWei={usesPublicExit ? 0n : availableWei}
+        balanceLabel={balanceLabel}
+        balanceSummary={hasSplitReadyBalance ? (
+          <SimpleGrid columns={2} spacing={3} mt={2}>
+            <VStack align="start" spacing={0.5} minW={0}>
+              <Text fontSize="2xs" color="fg.muted" lineHeight="short">
+                Total ready
+              </Text>
+              <Text
+                fontSize="sm"
+                fontWeight="600"
+                color="fg.primary"
+                lineHeight="short"
+                sx={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {formatShieldWei(totalReadyWei)} ETH
+              </Text>
+            </VStack>
+            <Popover placement="top-end" isLazy>
+              <PopoverTrigger>
+                <Button
+                  aria-label={`Why this withdrawal is limited to ${formatShieldWei(availableWei)} ETH`}
+                  variant="unstyled"
+                  h="auto"
+                  minW={0}
+                  display="flex"
+                  justifyContent="flex-start"
+                  color="accent.highlight"
+                >
+                  <VStack align="end" spacing={0.5} minW={0} w="full">
+                    <HStack spacing={1}>
+                      <Text fontSize="2xs" lineHeight="short">
+                        Max per withdrawal
+                      </Text>
+                      <InfoOutlineIcon boxSize="11px" aria-hidden />
+                    </HStack>
+                    <Text
+                      fontSize="sm"
+                      fontWeight="600"
+                      lineHeight="short"
+                      sx={{ fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {formatShieldWei(availableWei)} ETH
+                    </Text>
+                  </VStack>
+                </Button>
+              </PopoverTrigger>
+              <Portal>
+                <PopoverContent
+                  w="272px"
+                  maxW="calc(100vw - 24px)"
+                  _focus={{ outline: "none" }}
+                >
+                  <PopoverBody p={3}>
+                    <Text fontSize="xs" fontWeight="700" color="fg.primary">
+                      Why is the maximum lower?
+                    </Text>
+                    <Text mt={1} fontSize="xs" color="fg.secondary" lineHeight="1.45">
+                      A Privacy Pools withdrawal uses one private commitment at a time.
+                      You can withdraw up to {formatShieldWei(availableWei)} ETH now,
+                      then withdraw again for the rest.
+                    </Text>
+                  </PopoverBody>
+                </PopoverContent>
+              </Portal>
+            </Popover>
+          </SimpleGrid>
+        ) : undefined}
+        balanceLabelColor={usesPublicExit || (availableWei === 0n && pendingWei > 0n)
+          ? "accent.highlight"
+          : undefined}
+        error={error}
+        isDisabled={!usesPublicExit && availableWei === 0n}
+        isReadOnly={usesPublicExit}
+        onAmountChange={controller.setAmount}
+      />
+
+      <ShieldDirectionMarker />
+
+      <Box
+        bg="surface.raised"
+        borderWidth="1px"
+        borderColor="border.default"
+        borderRadius="lg"
+        px={3}
+        py={3}
+      >
+        {usesPublicExit && publicExit ? (
+          <Box>
+            <Text mb={1.5} fontSize="sm" fontWeight="600" color="fg.secondary">
+              {copy.recipientLabel}
+            </Text>
+            <HStack
+              minH="48px"
+              px={3}
+              justify="space-between"
+              bg="surface.sunken"
+              borderWidth="1px"
+              borderColor="border.default"
+              borderRadius="md"
+            >
+              <Text fontSize="xs" color="fg.muted">Original deposit account</Text>
+              <LabeledAddressPopover
+                address={publicExit.depositAccountAddress}
+                contextLabel="public exit recipient"
+                explorer={explorerUrl}
+                label={truncateAddress(publicExit.depositAccountAddress)}
+                maxW="160px"
+              />
+            </HStack>
+          </Box>
+        ) : (
+          <RecipientSection
+            recipientState={recipientState}
+            explorerUrl={explorerUrl}
+            label={copy.recipientLabel}
+            chooserLabel={copy.recipientChooserLabel}
+          />
+        )}
       </Box>
 
-      {usesPublicExit && publicExit ? (
-        <Box>
-          <Text mb={1} fontSize="sm" fontWeight="600" color="fg.secondary">
-            {copy.recipientLabel}
-          </Text>
-          <HStack
-            minH="48px"
-            px={3}
-            justify="space-between"
-            bg="surface.raised"
-            borderWidth="1px"
-            borderColor="border.default"
-            borderRadius="md"
-          >
-            <Text fontSize="xs" color="fg.secondary">Original deposit account</Text>
-            <LabeledAddressPopover
-              address={publicExit.depositAccountAddress}
-              contextLabel="public exit recipient"
-              explorer={explorerUrl}
-              label={truncateAddress(publicExit.depositAccountAddress)}
-              maxW="160px"
-            />
-          </HStack>
-        </Box>
-      ) : (
-        <RecipientSection
-          recipientState={recipientState}
-          explorerUrl={explorerUrl}
-          label={copy.recipientLabel}
-          chooserLabel={copy.recipientChooserLabel}
-        />
-      )}
-
-      {operation?.recipientMatchesDepositor && (
-        <Box
-          role="alert"
-          bg="status.warning.bg"
-          borderWidth="1px"
-          borderColor="status.warning.border"
-          borderRadius="md"
-          px={3}
-          py={2.5}
-        >
-          <Text fontSize="xs" fontWeight="600" color="status.warning.fg">
-            This recipient matches the original depositor. Reusing it can weaken privacy.
-          </Text>
-        </Box>
-      )}
-
-      {usesPublicExit ? (
-        (publicExit?.error || publicExit?.status === "queued") ? (
-          <Text
-            fontSize="xs"
-            color={publicExit?.status === "error" ? "status.error.fg" : "fg.secondary"}
-            role={publicExit?.status === "error" ? "alert" : "status"}
-          >
-            {publicExit.error ?? "Open the wallet confirmation to continue."}
-          </Text>
-        ) : null
-      ) : (
-        <HStack justify="space-between" spacing={3}>
-          <Text fontSize="xs" color="fg.secondary">
-            Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
-          </Text>
-          <Text fontSize="xs" color="fg.secondary" textAlign="right">
-            Sent by a verified relay
-          </Text>
-        </HStack>
-      )}
+      <HStack justify="space-between" spacing={3} px={1} pt={3}>
+        <Text fontSize="xs" color="fg.secondary">
+          Privacy Pools · {SHIELDED_ETH_NETWORK_NAME}
+        </Text>
+        <Text fontSize="xs" color="fg.secondary" textAlign="right">
+          {usesPublicExit ? "Public exit shown in review" : "Withdrawal method shown in review"}
+        </Text>
+      </HStack>
     </VStack>
   );
 }

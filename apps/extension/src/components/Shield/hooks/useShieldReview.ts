@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ShieldQuoteController } from "./useShieldQuote";
-import { parseShieldQuoteError } from "../model/shieldQuote";
+import {
+  isPrivacyAuthRequiredResponse,
+  parseShieldQuoteError,
+} from "../model/shieldQuote";
 import {
   parseShieldReviewResponse,
   type ShieldPreparedReview,
@@ -25,8 +28,9 @@ export interface ShieldReviewController {
 export function useShieldReview(input: {
   account: ShieldSourceAccount | null;
   quote: ShieldQuoteController;
+  onAuthRequired: () => void;
 }): ShieldReviewController {
-  const { account, quote } = input;
+  const { account, quote, onAuthRequired } = input;
   const generation = useRef(0);
   const [state, setState] = useState<ShieldReviewState>({
     status: "idle",
@@ -63,6 +67,11 @@ export function useShieldReview(input: {
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;
+        if (isPrivacyAuthRequiredResponse(response)) {
+          setState({ status: "idle", review: null, error: null });
+          onAuthRequired();
+          return;
+        }
         const review = parseShieldReviewResponse(
           response,
           account,
@@ -87,7 +96,7 @@ export function useShieldReview(input: {
           });
         }
       });
-  }, [account, quote.ethAmount, quote.state, quote.validation]);
+  }, [account, onAuthRequired, quote.ethAmount, quote.state, quote.validation]);
 
   return {
     state,

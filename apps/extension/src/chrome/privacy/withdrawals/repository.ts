@@ -91,6 +91,14 @@ export async function getPrivacyUnshieldById(id: string): Promise<StoredPrivacyU
   return validated(raw);
 }
 
+export async function deletePrivacyUnshield(id: string): Promise<void> {
+  const db = await database();
+  const transaction = db.transaction(PRIVACY_WITHDRAWALS_STORE, "readwrite");
+  const completion = complete(transaction);
+  transaction.objectStore(PRIVACY_WITHDRAWALS_STORE).delete(id);
+  await completion;
+}
+
 export async function updatePrivacyUnshieldTracking(
   id: string,
   update: (current: Readonly<PrivacyUnshieldTrackingV1>, record: Readonly<StoredPrivacyUnshieldV1>) => PrivacyUnshieldTrackingV1 | null,

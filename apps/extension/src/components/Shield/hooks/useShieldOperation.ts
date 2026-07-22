@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ShieldQuoteController } from "./useShieldQuote";
 import type { ShieldReviewController } from "./useShieldReview";
-import { parseShieldQuoteError } from "../model/shieldQuote";
+import {
+  isPrivacyAuthRequiredResponse,
+  parseShieldQuoteError,
+} from "../model/shieldQuote";
 import type { ShieldSourceAccount } from "../model/shieldQuote";
 import {
   parseShieldOperationResponse,
@@ -28,8 +31,9 @@ export function useShieldOperation(input: {
   quote: ShieldQuoteController;
   review: ShieldReviewController;
   onSaved: () => void;
+  onAuthRequired: () => void;
 }): ShieldOperationController {
-  const { account, quote, review, onSaved } = input;
+  const { account, quote, review, onSaved, onAuthRequired } = input;
   const generation = useRef(0);
   const requestId = useRef(crypto.randomUUID());
   const [state, setState] = useState<ShieldOperationState>({
@@ -71,6 +75,11 @@ export function useShieldOperation(input: {
       })
       .then((response) => {
         if (generation.current !== requestGeneration) return;
+        if (isPrivacyAuthRequiredResponse(response)) {
+          setState({ status: "idle", operation: null, error: null });
+          onAuthRequired();
+          return;
+        }
         const operation = parseShieldOperationResponse(
           response,
           account,
@@ -92,7 +101,7 @@ export function useShieldOperation(input: {
           setState({ status: "failed", operation: null, error: FALLBACK_ERROR });
         }
       });
-  }, [account, onSaved, quote.ethAmount, quote.state, quote.validation, review.state]);
+  }, [account, onAuthRequired, onSaved, quote.ethAmount, quote.state, quote.validation, review.state]);
 
   return {
     state,

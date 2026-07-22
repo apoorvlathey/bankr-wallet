@@ -167,7 +167,7 @@ test("operation preparation blocks agent sessions", async () => {
   }
 });
 
-test("operation preparation returns the existing pending operation without reserving another index", async () => {
+test("operation preparation retries the same request UUID without reserving another index", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
   const source = account("privateKey");
   const harness = createChromeStorageHarness({
@@ -215,12 +215,10 @@ test("operation preparation returns the existing pending operation without reser
       },
     });
     assert.ok(stored);
-    const second = await preparePrivacyShieldOperation({
-      ...request,
-      requestId: "00000000-0000-4000-8000-000000000003",
-    }, {
+    const second = await preparePrivacyShieldOperation(request, {
       ...shared,
-      findOperation: async () => stored,
+      findOperation: async (requestId) =>
+        stored?.summary.requestId === requestId ? stored : null,
       readNextDepositIndex: async () => {
         indexReads += 1;
         return 1;
@@ -235,6 +233,129 @@ test("operation preparation returns the existing pending operation without reser
     assert.equal(commits, 1);
     assert.equal(deploymentChecks, 1);
     assert.equal(quoteReads, 1);
+
+    await assert.rejects(
+      preparePrivacyShieldOperation({ ...request, amount: "0.2" }, {
+        ...shared,
+        findOperation: async (requestId) =>
+          stored?.summary.requestId === requestId ? stored : null,
+      }),
+      (error: unknown) =>
+        error instanceof PrivacyShieldOperationError &&
+        error.code === "operation-unavailable",
+    );
+    assert.equal(indexReads, 1);
+    assert.equal(commits, 1);
+    assert.equal(deploymentChecks, 1);
+    assert.equal(quoteReads, 1);
+  } finally {
+    session.clearInMemoryAuthCache();
+    harness.restore();
+  }
+});
+
+test("new request UUIDs can Shield the same amount during confirmation and ASP review", async () => {
+  const identity = await import("../../src/chrome/privacy/identity");
+  const source = account("privateKey");
+  const harness = createChromeStorageHarness({
+    local: { accounts: [source] },
+    sync: { activeAccountId: source.id, autoLockTimeout: 60_000 },
+  });
+  const session = await establishMasterSession();
+  const stored: StoredPrivacyShieldOperationV1[] = [];
+  let nextIndex = 0;
+  let operationSequence = 10;
+  const dependencies = {
+    verifyDeployment: async () => {},
+    quotePrivacyShield: async () => quote(),
+    getAccountById: async () => source,
+    findOperation: async (requestId: string) =>
+      stored.find((operation) => operation.summary.requestId === requestId) ?? null,
+    readNextDepositIndex: async () => nextIndex,
+    createOperationId: () =>
+      `00000000-0000-4000-8000-${(operationSequence++).toString().padStart(12, "0")}`,
+    now: () => 100 + stored.length,
+    commitOperation: async (
+      operation: StoredPrivacyShieldOperationV1,
+      expectedDepositIndex: number,
+    ) => {
+      const existing = stored.find(
+        (candidate) =>
+          candidate.summary.requestId === operation.summary.requestId,
+      );
+      if (existing) return { status: "existing" as const, operation: existing };
+      assert.equal(expectedDepositIndex, nextIndex);
+      stored.push(operation);
+      nextIndex += 1;
+      return { status: "created" as const, operation };
+    },
+  };
+  try {
+    assert.equal((await identity.ensurePrivacyIdentityInitialized()).success, true);
+    const first = await preparePrivacyShieldOperation({
+      requestId: REQUEST_ID,
+      accountId: source.id,
+      accountAddress: source.address,
+      accountType: source.type,
+      amount: "0.1",
+    }, dependencies);
+    assert.equal(stored.length, 1);
+
+    const duringConfirmation = await preparePrivacyShieldOperation({
+      requestId: "00000000-0000-4000-8000-000000000003",
+      accountId: source.id,
+      accountAddress: source.address,
+      accountType: source.type,
+      amount: "0.1",
+    }, dependencies);
+    assert.equal(stored.length, 2);
+    assert.equal(duringConfirmation.state, "awaiting_wallet_confirmation");
+
+    stored[0] = {
+      ...stored[0],
+      tracking: {
+        version: 1,
+        revision: 4,
+        state: "awaiting_asp",
+        updatedAt: 200,
+        txHash: `0x${"ab".repeat(32)}`,
+        blockNumber: "123",
+        commitment: "456",
+        label: "789",
+        poolValueWei: stored[0].summary.shieldedAmountWei,
+        errorCode: null,
+      },
+    };
+
+    const duringAspReview = await preparePrivacyShieldOperation({
+      requestId: "00000000-0000-4000-8000-000000000004",
+      accountId: source.id,
+      accountAddress: source.address,
+      accountType: source.type,
+      amount: "0.1",
+    }, dependencies);
+
+    assert.equal(stored.length, 3);
+    assert.equal(nextIndex, 3);
+    assert.notEqual(duringConfirmation.id, first.id);
+    assert.notEqual(duringAspReview.id, first.id);
+    assert.notEqual(duringAspReview.id, duringConfirmation.id);
+    assert.equal(duringConfirmation.dedupeKey, first.dedupeKey);
+    assert.equal(duringAspReview.dedupeKey, first.dedupeKey);
+    assert.equal(duringAspReview.state, "awaiting_wallet_confirmation");
+
+    const privacyKey = session.getCachedPrivacyKey();
+    assert.ok(privacyKey);
+    const details = await Promise.all(stored.map((operation) =>
+      decryptPrivacyShieldOperationDetails(
+        privacyKey.key,
+        operation.keyId,
+        operation.summary,
+        operation.encryptedDetails,
+      )
+    ));
+    assert.deepEqual(details.map((detail) => detail?.depositIndex), ["0", "1", "2"]);
+    assert.equal(new Set(details.map((detail) => detail?.precommitment)).size, 3);
   } finally {
     session.clearInMemoryAuthCache();
     harness.restore();

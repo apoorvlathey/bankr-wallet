@@ -112,6 +112,9 @@ export async function updateCallInPendingBatchTxRequest(
     if (idx === -1) return { success: false, error: "Batch not found" };
 
     const target = requests[idx];
+    if (target.privacyRagequitMeta) {
+      return { success: false, error: "Public exit calls cannot be changed" };
+    }
     if (target.intakeStatus === "validating") {
       return { success: false, error: "Batch request is still being validated" };
     }
@@ -152,6 +155,13 @@ export async function removeCallFromPendingBatchTxRequest(
     if (idx === -1) return { found: false, remainingCalls: 0 };
 
     const target = requests[idx];
+    if (target.privacyRagequitMeta) {
+      return {
+        found: true,
+        remainingCalls: target.params.calls?.length ?? 0,
+        error: "Public exit calls cannot be changed",
+      };
+    }
     if (target.intakeStatus === "validating") {
       return {
         found: true,

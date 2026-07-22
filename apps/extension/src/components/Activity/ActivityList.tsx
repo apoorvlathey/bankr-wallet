@@ -17,10 +17,11 @@ import { useAddressContacts } from "@/hooks/useAddressContacts";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 import ActivityItem from "./ActivityItem";
 import { buildActivityAddressLabels } from "./activityIdentityModel";
-import { groupActivityByDate, isShieldActivityTransaction } from "./activityModel";
+import { groupActivityByDate } from "./activityModel";
+import { isTransactionVisibleInActivityScope } from "./activityScopeModel";
 import type { UnshieldOperation } from "@/components/Shield/model/unshield";
-import PrivacySendActivityItem from "./PrivacySendActivityItem";
-import PrivateSendDetailModal from "./PrivateSendDetailModal";
+import UnshieldActivityItem from "./UnshieldActivityItem";
+import { SHIELDED_ETH_CHAIN_ID } from "@/components/Shield/model/shieldedAsset";
 
 interface ActivityListProps {
   maxItems?: number;
@@ -32,15 +33,18 @@ interface ActivityListProps {
   onShowAllNetworks?: () => void;
   /** When provided, the parent owns screen-level transaction detail navigation. */
   onSelectTx?: (tx: CompletedTransaction) => void;
+  /** Opens the same full-screen detail route used by ordinary transactions. */
+  onSelectUnshield?: (operation: UnshieldOperation) => void;
   scope?: "public" | "private";
-  privateSendOperations?: readonly UnshieldOperation[];
+  unshieldOperations?: readonly UnshieldOperation[];
 }
 
 type ActivityEntry =
   | { kind: "transaction"; createdAt: number; tx: CompletedTransaction }
-  | { kind: "privateSend"; createdAt: number; operation: UnshieldOperation };
+  | { kind: "unshield"; createdAt: number; operation: UnshieldOperation };
 
-const PRIVATE_SEND_ACTIVITY_STATES = new Set<UnshieldOperation["state"]>([
+const UNSHIELD_ACTIVITY_STATES = new Set<UnshieldOperation["state"]>([
+  "awaiting_wallet_confirmation",
   "proof_preparing",
   "proof_verified",
   "submitting_to_relayer",
@@ -65,15 +69,15 @@ function TxStatusList({
   filterChainId,
   onShowAllNetworks,
   onSelectTx,
+  onSelectUnshield,
   scope = "public",
-  privateSendOperations = [],
+  unshieldOperations = [],
 }: ActivityListProps) {
   const [allHistory, setAllHistory] = useState<CompletedTransaction[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTx, setSelectedTx] = useState<CompletedTransaction | null>(
     null,
   );
-  const [selectedPrivateSend, setSelectedPrivateSend] = useState<UnshieldOperation | null>(null);
   const { contacts } = useAddressContacts();
   const formatOrigin = useDappOriginFormatter();
   const addressLabels = useMemo(
@@ -106,13 +110,6 @@ function TxStatusList({
       return fresh;
     });
   }, [allHistory]);
-
-  useEffect(() => {
-    setSelectedPrivateSend((current) => current
-      ? privateSendOperations.find((operation) => operation.id === current.id) ?? current
-      : null,
-    );
-  }, [privateSendOperations]);
 
   const allHistoryRef = useRef(allHistory);
   allHistoryRef.current = allHistory;
@@ -150,20 +147,20 @@ function TxStatusList({
       ? addressFiltered.filter((tx) => tx.chainId === filterChainId)
       : addressFiltered;
   const transactionEntries: ActivityEntry[] = history
-    .filter((tx) => scope === "private" ? isShieldActivityTransaction(tx) : !isShieldActivityTransaction(tx))
+    .filter((tx) => isTransactionVisibleInActivityScope(tx, scope))
     .map((tx) => ({ kind: "transaction", createdAt: tx.createdAt, tx }));
-  const privateSendEntries: ActivityEntry[] = (
-    scope !== "private" || (filterChainId != null && filterChainId !== 11_155_111)
+  const unshieldEntries: ActivityEntry[] = (
+    scope !== "private" || (filterChainId != null && filterChainId !== SHIELDED_ETH_CHAIN_ID)
       ? []
-      : privateSendOperations.filter((operation) =>
-          PRIVATE_SEND_ACTIVITY_STATES.has(operation.state),
+      : unshieldOperations.filter((operation) =>
+          UNSHIELD_ACTIVITY_STATES.has(operation.state),
         )
   ).map((operation) => ({
-    kind: "privateSend",
+    kind: "unshield",
     createdAt: operation.createdAt,
     operation,
   }));
-  const entries = [...transactionEntries, ...privateSendEntries]
+  const entries = [...transactionEntries, ...unshieldEntries]
     .sort((left, right) => right.createdAt - left.createdAt);
   const displayItems = hideHeader || isExpanded
     ? entries
@@ -196,12 +193,6 @@ function TxStatusList({
       tx={selectedTx}
     />
   );
-  const privateSendModal = selectedPrivateSend && (
-    <PrivateSendDetailModal
-      operation={selectedPrivateSend}
-      onClose={() => setSelectedPrivateSend(null)}
-    />
-  );
   const expandButton = hasMore && (
     <Button
       size="xs"
@@ -221,7 +212,7 @@ function TxStatusList({
             <EmptyStateTitle>No activity yet</EmptyStateTitle>
             <EmptyStateDescription>
               {scope === "private"
-                ? "Shield and private-send activity will appear here."
+                ? "Shield and Unshield activity will appear here."
                 : "Transactions from this account will appear here."}
             </EmptyStateDescription>
           </EmptyStateHeader>
@@ -234,7 +225,6 @@ function TxStatusList({
           ) : null}
         </EmptyState>
         {modal}
-        {privateSendModal}
       </Box>
     );
   }
@@ -291,10 +281,11 @@ function TxStatusList({
                   resolveLogo={resolveLogo}
                 />
               ) : (
-                <PrivacySendActivityItem
+                <UnshieldActivityItem
                   key={`private-${entry.operation.id}`}
                   operation={entry.operation}
-                  onClick={() => setSelectedPrivateSend(entry.operation)}
+                  addressLabels={addressLabels}
+                  onClick={() => onSelectUnshield?.(entry.operation)}
                 />
               ))}
           </Fragment>
@@ -302,7 +293,6 @@ function TxStatusList({
       </ListSurface>
 
       {modal}
-      {privateSendModal}
     </Box>
   );
 }

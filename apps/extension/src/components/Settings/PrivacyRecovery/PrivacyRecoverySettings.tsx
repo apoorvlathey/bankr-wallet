@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Text, VStack } from "@chakra-ui/react";
+import { SHIELDED_ETH_NETWORK_NAME } from "@/components/Shield/model/shieldedAsset";
 
 import { SettingsScreenFrame } from "../SettingsScreenFrame";
 import { RecoveryBackupScreen } from "./RecoveryBackupScreen";
@@ -171,7 +172,7 @@ export default function PrivacyRecoverySettings({ onBack }: Props) {
       }
 
       clearTransientSecrets();
-      setNotice("Shield phrase restored. Scanning Sepolia…");
+      setNotice(`Shield phrase restored. Scanning ${SHIELDED_ETH_NETWORK_NAME}…`);
       const scan = await sendMessage<{
         success: boolean;
         result?: { recovered: number };
@@ -179,14 +180,14 @@ export default function PrivacyRecoverySettings({ onBack }: Props) {
       }>({ type: "privacyRescanRecovery" });
       if (!scan.success) {
         setNotice("");
-        setError("The new Shield phrase is saved, but Sepolia couldn’t be scanned yet.");
+        setError(`The new Shield phrase is saved, but ${SHIELDED_ETH_NETWORK_NAME} couldn’t be scanned yet.`);
         setView("menu");
         await loadStatus();
         return;
       }
       setNotice(scan.result?.recovered
         ? `Shield phrase restored. Recovered ${scan.result.recovered} Shield balance${scan.result.recovered === 1 ? "" : "s"}.`
-        : "Shield phrase restored. Sepolia scan complete.");
+        : `Shield phrase restored. ${SHIELDED_ETH_NETWORK_NAME} scan complete.`);
       setBackupConfirmed(false);
       setLossConfirmed(false);
       setView("menu");

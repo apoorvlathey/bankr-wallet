@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type ShieldInitializationState =
   | { status: "loading"; error: null }
   | { status: "ready"; error: null }
+  | { status: "auth-required"; error: null }
   | { status: "action-required"; error: string };
 
 const FALLBACK_ERROR = "Shield setup needs attention before you continue.";
@@ -19,6 +20,16 @@ function parseInitializationResponse(
     response.status === "ready"
   ) {
     return { status: "ready", error: null };
+  }
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    "success" in response &&
+    response.success === false &&
+    "code" in response &&
+    response.code === "auth-required"
+  ) {
+    return { status: "auth-required", error: null };
   }
   const error =
     typeof response === "object" &&

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  aggregateLockedPrivacyCommitmentPortfolio,
   aggregatePrivacyCommitmentPortfolio,
   type PrivacyPortfolioCommitmentInput,
   type PrivacyPortfolioOperationInput,
@@ -51,6 +52,44 @@ test("confirmed onchain Shield operations count before ASP indexing", () => {
   assert.equal(awaitingAsp.recoverableBalanceWei, "0");
 });
 
+test("a cold privacy key keeps public processing deposits visible", () => {
+  const portfolio = aggregateLockedPrivacyCommitmentPortfolio([
+    operation("awaiting_asp"),
+  ]);
+
+  assert.equal(portfolio.status, "locked");
+  assert.equal(portfolio.confirmedBalanceWei, "4950");
+  assert.equal(portfolio.pendingBalanceWei, "4950");
+  assert.equal(portfolio.readyBalanceWei, "0");
+  assert.equal(portfolio.maxPrivateSendWei, "0");
+  assert.equal(portfolio.recoverableBalanceWei, "0");
+});
+
+test("public ASP approval is confirmed but not spendable while locked", () => {
+  const portfolio = aggregateLockedPrivacyCommitmentPortfolio([
+    operation("asp_approved"),
+  ]);
+
+  assert.equal(portfolio.status, "locked");
+  assert.equal(portfolio.confirmedBalanceWei, "4950");
+  assert.equal(portfolio.pendingBalanceWei, "0");
+  assert.equal(portfolio.readyBalanceWei, "0");
+  assert.equal(portfolio.maxPrivateSendWei, "0");
+  assert.equal(portfolio.recoverableBalanceWei, "0");
+});
+
+test("a cold privacy key exposes ASP retry and POA balances for public recovery", () => {
+  for (const state of ["asp_unavailable", "asp_poi_required"] as const) {
+    const portfolio = aggregateLockedPrivacyCommitmentPortfolio([
+      operation(state),
+    ]);
+    assert.equal(portfolio.confirmedBalanceWei, "4950");
+    assert.equal(portfolio.pendingBalanceWei, "0");
+    assert.equal(portfolio.recoverableBalanceWei, "4950");
+    assert.equal(portfolio.attentionCount, 1);
+  }
+});
+
 test("commitment lineage supersedes its source operation without double counting", () => {
   const portfolio = aggregatePrivacyCommitmentPortfolio(
     [commitment("awaiting_asp")],
@@ -60,6 +99,29 @@ test("commitment lineage supersedes its source operation without double counting
   assert.equal(portfolio.pendingBalanceWei, "4950");
   assert.equal(portfolio.readyBalanceWei, "0");
   assert.equal(portfolio.recoverableBalanceWei, "4950");
+});
+
+test("duplicate records from one partial-withdrawal lineage count only the current balance", () => {
+  const portfolio = aggregatePrivacyCommitmentPortfolio([
+    {
+      ...commitment("private_ready"),
+      balanceWei: "1000",
+      lineageKey: "lineage-1",
+      withdrawalIndex: "0",
+      updatedAt: 10,
+    },
+    {
+      ...commitment("private_ready"),
+      balanceWei: "750",
+      lineageKey: "lineage-1",
+      withdrawalIndex: "1",
+      updatedAt: 20,
+    },
+  ], []);
+
+  assert.equal(portfolio.confirmedBalanceWei, "750");
+  assert.equal(portfolio.readyBalanceWei, "750");
+  assert.equal(portfolio.maxPrivateSendWei, "750");
 });
 
 test("total confirmed balance remains separate from withdrawal and recovery availability", () => {

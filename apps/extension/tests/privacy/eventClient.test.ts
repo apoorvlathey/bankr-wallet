@@ -7,6 +7,7 @@ import {
 } from "viem";
 
 import {
+  MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST,
   readPrivacyDepositEvents,
   readPrivacyPoolEvents,
 } from "../../src/chrome/privacy/events/client";
@@ -16,6 +17,8 @@ import {
   isValidPrivacyRagequitEvent,
   isValidPrivacyWithdrawalEvent,
 } from "../../src/chrome/privacy/events/types";
+import { RpcResponseError } from "../../src/chrome/network/rpcClient";
+import { shouldShrinkPrivacyEventPage } from "../../src/chrome/privacy/events/sync";
 
 const ABI = parseAbi([
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
@@ -84,6 +87,47 @@ test("bounded Sepolia log client decodes the exact pool deposit event", async ()
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("pool event requests never exceed the public RPC 1,000-block limit", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ fromBlock: bigint; toBlock: bigint }> = [];
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    const range = body.params[0] as { fromBlock: string; toBlock: string };
+    requests.push({
+      fromBlock: BigInt(range.fromBlock),
+      toBlock: BigInt(range.toBlock),
+    });
+    return new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: [],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const fromBlock = 1_000n;
+    const maximumToBlock = fromBlock + MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST - 1n;
+    await readPrivacyPoolEvents("https://rpc.example", fromBlock, maximumToBlock);
+    assert.deepEqual(requests, [{ fromBlock, toBlock: maximumToBlock }]);
+
+    await assert.rejects(
+      readPrivacyPoolEvents("https://rpc.example", fromBlock, maximumToBlock + 1n),
+      /Invalid privacy event range/,
+    );
+    assert.equal(requests.length, 1, "an oversized range must fail before RPC egress");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("event paging shrinks only for explicit range errors, never rate limits", () => {
+  assert.equal(shouldShrinkPrivacyEventPage(new RpcResponseError(
+    "Log response size exceeded. Maximum allowed number of requested blocks is 500",
+    -32_005,
+  )), true);
+  assert.equal(shouldShrinkPrivacyEventPage(new Error("RPC request failed: 429")), false);
+  assert.equal(shouldShrinkPrivacyEventPage(new RpcResponseError("rate limited", -32_005)), false);
 });
 
 test("event and checkpoint codecs reject route drift and inconsistent cursors", () => {

@@ -25,6 +25,7 @@ const RAGEQUIT_TOPIC = keccak256(
 );
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const MAX_LOGS_PER_PAGE = 5_000;
+export const MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST = 1_000n;
 
 function hexUint(value: unknown): bigint | null {
   if (typeof value !== "string" || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) {
@@ -82,7 +83,12 @@ export async function readPrivacyPoolEvents(
   fromBlock: bigint,
   toBlock: bigint,
 ): Promise<PrivacyPoolEventPageV1> {
-  if (fromBlock < 0n || toBlock < fromBlock || toBlock - fromBlock > 100_000n) {
+  const blockCount = toBlock - fromBlock + 1n;
+  if (
+    fromBlock < 0n ||
+    toBlock < fromBlock ||
+    blockCount > MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST
+  ) {
     throw new Error("Invalid privacy event range");
   }
   const result = await fetchRpcResult(

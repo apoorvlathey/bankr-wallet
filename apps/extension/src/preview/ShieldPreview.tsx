@@ -16,14 +16,13 @@ export function ShieldPreview({
       scenario === "unshield-empty" ||
       scenario === "unshield-pending"
     ? "unshield"
-    : scenario === "send" || scenario === "send-empty"
-      ? "send"
-      : "shield";
+    : "shield";
   return (
     <ShieldView
       key={mode}
       mode={mode}
       onBack={() => {}}
+      onUnlockRequired={() => {}}
       account={account}
       accounts={[account]}
     />

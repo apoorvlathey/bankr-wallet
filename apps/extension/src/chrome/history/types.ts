@@ -145,6 +145,21 @@ export interface PrivacyShieldHistoryMeta {
 }
 
 /**
+ * Public, non-linking marker for a Privacy Pools public exit. The operation
+ * identifiers and commitment details stay in the encrypted ragequit store;
+ * Activity needs only this versioned marker to keep the transaction in the
+ * Private wallet surface.
+ */
+export interface PrivacyRagequitHistoryMeta {
+  version: 1;
+}
+
+/** Public marker used only to suppress the duplicate normal transaction row. */
+export interface PrivacyUnshieldHistoryMeta {
+  version: 1;
+}
+
+/**
  * Released `txHistory` record shape. All enrichment fields remain optional so
  * entries written by earlier extension versions continue to decode as-is.
  */
@@ -196,4 +211,8 @@ export interface CompletedTransaction {
   accountId?: string;
   /** No note, commitment, label, index, proof, or recovery material. */
   privacyShieldMeta?: PrivacyShieldHistoryMeta;
+  /** No operation ID, commitment, label, proof, or recovery material. */
+  privacyRagequitMeta?: PrivacyRagequitHistoryMeta;
+  /** The encrypted Unshield operation owns its Private Activity presentation. */
+  privacyUnshieldMeta?: PrivacyUnshieldHistoryMeta;
 }

@@ -24,7 +24,7 @@ function StatusLabel({ label, tone, isPending }: StatusLabelProps) {
     >
       {isPending ? (
         <Spinner size="xs" color="currentColor" boxSize="8px" />
-      ) : tone === "error" ? (
+      ) : tone === "error" || tone === "warning" ? (
         <WarningIcon boxSize="9px" flexShrink={0} />
       ) : (
         <CheckIcon boxSize="8px" flexShrink={0} />

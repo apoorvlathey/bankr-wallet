@@ -17,6 +17,7 @@ test("trusted UI heartbeat sends immediately and below Chrome's idle deadline", 
 
   const stop = startUiKeepaliveHeartbeat(
     { postMessage: (message) => messages.push(message) },
+    "surface-1",
     {
       setInterval: (callback, milliseconds) => {
         scheduled = callback;
@@ -29,7 +30,7 @@ test("trusted UI heartbeat sends immediately and below Chrome's idle deadline", 
     },
   );
 
-  assert.deepEqual(messages, [{ type: "wallet-ui-keepalive" }]);
+  assert.deepEqual(messages, [{ type: "wallet-ui-keepalive", surfaceId: "surface-1" }]);
   assert.equal(scheduledAfter, UI_KEEPALIVE_HEARTBEAT_MS);
   assert.ok(
     scheduledAfter < 30_000,
@@ -39,8 +40,8 @@ test("trusted UI heartbeat sends immediately and below Chrome's idle deadline", 
   assert.ok(scheduled);
   (scheduled as () => void)();
   assert.deepEqual(messages, [
-    { type: "wallet-ui-keepalive" },
-    { type: "wallet-ui-keepalive" },
+    { type: "wallet-ui-keepalive", surfaceId: "surface-1" },
+    { type: "wallet-ui-keepalive", surfaceId: "surface-1" },
   ]);
 
   stop();
@@ -60,6 +61,7 @@ test("heartbeat stops and reports a disconnected port", () => {
         throw new Error("disconnected");
       },
     },
+    "surface-2",
     {
       setInterval: (callback) => {
         scheduled = callback;

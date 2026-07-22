@@ -17,6 +17,7 @@ import {
   isPrivacyShieldLifecycleState,
   type PrivacyShieldActivityState,
 } from "@/lib/privacyShieldLifecycle";
+import { getPrivacyTransactionIdentity } from "@/lib/privacyTransactionIdentity";
 import { formatEther } from "viem";
 
 export interface ActivityDateGroup<T extends { createdAt: number } = CompletedTransaction> {
@@ -235,7 +236,7 @@ function getPrivacyShieldValue(
     return formatActivityValueLabel(
       formatEther(BigInt(meta.amountWei)),
       "ETH",
-      "−",
+      "+",
       18,
       compactTiny,
     );
@@ -272,14 +273,8 @@ export function getInternalSendSymbol(
   return symbol || null;
 }
 
-export function isShieldRecoveryActivityTransaction(tx: CompletedTransaction): boolean {
-  return tx.origin.trim().toLowerCase() === "walletchan shield recovery";
-}
-
 export function isShieldActivityTransaction(tx: CompletedTransaction): boolean {
-  return Boolean(
-    tx.privacyShieldMeta || tx.origin.toLowerCase().includes("walletchan shield"),
-  );
+  return getPrivacyTransactionIdentity(tx) !== null;
 }
 
 export function getActivityStatusModel(
@@ -287,7 +282,7 @@ export function getActivityStatusModel(
 ): ActivityStatusModel {
   const privacyShield = tx.privacyShieldMeta &&
       isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
-    ? getPrivacyShieldActivityState(tx.privacyShieldMeta.state)
+    ? getPrivacyShieldActivityState(tx.privacyShieldMeta.state, tx.chainName)
     : null;
   const isForceInclusion = !!tx.forceInclusionMeta;
   const isForcePendingL2 =
@@ -326,11 +321,12 @@ export function getActivityPresentation(
   addressLabels?: ReadonlyMap<string, string>,
   originDisplayHostname?: string | null,
 ): ActivityPresentation {
+  const privacyIdentity = getPrivacyTransactionIdentity(tx);
   if (
     tx.privacyShieldMeta &&
     isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
   ) {
-    const activity = getPrivacyShieldActivityState(tx.privacyShieldMeta.state);
+    const activity = getPrivacyShieldActivityState(tx.privacyShieldMeta.state, tx.chainName);
     return {
       originHostname: null,
       intent: "Shield ETH",
@@ -355,8 +351,8 @@ export function getActivityPresentation(
     }
   }
 
-  const intent = isShieldRecoveryActivityTransaction(tx)
-    ? "Shield Recovery"
+  const intent = privacyIdentity
+    ? privacyIdentity.label
     : tx.clearSignedMeta
       ? getClearSignedIntent(tx.clearSignedMeta)
       : tx.transferMeta

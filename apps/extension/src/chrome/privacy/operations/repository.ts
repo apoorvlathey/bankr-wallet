@@ -17,7 +17,6 @@ import {
 import {
   openPrivacyOperationsDatabase,
   PRIVACY_OPERATION_CREATED_AT_INDEX,
-  PRIVACY_OPERATION_DEDUPE_INDEX,
   PRIVACY_OPERATION_REQUEST_ID_INDEX,
   requestResult,
   transactionComplete,
@@ -27,53 +26,19 @@ import { isRejectedPrivacyShieldOperation } from "./rejectionRepository";
 
 export { deletePrivacyOperationsDatabase } from "./database";
 
-/**
- * Dedupe only operations that can still be resumed. Any terminal record still
- * awaiting lifecycle cleanup must not prevent a fresh user intent for the
- * same account and amount.
- */
-export function newestActivePrivacyShieldOperation(
-  operations: readonly StoredPrivacyShieldOperationV1[],
-): StoredPrivacyShieldOperationV1 | null {
-  let newest: StoredPrivacyShieldOperationV1 | null = null;
-  for (const operation of operations) {
-    const state = (operation.tracking ??
-      defaultPrivacyShieldOperationTracking(operation.summary)).state;
-    if (
-      !isTerminalPrivacyShieldState(state) &&
-      (newest === null || operation.summary.createdAt > newest.summary.createdAt)
-    ) {
-      newest = operation;
-    }
-  }
-  return newest;
-}
-
-export async function findPrivacyShieldOperation(input: {
-  requestId: string;
-  dedupeKey: string;
-}): Promise<StoredPrivacyShieldOperationV1 | null> {
+/** A request UUID is the sole idempotency identity; amount is never identity. */
+export async function findPrivacyShieldOperation(
+  requestId: string,
+): Promise<StoredPrivacyShieldOperationV1 | null> {
   const database = await openPrivacyOperationsDatabase();
   const transaction = database.transaction(PRIVACY_OPERATIONS_STORE, "readonly");
   const completion = transactionComplete(transaction);
   const store = transaction.objectStore(PRIVACY_OPERATIONS_STORE);
   const byRequest = await requestResult(
-    store.index(PRIVACY_OPERATION_REQUEST_ID_INDEX).get(input.requestId),
-  );
-  if (byRequest !== undefined) {
-    await completion;
-    return validatedOperation(byRequest);
-  }
-  const byDedupe = await requestResult(
-    store.index(PRIVACY_OPERATION_DEDUPE_INDEX).getAll(input.dedupeKey),
+    store.index(PRIVACY_OPERATION_REQUEST_ID_INDEX).get(requestId),
   );
   await completion;
-  const candidates = (Array.isArray(byDedupe) ? byDedupe : [])
-    .map(validatedOperation)
-    .filter((operation): operation is StoredPrivacyShieldOperationV1 =>
-      operation !== null
-    );
-  return newestActivePrivacyShieldOperation(candidates);
+  return validatedOperation(byRequest);
 }
 
 export async function getPrivacyShieldOperationById(
@@ -222,31 +187,19 @@ export async function commitPrivacyShieldOperation(
   const operations = transaction.objectStore(PRIVACY_OPERATIONS_STORE);
   const metadata = transaction.objectStore(PRIVACY_OPERATIONS_METADATA_STORE);
   try {
-    const [rawMetadata, byRequest, byDedupe, operationCount] = await Promise.all([
+    const [rawMetadata, byRequest, operationCount] = await Promise.all([
       requestResult(metadata.get(PRIVACY_NEXT_DEPOSIT_INDEX_KEY)),
       requestResult(
         operations
           .index(PRIVACY_OPERATION_REQUEST_ID_INDEX)
           .get(operation.summary.requestId),
       ),
-      requestResult(
-        operations
-          .index(PRIVACY_OPERATION_DEDUPE_INDEX)
-          .getAll(operation.summary.dedupeKey),
-      ),
       requestResult(operations.count()),
     ]);
     const existingByRequest = validatedOperation(byRequest);
-    const dedupeCandidates = (Array.isArray(byDedupe) ? byDedupe : [])
-      .map(validatedOperation)
-      .filter((candidate): candidate is StoredPrivacyShieldOperationV1 =>
-        candidate !== null
-      );
-    const existing = existingByRequest ??
-      newestActivePrivacyShieldOperation(dedupeCandidates);
-    if (existing) {
+    if (existingByRequest) {
       await completion;
-      return { status: "existing", operation: existing };
+      return { status: "existing", operation: existingByRequest };
     }
     const currentIndex = rawMetadata === undefined
       ? 0
@@ -338,7 +291,8 @@ export async function listPrivacyShieldOperationSummaries() {
 export function isTerminalPrivacyShieldState(
   state: PrivacyShieldOperationTrackingV1["state"],
 ): boolean {
-  return state === "private_ready" ||
+  return state === "asp_approved" ||
+    state === "private_ready" ||
     state === "wallet_rejected" ||
     state === "submission_failed" ||
     state === "public_reverted" ||

@@ -8,22 +8,70 @@ import { PRIVACY_POOLS_RPC_BATCH_SIZE } from "../rpcPolicy";
 import { PRIVACY_SNARK_SCALAR_FIELD } from "./types";
 
 const ENTRYPOINT_ABI = parseAbi([
-  "function associationSets(uint256 scope) view returns (uint256 root, string ipfsCID, uint256 timestamp)",
+  "function latestRoot() view returns (uint256)",
 ]);
 const POOL_ABI = parseAbi([
   "function currentRoot() view returns (uint256)",
+  "function currentRootIndex() view returns (uint32)",
+  "function roots(uint256 index) view returns (uint256)",
 ]);
+
+// Privacy Pools' State contract retains roots in a fixed-size circular buffer.
+// This must remain aligned with the deployed contract's ROOT_HISTORY_SIZE.
+export const PRIVACY_POOL_ROOT_HISTORY_SIZE = 64;
 
 export interface PrivacyAspOnchainRoots {
   associationRoot: bigint;
-  stateRoot: bigint;
-  associationTimestamp: bigint;
+  verifiedStateRoot: bigint;
 }
 
-export async function readPrivacyAspOnchainRoots(
-  rpcUrl?: string,
-): Promise<PrivacyAspOnchainRoots> {
-  const resolvedRpcUrl = rpcUrl ?? await resolvePrivacyPoolsRpcUrl();
+export function privacyPoolHistoricalRootIndices(
+  currentRootIndex: number,
+): number[] {
+  if (
+    !Number.isSafeInteger(currentRootIndex) ||
+    currentRootIndex < 0 ||
+    currentRootIndex >= PRIVACY_POOL_ROOT_HISTORY_SIZE
+  ) {
+    throw new Error("Invalid Privacy Pools root index");
+  }
+  return Array.from(
+    { length: PRIVACY_POOL_ROOT_HISTORY_SIZE - 1 },
+    (_, offset) =>
+      (currentRootIndex - offset - 1 + PRIVACY_POOL_ROOT_HISTORY_SIZE) %
+      PRIVACY_POOL_ROOT_HISTORY_SIZE,
+  );
+}
+
+export async function isPrivacyPoolStateRootKnown(input: {
+  expectedStateRoot: bigint;
+  currentStateRoot: bigint;
+  readCurrentRootIndex: () => Promise<number>;
+  readHistoricalRoots: (indices: readonly number[]) => Promise<readonly bigint[]>;
+}): Promise<boolean> {
+  if (input.expectedStateRoot === input.currentStateRoot) return true;
+  const indices = privacyPoolHistoricalRootIndices(
+    await input.readCurrentRootIndex(),
+  );
+  const historicalRoots = await input.readHistoricalRoots(indices);
+  if (historicalRoots.length !== indices.length) {
+    throw new Error("Incomplete Privacy Pools root history");
+  }
+  return historicalRoots.some((root) => root === input.expectedStateRoot);
+}
+
+export async function readPrivacyAspOnchainRoots(options: {
+  expectedStateRoot: bigint;
+  rpcUrl?: string;
+}): Promise<PrivacyAspOnchainRoots> {
+  const { expectedStateRoot } = options;
+  if (
+    expectedStateRoot <= 0n ||
+    expectedStateRoot >= PRIVACY_SNARK_SCALAR_FIELD
+  ) {
+    throw new Error("Invalid expected Privacy Pools state root");
+  }
+  const resolvedRpcUrl = options.rpcUrl ?? await resolvePrivacyPoolsRpcUrl();
   const deployment = PRIVACY_POOLS_DEPLOYMENT;
   const client = createPublicClient({
     chain: PRIVACY_POOLS_VIEM_CHAIN,
@@ -33,12 +81,11 @@ export async function readPrivacyAspOnchainRoots(
       timeout: 12_000,
     }),
   });
-  const [associationSet, stateRoot] = await Promise.all([
+  const [associationRoot, currentStateRoot] = await Promise.all([
     client.readContract({
       address: deployment.contracts.entrypointProxy.address,
       abi: ENTRYPOINT_ABI,
-      functionName: "associationSets",
-      args: [deployment.scope],
+      functionName: "latestRoot",
     }),
     client.readContract({
       address: deployment.contracts.ethPool.address,
@@ -46,17 +93,35 @@ export async function readPrivacyAspOnchainRoots(
       functionName: "currentRoot",
     }),
   ]);
-  const [associationRoot, ipfsCID, associationTimestamp] = associationSet;
   if (
     associationRoot <= 0n ||
     associationRoot >= PRIVACY_SNARK_SCALAR_FIELD ||
-    stateRoot <= 0n ||
-    stateRoot >= PRIVACY_SNARK_SCALAR_FIELD ||
-    typeof ipfsCID !== "string" ||
-    ipfsCID.length > 2_048 ||
-    associationTimestamp < 0n
+    currentStateRoot <= 0n ||
+    currentStateRoot >= PRIVACY_SNARK_SCALAR_FIELD
   ) {
     throw new Error("Invalid onchain ASP roots");
   }
-  return { associationRoot, stateRoot, associationTimestamp };
+  const stateRootKnown = await isPrivacyPoolStateRootKnown({
+    expectedStateRoot,
+    currentStateRoot,
+    readCurrentRootIndex: async () => Number(await client.readContract({
+      address: deployment.contracts.ethPool.address,
+      abi: POOL_ABI,
+      functionName: "currentRootIndex",
+    })),
+    readHistoricalRoots: async (indices) =>
+      await client.multicall({
+        allowFailure: false,
+        contracts: indices.map((index) => ({
+          address: deployment.contracts.ethPool.address,
+          abi: POOL_ABI,
+          functionName: "roots" as const,
+          args: [BigInt(index)] as const,
+        })),
+      }) as readonly bigint[],
+  });
+  if (!stateRootKnown) {
+    throw new Error("ASP state root is not in the Privacy Pools root history");
+  }
+  return { associationRoot, verifiedStateRoot: expectedStateRoot };
 }

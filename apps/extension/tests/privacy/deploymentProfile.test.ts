@@ -57,6 +57,10 @@ test("Vite development selects only the Sepolia Privacy Pools profile", async ()
     maxRelayFeeBPS: "100",
     mode: "sepolia-local-beta",
     bankrMutations: "blocked",
+    confirmationLabel: "Sepolia confirmation",
+    confirmationDescription:
+      "WalletChan is checking submission and waiting for confirmation on Sepolia.",
+    confirmationContext: "Confirming on Sepolia",
   });
   assert.doesNotMatch(source, /6818809eefce719e480a7526d76bd3e561526b46/i);
   assert.doesNotMatch(source, /api\.0xbow\.io/);
@@ -77,7 +81,12 @@ test("Vite production selects only the Ethereum mainnet Privacy Pools profile", 
     maxRelayFeeBPS: "1000",
     mode: "mainnet-production",
     bankrMutations: "enabled",
+    confirmationLabel: "Ethereum confirmation",
+    confirmationDescription:
+      "WalletChan is checking submission and waiting for confirmation on Ethereum.",
+    confirmationContext: "Confirming on Ethereum",
   });
   assert.doesNotMatch(source, /34a2068192b1297f2a7f85d7d8cde66f8f0921cb/i);
   assert.doesNotMatch(source, /dw\.0xbow\.io/);
+  assert.doesNotMatch(source, /Confirming on Sepolia|Sepolia confirmation/);
 });

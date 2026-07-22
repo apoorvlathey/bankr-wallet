@@ -10,6 +10,7 @@ interface HomeQuickActionButtonProps {
   onClick: () => void;
   emphasized?: boolean;
   accentIcon?: boolean;
+  mutedIcon?: boolean;
   indicator?: boolean;
   ariaLabel?: string;
   justifySelf?: ButtonProps["justifySelf"];
@@ -48,6 +49,7 @@ export function HomeQuickActionButton({
   onClick,
   emphasized = false,
   accentIcon = true,
+  mutedIcon = false,
   indicator = false,
   ariaLabel,
   justifySelf = "center",
@@ -97,6 +99,8 @@ export function HomeQuickActionButton({
               : "accentFg.primary"
             : isWarmMidnight && accentIcon
               ? "accent.highlight"
+              : isWarmMidnight && mutedIcon
+                ? "fg.secondary"
               : "fg.primary"
         }
         borderWidth={emphasized ? "0" : "1px"}

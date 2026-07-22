@@ -41,6 +41,8 @@ export interface PrivacyRagequitSummaryV1 {
   version: 1;
   id: string;
   requestId: string;
+  /** Shared pending-batch id for an atomic multi-deposit public exit. */
+  batchId?: string;
   createdAt: number;
   chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   accountId: string;
@@ -71,7 +73,7 @@ export interface PrivacyRagequitDetailsV1 {
   nullifierHash: string;
   previousStatus: Extract<
     PrivacyCommitmentStatus,
-    "awaiting_asp" | "asp_unavailable" | "asp_declined" | "asp_removed"
+    "awaiting_asp" | "asp_unavailable" | "private_ready" | "asp_declined" | "asp_removed"
   >;
   callData: Hex;
 }
@@ -134,15 +136,19 @@ function address(value: unknown): value is Address {
 }
 
 export function isValidPrivacyRagequitSummary(value: unknown): value is PrivacyRagequitSummaryV1 {
-  if (!exact(value, [
+  const legacyKeys = [
     "accountAddress", "accountId", "accountType", "amountWei", "chainId",
     "createdAt", "id", "poolAddress", "requestId", "schema", "version",
-  ])) return false;
+  ] as const;
+  const batchKeys = [...legacyKeys, "batchId"] as const;
+  if (!exact(value, legacyKeys) && !exact(value, batchKeys)) return false;
   const amount = uint(value.amountWei);
   return value.schema === "walletchan-privacy-ragequit-v1" &&
     value.version === 1 &&
     typeof value.id === "string" && UUID.test(value.id) &&
     typeof value.requestId === "string" && UUID.test(value.requestId) &&
+    (value.batchId === undefined ||
+      (typeof value.batchId === "string" && UUID.test(value.batchId))) &&
     typeof value.createdAt === "number" && Number.isSafeInteger(value.createdAt) && value.createdAt >= 0 &&
     value.chainId === PRIVACY_POOLS_DEPLOYMENT.chainId &&
     typeof value.accountId === "string" && value.accountId.length > 0 && value.accountId.length <= 128 &&
@@ -208,6 +214,7 @@ export function isValidPrivacyRagequitDetails(
     uint(value.nullifierHash) !== null && BigInt(value.nullifierHash as string) > 0n &&
     (value.previousStatus === "awaiting_asp" ||
       value.previousStatus === "asp_unavailable" ||
+      value.previousStatus === "private_ready" ||
       value.previousStatus === "asp_declined" ||
       value.previousStatus === "asp_removed") &&
     typeof value.callData === "string" && HEX_DATA.test(value.callData) &&

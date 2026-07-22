@@ -233,6 +233,14 @@ export function parseShieldQuoteError(response: unknown): string | null {
     : null;
 }
 
+export function isPrivacyAuthRequiredResponse(response: unknown): boolean {
+  return typeof response === "object" &&
+    response !== null &&
+    !Array.isArray(response) &&
+    (response as { success?: unknown }).success === false &&
+    (response as { code?: unknown }).code === "auth-required";
+}
+
 export function formatShieldWei(value: bigint): string {
   const exact = formatEther(value);
   const [whole, fraction = ""] = exact.split(".");

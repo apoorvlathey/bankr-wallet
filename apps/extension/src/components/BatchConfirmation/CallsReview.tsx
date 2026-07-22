@@ -32,6 +32,7 @@ interface CallsReviewProps {
   onToggleCall: (index: number) => void;
   onFunctionName: (index: number, name: string) => void;
   onClearSigningAction: (index: number, name?: string) => void;
+  readOnly?: boolean;
 }
 
 interface CallsReviewHeaderActionProps {
@@ -98,6 +99,7 @@ export function CallsReview({
   onToggleCall,
   onFunctionName,
   onClearSigningAction,
+  readOnly = false,
 }: CallsReviewProps) {
   return (
     <VStack spacing={1.5} align="stretch">
@@ -131,7 +133,7 @@ export function CallsReview({
             decodedName={decodedFunctionNames[index]}
             origin={callOrigin?.origin}
             favicon={callOrigin?.favicon ?? null}
-            onEditCallData={editCallData}
+            onEditCallData={readOnly ? undefined : editCallData}
           />
         );
 

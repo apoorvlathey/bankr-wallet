@@ -121,15 +121,7 @@ function assertOperationMatchesRequest(
   quote: PrivacyShieldQuoteValues,
 ): void {
   const summary = operation.summary;
-  if (
-    summary.requestId !== request.requestId &&
-    summary.dedupeKey !==
-      privacyShieldOperationDedupeKey({
-        chainId: quote.chainId,
-        accountId: request.accountId,
-        amountWei: quote.amountWei,
-      })
-  ) {
+  if (summary.requestId !== request.requestId) {
     throw new PrivacyShieldOperationError("operation-unavailable");
   }
   if (
@@ -157,12 +149,11 @@ function resumeExistingOperation(
   operation: StoredPrivacyShieldOperationV1,
   request: PrivacyShieldOperationRequest,
   amountWei: string,
-  dedupeKey: string,
 ): PrivacyShieldOperationPublicV1 {
   const released = publicSummary(operation);
   const summary = operation.summary;
   if (
-    (summary.requestId !== request.requestId && summary.dedupeKey !== dedupeKey) ||
+    summary.requestId !== request.requestId ||
     summary.accountId !== request.accountId ||
     summary.accountType !== request.accountType ||
     summary.accountAddress.toLowerCase() !== request.accountAddress.toLowerCase() ||
@@ -208,10 +199,7 @@ export async function preparePrivacyShieldOperation(
     accountId: request.accountId,
     amountWei,
   });
-  const resumable = await dependencies.findOperation({
-    requestId: request.requestId,
-    dedupeKey,
-  });
+  const resumable = await dependencies.findOperation(request.requestId);
   if (resumable) {
     return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
       try {
@@ -221,7 +209,7 @@ export async function preparePrivacyShieldOperation(
       }
       const account = await dependencies.getAccountById(request.accountId);
       assertPinnedSourceAccount(request, account);
-      return resumeExistingOperation(resumable, request, amountWei, dedupeKey);
+      return resumeExistingOperation(resumable, request, amountWei);
     });
   }
   await dependencies.verifyDeployment().catch(() => {
@@ -268,10 +256,7 @@ export async function preparePrivacyShieldOperation(
       throw new PrivacyShieldOperationError("recovery-unavailable");
     }
 
-    const existing = await dependencies.findOperation({
-      requestId: request.requestId,
-      dedupeKey,
-    });
+    const existing = await dependencies.findOperation(request.requestId);
     if (existing) {
       assertOperationMatchesRequest(existing, request, quote);
       return publicSummary(existing);

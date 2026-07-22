@@ -18,7 +18,7 @@ changing its public `TokenHoldings` contract.
 | `TokenRow.tsx` | Adapter for a single existing portfolio token row. |
 | `AggregatedAssetRow.tsx` | Expandable cross-network asset summary. |
 | `AssetRow.tsx` | Selects single-token versus aggregate row presentation. |
-| `ShieldedEthRow.tsx` | Permanent zero-USD Shielded ETH row and Shield/Unshield/Send/activity action sheet. |
+| `ShieldedEthRow.tsx` | Permanent zero-USD Shielded ETH row and Shield/Unshield/activity action sheet. |
 | `LowValueAssetsSection.tsx` | Collapsible low-value asset group. |
 | `HoldingsList.tsx` | Loading, empty, asset, and DeFi list composition. |
 | `HoldingsModals.tsx` | Edit and hide modal composition. |

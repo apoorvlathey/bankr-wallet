@@ -125,7 +125,7 @@ larger surface. Changing one requires updating this PRD before implementation.
 ### New privacy user
 
 As a WalletChan user, I can switch to Private and immediately see a private
-balance with Shield, Unshield, and Send actions. WalletChan creates and protects the separate
+balance with Shield and Unshield actions. WalletChan creates and protects the separate
 privacy identity in the background without showing protocol setup.
 
 ### Returning user
@@ -157,7 +157,6 @@ Shield
 │   └── Waiting-for-ASP subset when non-zero
 ├── Shield ETH
 ├── Unshield to an explicit address
-├── Send privately to a recipient
 ├── Withdraw publicly when eligible
 └── Activity
 
@@ -178,7 +177,7 @@ so the user understands where funds are held.
 Private mode is one balance-first home:
 
 1. private ETH balance;
-2. separate **Shield**, **Unshield**, and **Send** actions;
+2. separate **Shield** and **Unshield** actions;
 3. recent private activity;
 4. network, recovery, or operation status only when user action is required.
 
@@ -285,28 +284,56 @@ support Sepolia; impersonator and agent paths fail closed.
 
 ### 7.5 Withdrawal flow
 
-Private home exposes two distinct entry screens over this same exact relayed
-withdrawal engine. **Unshield** and **Send** both start with an empty recipient
-so the user must enter or choose the intended fresh destination. Unshield uses
-Unshield labels; Send uses private-send labels. Neither screen contains a
-Shield mode tab or a public source-account selector.
+Private home exposes one relayed withdrawal screen: **Unshield**. Privacy Pools
+v1 has no in-pool transfer, so Private mode does not expose a separate Send
+action or duplicate the withdrawal form under Send wording. Unshield starts
+with an empty recipient so the user must enter or choose the intended fresh
+destination. It contains no Shield mode tab or public source-account selector.
 
-1. Choose a ready commitment or an amount across compatible ready
-   commitments.
-2. Enter and checksum-normalize the Ethereum recipient.
-3. Warn when the recipient is the original depositor.
-4. Enter an amount; support full and partial withdrawal.
-5. Fetch a bounded, expiring relayer quote.
-6. Show recipient receives, relayer fee, total private debit, relayer identity,
-   quote expiry, and privacy hygiene warnings.
-7. Require live master or biometric-master authorization.
-8. Generate and locally verify the proof.
-9. Revalidate the quote, roots, deployment, and approved intent.
-10. Submit through the selected relayer and track the onchain nullifier and
+1. On the entry screen, enter an amount that fits within one ready commitment.
+   The current Privacy Pools withdrawal proof consumes one commitment at a
+   time and does not combine balances from separate deposits.
+2. Enter or choose and checksum-normalize the Ethereum recipient in the boxed
+   `Receive at` destination. The chooser label is `Address`, not a second
+   instruction to choose one.
+3. Press `Review unshield`; the fresh review screen fetches a bounded, expiring
+   relayer quote. If every otherwise verified quote
+   exceeds the Entrypoint's onchain relay-fee cap, retain only the cheapest
+   quote's public relay name and fee as a non-submittable diagnostic.
+4. On review, show the private debit and receiver amount once in the outcome
+   card. Request details starts with the quoted relay fee as percentage plus
+   ETH/USD value, followed by network, route, relay identity, quote expiry, and
+   privacy hygiene warnings. Warn when the recipient is the original depositor.
+5. Require live master or biometric-master authorization.
+6. Generate and locally verify the proof.
+7. Revalidate the quote, roots, deployment, and approved intent.
+8. Submit through the selected relayer and track the onchain nullifier and
     replacement commitment.
 
 The confirmation is invalidated if recipient, amount, fee, relayer, chain,
 pool, deployment fingerprint, ASP root, or quote expiry changes.
+
+An over-cap quote is not presented as a relay outage and never creates a
+withdrawal operation. The review screen keeps the estimated receive amount in
+the outcome card and turns the first Request details row amber, showing the
+exact quoted percentage, ETH/USD fee, and active chain's contract limit. The
+explicit public-exit alternative appears in the sticky decision bar immediately
+above Back and `Check relay again`; it is not another content card. The entry
+screen stays free of quote-dependent state. A verified signed quote remains a
+fee-cap diagnostic even when its gas-derived fee is 100% or more, with receiver
+amount floored at zero for display. A true all-relay outage still retains
+network/route context and public exit rather than leaving an empty review.
+There is no override:
+`Entrypoint.relay` reverts above `assetConfig.maxRelayFeeBPS`. When Unshield can
+bind the ready commitment to its original depositor, it reveals the explicit
+**Withdraw publicly** recovery route.
+
+The private home may aggregate several ready commitments into one Shielded ETH
+balance. Unshield separately exposes the total ready balance and the largest
+currently spendable commitment as the maximum for one withdrawal. When the
+maximum is lower than the total, the UI explains that the remaining balance can
+be withdrawn in subsequent operations. A partial withdrawal creates a verified
+replacement commitment for the unspent remainder.
 
 ### 7.6 Withdrawal hygiene
 
@@ -325,10 +352,17 @@ submission time.
 
 Ragequit is incorporated into the Unshield amount interface but remains
 explicitly presented as **Withdraw publicly**, never as a private withdrawal.
-The same inverse asset cards show its fixed amount and original depositor. An
-unchecked commitment control above the public sticky action identifies recovery
-to the original address as a public transaction; the action remains disabled
-until the user checks it. It is the always-available
+The entry action first opens a read-only review grouped by original depositor.
+Each checkbox represents one exact current whole commitment. Ragequit cannot accept an
+arbitrary partial amount because the commitment value is a public proof signal.
+Opening this review must not generate a proof, persist a recovery intent, claim
+the commitment, or create a transaction request. An unchecked commitment
+control identifies recovery to the original address as a public transaction;
+only the acknowledged final action may prepare and queue the transaction. One
+selection uses a normal transaction; two through eight selections from the same
+account use one immutable atomic EIP-7702/ERC-7821 or Bankr batch. Selecting a
+commitment disables other account groups until the current group is cleared.
+It is the always-available
 custody exit for an indexed commitment owned by the original depositor,
 including while ASP review is pending. The product should not force the user to
 wait for ASP approval if they accept the public link.
@@ -336,7 +370,8 @@ wait for ASP approval if they accept the public link.
 It is offered when:
 
 - the confirmed commitment is awaiting ASP approval, was declined or removed,
-  or normal withdrawal is unavailable for a supported recovery reason;
+  or normal withdrawal is unavailable because every verified relay quote is
+  above the Entrypoint's hard fee cap;
 - WalletChan can prove the active account controls the original depositor;
 - a commitment proof can be generated and verified.
 
@@ -355,6 +390,7 @@ draft
 -> public_confirmed
 -> awaiting_event
 -> awaiting_asp
+-> asp_approved
 -> private_ready
 
 terminal/attention states:
@@ -446,8 +482,9 @@ submission.
 
 ### 9.5 Agent-password sessions
 
-V1 blocks all privacy mutations. Agent sessions may view non-secret aggregate
-status only. They cannot:
+V1 blocks all privacy mutations. Agent sessions and an automatically expired
+auth session may view only the bounded aggregate balance/chart snapshot already
+released during the current browser session. They cannot:
 
 - create, verify, reveal, replace, export, or delete the privacy phrase;
 - shield funds;
@@ -456,8 +493,9 @@ status only. They cannot:
 - restore from a phrase or perform a full rescan that releases derived secret
   state.
 
-This deliberately keeps private balances outside the agent-password blast
-radius until a separate product and security decision changes the policy.
+This deliberately keeps private commitments, proofs, recovery material, and
+spending authority outside the agent-password and expired-session blast radius.
+The aggregate display snapshot is not an authorization capability.
 
 ## 10. SDK integration policy
 
@@ -629,7 +667,9 @@ Implemented message families:
 | `privacySyncShield` | Bounded event, commitment, receipt, and ASP refresh | No |
 | `privacyPrepareUnshieldQuote` | Bound relayer quote and public review | No |
 | `privacyExecuteUnshield` | Authorize proof generation and relayer submission | No |
+| `privacyPreviewRagequit` | Read-only list of all current ragequittable commitments with bounded opaque ID/timestamp/amount and original account/source binding | No |
 | `privacyPrepareRagequit` | Prepare and queue public original-depositor recovery | No |
+| `privacyPrepareRagequitBatch` | Prepare 2–8 distinct whole commitments from one original account and queue one immutable atomic public recovery | No |
 | `privacyGetRecoveryStatus` | Non-secret backup/recovery status | No |
 | `privacyRevealRecovery` | Master-only reveal | Dedicated reveal page only |
 | `privacyRestoreRecovery` | Master-only phrase replacement and immediate rescan | No plaintext response |
@@ -723,7 +763,8 @@ The Sepolia implementation creates extension-origin database
   route, timestamp, and state;
 - AES-GCM-encrypted deposit index, precommitment, and calldata under the
   dedicated privacy key, with a fresh IV and AAD binding the entire summary;
-- stable request-ID and pending account/amount dedupe indexes;
+- a unique request-ID idempotency index plus a non-unique account/amount
+  correlation index that never blocks a fresh request UUID;
 - a newest-20 public Activity projection.
 
 It also owns separate bounded IndexedDB databases for encrypted current
@@ -913,12 +954,22 @@ The ASP client must:
 - use bounded HTTPS transport and response schemas;
 - fetch only the minimum global pool/list data required;
 - avoid sending WalletChan account inventories;
-- verify the returned ASP root against the accepted onchain root;
+- verify the returned ASP root against `Entrypoint.latestRoot()` exactly;
+- accept a returned state root only when it is the pool's current root or one
+  of the other 63 roots retained in its 64-slot circular history;
 - reconstruct or verify the membership proof locally;
-- distinguish pending, approved, declined, and removed labels;
-- revalidate the ASP root before proof generation and submission;
-- preserve public withdrawal while approval is pending or the ASP is
-  unavailable.
+- permit public operation/deposit binding plus both onchain-root-pinned tree
+  memberships to advance to `asp_approved` while the privacy key is cold;
+- require authenticated secret-derived note lineage before advancing from
+  `asp_approved` to spendable `private_ready`;
+- distinguish pending, approved, Proof-of-Association-required, declined,
+  removed, and locally unavailable states;
+- revalidate the exact latest ASP root and still-known state root before proof
+  generation and submission;
+- preserve a previously verified private-ready commitment through transient
+  ASP transport failure;
+- preserve public withdrawal while approval/Proof of Association is pending or
+  the ASP is unavailable.
 
 The UI discloses the ASP endpoint and IP/timing exposure under Route details.
 
@@ -931,7 +982,7 @@ WalletChan must:
 - query at least two relayers when compatible production relayers exist;
 - bound deadlines, redirects, bytes, JSON depth, and field lengths;
 - validate quote signatures/commitments where provided;
-- enforce quote expiry and configured fee caps;
+- enforce quote expiry and the active Entrypoint's onchain fee cap;
 - decode withdrawal `FeeData` locally;
 - compare recipient, fee recipient, fee BPS, processooor, scope, amount, asset,
   chain, and replacement commitment with the approved intent;
@@ -941,6 +992,13 @@ WalletChan must:
 - treat timeout as `submission_unknown`;
 - query onchain nullifier/receipt state before retry;
 - never fall back to a direct withdrawal without a new explicit confirmation.
+
+The relay-fee cap is a hard protocol constraint, not a WalletChan preference.
+WalletChan must never offer a user override for an over-cap quote because the
+Entrypoint will revert it. A quote that passes every binding, signature,
+expiry, and economics check except this cap may be reduced to a bounded UI
+diagnostic containing only the pinned relay name, quoted BPS, and onchain
+maximum. It must not be persisted as a withdrawal or submitted to the relay.
 
 Relayer requests contain only the proof and public operation data required by
 the protocol. They do not include WalletChan account lists, recovery metadata,
@@ -1097,6 +1155,11 @@ recipients, tx hashes, or timing precise enough to correlate operations.
 - Impersonator never reaches a signer or submission path.
 - Popup closure does not cancel or duplicate the deposit.
 - Receipt/event/ASP state resumes after service-worker restart.
+- A locked browser with no WalletChan renderer open can verify public ASP
+  approval and deliver one metadata-free native notification. An already-open
+  trusted renderer may keep showing its session-scoped aggregate balance/chart
+  snapshot after automatic auth expiry, but no locked surface can decrypt
+  commitments, generate proofs, sign, or spend private balance.
 
 ### Withdrawal
 

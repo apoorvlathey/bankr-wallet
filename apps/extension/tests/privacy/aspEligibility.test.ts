@@ -7,13 +7,17 @@ import {
   fetchPrivacyAspDepositsByLabel,
 } from "../../src/chrome/privacy/asp/client";
 import { nextPrivacyCommitmentAspStatus } from "../../src/chrome/privacy/asp/commitmentEligibility";
-import { verifyPrivacyAspMembership } from "../../src/chrome/privacy/asp/eligibility";
+import {
+  verifyPrivacyAspMembership,
+  verifyPrivacyAspPublicMembership,
+} from "../../src/chrome/privacy/asp/eligibility";
 import {
   MAX_PRIVACY_ASP_LEAVES_PER_TREE,
   parsePrivacyAspDeposits,
   parsePrivacyAspLeaves,
   parsePrivacyAspRoots,
 } from "../../src/chrome/privacy/asp/types";
+import { partitionPrivacyAspStatusResponse } from "../../src/chrome/privacy/asp/statusResponse";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../../src/chrome/privacy/deployment/manifest";
 import { isPrivacyCommitmentPubliclyRecoverableStatus } from "../../src/chrome/privacy/commitments/types";
 import {
@@ -98,8 +102,7 @@ function membershipFixture() {
     },
     onchain: {
       associationRoot,
-      stateRoot,
-      associationTimestamp: 1n,
+      verifiedStateRoot: stateRoot,
     },
     masterKeys,
   };
@@ -171,6 +174,40 @@ test("approved membership requires local lineage plus ASP and state roots pinned
   );
 });
 
+test("public ASP membership can be verified without decrypting Shield details", () => {
+  const fixture = membershipFixture();
+  const publicFixture = {
+    operation: fixture.operation,
+    tracking: fixture.tracking,
+    deposit: fixture.deposit,
+    roots: fixture.roots,
+    leaves: fixture.leaves,
+    onchain: fixture.onchain,
+  };
+  assert.doesNotThrow(() => verifyPrivacyAspPublicMembership(publicFixture));
+  assert.doesNotThrow(() => verifyPrivacyAspPublicMembership({
+    ...publicFixture,
+    deposit: { ...publicFixture.deposit, precommitmentHash: "999" },
+  }));
+  assert.throws(
+    () => verifyPrivacyAspPublicMembership({
+      ...publicFixture,
+      deposit: { ...publicFixture.deposit, txHash: `0x${"33".repeat(32)}` },
+    }),
+    /does not match/,
+  );
+  assert.throws(
+    () => verifyPrivacyAspPublicMembership({
+      ...publicFixture,
+      onchain: {
+        ...publicFixture.onchain,
+        associationRoot: publicFixture.onchain.associationRoot + 1n,
+      },
+    }),
+    /roots do not match the active Privacy Pools deployment/,
+  );
+});
+
 test("ASP client sends only the requested labels and rejects response injection", async () => {
   const originalFetch = globalThis.fetch;
   let observedHeaders: Headers | null = null;
@@ -198,6 +235,25 @@ test("ASP client sends only the requested labels and rejects response injection"
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("a successful ASP response may omit deposits that are not indexed yet", () => {
+  const fixture = membershipFixture();
+  const response = partitionPrivacyAspStatusResponse(
+    [fixture.deposit.label, "789"],
+    [fixture.deposit],
+  );
+
+  assert.equal(response.depositsByLabel.get(fixture.deposit.label), fixture.deposit);
+  assert.deepEqual(response.missingLabels, ["789"]);
+  assert.deepEqual(response.reviewCounts, {
+    pending: 0,
+    approved: 1,
+    declined: 0,
+    exited: 0,
+    spent: 0,
+    poi_required: 0,
+  });
 });
 
 test("ASP waiting and outage states preserve explicit public recovery", () => {

@@ -20,7 +20,7 @@ import {
 } from "@/components/Shield/model/shieldedAsset";
 import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
 import { playInteractionSound } from "@/sounds/soundManager";
-import { HomeSendIcon, HomeUnshieldIcon } from "@/components/shared/HomeQuickActionButton";
+import { HomeUnshieldIcon } from "@/components/shared/HomeQuickActionButton";
 import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
 
 interface ShieldedEthRowProps {
@@ -57,18 +57,9 @@ export function ShieldedEthRow({
       isDisabled: !onAction,
     },
     {
-      id: "send",
-      label: "Send privately",
-      description: portfolio.readyBalanceWei > 0n
-        ? "Withdraw through a relay to another address"
-        : "Open the private-send flow",
-      icon: <HomeSendIcon />,
-      isDisabled: !onAction,
-    },
-    {
       id: "activity",
       label: "View activity",
-      description: "Show Shield and private-send activity",
+      description: "Show Privacy Pools activity",
       icon: <TimeIcon boxSize="18px" />,
       isDisabled: !onAction,
     },

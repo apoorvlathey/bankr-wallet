@@ -30,6 +30,7 @@ import { syncPrivacyDepositEvents } from "../privacy/events/sync";
 import { matchPrivacyShieldOperationsFromEvents } from "../privacy/events/match";
 import {
   materializeIndexedPrivacyShieldCommitments,
+  reconcileKnownPrivacyCommitmentsWithActiveIdentity,
   refreshPrivacyAspEligibility,
 } from "../privacy/asp/eligibility";
 import { refreshPrivacyCommitmentEligibility } from "../privacy/asp/commitmentEligibility";
@@ -44,10 +45,24 @@ import { listPrivacyUnshields } from "../privacy/withdrawals/repository";
 import { resumePrivacyUnshieldTracking } from "../privacy/withdrawals/lifecycle";
 import type { StoredPrivacyUnshieldV1 } from "../privacy/withdrawals/types";
 import {
+  preparePrivacyDirectUnshield,
+  PrivacyDirectUnshieldError,
+} from "../privacy/withdrawals/direct";
+import {
+  queuePrivacyDirectUnshieldConfirmation,
+  rollbackPreparedPrivacyDirectUnshield,
+} from "../privacy/withdrawals/directConfirmation";
+import {
+  previewPrivacyRagequits,
   preparePrivacyRagequit,
+  preparePrivacyRagequitBatch,
+  rollbackPreparedPrivacyRagequitBatch,
   PrivacyRagequitPrepareError,
 } from "../privacy/ragequit/prepare";
-import { queuePrivacyRagequitConfirmation } from "../privacy/ragequit/submission";
+import {
+  queuePrivacyRagequitBatchConfirmation,
+  queuePrivacyRagequitConfirmation,
+} from "../privacy/ragequit/submission";
 import { listPrivacyRagequits } from "../privacy/ragequit/repository";
 import {
   resumePrivacyRagequitTracking,
@@ -67,7 +82,10 @@ export const BACKGROUND_PRIVACY_MESSAGE_TYPES = [
   "privacySyncShield",
   "privacyPrepareUnshieldQuote",
   "privacyExecuteUnshield",
+  "privacyPrepareDirectUnshield",
+  "privacyPreviewRagequit",
   "privacyPrepareRagequit",
+  "privacyPrepareRagequitBatch",
 ] as const;
 
 export type BackgroundPrivacyRouteResult =
@@ -87,15 +105,24 @@ type Dependencies = {
   matchPrivacyShieldOperationsFromEvents: typeof matchPrivacyShieldOperationsFromEvents;
   refreshPrivacyAspEligibility: typeof refreshPrivacyAspEligibility;
   materializeIndexedPrivacyShieldCommitments: typeof materializeIndexedPrivacyShieldCommitments;
+  reconcileKnownPrivacyCommitmentsWithActiveIdentity:
+    typeof reconcileKnownPrivacyCommitmentsWithActiveIdentity;
   refreshPrivacyCommitmentEligibility: typeof refreshPrivacyCommitmentEligibility;
   readPrivacyCommitmentPortfolio: typeof readPrivacyCommitmentPortfolio;
   readPrivacyPortfolioSeries: typeof readPrivacyPortfolioSeries;
   preparePrivacyUnshieldQuote: typeof preparePrivacyUnshieldQuote;
   executePrivacyUnshield: typeof executePrivacyUnshield;
+  preparePrivacyDirectUnshield: typeof preparePrivacyDirectUnshield;
+  queuePrivacyDirectUnshieldConfirmation: typeof queuePrivacyDirectUnshieldConfirmation;
+  rollbackPreparedPrivacyDirectUnshield: typeof rollbackPreparedPrivacyDirectUnshield;
   listPrivacyUnshields: typeof listPrivacyUnshields;
   resumePrivacyUnshieldTracking: typeof resumePrivacyUnshieldTracking;
+  previewPrivacyRagequits: typeof previewPrivacyRagequits;
   preparePrivacyRagequit: typeof preparePrivacyRagequit;
+  preparePrivacyRagequitBatch: typeof preparePrivacyRagequitBatch;
+  rollbackPreparedPrivacyRagequitBatch: typeof rollbackPreparedPrivacyRagequitBatch;
   queuePrivacyRagequitConfirmation: typeof queuePrivacyRagequitConfirmation;
+  queuePrivacyRagequitBatchConfirmation: typeof queuePrivacyRagequitBatchConfirmation;
   listPrivacyRagequits: typeof listPrivacyRagequits;
   resumePrivacyRagequitTracking: typeof resumePrivacyRagequitTracking;
   warnPrivacyReadinessFailure: (code: string) => void;
@@ -103,6 +130,7 @@ type Dependencies = {
   warnPrivacyReviewFailure: (code: string) => void;
   warnPrivacyOperationFailure: (code: string) => void;
   warnPrivacyRecoveryFailure: (code: string) => void;
+  warnPrivacyEventSyncFailure: (surface: "portfolio") => void;
 };
 
 const productionDependencies: Dependencies = {
@@ -118,15 +146,23 @@ const productionDependencies: Dependencies = {
   matchPrivacyShieldOperationsFromEvents,
   refreshPrivacyAspEligibility,
   materializeIndexedPrivacyShieldCommitments,
+  reconcileKnownPrivacyCommitmentsWithActiveIdentity,
   refreshPrivacyCommitmentEligibility,
   readPrivacyCommitmentPortfolio,
   readPrivacyPortfolioSeries,
   preparePrivacyUnshieldQuote,
   executePrivacyUnshield,
+  preparePrivacyDirectUnshield,
+  queuePrivacyDirectUnshieldConfirmation,
+  rollbackPreparedPrivacyDirectUnshield,
   listPrivacyUnshields,
   resumePrivacyUnshieldTracking,
+  previewPrivacyRagequits,
   preparePrivacyRagequit,
+  preparePrivacyRagequitBatch,
+  rollbackPreparedPrivacyRagequitBatch,
   queuePrivacyRagequitConfirmation,
+  queuePrivacyRagequitBatchConfirmation,
   listPrivacyRagequits,
   resumePrivacyRagequitTracking,
   warnPrivacyReadinessFailure: (code) =>
@@ -139,7 +175,33 @@ const productionDependencies: Dependencies = {
     console.warn("[privacy-shield] operation preparation failed", code),
   warnPrivacyRecoveryFailure: (code) =>
     console.warn("[privacy-shield] public recovery preparation failed", code),
+  warnPrivacyEventSyncFailure: (surface) =>
+    console.warn("[privacy-shield] event sync deferred", surface),
 };
+
+async function reconcilePrivacyCommitmentEventsBestEffort(
+  dependencies: Pick<
+    Dependencies,
+    "syncPrivacyDepositEvents" |
+      "matchPrivacyShieldOperationsFromEvents" |
+      "reconcileKnownPrivacyCommitmentsWithActiveIdentity" |
+      "warnPrivacyEventSyncFailure"
+  >,
+  surface: "portfolio",
+) {
+  let sync;
+  try {
+    sync = await dependencies.syncPrivacyDepositEvents();
+  } catch {
+    dependencies.warnPrivacyEventSyncFailure(surface);
+    return null;
+  }
+  await dependencies.matchPrivacyShieldOperationsFromEvents();
+  if (sync.status === "current") {
+    await dependencies.reconcileKnownPrivacyCommitmentsWithActiveIdentity();
+  }
+  return sync;
+}
 
 function isExactRequest(message: unknown, type: string): boolean {
   return (
@@ -182,12 +244,36 @@ interface PrivacyExecuteUnshieldMessage {
   operationId: string;
 }
 
+interface PrivacyPrepareDirectUnshieldMessage {
+  type: "privacyPrepareDirectUnshield";
+  requestId: string;
+  amountWei: string;
+  recipient: string;
+  accountId: string;
+  accountAddress: string;
+  accountType: "bankr" | "privateKey" | "seedPhrase";
+}
+
 interface PrivacyPrepareRagequitMessage {
   type: "privacyPrepareRagequit";
   requestId: string;
   accountId: string;
   accountAddress: string;
   accountType: "bankr" | "privateKey" | "seedPhrase";
+  commitmentId: string;
+  sourceOperationId: string | null;
+  expectedAmountWei: string;
+}
+
+interface PrivacyPrepareRagequitBatchMessage {
+  type: "privacyPrepareRagequitBatch";
+  requestId: string;
+  selections: Array<Omit<PrivacyPrepareRagequitMessage, "type" | "requestId">>;
+}
+
+interface PrivacyPreviewRagequitMessage {
+  type: "privacyPreviewRagequit";
+  preferredOperationId: string | null;
 }
 
 function isPrivacyPrepareUnshieldMessage(
@@ -212,18 +298,74 @@ function isPrivacyExecuteUnshieldMessage(
     typeof value.operationId === "string";
 }
 
+function isPrivacyPrepareDirectUnshieldMessage(
+  message: unknown,
+): message is PrivacyPrepareDirectUnshieldMessage {
+  if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
+  const value = message as Record<string, unknown>;
+  return Object.keys(value).length === 7 &&
+    value.type === "privacyPrepareDirectUnshield" &&
+    typeof value.requestId === "string" && typeof value.amountWei === "string" &&
+    typeof value.recipient === "string" && typeof value.accountId === "string" &&
+    typeof value.accountAddress === "string" &&
+    (value.accountType === "bankr" || value.accountType === "privateKey" || value.accountType === "seedPhrase");
+}
+
 function isPrivacyPrepareRagequitMessage(
   message: unknown,
 ): message is PrivacyPrepareRagequitMessage {
   if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
   const value = message as Record<string, unknown>;
-  return Object.keys(value).length === 5 &&
+  return Object.keys(value).length === 8 &&
     value.type === "privacyPrepareRagequit" &&
     typeof value.requestId === "string" &&
     typeof value.accountId === "string" &&
     typeof value.accountAddress === "string" &&
     (value.accountType === "bankr" || value.accountType === "privateKey" ||
-      value.accountType === "seedPhrase");
+      value.accountType === "seedPhrase") &&
+    typeof value.commitmentId === "string" &&
+    (value.sourceOperationId === null || typeof value.sourceOperationId === "string") &&
+    typeof value.expectedAmountWei === "string";
+}
+
+function isPrivacyPrepareRagequitBatchMessage(
+  message: unknown,
+): message is PrivacyPrepareRagequitBatchMessage {
+  if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
+  const value = message as Record<string, unknown>;
+  if (
+    Object.keys(value).length !== 3 ||
+    value.type !== "privacyPrepareRagequitBatch" ||
+    typeof value.requestId !== "string" ||
+    !Array.isArray(value.selections) ||
+    value.selections.length < 2 ||
+    value.selections.length > 8
+  ) return false;
+  return value.selections.every((selection) => {
+    if (typeof selection !== "object" || selection === null || Array.isArray(selection)) {
+      return false;
+    }
+    const item = selection as Record<string, unknown>;
+    return Object.keys(item).length === 6 &&
+      typeof item.accountId === "string" &&
+      typeof item.accountAddress === "string" &&
+      (item.accountType === "bankr" || item.accountType === "privateKey" ||
+        item.accountType === "seedPhrase") &&
+      typeof item.commitmentId === "string" &&
+      (item.sourceOperationId === null || typeof item.sourceOperationId === "string") &&
+      typeof item.expectedAmountWei === "string";
+  });
+}
+
+function isPrivacyPreviewRagequitMessage(
+  message: unknown,
+): message is PrivacyPreviewRagequitMessage {
+  if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
+  const value = message as Record<string, unknown>;
+  return Object.keys(value).length === 2 &&
+    value.type === "privacyPreviewRagequit" &&
+    (value.preferredOperationId === null ||
+      typeof value.preferredOperationId === "string");
 }
 
 function isPrivacyAmountMessage(
@@ -338,7 +480,7 @@ function publicOperationSummary(operation: Awaited<
 }
 
 function publicUnshieldSummary(operation: StoredPrivacyUnshieldV1) {
-  return {
+  const base = {
     id: operation.summary.id,
     state: operation.tracking.state,
     revision: operation.tracking.revision,
@@ -357,6 +499,18 @@ function publicUnshieldSummary(operation: StoredPrivacyUnshieldV1) {
     blockNumber: operation.tracking.blockNumber,
     errorCode: operation.tracking.errorCode,
   };
+  return operation.summary.method === "direct"
+    ? {
+        ...base,
+        method: "direct" as const,
+        accountId: operation.summary.accountId,
+        accountAddress: operation.summary.accountAddress,
+        accountType: operation.summary.accountType,
+        gasLimit: operation.summary.gasLimit,
+        maxFeePerGas: operation.summary.maxFeePerGas,
+        gasFeeEstimateWei: operation.summary.gasFeeEstimateWei,
+      }
+    : { ...base, method: "relay" as const };
 }
 
 function privacyReviewFailure(error: unknown): {
@@ -429,6 +583,7 @@ export function createBackgroundPrivacyMessageRouter(
             sendResponse({
               success: false,
               status: "action-required",
+              code: "recovery-required",
               error: "Shield recovery needs attention before you continue.",
             }),
           );
@@ -617,19 +772,32 @@ export function createBackgroundPrivacyMessageRouter(
           return { handled: true, keepChannelOpen: false };
         }
         dependencies
-          .syncPrivacyDepositEvents()
-          .then(async (sync) => {
-            await dependencies.matchPrivacyShieldOperationsFromEvents();
-            await dependencies.materializeIndexedPrivacyShieldCommitments();
-            const eligibility = await dependencies.refreshPrivacyAspEligibility();
-            const commitments = await dependencies.refreshPrivacyCommitmentEligibility();
+          .materializeIndexedPrivacyShieldCommitments()
+          .then(async () => {
+            // Receipt recovery must never be blocked by ASP or event refresh.
             await dependencies.resumePrivacyUnshieldTracking();
             await dependencies.resumePrivacyRagequitTracking();
+
+            const operations = await dependencies.listPrivacyShieldOperationSummaries();
+            const eventRecoveryRequired = operations.some((operation) =>
+              operation.state === "awaiting_event"
+            );
+            const sync = eventRecoveryRequired
+              ? await reconcilePrivacyCommitmentEventsBestEffort(
+                  dependencies,
+                  "portfolio",
+                )
+              : null;
+            await dependencies.materializeIndexedPrivacyShieldCommitments();
+            await dependencies.resumePrivacyUnshieldTracking();
+            await dependencies.resumePrivacyRagequitTracking();
+            const eligibility = await dependencies.refreshPrivacyAspEligibility();
+            const commitments = await dependencies.refreshPrivacyCommitmentEligibility();
             sendResponse({
               success: true,
               sync: {
-                status: sync.status,
-                lastSyncAt: sync.lastSyncAt,
+                status: sync?.status ?? (eventRecoveryRequired ? "unavailable" : "idle"),
+                lastSyncAt: sync?.lastSyncAt ?? 0,
                 eligibility: eligibility.status === "unavailable" ||
                     commitments.status === "unavailable"
                   ? "unavailable"
@@ -666,10 +834,35 @@ export function createBackgroundPrivacyMessageRouter(
           const code = error instanceof PrivacyUnshieldPrepareError
             ? error.code
             : "operation-unavailable";
+          if (code === "relay-fee-cap-exceeded") {
+            const warning = error instanceof PrivacyUnshieldPrepareError
+              ? error.feeCapWarning
+              : null;
+            if (warning) {
+              sendResponse({
+                success: false,
+                code,
+                warning: {
+                  kind: "relay-fee-cap-exceeded",
+                  relayerName: warning.relayerName,
+                  quotedFeeBPS: warning.quotedFeeBPS,
+                  maxFeeBPS: warning.maxFeeBPS,
+                },
+              });
+              return;
+            }
+            sendResponse({
+              success: false,
+              code: "quote-unavailable",
+              error: "The relay quote could not be used.",
+            });
+            return;
+          }
           const messages = {
             "invalid-request": "Enter a valid amount and recipient.",
             "auth-required": "Unlock with your main password or biometrics and try again.",
             "balance-unavailable": "No single ready Shield balance can cover that amount.",
+            "balance-syncing": "Your private balance is still syncing. Try again shortly.",
             "quote-unavailable":
               `No valid ${PRIVACY_POOLS_DEPLOYMENT.chainName} relayer quote is available.`,
             "operation-unavailable": "Unshield is unavailable. Try again.",
@@ -688,13 +881,97 @@ export function createBackgroundPrivacyMessageRouter(
             success: true,
             operation: publicUnshieldSummary(operation),
           }))
-          .catch((error: unknown) => sendResponse({
-            success: false,
-            code: error instanceof Error ? error.message : "operation-unavailable",
-            error: error instanceof Error && error.message === "quote-expired"
-              ? "The relayer quote expired. Request a new quote."
-              : "Unshield didn’t complete. Your private balance is still tracked.",
-          }));
+          .catch((error: unknown) => {
+            const rawCode = error instanceof Error
+              ? error.message
+              : "operation-unavailable";
+            const code = rawCode === "privacy-master-authorization-required"
+              ? "auth-required"
+              : rawCode;
+            sendResponse({
+              success: false,
+              code,
+              error: code === "auth-required"
+                ? "Unlock with your main password or biometrics and try again."
+                : code === "quote-expired"
+                  ? "The relayer quote expired. Request a new quote."
+                  : "Unshield didn’t complete. Your private balance is still tracked.",
+            });
+          });
+        return { handled: true, keepChannelOpen: true };
+      }
+      case "privacyPrepareDirectUnshield": {
+        if (!isPrivacyPrepareDirectUnshieldMessage(message)) {
+          sendResponse({ success: false, code: "invalid-request", error: "Invalid request" });
+          return { handled: true, keepChannelOpen: false };
+        }
+        let preparedOperationId: string | null = null;
+        dependencies.preparePrivacyDirectUnshield({
+          requestId: message.requestId,
+          amountWei: message.amountWei,
+          recipient: message.recipient,
+          accountId: message.accountId,
+          accountAddress: message.accountAddress,
+          accountType: message.accountType,
+        }).then((operation) => {
+          preparedOperationId = operation.summary.id;
+          return dependencies.queuePrivacyDirectUnshieldConfirmation(operation.summary.id);
+        }
+        ).then((operation) => sendResponse({
+          success: true,
+          operation: publicUnshieldSummary(operation),
+        })).catch(async (error: unknown) => {
+          if (preparedOperationId) {
+            await dependencies.rollbackPreparedPrivacyDirectUnshield(
+              preparedOperationId,
+            ).catch(() => undefined);
+          }
+          const code = error instanceof PrivacyDirectUnshieldError
+            ? error.code
+            : error instanceof Error && error.message === "auth-required"
+              ? "auth-required"
+              : "operation-unavailable";
+          const messages = {
+            "invalid-request": "Choose a WalletChan receiving account.",
+            "auth-required": "Unlock with your main password or biometrics and try again.",
+            "account-unavailable": "The receiving account is no longer available.",
+            "bankr-testnet-unsupported":
+              `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
+            "balance-unavailable": "No single ready Shield balance can cover that amount.",
+            "balance-syncing": "Your private balance is still syncing. Try again shortly.",
+            "insufficient-gas": `The receiving account needs more ${PRIVACY_POOLS_DEPLOYMENT.chainName} ETH for gas.`,
+            "proof-failed": "Couldn’t prepare the receiver-paid withdrawal proof.",
+            "operation-unavailable": "Receiver-paid withdrawal is unavailable. Try again.",
+          } as const;
+          sendResponse({ success: false, code, error: messages[code] });
+        });
+        return { handled: true, keepChannelOpen: true };
+      }
+      case "privacyPreviewRagequit": {
+        if (!isPrivacyPreviewRagequitMessage(message)) {
+          sendResponse({ success: false, code: "invalid-request", error: "Invalid request" });
+          return { handled: true, keepChannelOpen: false };
+        }
+        dependencies.materializeIndexedPrivacyShieldCommitments()
+          .then(() => dependencies.previewPrivacyRagequits(message.preferredOperationId))
+          .then((previews) => sendResponse({ success: true, previews }))
+          .catch((error: unknown) => {
+            const code = error instanceof PrivacyRagequitPrepareError
+              ? error.code
+              : "recovery-unavailable";
+            const messages = {
+              "invalid-request": "Invalid recovery request.",
+              "auth-required": "Unlock with your main password or biometrics and try again.",
+              "account-unavailable": "The original deposit account is unavailable.",
+              "bankr-testnet-unsupported":
+                `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
+              "balance-syncing": "Your private balance is still syncing. Try again shortly.",
+              "recovery-unavailable": "No public recovery is available for this deposit.",
+              "proof-failed": "Couldn’t inspect this public recovery.",
+            } as const;
+            console.warn("[privacy-shield] public recovery preview failed", code);
+            sendResponse({ success: false, code, error: messages[code] });
+          });
         return { handled: true, keepChannelOpen: true };
       }
       case "privacyPrepareRagequit": {
@@ -707,6 +984,9 @@ export function createBackgroundPrivacyMessageRouter(
             accountId: message.accountId,
             accountAddress: message.accountAddress,
             accountType: message.accountType,
+            commitmentId: message.commitmentId,
+            sourceOperationId: message.sourceOperationId,
+            expectedAmountWei: message.expectedAmountWei,
           }))
           .then((operation) =>
             dependencies.queuePrivacyRagequitConfirmation(operation.summary.id),
@@ -724,8 +1004,53 @@ export function createBackgroundPrivacyMessageRouter(
               "account-unavailable": "Choose the original deposit account and try again.",
               "bankr-testnet-unsupported":
                 `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
+              "balance-syncing": "Your private balance is still syncing. Try again shortly.",
               "recovery-unavailable": "No public recovery is available for this account.",
               "proof-failed": "Couldn’t prepare the recovery proof. Try again.",
+            } as const;
+            dependencies.warnPrivacyRecoveryFailure(code);
+            sendResponse({ success: false, code, error: messages[code] });
+          });
+        return { handled: true, keepChannelOpen: true };
+      }
+      case "privacyPrepareRagequitBatch": {
+        if (!isPrivacyPrepareRagequitBatchMessage(message)) {
+          sendResponse({ success: false, code: "invalid-request", error: "Invalid request" });
+          return { handled: true, keepChannelOpen: false };
+        }
+        dependencies.materializeIndexedPrivacyShieldCommitments()
+          .then(() => dependencies.preparePrivacyRagequitBatch(
+            message.requestId,
+            message.selections,
+          ))
+          .then(async (batch) => {
+            try {
+              const operations = await dependencies.queuePrivacyRagequitBatchConfirmation(
+                batch.batchId,
+                batch.operations.map((operation) => operation.summary.id),
+              );
+              return { operations };
+            } catch (error) {
+              await dependencies.rollbackPreparedPrivacyRagequitBatch(batch.operations);
+              throw error;
+            }
+          })
+          .then(({ operations }) => sendResponse({ success: true, operations }))
+          .catch((error: unknown) => {
+            const code = error instanceof PrivacyRagequitPrepareError
+              ? error.code
+              : error instanceof Error && error.message === "auth-required"
+                ? "auth-required"
+                : "recovery-unavailable";
+            const messages = {
+              "invalid-request": "Choose deposits from one original account.",
+              "auth-required": "Unlock with your main password or biometrics and try again.",
+              "account-unavailable": "The original deposit account is unavailable.",
+              "bankr-testnet-unsupported":
+                `Bankr doesn’t support ${PRIVACY_POOLS_DEPLOYMENT.chainName} transactions in this build.`,
+              "balance-syncing": "Your private balance is still syncing. Try again shortly.",
+              "recovery-unavailable": "This atomic public exit is no longer available.",
+              "proof-failed": "Couldn’t prepare every recovery proof. Try again.",
             } as const;
             dependencies.warnPrivacyRecoveryFailure(code);
             sendResponse({ success: false, code, error: messages[code] });

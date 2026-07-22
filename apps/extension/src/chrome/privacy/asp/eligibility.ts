@@ -1,6 +1,10 @@
 import { getCachedPrivacyKey } from "../../sessionCache";
 import { decryptPrivacyRecovery } from "../crypto";
-import { applyPrivacyShieldAspReview } from "../operations/lifecycle";
+import {
+  applyPrivacyShieldAspApproval,
+  applyPrivacyShieldAspReview,
+  applyPrivacyShieldAspUnavailable,
+} from "../operations/lifecycle";
 import { listAllPrivacyShieldOperations } from "../operations/repository";
 import type {
   PrivacyShieldOperationTrackingV1,
@@ -16,6 +20,10 @@ import {
   type PrivacyCommitmentMaterial,
 } from "../commitments/materializeShield";
 import { readPrivacyCommitments } from "../commitments/repository";
+import {
+  repairPrivacyCommitmentLineages,
+  type PrivacyCommitmentLineageRepairResult,
+} from "../commitments/lineageIntegrity";
 import type {
   PrivacyCommitmentDetailsV1,
   PrivacyCommitmentStatus,
@@ -25,14 +33,23 @@ import {
   fetchPrivacyAspLeaves,
   fetchPrivacyAspRoots,
 } from "./client";
+import {
+  logPrivacyAspStatusResponse,
+  warnPrivacyAspRefreshDeferred,
+} from "./diagnostics";
 import { readPrivacyAspOnchainRoots } from "./onchain";
-import { verifyPrivacyAspMembership } from "./membership";
+import {
+  verifyPrivacyAspMembership,
+  verifyPrivacyAspPublicMembership,
+} from "./membership";
 export {
   verifyPrivacyAspMembership,
+  verifyPrivacyAspPublicMembership,
   verifyPrivacyCommitmentAspMembership,
 } from "./membership";
 export type {
   PrivacyAspMembershipInput,
+  PrivacyAspPublicMembershipInput,
   PrivacyCommitmentAspMembershipInput,
 } from "./membership";
 import {
@@ -40,6 +57,8 @@ import {
   type PrivacyAspDeposit,
   type PrivacyAspReviewStatus,
 } from "./types";
+import { partitionPrivacyAspStatusResponse } from "./statusResponse";
+import { reconcileKnownPrivacyCommitmentsFromEvents } from "../commitments/rescan";
 
 export interface PrivacyAspEligibilityRefreshResult {
   status: "idle" | "locked" | "current" | "unavailable";
@@ -54,6 +73,9 @@ function candidateTracking(
   return tracking &&
       tracking.label !== null &&
       (tracking.state === "awaiting_asp" ||
+        tracking.state === "asp_unavailable" ||
+        tracking.state === "asp_poi_required" ||
+        tracking.state === "asp_approved" ||
         tracking.state === "private_ready" ||
         tracking.state === "asp_declined" ||
         tracking.state === "asp_removed")
@@ -65,6 +87,7 @@ function materializationStatus(
   tracking: PrivacyShieldOperationTrackingV1,
 ): PrivacyCommitmentStatus {
   if (tracking.state === "private_ready") return "private_ready";
+  if (tracking.state === "asp_unavailable") return "asp_unavailable";
   if (tracking.state === "asp_declined") return "asp_declined";
   if (tracking.state === "asp_removed") return "asp_removed";
   return "awaiting_asp";
@@ -81,6 +104,16 @@ function exitClaimedOperationIds(
         details.status === "spent" ||
         details.status === "ragequit_recovered"
       )
+      .map(({ details }) => details.sourceOperationId)
+      .filter((id): id is string => id !== null),
+  );
+}
+
+function representedOperationIds(
+  commitments: Awaited<ReturnType<typeof readPrivacyCommitments>>,
+): Set<string> {
+  return new Set(
+    commitments
       .map(({ details }) => details.sourceOperationId)
       .filter((id): id is string => id !== null),
   );
@@ -173,15 +206,35 @@ export async function materializeIndexedPrivacyShieldCommitments(): Promise<{
   ]);
   if (!material) return { status: "locked", materialized: 0 };
   const commitments = await readPrivacyCommitments(material.key, material.keyId);
-  const claimed = exitClaimedOperationIds(commitments);
+  const represented = representedOperationIds(commitments);
   const candidates = operations
     .map((operation) => ({ operation, tracking: candidateTracking(operation) }))
     .filter((item): item is {
       operation: StoredPrivacyShieldOperationV1;
       tracking: PrivacyShieldOperationTrackingV1;
-    } => item.tracking !== null && !claimed.has(item.operation.summary.id));
+    } => item.tracking !== null && !represented.has(item.operation.summary.id));
   await materializeCandidates(material, candidates);
   return { status: "current", materialized: candidates.length };
+}
+
+/** Repair duplicate local records after the privacy capability is available. */
+export async function repairPrivacyCommitmentLineagesWithActiveIdentity(): Promise<
+  PrivacyCommitmentLineageRepairResult | { status: "locked" }
+> {
+  const material = await readPrivacyAspMasterMaterial();
+  return material
+    ? repairPrivacyCommitmentLineages(material)
+    : { status: "locked" };
+}
+
+export async function reconcileKnownPrivacyCommitmentsWithActiveIdentity(): Promise<
+  Awaited<ReturnType<typeof reconcileKnownPrivacyCommitmentsFromEvents>> |
+    { status: "locked" }
+> {
+  const material = await readPrivacyAspMasterMaterial();
+  return material
+    ? reconcileKnownPrivacyCommitmentsFromEvents(material)
+    : { status: "locked" };
 }
 
 async function enterAspUnavailableRecoveryMode(
@@ -189,16 +242,23 @@ async function enterAspUnavailableRecoveryMode(
     operation: StoredPrivacyShieldOperationV1;
     tracking: PrivacyShieldOperationTrackingV1;
   }[],
-): Promise<"locked" | "unavailable"> {
+): Promise<"unavailable"> {
   const material = await readPrivacyAspMasterMaterial();
-  if (!material) return "locked";
   for (const candidate of candidates) {
-    await materializePrivacyShieldCommitment({
-      material,
-      operation: candidate.operation,
-      tracking: candidate.tracking,
-      status: "asp_unavailable",
-    });
+    await applyPrivacyShieldAspUnavailable(candidate.operation.summary.id);
+    if (
+      material &&
+      candidate.tracking.state !== "private_ready" &&
+      candidate.tracking.state !== "asp_declined" &&
+      candidate.tracking.state !== "asp_removed"
+    ) {
+      await materializePrivacyShieldCommitment({
+        material,
+        operation: candidate.operation,
+        tracking: candidate.tracking,
+        status: "asp_unavailable",
+      });
+    }
   }
   return "unavailable";
 }
@@ -230,16 +290,40 @@ export async function refreshPrivacyAspEligibility(): Promise<PrivacyAspEligibil
   let deposits: PrivacyAspDeposit[];
   try {
     deposits = await fetchPrivacyAspStatuses([...byLabel.keys()]);
-    if (deposits.length !== byLabel.size) {
-      throw new Error("ASP did not return every Shield label");
-    }
   } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "shield-operations",
+      phase: "status-fetch",
+      candidateCount: candidates.length,
+    });
     return {
       status: await enterAspUnavailableRecoveryMode(candidates),
       reviewed: 0,
       ready: 0,
     };
   }
+  let response: ReturnType<typeof partitionPrivacyAspStatusResponse>;
+  try {
+    response = partitionPrivacyAspStatusResponse([...byLabel.keys()], deposits);
+  } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "shield-operations",
+      phase: "status-processing",
+      candidateCount: candidates.length,
+    });
+    return {
+      status: await enterAspUnavailableRecoveryMode(candidates),
+      reviewed: deposits.length,
+      ready: 0,
+    };
+  }
+  logPrivacyAspStatusResponse({
+    surface: "shield-operations",
+    requestedCount: candidates.length,
+    returnedCount: deposits.length,
+    missingCount: response.missingLabels.length,
+    reviewCounts: response.reviewCounts,
+  });
   const decisions: Array<{
     operationId: string;
     status: PrivacyAspReviewStatus;
@@ -279,64 +363,31 @@ export async function refreshPrivacyAspEligibility(): Promise<PrivacyAspEligibil
         });
       }
     }
+    for (const label of response.missingLabels) {
+      const candidate = byLabel.get(label);
+      if (!candidate) throw new Error("Missing Shield candidate");
+      if (
+        candidate.tracking.state === "awaiting_asp" ||
+        candidate.tracking.state === "asp_unavailable"
+      ) {
+        decisions.push({
+          operationId: candidate.operation.summary.id,
+          status: "pending",
+          membershipVerified: false,
+        });
+      }
+    }
   } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "shield-operations",
+      phase: "status-processing",
+      candidateCount: candidates.length,
+    });
     return {
       status: await enterAspUnavailableRecoveryMode(candidates),
       reviewed: deposits.length,
       ready: 0,
     };
-  }
-
-  if (approved.length > 0) {
-    if (!material) {
-      for (const decision of decisions) {
-        await applyPrivacyShieldAspReview(
-          decision.operationId,
-          decision.status,
-          decision.membershipVerified,
-        );
-      }
-      return { status: "locked", reviewed: deposits.length, ready: 0 };
-    }
-    try {
-      const [roots, leaves, onchain] = await Promise.all([
-        fetchPrivacyAspRoots(),
-        fetchPrivacyAspLeaves(),
-        readPrivacyAspOnchainRoots(),
-      ]);
-      for (const item of approved) {
-        const built = await buildPrivacyShieldCommitment({
-          material,
-          operation: item.operation,
-          tracking: item.tracking,
-          status: "private_ready",
-        });
-        if (!built) throw new Error("Shield commitment is incomplete");
-        verifyPrivacyAspMembership({
-          ...item,
-          details: built.operationDetails,
-          roots,
-          leaves,
-          onchain,
-          masterKeys: material.masterKeys,
-        });
-        verifiedCommitments.push(built.commitment);
-        decisions.push({
-          operationId: item.operation.summary.id,
-          status: "approved",
-          membershipVerified: true,
-        });
-      }
-    } catch {
-      return {
-        status: await enterAspUnavailableRecoveryMode(candidates),
-        reviewed: deposits.length,
-        ready: 0,
-      };
-    }
-    for (const commitment of verifiedCommitments) {
-      await persistPrivacyShieldCommitment(material, commitment);
-    }
   }
 
   for (const decision of decisions) {
@@ -346,9 +397,96 @@ export async function refreshPrivacyAspEligibility(): Promise<PrivacyAspEligibil
       decision.membershipVerified,
     );
   }
+
+  if (approved.length > 0) {
+    let roots: Awaited<ReturnType<typeof fetchPrivacyAspRoots>>;
+    let leaves: Awaited<ReturnType<typeof fetchPrivacyAspLeaves>>;
+    let onchain: Awaited<ReturnType<typeof readPrivacyAspOnchainRoots>>;
+    try {
+      [roots, leaves] = await Promise.all([
+        fetchPrivacyAspRoots(),
+        fetchPrivacyAspLeaves(),
+      ]);
+      onchain = await readPrivacyAspOnchainRoots({
+        expectedStateRoot: BigInt(roots.onchainMtRoot),
+      });
+      for (const item of approved) {
+        verifyPrivacyAspPublicMembership({
+          operation: item.operation,
+          tracking: item.tracking,
+          deposit: item.deposit,
+          roots,
+          leaves,
+          onchain,
+        });
+      }
+    } catch {
+      warnPrivacyAspRefreshDeferred({
+        surface: "shield-operations",
+        phase: "membership-verification",
+        candidateCount: approved.length,
+      });
+      return {
+        status: await enterAspUnavailableRecoveryMode(
+          approved.map(({ operation, tracking }) => ({ operation, tracking })),
+        ),
+        reviewed: deposits.length,
+        ready: 0,
+      };
+    }
+
+    for (const item of approved) {
+      await applyPrivacyShieldAspApproval(item.operation.summary.id);
+    }
+
+    if (material) {
+      try {
+        for (const item of approved) {
+          const built = await buildPrivacyShieldCommitment({
+            material,
+            operation: item.operation,
+            tracking: item.tracking,
+            status: "private_ready",
+          });
+          if (!built) throw new Error("Shield commitment is incomplete");
+          verifyPrivacyAspMembership({
+            ...item,
+            details: built.operationDetails,
+            roots,
+            leaves,
+            onchain,
+            masterKeys: material.masterKeys,
+          });
+          verifiedCommitments.push(built.commitment);
+        }
+        for (const commitment of verifiedCommitments) {
+          await persistPrivacyShieldCommitment(material, commitment);
+        }
+        for (const item of approved) {
+          await applyPrivacyShieldAspReview(
+            item.operation.summary.id,
+            "approved",
+            true,
+          );
+        }
+      } catch {
+        warnPrivacyAspRefreshDeferred({
+          surface: "shield-operations",
+          phase: "private-lineage-verification",
+          candidateCount: approved.length,
+        });
+        return {
+          status: "current",
+          reviewed: deposits.length,
+          ready: 0,
+        };
+      }
+    }
+  }
+
   return {
     status: "current",
     reviewed: deposits.length,
-    ready: approved.length,
+    ready: verifiedCommitments.length,
   };
 }

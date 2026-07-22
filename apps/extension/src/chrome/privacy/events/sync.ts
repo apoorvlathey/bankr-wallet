@@ -1,6 +1,8 @@
+import { RpcResponseError } from "../../network/rpcClient";
 import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import {
+  MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST,
   readPrivacyBlockHash,
   readPrivacyPoolEvents,
   readPrivacyLatestBlock,
@@ -13,8 +15,8 @@ import {
 import { PRIVACY_EVENT_CHECKPOINT_KEY } from "./types";
 
 const CONFIRMATIONS = 12n;
-const INITIAL_CHUNK_SIZE = 50_000n;
-const MIN_CHUNK_SIZE = 1_000n;
+const INITIAL_CHUNK_SIZE = MAX_PRIVACY_EVENT_BLOCKS_PER_REQUEST;
+const MIN_CHUNK_SIZE = 100n;
 const MAX_CHUNKS_PER_RUN = 64;
 
 export interface PrivacyEventSyncResult {
@@ -27,6 +29,19 @@ export interface PrivacyEventSyncResult {
 }
 
 let activeSync: Promise<PrivacyEventSyncResult> | null = null;
+
+export function shouldShrinkPrivacyEventPage(error: unknown): boolean {
+  if (!(error instanceof RpcResponseError)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    error.code === -32_005 ||
+    error.code === -32_602
+  ) && (
+    message.includes("block") ||
+    message.includes("range") ||
+    message.includes("response size")
+  );
+}
 
 async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResult> {
   const rpcUrl = await resolvePrivacyPoolsRpcUrl();
@@ -60,7 +75,10 @@ async function syncPrivacyDepositEventsInternal(): Promise<PrivacyEventSyncResul
     try {
       events = await readPrivacyPoolEvents(rpcUrl, nextBlock, toBlock);
     } catch (error) {
-      if (chunkSize <= MIN_CHUNK_SIZE) throw error;
+      if (
+        chunkSize <= MIN_CHUNK_SIZE ||
+        !shouldShrinkPrivacyEventPage(error)
+      ) throw error;
       chunkSize = chunkSize / 2n < MIN_CHUNK_SIZE
         ? MIN_CHUNK_SIZE
         : chunkSize / 2n;

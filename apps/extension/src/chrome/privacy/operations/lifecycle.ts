@@ -21,6 +21,11 @@ import type {
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import type { PrivacyDepositEventV1 } from "../events/types";
 import type { PrivacyAspReviewStatus } from "../asp/types";
+import { schedulePrivacyAspRefresh } from "../asp/alarmSchedule";
+import {
+  notifyPrivacyShieldApproval,
+  shouldNotifyPrivacyShieldApproval,
+} from "./notification";
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const UINT = /^(?:0|[1-9]\d{0,79})$/;
@@ -233,7 +238,7 @@ export async function applyPrivacyShieldReceipt(args: {
 }): Promise<void> {
   const normalized = normalizedHash(args.txHash);
   if (!normalized || args.chainId !== PRIVACY_POOLS_DEPLOYMENT.chainId) return;
-  await updatePrivacyShieldOperationTracking(args.txId, (current, operation) => {
+  const result = await updatePrivacyShieldOperationTracking(args.txId, (current, operation) => {
     if (
       current.txHash &&
       current.txHash.toLowerCase() !== normalized.toLowerCase()
@@ -277,6 +282,12 @@ export async function applyPrivacyShieldReceipt(args: {
       errorCode: null,
     });
   });
+  if (
+    result.status === "updated" &&
+    result.operation.tracking?.state === "awaiting_asp"
+  ) {
+    schedulePrivacyAspRefresh();
+  }
 }
 
 /** Apply a globally indexed event after its encrypted precommitment matched. */
@@ -284,7 +295,7 @@ export async function applyPrivacyShieldDepositEvent(
   operationId: string,
   event: PrivacyDepositEventV1,
 ): Promise<void> {
-  await updatePrivacyShieldOperationTracking(operationId, (current, operation) => {
+  const result = await updatePrivacyShieldOperationTracking(operationId, (current, operation) => {
     if (
       event.chainId !== operation.summary.chainId ||
       event.depositor.toLowerCase() !== operation.summary.accountAddress.toLowerCase() ||
@@ -313,6 +324,12 @@ export async function applyPrivacyShieldDepositEvent(
       errorCode: null,
     });
   });
+  if (
+    result.status === "updated" &&
+    result.operation.tracking?.state === "awaiting_asp"
+  ) {
+    schedulePrivacyAspRefresh();
+  }
 }
 
 /** Apply an ASP decision only after the caller has verified its operation binding. */
@@ -324,13 +341,33 @@ export async function applyPrivacyShieldAspReview(
   await updatePrivacyShieldOperationTracking(operationId, (current) => {
     if (
       current.state !== "awaiting_asp" &&
+      current.state !== "asp_unavailable" &&
+      current.state !== "asp_poi_required" &&
+      current.state !== "asp_approved" &&
       current.state !== "private_ready" &&
       current.state !== "asp_declined" &&
       current.state !== "asp_removed"
     ) {
       return null;
     }
-    if (status === "pending" || status === "poi_required") return null;
+    if (status === "pending") {
+      if (
+        current.state === "asp_approved" ||
+        current.state === "private_ready" ||
+        current.state === "awaiting_asp"
+      ) {
+        return null;
+      }
+      return advance(current, "awaiting_asp", { errorCode: null });
+    }
+    if (status === "poi_required") {
+      if (current.state === "private_ready" || current.state === "asp_poi_required") {
+        return null;
+      }
+      return advance(current, "asp_poi_required", {
+        errorCode: "asp-poi-required",
+      });
+    }
     if (status === "approved") {
       if (!membershipVerified) {
         throw new Error("ASP membership was not verified");
@@ -346,6 +383,50 @@ export async function applyPrivacyShieldAspReview(
     }
     if (current.state === "asp_removed") return null;
     return advance(current, "asp_removed", { errorCode: "asp-removed" });
+  });
+}
+
+/** Record a fully public, onchain-root-verified Privacy Pools approval. */
+export async function applyPrivacyShieldAspApproval(
+  operationId: string,
+): Promise<void> {
+  const result = await updatePrivacyShieldOperationTracking(operationId, (current) => {
+    if (
+      current.state !== "awaiting_asp" &&
+      current.state !== "asp_unavailable" &&
+      current.state !== "asp_poi_required" &&
+      current.state !== "asp_approved" &&
+      current.state !== "private_ready"
+    ) return null;
+    if (current.state === "asp_approved" || current.state === "private_ready") {
+      return null;
+    }
+    return advance(current, "asp_approved", { errorCode: null });
+  });
+  if (shouldNotifyPrivacyShieldApproval(result)) {
+    await notifyPrivacyShieldApproval(operationId).catch((error) =>
+      console.warn("[privacy-shield] approval notification failed", error)
+    );
+  }
+}
+
+/** Keep transport/root failures distinct from an ASP compliance decision. */
+export async function applyPrivacyShieldAspUnavailable(
+  operationId: string,
+): Promise<void> {
+  await updatePrivacyShieldOperationTracking(operationId, (current) => {
+    if (
+      current.state !== "awaiting_asp" &&
+      current.state !== "asp_unavailable" &&
+      current.state !== "asp_poi_required"
+    ) return null;
+    if (
+      current.state === "asp_unavailable" &&
+      current.errorCode === "asp-unavailable"
+    ) return null;
+    return advance(current, "asp_unavailable", {
+      errorCode: "asp-unavailable",
+    });
   });
 }
 
@@ -387,6 +468,14 @@ export async function resumePrivacyShieldTracking(): Promise<void> {
       );
     }
   }
+  if (operations.some((operation) => {
+    const state = operation.tracking?.state ?? operation.summary.state;
+    return state === "awaiting_asp" ||
+      state === "asp_unavailable" ||
+      state === "asp_poi_required";
+  })) {
+    schedulePrivacyAspRefresh();
+  }
 }
 
 export function privacyTrackingErrorForState(
@@ -396,6 +485,8 @@ export function privacyTrackingErrorForState(
   if (state === "submission_failed") return "submission-failed";
   if (state === "submission_unknown") return "submission-unknown";
   if (state === "public_reverted") return "public-reverted";
+  if (state === "asp_unavailable") return "asp-unavailable";
+  if (state === "asp_poi_required") return "asp-poi-required";
   if (state === "asp_declined") return "asp-declined";
   if (state === "asp_removed") return "asp-removed";
   return null;

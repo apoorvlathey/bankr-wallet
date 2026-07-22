@@ -9,7 +9,10 @@ import {
 } from "@/lib/chains";
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
-import { isPrivacyShieldLifecycleState } from "@/lib/privacyShieldLifecycle";
+import {
+  isPrivacyShieldLifecycleState,
+  isPrivacyShieldPublicRecoveryAvailable,
+} from "@/lib/privacyShieldLifecycle";
 import {
   decodeErc7821Batch,
   looksLikeErc7821SelfBatch,
@@ -29,6 +32,7 @@ import TransactionMeta from "./TransactionMeta";
 import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
 import PrivacyShieldLifecycleSummary from "./PrivacyShieldLifecycleSummary";
+import PrivacyShieldPendingAction from "./PrivacyShieldPendingAction";
 import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
 import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
@@ -37,6 +41,7 @@ interface TxDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   tx: CompletedTransaction;
+  onUnshield?: () => void;
 }
 
 export interface TxDetailControllerProps extends TxDetailModalProps {
@@ -47,6 +52,7 @@ export function TxDetailController({
   isOpen,
   onClose,
   tx,
+  onUnshield,
   presentation = "modal",
 }: TxDetailControllerProps) {
   const { networksInfo } = useNetworks();
@@ -93,6 +99,9 @@ export function TxDetailController({
       isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
     ? tx.privacyShieldMeta
     : null;
+  const privacyShieldPublicRecoveryAvailable = privacyShieldMeta
+    ? isPrivacyShieldPublicRecoveryAvailable(privacyShieldMeta.state)
+    : false;
   // eth.sh label for the delegation target — shared cache, so this is free
   // on reopen and free if any other surface (tx-confirmation screen, etc.)
   // already fetched it.
@@ -269,8 +278,16 @@ export function TxDetailController({
         />
 
         {privacyShieldMeta && (
-          <PrivacyShieldLifecycleSummary meta={privacyShieldMeta} />
+          <PrivacyShieldLifecycleSummary
+            meta={privacyShieldMeta}
+            networkName={chainName}
+            confirmedAt={tx.completedAt}
+          />
         )}
+
+        {privacyShieldPublicRecoveryAvailable && onUnshield ? (
+          <PrivacyShieldPendingAction onUnshield={onUnshield} />
+        ) : null}
 
         <ArbitrumForceInclusionAction isOpen={isOpen} tx={tx} />
 

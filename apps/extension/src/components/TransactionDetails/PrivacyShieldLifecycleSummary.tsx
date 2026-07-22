@@ -1,12 +1,17 @@
-import { Box, HStack, SimpleGrid, Text, VStack } from "@chakra-ui/react";
+import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import { formatEther } from "viem";
 
 import type { PrivacyShieldHistoryMeta } from "@/chrome/txHistoryStorage";
+import ShieldComplianceInfoPopover, {
+  PrivacyPoolsLogo,
+} from "@/components/Shield/ShieldComplianceInfoPopover";
+import ShieldComplianceElapsedTime from "@/components/Shield/ShieldComplianceElapsedTime";
+import ShieldComplianceProgress from "@/components/Shield/ShieldComplianceProgress";
 import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
 import {
   getPrivacyShieldActivityState,
   getShieldOperationProgress,
-  SHIELD_PROGRESS_STEPS,
+  isPrivacyShieldCompliancePending,
 } from "@/lib/privacyShieldLifecycle";
 import { formatTokenDecimalAmount } from "@/lib/tokenAmountFormat";
 
@@ -21,22 +26,34 @@ function formatShieldedAmount(amountWei: string): string | null {
 /** Durable Privacy Pools progress projected alongside the ordinary transaction. */
 export default function PrivacyShieldLifecycleSummary({
   meta,
+  networkName,
+  confirmedAt,
 }: {
   meta: PrivacyShieldHistoryMeta;
+  networkName: string;
+  confirmedAt?: number;
 }) {
-  const activity = getPrivacyShieldActivityState(meta.state);
-  const progress = getShieldOperationProgress(meta.state);
+  const activity = getPrivacyShieldActivityState(meta.state, networkName);
+  const progress = getShieldOperationProgress(meta.state, networkName);
   const shieldedAmount = formatShieldedAmount(meta.shieldedAmountWei);
+  const compliancePending = isPrivacyShieldCompliancePending(meta.state);
+  const privacyPoolsStatus = compliancePending ||
+    meta.state === "asp_approved" ||
+    meta.state === "asp_unavailable" ||
+    meta.state === "asp_poi_required" ||
+    meta.state === "asp_declined" ||
+    meta.state === "asp_removed";
+  const statusDetail = meta.state === "asp_poi_required"
+      ? "Privacy Pools requires Proof of Association before private withdrawal becomes available."
+      : activity.context;
+  const statusTitle = compliancePending
+    ? "Compliance check"
+    : meta.state === "asp_approved" || meta.state === "private_ready"
+      ? "Confirmed"
+      : progress?.label ?? activity.context;
 
-  return (
-    <Box
-      bg="surface.raised"
-      borderWidth="1px"
-      borderColor="border.subtle"
-      borderRadius="lg"
-      px={3}
-      py={3}
-    >
+  const cardContent = (
+    <>
       <HStack align="flex-start" justify="space-between" spacing={3}>
         <HStack align="center" minW={0} spacing={3}>
           <Box
@@ -45,20 +62,24 @@ export default function PrivacyShieldLifecycleSummary({
             display="flex"
             alignItems="center"
             justifyContent="center"
-            bg="surface.sunken"
+            bg={privacyPoolsStatus ? "white" : "surface.sunken"}
             color="accent.highlight"
             borderRadius="md"
             borderWidth="1px"
             borderColor="border.subtle"
           >
-            <PrivacyShieldIcon boxSize="20px" />
+            {privacyPoolsStatus ? (
+              <PrivacyPoolsLogo size="28px" />
+            ) : (
+              <PrivacyShieldIcon boxSize="20px" />
+            )}
           </Box>
           <VStack minW={0} align="start" spacing={0}>
             <Text fontSize="2xs" color="fg.muted" fontWeight="600">
-              Shield status
+              {privacyPoolsStatus ? "Privacy Pools" : "Shield status"}
             </Text>
             <Text fontSize="sm" fontWeight="700" noOfLines={1}>
-              {progress?.label ?? activity.context}
+              {statusTitle}
             </Text>
           </VStack>
         </HStack>
@@ -74,45 +95,65 @@ export default function PrivacyShieldLifecycleSummary({
         ) : null}
       </HStack>
 
-      {progress ? (
+      {compliancePending ? (
         <Box mt={3}>
-          <SimpleGrid
-            columns={SHIELD_PROGRESS_STEPS}
-            spacing={1}
-            role="progressbar"
-            aria-label="Shield progress"
-            aria-valuemin={0}
-            aria-valuemax={SHIELD_PROGRESS_STEPS}
-            aria-valuenow={progress.completedSteps}
-            aria-valuetext={`${activity.statusLabel}: ${progress.description}`}
-          >
-            {Array.from({ length: SHIELD_PROGRESS_STEPS }, (_, index) => {
-              const complete = index < progress.completedSteps;
-              const current = !progress.complete && index === progress.step - 1;
-              return (
-                <Box
-                  key={index}
-                  h="4px"
-                  borderRadius="full"
-                  bg={complete
-                    ? "accent.secondary"
-                    : current
-                      ? "accent.highlight"
-                      : "surface.raisedHover"}
-                  aria-hidden
-                />
-              );
-            })}
-          </SimpleGrid>
+          <ShieldComplianceProgress
+            state={meta.state}
+            confirmedAt={confirmedAt ?? meta.updatedAt}
+          />
           <Text mt={2} color="fg.secondary" fontSize="xs">
-            {progress.description}
+            Your deposit is confirmed and being checked before it becomes
+            available to Unshield or Send.
           </Text>
+          <ShieldComplianceElapsedTime
+            confirmedAt={confirmedAt ?? meta.updatedAt}
+          />
         </Box>
+      ) : progress ? (
+        <Text mt={2.5} color="fg.secondary" fontSize="xs">
+          {progress.description}
+        </Text>
       ) : (
         <Text mt={2.5} color={`status.${activity.tone}.emphasis`} fontSize="xs">
-          {activity.context}
+          {statusDetail}
         </Text>
       )}
-    </Box>
+    </>
   );
+  const cardProps = {
+    bg: "surface.raised",
+    borderWidth: "1px",
+    borderColor: "border.subtle",
+    borderRadius: "lg",
+    px: 3,
+    py: 3,
+    w: "full",
+    color: "fg.primary",
+    textAlign: "left",
+    appearance: "none",
+  } as const;
+  const card = compliancePending ? (
+    <Box
+      {...cardProps}
+      as="button"
+      type="button"
+      cursor="help"
+      aria-label="Privacy Pools compliance check status and timing"
+      _focusVisible={{
+        outline: "2px solid",
+        outlineColor: "border.focus",
+        outlineOffset: "3px",
+      }}
+    >
+      {cardContent}
+    </Box>
+  ) : (
+    <Box {...cardProps}>{cardContent}</Box>
+  );
+
+  return compliancePending ? (
+    <ShieldComplianceInfoPopover placement="top">
+      {card}
+    </ShieldComplianceInfoPopover>
+  ) : card;
 }

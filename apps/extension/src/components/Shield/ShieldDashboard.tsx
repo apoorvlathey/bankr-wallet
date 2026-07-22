@@ -14,6 +14,7 @@ interface ShieldDashboardProps {
   sourceAccountControl?: ReactNode;
   initialization: ShieldInitializationState;
   onRetryInitialization: () => void;
+  onUnlockRequired: () => void;
   content: ReactNode;
   recoveryPanel?: ReactNode;
   actionNotice?: ReactNode;
@@ -26,6 +27,7 @@ export default function ShieldDashboard({
   sourceAccountControl,
   initialization,
   onRetryInitialization,
+  onUnlockRequired,
   content,
   recoveryPanel,
   actionNotice,
@@ -53,7 +55,34 @@ export default function ShieldDashboard({
             </Box>
           ) : null}
 
-          {initialization.status === "action-required" ? (
+          {initialization.status === "auth-required" ? (
+            <Box
+              role="status"
+              bg="surface.raised"
+              borderWidth="1px"
+              borderColor="border.subtle"
+              borderRadius="md"
+              px={3}
+              py={3}
+            >
+              <Text fontSize="sm" fontWeight="700" color="fg.primary">
+                Unlock WalletChan to continue
+              </Text>
+              <Text mt={1} fontSize="xs" color="fg.secondary">
+                Your private balance stays protected while the wallet is locked.
+              </Text>
+              <Button
+                display="flex"
+                mt={3}
+                mx="auto"
+                variant="brand"
+                size="sm"
+                onClick={onUnlockRequired}
+              >
+                Unlock wallet
+              </Button>
+            </Box>
+          ) : initialization.status === "action-required" ? (
             <Box
               role="alert"
               bg="status.warning.bg"

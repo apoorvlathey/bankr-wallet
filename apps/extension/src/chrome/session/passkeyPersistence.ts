@@ -1,4 +1,4 @@
-/** Native browser-session persistence for a passkey-unwrapped vault capability. */
+/** Released passkey V1/V2 session-envelope migration compatibility. */
 
 import { arrayBufferToBase64, decodeBase64Exact } from "../cryptoUtils";
 import { isValidAutoLockTimeout } from "./timeoutValues";

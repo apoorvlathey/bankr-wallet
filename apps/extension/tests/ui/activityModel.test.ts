@@ -10,6 +10,7 @@ import {
   isShieldActivityTransaction,
 } from "../../src/components/Activity/activityModel";
 import { buildActivityAddressLabels } from "../../src/components/Activity/activityIdentityModel";
+import { isTransactionVisibleInActivityScope } from "../../src/components/Activity/activityScopeModel";
 
 const transaction = (
   overrides: Partial<CompletedTransaction>,
@@ -238,13 +239,13 @@ test("Shield activity presents amount and durable Privacy Pools progress", () =>
   assert.deepEqual(getActivityPresentation(tx), {
     originHostname: null,
     intent: "Shield ETH",
-    context: "Waiting for eligibility",
-    value: "−0.003 ETH",
-    compactValue: "−0.003 ETH",
+    context: "Compliance check pending",
+    value: "+0.003 ETH",
+    compactValue: "+0.003 ETH",
   });
   assert.deepEqual(getActivityStatusModel(tx).privacyShield, {
-    context: "Waiting for eligibility",
-    statusLabel: "Step 4 of 4",
+    context: "Compliance check pending",
+    statusLabel: "Compliance check pending",
     tone: "warning",
     pending: true,
   });
@@ -257,8 +258,11 @@ test("Shield activity presents amount and durable Privacy Pools progress", () =>
       updatedAt: 20,
     },
   };
-  assert.equal(getActivityPresentation(ready).context, "Ready to Unshield");
-  assert.equal(getActivityStatusModel(ready).privacyShield?.statusLabel, "Ready");
+  assert.equal(getActivityPresentation(ready).context, "Ready to Unshield or Send");
+  assert.equal(
+    getActivityStatusModel(ready).privacyShield?.statusLabel,
+    "Confirmed",
+  );
 
   const withdrawn = {
     ...tx,
@@ -275,6 +279,29 @@ test("Shield activity presents amount and durable Privacy Pools progress", () =>
   );
 });
 
+test("Shield activity confirmation uses the transaction network", () => {
+  const tx = transaction({
+    id: "mainnet-shield-operation",
+    origin: "WalletChan Shield",
+    chainId: 1,
+    chainName: "Ethereum",
+    privacyShieldMeta: {
+      version: 1,
+      operationId: "mainnet-shield-operation",
+      state: "submitted",
+      updatedAt: 10,
+      amountWei: "10050251256281407",
+      shieldedAmountWei: "10000000000000000",
+    },
+  });
+
+  assert.equal(getActivityPresentation(tx).context, "Confirming on Ethereum");
+  assert.equal(
+    getActivityStatusModel(tx).privacyShield?.context,
+    "Confirming on Ethereum",
+  );
+});
+
 test("Shield recovery keeps the shared private activity identity", () => {
   const recovery = transaction({
     origin: "WalletChan Shield Recovery",
@@ -285,6 +312,23 @@ test("Shield recovery keeps the shared private activity identity", () => {
 
   assert.equal(isShieldActivityTransaction(recovery), true);
   assert.equal(isShieldActivityTransaction(transaction({ origin: "WalletChan Shield" })), true);
+  assert.equal(
+    isShieldActivityTransaction(transaction({ origin: "WalletChan Public Exit" })),
+    true,
+  );
+  assert.equal(
+    isShieldActivityTransaction(transaction({
+      origin: "https://app.example.com",
+      privacyRagequitMeta: { version: 1 },
+    })),
+    true,
+  );
+  assert.equal(
+    isShieldActivityTransaction(transaction({
+      origin: "https://walletchan-public-exit.example.com",
+    })),
+    false,
+  );
   assert.equal(isShieldActivityTransaction(transaction({})), false);
   assert.deepEqual(getActivityPresentation(recovery), {
     originHostname: null,
@@ -293,4 +337,62 @@ test("Shield recovery keeps the shared private activity identity", () => {
     value: null,
     compactValue: null,
   });
+
+  assert.equal(
+    getActivityPresentation(transaction({
+      origin: "WalletChan Public Exit",
+      privacyRagequitMeta: { version: 1 },
+    })).intent,
+    "Public Exit",
+  );
+});
+
+test("signer-owned privacy transactions remain visible in Public Activity", () => {
+  const shield = transaction({
+    origin: "WalletChan Shield",
+    privacyShieldMeta: {
+      version: 1,
+      operationId: "shield-operation",
+      state: "submitted",
+      updatedAt: 1,
+      amountWei: "10000000000000000",
+      shieldedAmountWei: "9900000000000000",
+    },
+  });
+  const singleRagequit = transaction({
+    origin: "WalletChan Shield Recovery",
+    privacyRagequitMeta: { version: 1 },
+  });
+  const batchRagequit = transaction({
+    origin: "WalletChan Public Exit",
+    privacyRagequitMeta: { version: 1 },
+  });
+  const receiverPaidUnshield = transaction({
+    origin: "WalletChan Receiver-paid Unshield",
+    privacyUnshieldMeta: { version: 1 },
+  });
+  const ordinary = transaction({});
+
+  for (const tx of [
+    shield,
+    singleRagequit,
+    batchRagequit,
+    receiverPaidUnshield,
+    ordinary,
+  ]) {
+    assert.equal(isTransactionVisibleInActivityScope(tx, "public"), true);
+  }
+
+  assert.equal(isTransactionVisibleInActivityScope(shield, "private"), true);
+  assert.equal(isTransactionVisibleInActivityScope(singleRagequit, "private"), true);
+  assert.equal(isTransactionVisibleInActivityScope(batchRagequit, "private"), true);
+  assert.equal(
+    isTransactionVisibleInActivityScope(receiverPaidUnshield, "private"),
+    false,
+  );
+  assert.equal(isTransactionVisibleInActivityScope(ordinary, "private"), false);
+  assert.equal(
+    getActivityPresentation(receiverPaidUnshield).intent,
+    "Unshield ETH",
+  );
 });

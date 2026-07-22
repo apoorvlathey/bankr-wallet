@@ -19,6 +19,15 @@ export const PaletteIcon = (props: any) => (
   </Icon>
 );
 
+export const AccountsIcon = (props: any) => (
+  <Icon {...lucideProps} {...props}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </Icon>
+);
+
 export const LockIcon = (props: any) => (
   <Icon {...lucideProps} {...props}>
     <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />

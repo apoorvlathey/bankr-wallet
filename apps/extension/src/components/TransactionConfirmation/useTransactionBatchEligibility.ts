@@ -18,13 +18,13 @@ export function useTransactionBatchEligibility(
     chainId: tx.chainId,
   });
   const canBatchAccount = useMemo(() => {
-    if (isContractDeployment || txRequest.privacyShieldMeta || txRequest.privacyRagequitMeta) return false;
+    if (isContractDeployment || txRequest.privacyShieldMeta || txRequest.privacyRagequitMeta || txRequest.privacyUnshieldMeta) return false;
     if (accountType === "bankr") return true;
     if (accountType === "privateKey" || accountType === "seedPhrase") {
       return batchPlan.strategy === "atomic-7702";
     }
     return false;
-  }, [accountType, batchPlan.strategy, isContractDeployment, txRequest.privacyShieldMeta, txRequest.privacyRagequitMeta]);
+  }, [accountType, batchPlan.strategy, isContractDeployment, txRequest.privacyShieldMeta, txRequest.privacyRagequitMeta, txRequest.privacyUnshieldMeta]);
 
   const addToBatchDisabledReason = useMemo<string | null>(() => {
     if (isValueMalformed) return "Transaction value is malformed.";

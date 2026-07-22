@@ -217,7 +217,13 @@ test("dedicated mnemonic key remains compatible and isolated", async (t) => {
           }),
           mnemonic,
         );
-        assert.equal(localSetCalls.length, 0);
+        assert.equal(
+          localSetCalls.filter((write) =>
+            "mnemonicVault" in write || "passkeyUnlock" in write
+          ).length,
+          0,
+          "session capability persistence must not mutate mnemonic/passkey records",
+        );
       },
     );
 

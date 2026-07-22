@@ -1,4 +1,5 @@
 import { CHAIN_CONFIG } from "../../constants/chainConfig";
+import { BankrApiError } from "../bankr/response";
 import { authorizePendingBankrSubmit } from "../bankr/pendingAuthorization";
 import { submitTransactionDirect } from "../bankr/submission";
 import { attachClearSignedMetaToHistory } from "../clearSignedMetaSnapshot";
@@ -34,6 +35,11 @@ import {
   recordPrivacyRagequitSubmitted,
 } from "../privacy/ragequit/lifecycle";
 import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
+import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+} from "../privacy/withdrawals/lifecycle";
+import type { PrivacyDirectUnshieldAuthorization } from "../privacy/withdrawals/directConfirmation";
 /** Own the fire-and-forget Bankr submission and terminal publication flow. */
 export async function processBankrTransactionInBackground(
   txId: string,
@@ -43,10 +49,12 @@ export async function processBankrTransactionInBackground(
   effectLease?: PendingRequestEffectLease,
   privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
   privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
+  privacyDirectUnshieldAuthorization?: PrivacyDirectUnshieldAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
+  let publishedTxHash: string | null = null;
 
   try {
     await addTxToHistory({
@@ -60,6 +68,9 @@ export async function processBankrTransactionInBackground(
       createdAt: pending.timestamp,
       accountType: "bankr",
       functionName,
+      accountId: pending.accountId,
+      privacyRagequitMeta: pending.privacyRagequitMeta ? { version: 1 } : undefined,
+      privacyUnshieldMeta: pending.privacyUnshieldMeta ? { version: 1 } : undefined,
     });
 
     if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
@@ -98,15 +109,21 @@ export async function processBankrTransactionInBackground(
               pending,
               privacyRagequitAuthorization ?? null,
             );
+            await beginPrivacyDirectUnshieldSubmission(
+              pending,
+              privacyDirectUnshieldAuthorization ?? null,
+            );
           },
         ),
     );
     effectGuard.settleEffect();
     const txHash = result.transactionHash;
     if (txHash) {
+      publishedTxHash = txHash;
       await recordPrivacyShieldSubmitted(pending, txHash);
       await recordPrivacyRagequitSubmitted(pending, txHash);
-      if (pending.privacyShieldMeta || pending.privacyRagequitMeta) {
+      await recordPrivacyDirectUnshieldSubmitted(pending, txHash);
+      if (pending.privacyShieldMeta || pending.privacyRagequitMeta || pending.privacyUnshieldMeta) {
         startReceiptPolling(txId, txHash, pending.tx.chainId);
       }
     }
@@ -162,7 +179,10 @@ export async function processBankrTransactionInBackground(
           ? "Transaction submission was interrupted. Its outcome is unknown; check activity before retrying."
           : error.message;
     }
-    await handleTransactionFailure(txId, pending, errorMessage);
+    await handleTransactionFailure(txId, pending, errorMessage, {
+      privacySubmissionOutcomeUncertain: publishedTxHash !== null ||
+        (error instanceof BankrApiError && error.outcomeUncertain),
+    });
   } finally {
     effectGuard.releaseIfSafe();
     activeAbortControllers.delete(txId);

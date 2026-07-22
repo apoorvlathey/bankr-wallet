@@ -1,94 +1,86 @@
-import { ExternalLinkIcon } from "@chakra-ui/icons";
+import { InfoOutlineIcon } from "@chakra-ui/icons";
 import { Box, Button, HStack, Text } from "@chakra-ui/react";
 
-import { truncateAddress } from "@/lib/addressUtils";
-import { getPublicWithdrawalCopy } from "./model/recovery";
-import { formatShieldWei } from "./model/shieldQuote";
+import type { Account } from "@/chrome/types";
+import PublicRecoveryAccountIdentity from "./PublicRecoveryAccountIdentity";
 
 interface PublicRecoveryPanelProps {
   amountWei: bigint;
   depositAccountAddress: string;
-  activeAccountMatches: boolean;
-  waitingForAsp: boolean;
-  isPrimaryRoute: boolean;
-  status: "idle" | "preparing" | "queued" | "error";
+  depositAccount: Account | null;
+  displayName: string | null;
+  ensAvatar: string | null;
+  secondaryIdentity: string | null;
+  canReview: boolean;
+  status: "idle" | "previewing" | "ready" | "preparing" | "queued" | "error";
   error: string | null;
-  onRecover: () => void;
-  onUseDepositAccount: () => void;
+  onReview: () => void;
 }
 
 export default function PublicRecoveryPanel({
   amountWei,
   depositAccountAddress,
-  activeAccountMatches,
-  waitingForAsp,
-  isPrimaryRoute,
+  depositAccount,
+  displayName,
+  ensAvatar,
+  secondaryIdentity,
+  canReview,
   status,
   error,
-  onRecover,
-  onUseDepositAccount,
+  onReview,
 }: PublicRecoveryPanelProps) {
   if (amountWei <= 0n) return null;
-  const copy = getPublicWithdrawalCopy(waitingForAsp);
+
   return (
     <Box
-      borderTopWidth="1px"
-      borderColor="border.subtle"
-      px={1}
-      pt={3}
+      bg="surface.sunken"
+      borderWidth="1px"
+      borderColor="border.default"
+      borderRadius="md"
+      px={3}
+      py={2.5}
     >
-      <HStack align="center" spacing={2.5}>
-        <Box
-          boxSize="32px"
-          flexShrink={0}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          bg="surface.sunken"
-          color="accent.highlight"
-          borderRadius="sm"
-          borderWidth="1px"
-          borderColor="border.subtle"
-        >
-          <ExternalLinkIcon boxSize="15px" aria-hidden />
-        </Box>
-        <Box minW={0} flex="1">
-          <Text fontSize="xs" fontWeight="700">
-            {isPrimaryRoute ? "Public exit" : copy.title}
-          </Text>
-          <Text color="fg.secondary" fontSize="2xs" noOfLines={1}>
-            {isPrimaryRoute
-              ? "Available before eligibility"
-              : `${formatShieldWei(amountWei)} ETH to ${truncateAddress(depositAccountAddress)}`}
-          </Text>
-        </Box>
-        {!isPrimaryRoute && (
-          <Button
-            size="sm"
-            variant="secondary"
-            flexShrink={0}
-            isLoading={activeAccountMatches && status === "preparing"}
-            loadingText="Preparing"
-            isDisabled={status === "queued"}
-            onClick={activeAccountMatches ? onRecover : onUseDepositAccount}
-          >
-            {activeAccountMatches ? "Withdraw publicly" : "Use deposit account"}
-          </Button>
-        )}
-      </HStack>
-      <Text mt={1.5} color="accent.highlight" fontSize="2xs" fontWeight="600">
-        Links this withdrawal directly to the deposit
+      <Text fontSize="xs" fontWeight="700" color="fg.primary">
+        Public exit available
       </Text>
-      {(error || status === "queued") && (
-        <Text
-          mt={1}
-          color={status === "error" ? "status.error.emphasis" : "fg.secondary"}
-          fontSize="xs"
-          role={status === "error" ? "alert" : "status"}
+
+      <HStack mt={2.5} spacing={2.5} justify="space-between">
+        <Box minW={0} flex="1">
+          <PublicRecoveryAccountIdentity
+            account={depositAccount}
+            address={depositAccountAddress}
+            displayName={displayName}
+            ensAvatar={ensAvatar}
+            secondaryIdentity={secondaryIdentity}
+          />
+        </Box>
+        <Button
+          size="sm"
+          variant="secondary"
+          h="36px"
+          px={3}
+          flexShrink={0}
+          isLoading={status === "previewing"}
+          loadingText="Checking"
+          isDisabled={!canReview || status === "queued" || status === "preparing"}
+          onClick={onReview}
         >
-          {error ?? "Open the wallet confirmation to continue."}
+          Review exit
+        </Button>
+      </HStack>
+
+      <HStack mt={2.5} spacing={1.5} color="status.warning.emphasis">
+        <InfoOutlineIcon boxSize="12px" flexShrink={0} aria-hidden />
+        <Text fontSize="2xs" fontWeight="600" lineHeight="short">
+          Public transaction · directly linked to this deposit
         </Text>
-      )}
+      </HStack>
+
+      {error && status === "error" ? (
+        <Text mt={2} color="status.error.emphasis" fontSize="xs" role="alert">
+          {error}
+        </Text>
+      ) : null}
     </Box>
   );
 }

@@ -8,6 +8,7 @@ import {
 import {
   getPublicWithdrawalCopy,
   getPublicWithdrawalOffer,
+  parsePublicRecoveryPreviewsResponse,
 } from "../../src/components/Shield/model/recovery";
 
 const account = {
@@ -176,6 +177,7 @@ test("an indexed pending operation keeps public withdrawal visible before materi
     accountAddress: account.address,
     accountType: "privateKey",
     activeAccountMatches: true,
+    sourceOperationId: pending.id,
   });
   assert.deepEqual(getPublicWithdrawalOffer({
     account: { ...account, id: "pk-2" },
@@ -187,6 +189,7 @@ test("an indexed pending operation keeps public withdrawal visible before materi
     accountAddress: account.address,
     accountType: "privateKey",
     activeAccountMatches: false,
+    sourceOperationId: pending.id,
   });
   assert.deepEqual(getPublicWithdrawalOffer({
     account: { ...account, type: "bankr" },
@@ -198,7 +201,90 @@ test("an indexed pending operation keeps public withdrawal visible before materi
     accountAddress: account.address,
     accountType: "privateKey",
     activeAccountMatches: false,
+    sourceOperationId: pending.id,
   });
+});
+
+test("a ready commitment offers public withdrawal only after a relay fee-cap failure", () => {
+  const ready = {
+    ...operation(),
+    state: "private_ready",
+    shieldedAmountWei: 5_000_000_000_000_000n,
+  };
+  assert.equal(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 0n,
+    operations: [ready],
+  }), null);
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 0n,
+    operations: [ready],
+    allowPrivateReady: true,
+  }), {
+    amountWei: ready.shieldedAmountWei,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: true,
+    sourceOperationId: ready.id,
+  });
+});
+
+test("ASP retry and Proof of Association states keep the exact deposit recoverable", () => {
+  for (const state of ["asp_unavailable", "asp_poi_required"] as const) {
+    const recoverable = {
+      ...operation(),
+      state,
+      shieldedAmountWei: 99_000_000_000_000_000n,
+    };
+    assert.deepEqual(getPublicWithdrawalOffer({
+      account,
+      recoverableBalanceWei: 0n,
+      operations: [recoverable],
+    }), {
+      amountWei: recoverable.shieldedAmountWei,
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: "privateKey",
+      activeAccountMatches: true,
+      sourceOperationId: recoverable.id,
+    });
+  }
+});
+
+test("transaction-detail recovery selects only the clicked Shield operation", () => {
+  const first = {
+    ...operation(),
+    state: "awaiting_asp",
+    shieldedAmountWei: 3n,
+    createdAt: 10,
+  };
+  const second = {
+    ...first,
+    id: "00000000-0000-4000-8000-000000000002",
+    shieldedAmountWei: 2n,
+    createdAt: 20,
+  };
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 5n,
+    operations: [first, second],
+    preferredOperationId: second.id,
+  }), {
+    amountWei: 2n,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: true,
+    sourceOperationId: second.id,
+  });
+  assert.equal(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 5n,
+    operations: [first],
+    preferredOperationId: second.id,
+  }), null);
 });
 
 test("public withdrawal amounts stay scoped to one depositing account", () => {
@@ -228,6 +314,7 @@ test("public withdrawal amounts stay scoped to one depositing account", () => {
     accountAddress: first.accountAddress,
     accountType: "privateKey",
     activeAccountMatches: false,
+    sourceOperationId: first.id,
   });
   assert.deepEqual(getPublicWithdrawalOffer({
     account: {
@@ -243,5 +330,90 @@ test("public withdrawal amounts stay scoped to one depositing account", () => {
     accountAddress: second.accountAddress,
     accountType: "seedPhrase",
     activeAccountMatches: true,
+    sourceOperationId: second.id,
   });
+});
+
+test("public exit offers one whole deposit instead of aggregating an account", () => {
+  const first = {
+    ...operation(),
+    state: "awaiting_asp",
+    shieldedAmountWei: 3n,
+    createdAt: 10,
+  };
+  const second = {
+    ...first,
+    id: "00000000-0000-4000-8000-000000000002",
+    shieldedAmountWei: 2n,
+    createdAt: 20,
+  };
+
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account,
+    recoverableBalanceWei: 5n,
+    operations: [first, second],
+  }), {
+    amountWei: 3n,
+    accountId: account.id,
+    accountAddress: account.address,
+    accountType: "privateKey",
+    activeAccountMatches: true,
+    sourceOperationId: first.id,
+  });
+});
+
+test("public recovery preview accepts every bounded whole-commitment projection", () => {
+  const response = {
+    success: true,
+    previews: [{
+      commitmentId: "00000000-0000-4000-8000-000000000011",
+      createdAt: 20,
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: account.type,
+      amountWei: "5000000000000000",
+      originalAmountWei: "6000000000000000",
+      withdrawnAmountWei: "1000000000000000",
+      withdrawalCount: 1,
+      sourceOperationId: "00000000-0000-4000-8000-000000000001",
+    }, {
+      commitmentId: "00000000-0000-4000-8000-000000000012",
+      createdAt: 10,
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: account.type,
+      amountWei: "2000000000000000",
+      originalAmountWei: "2000000000000000",
+      withdrawnAmountWei: "0",
+      withdrawalCount: 0,
+      sourceOperationId: "00000000-0000-4000-8000-000000000002",
+    }],
+  };
+
+  assert.deepEqual(parsePublicRecoveryPreviewsResponse(response), [
+    {
+      ...response.previews[0],
+      amountWei: 5_000_000_000_000_000n,
+      originalAmountWei: 6_000_000_000_000_000n,
+      withdrawnAmountWei: 1_000_000_000_000_000n,
+    },
+    {
+      ...response.previews[1],
+      amountWei: 2_000_000_000_000_000n,
+      originalAmountWei: 2_000_000_000_000_000n,
+      withdrawnAmountWei: 0n,
+    },
+  ]);
+  assert.equal(parsePublicRecoveryPreviewsResponse({
+    ...response,
+    previews: [{ ...response.previews[0], commitment: "secret" }],
+  }), null);
+  assert.equal(parsePublicRecoveryPreviewsResponse({
+    ...response,
+    previews: [{ ...response.previews[0], amountWei: "0" }],
+  }), null);
+  assert.equal(parsePublicRecoveryPreviewsResponse({
+    ...response,
+    previews: [response.previews[0], response.previews[0]],
+  }), null);
 });

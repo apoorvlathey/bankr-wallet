@@ -91,8 +91,6 @@ test("every documented core scenario is accepted as reload-stable URL state", ()
       "unshield",
       "unshield-empty",
       "unshield-pending",
-      "send",
-      "send-empty",
     ],
     "swap-picker": ["sell", "buy", "chains", "search", "loading", "empty", "missing-logo", "stress"],
     batch: ["default", "loading", "simulation-error", "malformed-disabled", "unsafe-self-call", "stress", "impersonator-disabled"],

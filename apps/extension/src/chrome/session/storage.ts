@@ -21,6 +21,7 @@ const LEGACY_LOCAL_SESSION_KEYS = [
   "sessionId",
   "sessionStartedAt",
   "autoLockNever",
+  "encryptedSessionCapabilities",
   "encryptedSessionPassword",
   "encryptedSessionVaultKey",
   "sessionCredentialKind",
@@ -41,8 +42,8 @@ function prefix(key: string): string {
  * cleanup, an upgraded profile could retain both the old password ciphertext
  * and its local AES-key half indefinitely.
  *
- * A current native Never session also uses `sessionKeyLocal`. Preserve that
- * key when a native password ciphertext exists; the stale prefixed ciphertext
+ * A current native unified session also uses `sessionKeyLocal`. Preserve that
+ * key when a native secret ciphertext exists; the stale prefixed ciphertext
  * is still removed. On a fallback-only profile, or when native session state
  * is absent, the key belonged to the legacy local envelope and is removed.
  */
@@ -58,6 +59,7 @@ export async function cleanupLegacyLocalSessionFallback(
   if (legacyKeys.length === 0) return;
 
   const hasLegacySecretCiphertext =
+    legacyLocal[prefix("encryptedSessionCapabilities")] !== undefined ||
     legacyLocal[prefix("encryptedSessionPassword")] !== undefined ||
     legacyLocal[prefix("encryptedSessionVaultKey")] !== undefined;
   // Current non-native builds still use prefixed local storage for explicitly
@@ -68,9 +70,14 @@ export async function cleanupLegacyLocalSessionFallback(
   let hasCurrentNativeSecretCiphertext = false;
   if (NATIVE) {
     const current = await getSessionItems<unknown>(
-      ["encryptedSessionPassword", "encryptedSessionVaultKey"],
+      [
+        "encryptedSessionCapabilities",
+        "encryptedSessionPassword",
+        "encryptedSessionVaultKey",
+      ],
     );
     hasCurrentNativeSecretCiphertext =
+      current.encryptedSessionCapabilities !== undefined ||
       current.encryptedSessionPassword !== undefined ||
       current.encryptedSessionVaultKey !== undefined;
   }

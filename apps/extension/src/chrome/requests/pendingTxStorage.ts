@@ -57,6 +57,11 @@ export interface PendingTxRequest {
     version: 1;
     operationId: string;
   };
+  /** Background-authored receiver-paid Privacy Pools withdrawal binding. */
+  privacyUnshieldMeta?: {
+    version: 1;
+    operationId: string;
+  };
   walletConnect?: {
     topic: string;
     requestId: number;

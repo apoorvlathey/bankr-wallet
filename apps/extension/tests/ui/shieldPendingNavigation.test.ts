@@ -78,4 +78,8 @@ test("the app reopens a pending Shield confirmation before mounting the amount s
     source,
     /newPendingTxRequest[\s\S]*?setPendingRequests\(\(current\)\s*=>\s*current\.some/,
   );
+  assert.match(
+    source,
+    /unshieldTarget=\{privacyAction\.unshieldTarget\}/,
+  );
 });

@@ -37,8 +37,13 @@ import { readPrivacyVault } from "../repository";
 import { verifyPrivacyVaultWithKey } from "../vault";
 import {
   markPrivacyCommitmentLineageSuperseded,
+  readPrivacyCommitments,
   upsertPrivacyCommitment,
 } from "./repository";
+import {
+  canonicalPrivacyCommitments,
+  privacyCommitmentLineageKey,
+} from "./lineageIntegrity";
 import type { PrivacyCommitmentDetailsV1 } from "./types";
 
 export const MAX_PRIVACY_RESCAN_DERIVATION_INDEX = 4_095;
@@ -51,6 +56,12 @@ export interface PrivacyCommitmentRescanResult {
   created: number;
   scannedIndices: number;
   nextDepositIndex: number;
+}
+
+export interface PrivacyKnownCommitmentReconciliationResult {
+  status: "current";
+  recovered: number;
+  created: number;
 }
 
 function nextTurn(): Promise<void> {
@@ -212,6 +223,71 @@ export async function recoverPrivacyCommitmentsFromEvents(input: {
     scannedIndices,
     nextDepositIndex: Math.max(0, highestMatch + 1),
   };
+}
+
+/**
+ * Reconcile already-authenticated lineages from a fully current public event
+ * cache without requiring the recovery-screen authorization ceremony.
+ */
+export async function reconcileKnownPrivacyCommitmentsFromEvents(input: {
+  key: CryptoKey;
+  keyId: string;
+  masterKeys: PrivacyPoolMasterKeys;
+}): Promise<PrivacyKnownCommitmentReconciliationResult> {
+  const [events, withdrawals, ragequits] = await Promise.all([
+    listPrivacyDepositEvents(),
+    listPrivacyWithdrawalEvents(),
+    listPrivacyRagequitEvents(),
+  ]);
+  const recovered = await recoverPrivacyCommitmentsFromEvents({
+    masterKeys: input.masterKeys,
+    events,
+    withdrawals,
+    ragequits,
+  });
+  return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
+    const existing = await readPrivacyCommitments(input.key, input.keyId);
+    const canonicalExisting = canonicalPrivacyCommitments(existing);
+    let created = 0;
+    for (const candidate of recovered.commitments) {
+      const lineageKey = privacyCommitmentLineageKey(candidate);
+      const prior = canonicalExisting.find((item) =>
+        privacyCommitmentLineageKey(item.details) === lineageKey
+      );
+      if (
+        prior &&
+        BigInt(prior.details.withdrawalIndex) > BigInt(candidate.withdrawalIndex)
+      ) continue;
+      if (
+        prior &&
+        prior.details.withdrawalIndex === candidate.withdrawalIndex &&
+        prior.details.commitment !== candidate.commitment
+      ) throw new Error("Public commitment history conflicts with local lineage");
+      const sourceOperationId = prior?.details.sourceOperationId ?? existing
+        .find((item) =>
+          privacyCommitmentLineageKey(item.details) === lineageKey &&
+          item.details.sourceOperationId !== null
+        )?.details.sourceOperationId ?? null;
+      const commitment = sourceOperationId
+        ? { ...candidate, sourceOperationId }
+        : candidate;
+      const result = await upsertPrivacyCommitment(
+        input.key,
+        input.keyId,
+        commitment,
+      );
+      if (result === "created") created += 1;
+      const stored = (await readPrivacyCommitments(input.key, input.keyId))
+        .find((item) => item.details.commitment === commitment.commitment);
+      if (!stored) throw new Error("Reconciled privacy commitment is unavailable");
+      await markPrivacyCommitmentLineageSuperseded(
+        input.key,
+        input.keyId,
+        stored.details,
+      );
+    }
+    return { status: "current", recovered: recovered.commitments.length, created };
+  });
 }
 
 async function requireMasterEpoch(): Promise<string> {

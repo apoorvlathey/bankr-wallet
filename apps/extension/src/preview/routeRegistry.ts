@@ -183,8 +183,6 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
       "unshield",
       "unshield-empty",
       "unshield-pending",
-      "send",
-      "send-empty",
     ],
     wallets: SIGNING_WALLETS,
     fidelity: "production",

@@ -11,6 +11,7 @@ import {
 } from "@chakra-ui/react";
 import type { RefObject } from "react";
 
+import { SHIELDED_ETH_NETWORK_NAME } from "@/components/Shield/model/shieldedAsset";
 import { ScreenSection } from "@/components/ui";
 
 interface Props {
@@ -32,7 +33,7 @@ export function RecoveryImportScreen(props: Props) {
       title="Restore Shield phrase"
       description={props.replacing
         ? "Enter the saved phrase that should replace the current Shield identity. The current phrase remains active until this succeeds."
-        : "Enter a saved 12-word Shield phrase. WalletChan will encrypt it locally and scan Sepolia."}
+        : `Enter a saved 12-word Shield phrase. WalletChan will encrypt it locally and scan ${SHIELDED_ETH_NETWORK_NAME}.`}
     >
       <VStack spacing={4} align="stretch">
         <FormControl isInvalid={!!props.error}>

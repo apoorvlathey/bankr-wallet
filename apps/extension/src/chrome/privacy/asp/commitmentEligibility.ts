@@ -2,6 +2,10 @@ import {
   readPrivacyCommitments,
   updatePrivacyCommitmentStatus,
 } from "../commitments/repository";
+import {
+  canonicalPrivacyCommitments,
+  repairPrivacyCommitmentLineages,
+} from "../commitments/lineageIntegrity";
 import type {
   PrivacyCommitmentDetailsV1,
   PrivacyCommitmentStatus,
@@ -13,7 +17,12 @@ import {
   verifyPrivacyCommitmentAspMembership,
 } from "./eligibility";
 import { fetchPrivacyAspLeaves, fetchPrivacyAspRoots } from "./client";
+import {
+  logPrivacyAspStatusResponse,
+  warnPrivacyAspRefreshDeferred,
+} from "./diagnostics";
 import { readPrivacyAspOnchainRoots } from "./onchain";
+import { partitionPrivacyAspStatusResponse } from "./statusResponse";
 import type { PrivacyAspDeposit, PrivacyAspReviewStatus } from "./types";
 
 export interface PrivacyCommitmentEligibilityResult {
@@ -39,7 +48,10 @@ export function nextPrivacyCommitmentAspStatus(
 export async function refreshPrivacyCommitmentEligibility(): Promise<PrivacyCommitmentEligibilityResult> {
   const material = await readPrivacyAspMasterMaterial();
   if (!material) return { status: "locked", reviewed: 0, ready: 0 };
-  const stored = await readPrivacyCommitments(material.key, material.keyId);
+  await repairPrivacyCommitmentLineages(material);
+  const stored = canonicalPrivacyCommitments(
+    await readPrivacyCommitments(material.key, material.keyId),
+  );
   const candidates = stored.filter((item) =>
     item.details.status !== "spent" &&
     item.details.status !== "ragequit_recovered" &&
@@ -59,26 +71,69 @@ export async function refreshPrivacyCommitmentEligibility(): Promise<PrivacyComm
   let deposits: PrivacyAspDeposit[];
   try {
     deposits = await fetchPrivacyAspStatuses([...byLabel.keys()]);
-    if (deposits.length !== byLabel.size) {
-      throw new Error("ASP did not return every private label");
-    }
   } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "private-commitments",
+      phase: "status-fetch",
+      candidateCount: candidates.length,
+    });
     for (const candidate of candidates) {
+      if (candidate.details.status === "private_ready") continue;
       await updatePrivacyCommitmentStatus(
         material.key,
         material.keyId,
         candidate.record.id,
         "asp_unavailable",
+        {
+          revision: candidate.record.revision,
+          status: candidate.details.status,
+        },
       );
     }
     return { status: "unavailable", reviewed: 0, ready: 0 };
   }
+  let response: ReturnType<typeof partitionPrivacyAspStatusResponse>;
+  try {
+    response = partitionPrivacyAspStatusResponse([...byLabel.keys()], deposits);
+  } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "private-commitments",
+      phase: "status-processing",
+      candidateCount: candidates.length,
+    });
+    for (const candidate of candidates) {
+      if (candidate.details.status === "private_ready") continue;
+      await updatePrivacyCommitmentStatus(
+        material.key,
+        material.keyId,
+        candidate.record.id,
+        "asp_unavailable",
+        {
+          revision: candidate.record.revision,
+          status: candidate.details.status,
+        },
+      );
+    }
+    return { status: "unavailable", reviewed: deposits.length, ready: 0 };
+  }
+  logPrivacyAspStatusResponse({
+    surface: "private-commitments",
+    requestedCount: candidates.length,
+    returnedCount: deposits.length,
+    missingCount: response.missingLabels.length,
+    reviewCounts: response.reviewCounts,
+  });
   const approved: Array<{
     record: StoredPrivacyCommitmentV1;
     details: PrivacyCommitmentDetailsV1;
     deposit: PrivacyAspDeposit;
   }> = [];
-  const decisions: Array<{ id: string; status: PrivacyCommitmentStatus }> = [];
+  const decisions: Array<{
+    id: string;
+    status: PrivacyCommitmentStatus;
+    expectedRevision: number;
+    expectedStatus: PrivacyCommitmentStatus;
+  }> = [];
   try {
     for (const deposit of deposits) {
       const candidate = byLabel.get(BigInt(deposit.label).toString());
@@ -92,15 +147,34 @@ export async function refreshPrivacyCommitmentEligibility(): Promise<PrivacyComm
             candidate.details.status,
             deposit.reviewStatus,
           ),
+          expectedRevision: candidate.record.revision,
+          expectedStatus: candidate.details.status,
+        });
+      }
+    }
+    for (const label of response.missingLabels) {
+      const candidate = byLabel.get(label);
+      if (!candidate) throw new Error("Missing private commitment candidate");
+      if (
+        candidate.details.status === "awaiting_asp" ||
+        candidate.details.status === "asp_unavailable"
+      ) {
+        decisions.push({
+          id: candidate.record.id,
+          status: "awaiting_asp",
+          expectedRevision: candidate.record.revision,
+          expectedStatus: candidate.details.status,
         });
       }
     }
     if (approved.length > 0) {
-      const [roots, leaves, onchain] = await Promise.all([
+      const [roots, leaves] = await Promise.all([
         fetchPrivacyAspRoots(),
         fetchPrivacyAspLeaves(),
-        readPrivacyAspOnchainRoots(),
       ]);
+      const onchain = await readPrivacyAspOnchainRoots({
+        expectedStateRoot: BigInt(roots.onchainMtRoot),
+      });
       for (const candidate of approved) {
         verifyPrivacyCommitmentAspMembership({
           details: candidate.details,
@@ -110,16 +184,33 @@ export async function refreshPrivacyCommitmentEligibility(): Promise<PrivacyComm
           onchain,
           masterKeys: material.masterKeys,
         });
-        decisions.push({ id: candidate.record.id, status: "private_ready" });
+        decisions.push({
+          id: candidate.record.id,
+          status: "private_ready",
+          expectedRevision: candidate.record.revision,
+          expectedStatus: candidate.details.status,
+        });
       }
     }
   } catch {
+    warnPrivacyAspRefreshDeferred({
+      surface: "private-commitments",
+      phase: approved.length > 0
+        ? "membership-verification"
+        : "status-processing",
+      candidateCount: candidates.length,
+    });
     for (const candidate of candidates) {
+      if (candidate.details.status === "private_ready") continue;
       await updatePrivacyCommitmentStatus(
         material.key,
         material.keyId,
         candidate.record.id,
         "asp_unavailable",
+        {
+          revision: candidate.record.revision,
+          status: candidate.details.status,
+        },
       );
     }
     return { status: "unavailable", reviewed: deposits.length, ready: 0 };
@@ -130,6 +221,10 @@ export async function refreshPrivacyCommitmentEligibility(): Promise<PrivacyComm
       material.keyId,
       decision.id,
       decision.status,
+      {
+        revision: decision.expectedRevision,
+        status: decision.expectedStatus,
+      },
     );
   }
   return {

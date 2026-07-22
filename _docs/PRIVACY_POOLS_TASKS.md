@@ -11,12 +11,12 @@ checkpoint ends in a build the team can inspect manually before the next one
 starts. A checked implementation item means the code and automated checks are
 complete; the matching manual gate remains the product owner's approval point.
 
-## Manual progress snapshot (2026-07-20)
+## Manual progress snapshot (2026-07-21)
 
 | Area | Current evidence | Remaining manual gate |
 | --- | --- | --- |
-| Public/private home | Dual-mode home, private-only balance/chart/assets/activity, explicit Shield signer, and account-independent private send are implemented | Recheck both themes and final popup/sidepanel transitions in the unpacked extension |
-| Shield/Unshield/Send UI | Three private-home actions, separate fixed-asset screens, private-only Shielded ETH asset, and private Activity are implemented | Recheck both themes and final popup/sidepanel layouts in the unpacked extension |
+| Public/private home | Dual-mode home, private balance/chart/assets/activity, signer-owned transaction mirroring into Public Activity, explicit Shield signer, and relayed Unshield are implemented | Recheck both themes and final popup/sidepanel transitions in the unpacked extension |
+| Shield/Unshield UI | Four private-home actions, separate fixed-asset screens, private-only Shielded ETH asset, and privacy-ledger Activity are implemented; duplicate Private Send was removed because v1 has no in-pool transfer | Recheck both themes and final popup/sidepanel layouts in the unpacked extension |
 | Password/passkey initialization | Fresh biometric login was confirmed working after capability parity fixes | Complete reveal, restore, rotation, factor-removal, and clean-install recovery rehearsal |
 | Quote/review | Real quotes work with three-request RPC batches; arbitrary 1 ETH cap removed | Repeat with Bankr, private-key, seed-phrase, impersonator, and agent sessions |
 | Sepolia Shield | Real deposits reached confirmation/indexing and appeared in the confirmed balance while ASP-pending | Complete and record one full private-key and one full seed-phrase run, including rejection/restart/account-switch cases |
@@ -34,8 +34,8 @@ cross-theme/layout recheck remains.
 
 - [x] Show ASP-cleared Shielded ETH as the main private value and
   compliance-pending processing ETH as compact amber subcopy.
-- [x] Expose Shield, Unshield, and Send as three private-home actions with
-  separate screens and no nested mode tabs.
+- [x] Expose Shield and Unshield as two private-home actions with separate
+  screens and no nested mode tabs; do not expose Send in v1.
 - [x] Align one tiny tooltip-free amber Public/Private switch to the balance
   heading below the Public account selector.
 - [x] Keep private balance, chart, assets, and Activity separate from the
@@ -45,8 +45,8 @@ cross-theme/layout recheck remains.
   Assets, Send, and Swap free of the pseudo-asset.
 - [x] Select the Sepolia Shield signer inside Shield without changing the
   public active account.
-- [x] Make private send spend the wallet-wide privacy identity without a public
-  account field, while retaining master authorization and exact note checks.
+- [x] Make relayed Unshield spend the wallet-wide privacy identity without a
+  public account field, while retaining master authorization and exact note checks.
 - [x] Encrypt the bounded eight-day private USD chart with the privacy key.
 - [x] Remove recovery setup, phrase, and protocol explainer pages.
 - [x] Add a pure fixture/presentation model and UI coverage.
@@ -58,8 +58,15 @@ Manual gate:
 1. Reload the extension and open **Shield** from the home quick actions.
 2. Confirm Shield opens directly to `Deposit from` and compact fixed Sepolia
    ETH/Shielded ETH cards without a repeated balance strip or mode tabs.
-3. Return to Private and confirm Unshield and Send open their own titled screens;
-   both start with an empty recipient and require an explicit address or choice.
+3. Return to Private and confirm only Shield and Unshield are offered. Unshield
+   starts with an empty boxed `Receive at` field and an `Address` chooser. Enter
+   an amount and fresh recipient, then confirm `Review unshield` opens a second
+   screen with exact from/receiver amounts and a compact Request details list.
+   Its first row must show relay percentage and ETH/USD fee on two lines. An
+   over-cap quote must turn that row amber and place the public-exit alternative
+   in the sticky bar above Back and `Check relay again`; no duplicate Financial
+   impact or standalone warning card, private Send action, or private Send
+   screen should exist.
 4. Review both themes and the popup/sidepanel layouts.
 5. Confirm no recovery or privacy explainer block appears in the healthy state.
 6. Confirm opening Shield creates no transaction prompt and shows no phrase.
@@ -229,6 +236,9 @@ both local wallet types and clean-recovery repetition remain.
 - [x] Generate and locally verify the commitment proof and calldata.
 - [x] Route the public transaction through private-key and seed-phrase signing;
   Bankr remains unavailable on Sepolia.
+- [x] Group ragequittable commitments by original account and allow 2–8 whole
+  deposits from one group to share one immutable EIP-7702/ERC-7821 transaction;
+  reject duplicate or mixed-depositor selections and reconcile every event.
 - [x] Explain the public link and reject impersonator/agent sessions.
 - [x] Restore the prior ASP state after rejection and mark the matching Shield
   activity `Withdrawn` only after the exact onchain Ragequit event.

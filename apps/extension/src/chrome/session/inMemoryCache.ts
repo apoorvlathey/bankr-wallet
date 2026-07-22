@@ -38,6 +38,12 @@ let currentSessionId: string | null = null;
 let activeUIConnections = 0;
 
 function isCacheEntryValid(timestamp: number, timeout: number): boolean {
+  // A trusted WalletChan surface is an explicit user-presence lease. Finite
+  // auto-lock measures inactivity after the last surface closes; it must not
+  // expire a capability while the popup, side panel, or full-page wallet is
+  // still mounted. Manual lock and other auth transitions clear this module
+  // directly and therefore remain immediate.
+  if (activeUIConnections > 0) return timestamp > 0;
   return (
     (authSessionHardExpiresAt === null || Date.now() < authSessionHardExpiresAt) &&
     (timeout === 0 || (timestamp > 0 && Date.now() - timestamp < timeout))
@@ -201,4 +207,8 @@ export function decrementUIConnections(): void {
   ) {
     authCacheTimestamp = Date.now();
   }
+}
+
+export function hasActiveUIConnections(): boolean {
+  return activeUIConnections > 0;
 }

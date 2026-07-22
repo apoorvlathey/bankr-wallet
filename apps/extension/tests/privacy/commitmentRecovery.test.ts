@@ -198,6 +198,76 @@ test("phrase rescan follows partial withdrawals to the active replacement commit
   assert.equal(recovered.commitments[0].withdrawalIndex, "1");
 });
 
+test("phrase rescan follows consecutive partial withdrawals without restoring an older note", async () => {
+  const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
+  const depositSecrets = derivePrivacyPoolDepositSecrets(
+    masterKeys,
+    PRIVACY_POOLS_DEPLOYMENT.scope,
+    0n,
+  );
+  const precommitment = derivePrivacyPoolDepositPrecommitment(depositSecrets);
+  const deposit = derivePrivacyPoolCommitment(99_000n, 456n, depositSecrets);
+  const firstReplacement = derivePrivacyPoolCommitment(
+    60_000n,
+    456n,
+    derivePrivacyPoolWithdrawalSecrets(masterKeys, 456n, 0n),
+  );
+  const secondReplacement = derivePrivacyPoolCommitment(
+    50_000n,
+    456n,
+    derivePrivacyPoolWithdrawalSecrets(masterKeys, 456n, 1n),
+  );
+  const recovered = await recoverPrivacyCommitmentsFromEvents({
+    masterKeys,
+    events: [{
+      version: 1,
+      id: `${TX_HASH}:0`,
+      chainId: 11_155_111,
+      blockNumber: "100",
+      blockHash: BLOCK_HASH,
+      logIndex: 0,
+      transactionHash: TX_HASH,
+      depositor: DEPOSITOR,
+      commitment: deposit.hash.toString(),
+      label: "456",
+      valueWei: "99000",
+      precommitment: precommitment.toString(),
+    }],
+    withdrawals: [{
+      version: 1,
+      id: `0x${"44".repeat(32)}:1`,
+      chainId: 11_155_111,
+      blockNumber: "110",
+      blockHash: `0x${"55".repeat(32)}`,
+      logIndex: 1,
+      transactionHash: `0x${"44".repeat(32)}`,
+      processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+      valueWei: "39000",
+      spentNullifier: deposit.nullifierHash.toString(),
+      newCommitment: firstReplacement.hash.toString(),
+    }, {
+      version: 1,
+      id: `0x${"66".repeat(32)}:2`,
+      chainId: 11_155_111,
+      blockNumber: "120",
+      blockHash: `0x${"77".repeat(32)}`,
+      logIndex: 2,
+      transactionHash: `0x${"66".repeat(32)}`,
+      processooor: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+      valueWei: "10000",
+      spentNullifier: firstReplacement.nullifierHash.toString(),
+      newCommitment: secondReplacement.hash.toString(),
+    }],
+    createId: () => ID,
+    maxIndex: 2,
+    missGap: 2,
+  });
+
+  assert.equal(recovered.commitments[0].commitment, secondReplacement.hash.toString());
+  assert.equal(recovered.commitments[0].balanceWei, "50000");
+  assert.equal(recovered.commitments[0].withdrawalIndex, "2");
+});
+
 test("phrase rescan recognizes a public emergency exit after a partial withdrawal", async () => {
   const masterKeys = derivePrivacyPoolMasterKeys(PHRASE);
   const depositSecrets = derivePrivacyPoolDepositSecrets(
