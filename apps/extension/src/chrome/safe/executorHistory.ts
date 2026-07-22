@@ -30,12 +30,12 @@ export function buildSafeExecutionExecutor(
     maxPriorityFeePerGas: `${bigint}`;
   } | undefined,
   preparedAt: number,
-  feePaymentToken?: string,
+  feePaymentTokenAddress?: `0x${string}`,
 ): SafeExecutionExecutor {
   return {
     ...account,
     preparedAt,
-    feePaymentToken,
+    feePaymentTokenAddress,
     gasOverrides: gas
       ? {
           gasLimit: gas.gas,
@@ -75,7 +75,9 @@ export function buildSafeExecutorHistoryEntry(
     createdAt: executor.preparedAt,
     txHash: proposal.transactionHash,
     userOperationHash: proposal.userOperationHash,
-    feePaymentToken: executor.feePaymentToken,
+    erc20FeePayment: executor.feePaymentTokenAddress
+      ? { token: executor.feePaymentTokenAddress.toLowerCase() }
+      : undefined,
     broadcastUncertain,
     accountType: executor.accountType,
     accountId: executor.accountId,
@@ -158,7 +160,9 @@ export async function resumeSafeExecutorHistory(
       await updateTxInHistory(entry.id, {
         status: "pending",
         userOperationHash: proposal.userOperationHash,
-        feePaymentToken: proposal.executor?.feePaymentToken,
+        erc20FeePayment: proposal.executor?.feePaymentTokenAddress
+          ? { token: proposal.executor.feePaymentTokenAddress.toLowerCase() }
+          : undefined,
         broadcastUncertain: proposal.state === "ambiguous",
       });
     }

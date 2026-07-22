@@ -267,10 +267,16 @@ transaction history, Safe proposal/provider results, or ERC-5792 status. A
 waiting Safe caller never receives the UserOperation hash; it receives the real
 onchain transaction hash only after independently verified finality.
 
-Completed history stores the selected fee-token symbol. Receipt enrichment
-uses that marker to avoid attributing the bundler's native gas transfer to the
-user. The activity view therefore shows the user's actual asset changes rather
-than a false native-token receipt.
+New completed history stores only the selected fee-token contract and, after
+settlement, the exact charged base-unit amount. Symbol, decimals, logo, and USD
+price remain in the shared chain/address metadata and price caches rather than
+being duplicated per transaction. The verified onchain `UserOperationEvent`
+provides the exact paymaster, whose `UserOperationSponsored` event provides the
+token and exact `tokenAmountPaid`. Receipt enrichment uses that amount to remove
+the matching treasury debit or charge/refund pair from ordinary Balance changes
+and records the resulting charge for both successful and reverted operations.
+Unproven transfers fail open and remain visible. Transaction details never
+present the bundler's outer native receipt cost as a wallet-paid fee.
 
 ## Adding a chain or token
 

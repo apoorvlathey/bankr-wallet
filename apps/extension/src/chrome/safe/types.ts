@@ -103,7 +103,10 @@ export interface SafeExecutionExecutor {
   address: SafeAddress;
   preparedAt: number;
   /** ERC-20 symbol when the executor submitted through the fee-token route. */
+  /** @deprecated Released symbol-only marker. */
   feePaymentToken?: string;
+  /** Exact ERC-20 token used by new fee-token executions. */
+  feePaymentTokenAddress?: SafeAddress;
   gasOverrides?: {
     gasLimit: SafeDecimalString;
     maxFeePerGas: SafeDecimalString;

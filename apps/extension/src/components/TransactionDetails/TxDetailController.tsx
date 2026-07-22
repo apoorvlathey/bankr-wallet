@@ -38,6 +38,7 @@ import { useResolvedCalldata } from "./useResolvedCalldata";
 import PendingTransactionActions from "./PendingTransactionActions";
 import { canPrepareTransactionReplacement } from "./transactionReplacementModel";
 import { usePendingReplacementActions } from "./usePendingReplacementActions";
+import { buildErc20FeeDisplay } from "./feeDisplay";
 
 interface TxDetailModalProps {
   isOpen: boolean;
@@ -84,11 +85,7 @@ export function TxDetailController({
       (url && cachedLogoMap.get(url)) || url || undefined,
     [cachedLogoMap],
   );
-  // Atomic batches (Bankr ERC-7821, EIP-7702 PK/SP) land on-chain as a self-
-  // call whose data is `execute(mode, encodedCalls)`. Decode it back into the
-  // per-call list so we can render the same clear-signing UI the confirmation
-  // surface uses — instead of FROM=EOA / TO=EOA + an opaque blob. Returns null
-  // for non-batch txs so this is a no-op for the rest of history.
+  // Decode atomic ERC-7821 self-calls back into their per-call list.
   const batchCalls = useMemo(() => {
     if (!looksLikeErc7821SelfBatch(detailTx.tx)) return null;
     return decodeErc7821Batch(detailTx.tx.data);
@@ -98,14 +95,10 @@ export function TxDetailController({
   const hasDelegation = !!delegationMeta;
   const erc7715RevokeMeta = tx.erc7715PermissionRevokeMeta;
   const hasErc7715Revoke = !!erc7715RevokeMeta;
-  // Match the live confirmation screen: ERC-7715 revoke txs get the dedicated
-  // permission summary, not a second generic ERC-7730/clear-signing card for
-  // the same DelegationManager calldata.
+  // Revoke txs use the dedicated permission summary, not a duplicate card.
   const clearSignedMeta = hasErc7715Revoke ? undefined : tx.clearSignedMeta;
   const privacyShieldMeta = tx.privacyShieldMeta && isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state) ? tx.privacyShieldMeta : null;
-  // eth.sh label for the delegation target — shared cache, so this is free
-  // on reopen and free if any other surface (tx-confirmation screen, etc.)
-  // already fetched it.
+  // Shared eth.sh cache avoids refetching the delegation target label.
   const [delegateLabels, setDelegateLabels] = useState<string[]>([]);
   useEffect(() => {
     if (!isOpen || !delegationMeta || delegationMeta.kind === "revoke") {
@@ -158,7 +151,12 @@ export function TxDetailController({
     destinationAssetChanges,
     formatTokenAmountUsd,
     formatWeiUsd,
+    feeTokenMetadata,
+    feeTokenUsd,
   } = useAssetChangeData({ isOpen, tx });
+  const feeLogoMap = useCachedAvatarMap(
+    useMemo(() => [feeTokenMetadata?.logoUrl], [feeTokenMetadata?.logoUrl]),
+  );
   const toast = useThemedToast();
   const replacementActions = usePendingReplacementActions(tx.id);
   const canReplace = canPrepareTransactionReplacement(tx);
@@ -264,6 +262,14 @@ export function TxDetailController({
       ? "Contract interaction"
       : "Transaction";
   const chainName = resolvedChain?.name ?? tx.chainName;
+  const feeLogoUrl = feeTokenMetadata?.logoUrl;
+  const erc20Fee = buildErc20FeeDisplay(
+    tx.erc20FeePayment,
+    feeTokenMetadata,
+    feeLogoUrl ? feeLogoMap.get(feeLogoUrl) ?? feeLogoUrl : undefined,
+    feeTokenUsd,
+    tx.status === "processing" || tx.status === "pending",
+  );
 
   return (
     <TxDetailView
@@ -361,6 +367,7 @@ export function TxDetailController({
           nativeSym={nativeSym}
           txFee={txFee}
           estimatedMaxCost={estimatedMaxCost}
+          erc20Fee={erc20Fee}
           displayTimestamp={displayTimestamp}
           formatWeiUsd={formatWeiUsd}
         />
@@ -379,6 +386,7 @@ export function TxDetailController({
           setGasPrice={setGasPrice}
           hasSetGasParams={hasSetGasParams}
           estimatedMaxCost={estimatedMaxCost}
+          erc20Fee={erc20Fee}
           defaultOpen={!hasHero && !decodedFunctionName}
           formatWeiUsd={formatWeiUsd}
           onFunctionName={handleDecodedFunctionName}

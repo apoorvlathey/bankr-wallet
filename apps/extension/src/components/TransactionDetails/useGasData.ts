@@ -30,7 +30,13 @@ export function useGasData({
   useEffect(() => {
     setGasData(tx.gasData);
 
-    if (tx.gasData || !tx.txHash || tx.status !== "success" || !isOpen) return;
+    if (
+      tx.erc20FeePayment ||
+      tx.gasData ||
+      !tx.txHash ||
+      tx.status !== "success" ||
+      !isOpen
+    ) return;
 
     let cancelled = false;
 
@@ -93,11 +99,12 @@ export function useGasData({
     tx.txHash,
     tx.status,
     tx.chainId,
+    tx.erc20FeePayment,
     isOpen,
   ]);
 
   const derived = useMemo(() => {
-    const txFee = gasData
+    const txFee = gasData && !tx.erc20FeePayment
       ? (
           BigInt(gasData.gasUsed) * BigInt(gasData.effectiveGasPrice) +
           BigInt(gasData.l1Fee || "0")
@@ -117,7 +124,7 @@ export function useGasData({
       setGasPrice
     );
     let estimatedMaxCost: string | undefined;
-    if (setGas) {
+    if (setGas && !tx.erc20FeePayment) {
       const price = setMaxFee || setGasPrice;
       if (price) {
         try {
@@ -138,7 +145,7 @@ export function useGasData({
       hasSetGasParams,
       estimatedMaxCost,
     };
-  }, [gasData, tx.tx]);
+  }, [gasData, tx.tx, tx.erc20FeePayment]);
 
   return {
     gasData,

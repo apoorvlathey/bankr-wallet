@@ -218,3 +218,12 @@ export const previewPendingSwapTransaction: CompletedTransaction = {
   completedAt: undefined,
   assetChanges: undefined,
 };
+
+export const previewTokenFeeSwapTransaction: CompletedTransaction = {
+  ...previewSwapTransaction,
+  id: "preview-completed-swap-token-fee",
+  erc20FeePayment: {
+    token: previewUsdcAddress,
+    amountWei: "5847",
+  },
+};

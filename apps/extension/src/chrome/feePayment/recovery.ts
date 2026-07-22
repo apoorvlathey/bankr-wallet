@@ -1,4 +1,7 @@
-import { applyReceiptToHistory } from "../forceInclusion/receiptPoller";
+import {
+  applyErc20FeeReceiptEnrichment,
+  applyReceiptToHistory,
+} from "../forceInclusion/receiptPoller";
 import { BUNDLE_STATUS } from "../erc5792Types";
 import { toBundleReceipt } from "../receiptEnrichment";
 import { updateBundleStatus } from "../batch/bundleStatusStorage";
@@ -12,10 +15,14 @@ import {
   type PendingUserOperation,
 } from "./pendingOperations";
 import { verifyUserOperationReceiptOnchain } from "./receiptValidation";
+import type { Address } from "./pimlicoTypes";
 
 type UserOperationReceipt = NonNullable<
   Awaited<ReturnType<PimlicoClient["getUserOperationReceipt"]>>
 >;
+type SettledUserOperationReceipt = UserOperationReceipt & {
+  paymaster: Address;
+};
 
 function receiptTransactionHash(receipt: Record<string, unknown>): `0x${string}` {
   const hash = receipt.transactionHash;
@@ -27,7 +34,7 @@ function receiptTransactionHash(receipt: Record<string, unknown>): `0x${string}`
 
 async function finalizeTransaction(
   record: PendingUserOperation,
-  receipt: UserOperationReceipt,
+  receipt: SettledUserOperationReceipt,
 ) {
   const txHash = receiptTransactionHash(receipt.receipt);
   if (receipt.success) {
@@ -36,18 +43,20 @@ async function finalizeTransaction(
       txHash,
       record.chainId,
       receipt.receipt,
+      { feePaymentPaymaster: receipt.paymaster },
     );
     await writeResultToStorage(`txResult:${record.txId}`, {
       success: true,
       txHash,
     });
   } else {
-    await updateTxInHistory(record.txId, {
-      status: "failed",
+    await applyReceiptToHistory(
+      record.txId,
       txHash,
-      error: "UserOperation reverted",
-      completedAt: Date.now(),
-    });
+      record.chainId,
+      { ...receipt.receipt, status: "reverted" },
+      { feePaymentPaymaster: receipt.paymaster },
+    );
     await writeResultToStorage(`txResult:${record.txId}`, {
       success: false,
       error: "Transaction reverted",
@@ -57,7 +66,7 @@ async function finalizeTransaction(
 
 async function finalizeBatch(
   record: PendingUserOperation,
-  receipt: UserOperationReceipt,
+  receipt: SettledUserOperationReceipt,
 ) {
   const txHash = receiptTransactionHash(receipt.receipt);
   await updateBundleStatus(record.txId, {
@@ -74,6 +83,13 @@ async function finalizeBatch(
     completedAt: Date.now(),
     ...(receipt.success ? {} : { error: "UserOperation reverted" }),
   });
+  await applyErc20FeeReceiptEnrichment(
+    record.txId,
+    txHash,
+    record.chainId,
+    receipt.receipt,
+    receipt.paymaster,
+  );
   await writeResultToStorage(`batchTxResult:${record.txId}`,
     receipt.success
       ? { success: true, txHash }
@@ -104,6 +120,7 @@ export async function resumePendingFeePaymentOperations(): Promise<void> {
         ...receipt,
         success: verified.success,
         receipt: verified.receipt,
+        paymaster: verified.paymaster,
       };
       if (record.family === "transaction") {
         await finalizeTransaction(record, verifiedReceipt);

@@ -28,6 +28,7 @@ import { encodeMetaMaskDeleGatorCalls } from "./userOperation";
 import type { PreparedFeePaymentQuote } from "./quotes";
 import { assertFeePaymentQuoteChainState } from "./quoteValidation";
 import { verifyUserOperationReceiptOnchain } from "./receiptValidation";
+import { applyErc20FeeReceiptEnrichment } from "../forceInclusion/receiptPoller";
 
 function callsFromBatch(pending: PendingBatchTxRequest) {
   return pending.params.calls.map((call, index) => {
@@ -102,6 +103,13 @@ async function pollBatchReceipt(
           error: "Batch transaction reverted",
         });
       }
+      await applyErc20FeeReceiptEnrichment(
+        bundleId,
+        verified.txHash,
+        pending.chainId,
+        verified.receipt,
+        verified.paymaster,
+      );
       await removePendingUserOperation(bundleId);
       return true;
     }
@@ -149,7 +157,7 @@ export async function processUsdcBatchInBackground(input: {
       accountType: signer.account.type,
       accountId: pending.accountId,
       functionName: displayName,
-      feePaymentToken: token.symbol,
+      erc20FeePayment: { token: token.address.toLowerCase() },
       swapMeta: historyMeta?.swapMeta,
       bridge: historyMeta?.bridge,
     });

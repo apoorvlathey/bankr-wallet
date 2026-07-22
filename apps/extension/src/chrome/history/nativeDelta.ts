@@ -10,9 +10,9 @@ export interface NativeDeltaInput {
 
 /** The ERC-4337 bundler, not the wallet EOA, pays a token-funded outer tx. */
 export function isWalletOuterGasPayer(
-  feePaymentToken: string | undefined,
+  feePaymentToken: string | undefined, erc20FeePayment?: { token: string },
 ): boolean {
-  return feePaymentToken === undefined;
+  return feePaymentToken === undefined && erc20FeePayment === undefined;
 }
 
 /** Removes transaction fees and same-block sibling costs from a block delta. */

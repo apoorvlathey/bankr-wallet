@@ -2,30 +2,19 @@ import { decodeEventLog, isAddressEqual } from "viem";
 
 import { fetchRawTransactionReceipt } from "../receiptEnrichment";
 import { ENTRY_POINT_V07 } from "./constants";
+import { USER_OPERATION_EVENT_ABI } from "./userOperationEvent";
+export { USER_OPERATION_EVENT_ABI } from "./userOperationEvent";
 import type {
   Address,
   Hex,
   UserOperationReceipt,
 } from "./pimlicoTypes";
 
-export const USER_OPERATION_EVENT_ABI = [{
-  type: "event",
-  name: "UserOperationEvent",
-  inputs: [
-    { name: "userOpHash", type: "bytes32", indexed: true },
-    { name: "sender", type: "address", indexed: true },
-    { name: "paymaster", type: "address", indexed: true },
-    { name: "nonce", type: "uint256", indexed: false },
-    { name: "success", type: "bool", indexed: false },
-    { name: "actualGasCost", type: "uint256", indexed: false },
-    { name: "actualGasUsed", type: "uint256", indexed: false },
-  ],
-}] as const;
-
 export interface VerifiedUserOperationReceipt {
   txHash: Hex;
   receipt: Record<string, unknown>;
   success: boolean;
+  paymaster: Address;
 }
 
 export async function verifyUserOperationReceiptOnchain(input: {
@@ -92,6 +81,7 @@ export async function verifyUserOperationReceiptOnchain(input: {
           txHash: claimedHash as Hex,
           receipt,
           success: decoded.args.success,
+          paymaster: decoded.args.paymaster as Address,
         };
       }
     } catch (error) {

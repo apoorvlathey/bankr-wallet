@@ -2843,7 +2843,8 @@ The implemented domain contains:
   response is outcome-unknown;
 - `receiptValidation.ts`: independently fetches the chain receipt and requires
   a matching EntryPoint `UserOperationEvent` for the exact hash and sender
-  before Activity or ERC-5792 status becomes terminal;
+  before Activity or ERC-5792 status becomes terminal; the verified event also
+  supplies the exact paymaster used to classify the settled token charge;
 - `pendingOperations.ts` and `recovery.ts`: serialize bounded recovery-record
   mutations and reconcile deterministic hashes after MV3 restarts without
   persisting calldata, authorization tuples, or UserOperation signatures;
@@ -2883,6 +2884,20 @@ deterministic UserOperation hash plus public executor/fee-token routing data;
 startup and alarm reconciliation require the matching onchain EntryPoint event
 before applying the Safe result or returning the real transaction hash to the
 connected app.
+
+New token-funded history stores only `{ token, amountWei? }`: the lowercase
+contract is committed before broadcast and the settled base-unit charge is
+filled from the verified paymaster's onchain `UserOperationSponsored` event.
+Its exact `tokenAmountPaid` identifies a matching treasury debit or
+charge/refund pair even when the treasury differs from the paymaster contract.
+Those transfers are removed from ordinary Balance changes without hiding
+unrelated same-token activity. Metadata and price are resolved lazily through
+the shared chain/address caches when Transaction details opens. Its compact fee pill and
+Advanced gas section show the ERC-20 logo, amount, and USD value; outer bundler
+native gas is never labeled as paid by the wallet. This applies equally to
+successful and reverted UserOperations and to single, atomic batch, Swap,
+bridge, and Safe executor history. Released symbol-only rows remain readable
+but are not migrated.
 
 The options request reads every catalog-token balance independently of Pimlico quote
 preparation. An exact zero balance omits that catalog token before the options

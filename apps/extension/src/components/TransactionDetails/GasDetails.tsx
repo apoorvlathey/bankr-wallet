@@ -1,6 +1,12 @@
 import { Box, HStack, StackDivider, Text, VStack } from "@chakra-ui/react";
 import type { GasData } from "@/chrome/txHistoryStorage";
 import { formatEth, formatGwei, formatNumber } from "@/lib/gasFormatUtils";
+import TokenLogo from "@/components/TokenLogo";
+import {
+  formatErc20FeeDisplayAmount,
+  getErc20FeeStatusLabel,
+  type Erc20FeeDisplay,
+} from "./feeDisplay";
 
 export function GasRow({ label, value }: { label: string; value: string }) {
   return (
@@ -35,6 +41,7 @@ export default function GasDetails({
   hasSetGasParams,
   estimatedMaxCost,
   formatWeiUsd,
+  erc20Fee,
 }: {
   gasData: GasData | undefined;
   txFee: string | undefined;
@@ -48,7 +55,41 @@ export default function GasDetails({
   hasSetGasParams: boolean;
   estimatedMaxCost: string | undefined;
   formatWeiUsd: (raw: string | undefined | null) => string | null;
+  erc20Fee?: Erc20FeeDisplay;
 }) {
+  if (erc20Fee) {
+    const amountLabel = formatErc20FeeDisplayAmount(erc20Fee);
+    const primary = erc20Fee.usd ?? amountLabel ?? getErc20FeeStatusLabel(erc20Fee);
+    const secondary = erc20Fee.usd && amountLabel
+      ? amountLabel
+      : erc20Fee.symbol ?? `${erc20Fee.token.slice(0, 6)}…${erc20Fee.token.slice(-4)}`;
+    return (
+      <Box borderTopWidth="1px" borderTopStyle="solid" borderTopColor="border.subtle">
+        <HStack minH="52px" px={3} py={2.5} justify="space-between" spacing={3}>
+          <Text color="fg.primary" fontSize="sm" fontWeight="600">
+            Gas details
+          </Text>
+          <HStack spacing={2} minW={0}>
+            <TokenLogo
+              symbol={erc20Fee.symbol}
+              logoUrl={erc20Fee.logoUrl}
+              alt={erc20Fee.symbol || "Fee token"}
+              size="20px"
+              fontSize="7px"
+            />
+            <VStack spacing={0} align="flex-end" minW={0}>
+              <Text color="fg.primary" fontFamily="mono" fontSize="xs" fontWeight="600">
+                {primary}
+              </Text>
+              <Text color="fg.secondary" fontSize="2xs" fontWeight="600">
+                {secondary}
+              </Text>
+            </VStack>
+          </HStack>
+        </HStack>
+      </Box>
+    );
+  }
   const showConfirmedFee = Boolean(gasData && txFee);
   const showSetParams = !showConfirmedFee && hasSetGasParams;
   if (!showConfirmedFee && !showSetParams) return null;

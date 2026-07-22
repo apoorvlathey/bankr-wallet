@@ -16,6 +16,7 @@ import {
   previewErc20TransferTransaction,
   previewPendingSwapTransaction,
   previewSwapTransaction,
+  previewTokenFeeSwapTransaction,
   previewTransferTransaction,
 } from "./completedTransactionCoreVariants";
 import {
@@ -42,6 +43,7 @@ const fixtures: Record<string, CompletedTransaction> = {
   "bridge-pending": previewBridgePendingTransaction,
   "bridge-refunded": previewBridgeRefundedTransaction,
   swap: previewSwapTransaction,
+  "swap-token-fee": previewTokenFeeSwapTransaction,
   "swap-pending": previewPendingSwapTransaction,
   approve: previewApprovalTransaction,
   "approval-revoke": previewApprovalRevokeTransaction,

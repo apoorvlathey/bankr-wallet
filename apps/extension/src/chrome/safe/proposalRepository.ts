@@ -128,6 +128,9 @@ function executor(value: unknown): SafeExecutionExecutor {
     feePaymentToken: raw.feePaymentToken === undefined
       ? undefined
       : text(raw.feePaymentToken, "execution fee token", 32),
+    feePaymentTokenAddress: raw.feePaymentTokenAddress === undefined
+      ? undefined
+      : address(raw.feePaymentTokenAddress, "execution fee token address"),
     gasOverrides: gasRaw
       ? {
           gasLimit: decimal(gasRaw.gasLimit, "execution gas limit"),

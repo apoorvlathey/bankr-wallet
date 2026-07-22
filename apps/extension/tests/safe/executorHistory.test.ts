@@ -15,6 +15,7 @@ const SAFE = `0x${"1".repeat(40)}` as const;
 const OWNER = `0x${"2".repeat(40)}` as const;
 const TX_HASH = `0x${"3".repeat(64)}` as const;
 const USER_OPERATION_HASH = `0x${"6".repeat(64)}` as const;
+const FEE_TOKEN = `0x${"7".repeat(40)}` as const;
 
 function proposal(
   accountType: SafeExecutionExecutor["accountType"],
@@ -105,15 +106,16 @@ test("token-funded Safe execution records its pending UserOperation and fee toke
   const safeProposal = proposal("privateKey");
   safeProposal.transactionHash = undefined;
   safeProposal.userOperationHash = USER_OPERATION_HASH;
-  safeProposal.executor!.feePaymentToken = "USDC";
+  safeProposal.executor!.feePaymentTokenAddress = FEE_TOKEN;
   const entry = buildSafeExecutorHistoryEntry(safeProposal, "Base", false);
   assert.ok(entry);
   assert.equal(entry.txHash, undefined);
   assert.equal(entry.userOperationHash, USER_OPERATION_HASH);
-  assert.equal(entry.feePaymentToken, "USDC");
+  assert.equal(entry.feePaymentToken, undefined);
+  assert.deepEqual(entry.erc20FeePayment, { token: FEE_TOKEN });
   const decoded = decodeSafeProposal(safeProposal);
   assert.equal(decoded.userOperationHash, USER_OPERATION_HASH);
-  assert.equal(decoded.executor?.feePaymentToken, "USDC");
+  assert.equal(decoded.executor?.feePaymentTokenAddress, FEE_TOKEN);
 });
 
 test("Safe execution persistence rejects Bankr, impersonator, and Safe executors", () => {

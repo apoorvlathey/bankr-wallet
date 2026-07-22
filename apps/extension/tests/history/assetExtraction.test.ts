@@ -17,6 +17,7 @@ import {
 } from "../../src/chrome/history/nativeDelta";
 import { fetchSettledReceiptAtRpcUrl } from "../../src/chrome/history/receiptSettlement";
 import { shouldReconcileReceiptDerivedHistory } from "../../src/chrome/history/receiptReconciliation";
+import { separateErc20FeeTransfers } from "../../src/chrome/history/erc20FeeSettlement";
 import type { CompletedTransaction } from "../../src/chrome/history/types";
 import { createChromeStorageHarness } from "../helpers/chromeStorageHarness";
 
@@ -214,6 +215,7 @@ test("token-funded UserOperations do not attribute bundler gas to the wallet", (
   const balance = 10_000_000_000_000_000n;
   assert.equal(isWalletOuterGasPayer("USDC"), false);
   assert.equal(isWalletOuterGasPayer(undefined), true);
+  assert.equal(isWalletOuterGasPayer(undefined, { token: TOKEN }), false);
   assert.equal(
     deriveNativeDelta({
       currentBalance: balance,
@@ -222,6 +224,58 @@ test("token-funded UserOperations do not attribute bundler gas to the wallet", (
       payerForGas: isWalletOuterGasPayer("USDC"),
     }),
     undefined,
+  );
+});
+
+test("paymaster token charges are separated without hiding same-token activity", () => {
+  const paymaster = `0x${"3".repeat(40)}`;
+  const transfers = [
+    { token: TOKEN, direction: "out" as const, counterparty: OTHER, amountWei: "100000" },
+    { token: TOKEN, direction: "out" as const, counterparty: paymaster, amountWei: "5847" },
+    { token: `0x${"b".repeat(40)}`, direction: "out" as const, counterparty: paymaster, amountWei: "9" },
+  ];
+  assert.deepEqual(
+    separateErc20FeeTransfers(transfers, { token: TOKEN, paymaster }),
+    { transfers: [transfers[0], transfers[2]], amountWei: "5847" },
+  );
+});
+
+test("sponsored amount removes a treasury transfer distinct from the paymaster", () => {
+  const paymaster = `0x${"3".repeat(40)}`;
+  const treasury = `0x${"4".repeat(40)}`;
+  const swap = { token: TOKEN, direction: "out" as const, counterparty: OTHER, amountWei: "100000" };
+  const fee = { token: TOKEN, direction: "out" as const, counterparty: treasury, amountWei: "5797" };
+  assert.deepEqual(
+    separateErc20FeeTransfers([swap, fee], {
+      token: TOKEN,
+      paymaster,
+      amountWei: "5797",
+    }),
+    { transfers: [swap], amountWei: "5797" },
+  );
+});
+
+test("paymaster refunds reduce the settled fee and both settlement legs are removed", () => {
+  const paymaster = `0x${"3".repeat(40)}`;
+  const unrelated = { token: TOKEN, direction: "out" as const, counterparty: OTHER, amountWei: "100000" };
+  assert.deepEqual(
+    separateErc20FeeTransfers([
+      unrelated,
+      { token: TOKEN, direction: "out", counterparty: paymaster, amountWei: "10000" },
+      { token: TOKEN, direction: "in", counterparty: paymaster, amountWei: "4153" },
+    ], { token: TOKEN, paymaster }),
+    { transfers: [unrelated], amountWei: "5847" },
+  );
+});
+
+test("unproven or non-positive paymaster settlement fails open", () => {
+  const paymaster = `0x${"3".repeat(40)}`;
+  const transfers = [
+    { token: TOKEN, direction: "in" as const, counterparty: paymaster, amountWei: "5" },
+  ];
+  assert.deepEqual(
+    separateErc20FeeTransfers(transfers, { token: TOKEN, paymaster }),
+    { transfers },
   );
 });
 
@@ -299,6 +353,25 @@ test("legacy ERC-20-only history snapshots are eligible for lazy NFT backfill", 
     }),
     false,
   );
+});
+
+test("only new unresolved token-fee history can repair a failed receipt", () => {
+  const base = {
+    status: "failed" as const,
+    txHash: "0xhash",
+    tx: { from: USER },
+    chainId: 1,
+    assetChanges: { version: 2 as const, blockNumber: "1", erc20Transfers: [] },
+  };
+  assert.equal(shouldReconcileReceiptDerivedHistory(base), false);
+  assert.equal(shouldReconcileReceiptDerivedHistory({
+    ...base,
+    erc20FeePayment: { token: TOKEN },
+  }), true);
+  assert.equal(shouldReconcileReceiptDerivedHistory({
+    ...base,
+    erc20FeePayment: { token: TOKEN, amountWei: "5847" },
+  }), false);
 });
 
 test("backfill eligibility does not requeue existing or non-success entries", async () => {

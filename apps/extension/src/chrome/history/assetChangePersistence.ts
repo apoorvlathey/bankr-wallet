@@ -4,6 +4,10 @@ import { extractAssetChangesFromConfirmedReceipt } from "./assetChangeExtraction
 import { updateTxInHistory } from "./repository";
 import { fetchReceiptAtRpcUrl } from "./rpc";
 import type { AssetChangeRecord } from "./types";
+import {
+  settleErc20FeeRecord,
+  type Erc20FeeTransferContext,
+} from "./erc20FeeSettlement";
 
 export interface SourceExtractionArgs {
   txId: string;
@@ -13,22 +17,27 @@ export interface SourceExtractionArgs {
   rpcUrl: string;
   /** Defaults to true for legacy direct-transaction callers. */
   payerForGas?: boolean;
+  feePayment?: Erc20FeeTransferContext;
 }
 
 export async function extractAndStoreAssetChanges(
   args: SourceExtractionArgs,
 ): Promise<void> {
   try {
-    const record = await extractAssetChangesFromConfirmedReceipt({
+    const extracted = await extractAssetChangesFromConfirmedReceipt({
       receipt: args.receipt,
       userAddress: args.userAddress,
       chainId: args.chainId,
       rpcUrl: args.rpcUrl,
       payerForGas: args.payerForGas ?? true,
     });
-    if (!record) return;
+    if (!extracted) return;
+    const { record, payment } = settleErc20FeeRecord(extracted, args.feePayment);
     await seedRecentlyReceivedSafely(args.chainId, record);
-    await updateTxInHistory(args.txId, { assetChanges: record });
+    await updateTxInHistory(args.txId, {
+      assetChanges: record,
+      ...(payment ? { erc20FeePayment: payment } : {}),
+    });
   } catch (error) {
     console.warn("[assetChanges] source extraction failed", error);
     await updateTxInHistory(args.txId, { detailsIncomplete: true }).catch(() => undefined);

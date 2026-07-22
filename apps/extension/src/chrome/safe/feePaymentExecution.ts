@@ -98,6 +98,7 @@ export async function finalizeSafeFeePaymentReceipt(input: {
     input.verified.txHash,
     proposal.chainId,
     { ...input.verified.receipt, status: input.verified.success ? "success" : "reverted" },
+    { feePaymentPaymaster: input.verified.paymaster },
   );
   if ((proposal.route.kind === "injected" || proposal.route.kind === "walletConnect") &&
       !proposal.route.detachedAt && proposal.route.requestId) {
@@ -288,7 +289,7 @@ export async function executeSafeProposalWithFeeToken(input: {
             accountId: account.id,
             accountType: account.type,
             address: account.address.toLowerCase() as `0x${string}`,
-          }, undefined, preparedAt, quote.token.symbol),
+          }, undefined, preparedAt, quote.token.address),
           error: "Execution is crossing the broadcast boundary",
           updatedAt: preparedAt,
         }));
@@ -306,7 +307,7 @@ export async function executeSafeProposalWithFeeToken(input: {
     await updateTxInHistory(getSafeExecutorHistoryId(proposal.id), {
       status: "pending",
       userOperationHash,
-      feePaymentToken: quote.token.symbol,
+      erc20FeePayment: { token: quote.token.address.toLowerCase() },
       broadcastUncertain: submission.outcomeUnknown,
     });
     startSafeExecutionReconciliation(updated.id);

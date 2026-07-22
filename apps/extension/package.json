@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm dev:web && pnpm dev:onboarding && pnpm dev:ens-pages && pnpm dev:privacy-prover && concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:ens-banner' 'pnpm dev:background' 'pnpm dev:offscreen' 'pnpm build:privacy-prover --watch --mode development'",
+    "dev": "pnpm dev:web && pnpm dev:onboarding && pnpm dev:ens-pages && pnpm dev:privacy-prover && concurrently 'pnpm dev:inpage' 'pnpm dev:inject' 'pnpm dev:ens-banner' 'pnpm dev:background' 'pnpm dev:offscreen'",
     "dev:sepolia": "VITE_PRIVACY_POOLS_PROFILE=sepolia pnpm dev",
     "dev:preview": "vite --host 0.0.0.0 -c vite.config.preview.ts",
     "dev:web": "pnpm build:web --mode development",

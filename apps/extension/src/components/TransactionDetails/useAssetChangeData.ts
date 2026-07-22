@@ -7,6 +7,7 @@ import { FLASHBLOCKS_CHAIN_IDS } from "@/constants/networks";
 import {
   applyTokenDisplayMetadata,
   collectMissingTokenMetadataRequests,
+  tokenDisplayMetadataKey,
   type TokenDisplayMetadata,
 } from "./tokenMetadata";
 
@@ -132,6 +133,14 @@ export function useAssetChangeData({
         tx.chainId,
         requests,
       );
+      const feeToken = tx.erc20FeePayment?.token;
+      if (feeToken && /^0x[a-fA-F0-9]{40}$/.test(feeToken)) {
+        const tokenAddress = feeToken.toLowerCase();
+        requests.set(tokenDisplayMetadataKey(tx.chainId, tokenAddress), {
+          chainId: tx.chainId,
+          tokenAddress,
+        });
+      }
       if (bridgeDestinationChainId && tx.destAssetChanges) {
         collectMissingTokenMetadataRequests(
           tx.destAssetChanges,
@@ -193,6 +202,7 @@ export function useAssetChangeData({
     }, [
       isOpen,
       tx.assetChanges,
+      tx.erc20FeePayment?.token,
       bridgeDestinationChainId,
       tx.chainId,
       tx.destAssetChanges,
@@ -231,9 +241,12 @@ export function useAssetChangeData({
 
     useEffect(() => {
       if (!isOpen) return;
-      if (tx.status !== "success" || !tx.txHash) return;
+      const repairableStatus = tx.status === "success" ||
+        (tx.status === "failed" && !!tx.erc20FeePayment);
+      if (!repairableStatus || !tx.txHash) return;
       if (
         tx.assetChanges?.version === 2 &&
+        (!tx.erc20FeePayment || !!tx.erc20FeePayment.amountWei) &&
         !FLASHBLOCKS_CHAIN_IDS.has(tx.chainId)
       ) {
         return;
@@ -245,7 +258,15 @@ export function useAssetChangeData({
         type: "backfillAssetChanges",
         txId: tx.id,
       });
-    }, [isOpen, tx.id, tx.status, tx.txHash, tx.assetChanges, tx.chainId]);
+    }, [
+      isOpen,
+      tx.id,
+      tx.status,
+      tx.txHash,
+      tx.assetChanges,
+      tx.chainId,
+      tx.erc20FeePayment,
+    ]);
 
     // USD prices keyed by `${chainId}-${address-lowercase}` for ERC-20s and
     // `${chainId}-native` for native deltas. Populated lazily from assetChanges
@@ -273,6 +294,9 @@ export function useAssetChangeData({
         for (const t of record.erc20Transfers) addReq(chainId, t.token);
       };
       collect(sourceAssetChanges, tx.chainId);
+      if (tx.erc20FeePayment?.token) {
+        addReq(tx.chainId, tx.erc20FeePayment.token);
+      }
       if (bridgeDestinationChainId && destinationAssetChanges) {
         collect(destinationAssetChanges, bridgeDestinationChainId);
       }
@@ -308,6 +332,7 @@ export function useAssetChangeData({
     }, [
       isOpen,
       tx.chainId,
+      tx.erc20FeePayment?.token,
       sourceAssetChanges,
       destinationAssetChanges,
       bridgeDestinationChainId,
@@ -365,10 +390,28 @@ export function useAssetChangeData({
       [nativePriceUsd],
     );
 
+    const feeTokenMetadata = tx.erc20FeePayment
+      ? assetTokenMetadata[
+          tokenDisplayMetadataKey(tx.chainId, tx.erc20FeePayment.token)
+        ]
+      : undefined;
+    const feeTokenUsd =
+      tx.erc20FeePayment?.amountWei &&
+      feeTokenMetadata?.decimals !== undefined
+        ? formatTokenAmountUsd(
+            tx.erc20FeePayment.amountWei,
+            feeTokenMetadata.decimals,
+            tx.chainId,
+            tx.erc20FeePayment.token,
+          )
+        : null;
+
   return {
     sourceAssetChanges,
     destinationAssetChanges,
     formatTokenAmountUsd,
     formatWeiUsd,
+    feeTokenMetadata,
+    feeTokenUsd,
   };
 }

@@ -13,6 +13,7 @@ export function canPrepareTransactionReplacement(
       !tx.forceInclusionMeta &&
       !tx.userOperationHash &&
       !tx.feePaymentToken &&
+      !tx.erc20FeePayment &&
       !tx.replacedByTxId,
   );
 }

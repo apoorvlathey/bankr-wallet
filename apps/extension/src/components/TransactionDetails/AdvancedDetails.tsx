@@ -7,6 +7,7 @@ import type {
 import { InlineDisclosure } from "@/components/ui";
 import GasDetails, { GasRow } from "./GasDetails";
 import RawTransactionDetails from "./RawTransactionDetails";
+import type { Erc20FeeDisplay } from "./feeDisplay";
 
 export default function AdvancedDetails({
   tx,
@@ -22,6 +23,7 @@ export default function AdvancedDetails({
   setGasPrice,
   hasSetGasParams,
   estimatedMaxCost,
+  erc20Fee,
   defaultOpen,
   formatWeiUsd,
   onFunctionName,
@@ -42,6 +44,7 @@ export default function AdvancedDetails({
   setGasPrice: string | undefined;
   hasSetGasParams: boolean;
   estimatedMaxCost: string | undefined;
+  erc20Fee?: Erc20FeeDisplay;
   defaultOpen: boolean;
   formatWeiUsd: (raw: string | undefined | null) => string | null;
   onFunctionName: (name: string) => void;
@@ -125,6 +128,7 @@ export default function AdvancedDetails({
           setGasPrice={setGasPrice}
           hasSetGasParams={hasSetGasParams}
           estimatedMaxCost={estimatedMaxCost}
+          erc20Fee={erc20Fee}
           formatWeiUsd={formatWeiUsd}
         />
         {typeof addressNonce === "number" &&

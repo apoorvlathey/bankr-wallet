@@ -23,7 +23,8 @@ Review this domain in dependency order:
    same-block sibling-cost correction.
 8. `nativeDelta.ts` — pure fee and sibling-cost removal from block-level native
    balance deltas.
-9. `assetChangeExtraction.ts` — ERC-20/NFT identities and native delta assembly.
+9. `assetChangeExtraction.ts` and `erc20FeeSettlement.ts` — ERC-20/NFT/native
+   delta assembly and exact sponsored treasury debit/refund separation.
 10. `detailResolution.ts`, `nftTransferMetadata.ts`, and `nftMetadataCache.ts` —
    trusted on-demand calldata and bounded NFT display-metadata resolution.
 11. `assetChangePersistence.ts` — best-effort recent-token seeding followed by
@@ -55,7 +56,12 @@ function export identities remain stable for existing callers.
   change during file-only refactors.
 - Asset extraction and backfill stay best-effort. RPC, metadata, recent-token,
   or history-write failures must never block confirmation or bridge progress.
-- Backfill only queues a successful entry with a hash and sender. Legacy
+- New token-funded rows persist only the fee-token contract and settled
+  base-unit charge. The verified paymaster's `UserOperationSponsored` amount
+  classifies the charge; unrelated same-token transfers remain ordinary asset
+  changes, and unproven matches fail open. Released symbol-only rows are not rewritten.
+- Backfill queues a successful entry or a failed unresolved token-fee entry
+  with a hash and sender. Legacy
   ERC-20-only snapshots are lazily upgraded to parser version 2; current snapshots
   remain immutable on ordinary chains, while Flashblocks chains are
   revalidated once per mounted details view because preconfirmed receipt fee

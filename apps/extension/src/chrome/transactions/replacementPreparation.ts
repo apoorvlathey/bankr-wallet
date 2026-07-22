@@ -55,7 +55,12 @@ function replacementEligibilityError(
     return "Pending transaction hash is invalid";
   }
   if (tx.replacedByTxId) return "A newer replacement already exists";
-  if (tx.forceInclusionMeta || tx.userOperationHash || tx.feePaymentToken) {
+  if (
+    tx.forceInclusionMeta ||
+    tx.userOperationHash ||
+    tx.feePaymentToken ||
+    tx.erc20FeePayment
+  ) {
     return "This transaction submission type cannot be replaced";
   }
   if (!account) return "The transaction account is no longer available";

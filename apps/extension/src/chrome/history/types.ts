@@ -138,7 +138,10 @@ export interface CompletedTransaction {
   /** ERC-4337 operation hash while a token-funded transaction is pending. */
   userOperationHash?: string;
   /** Token used to settle gas through an ERC-4337 paymaster. */
+  /** @deprecated Symbol-only marker retained for released history records. */
   feePaymentToken?: string;
+  /** Lowercase token contract plus optional settled base-unit charge. */
+  erc20FeePayment?: { token: string; amountWei?: string };
   /** Signed bytes crossed the RPC boundary without an authoritative reply. */
   broadcastUncertain?: boolean;
   error?: string;

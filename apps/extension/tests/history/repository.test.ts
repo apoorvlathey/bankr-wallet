@@ -33,6 +33,7 @@ test("IndexedDB history migrates, compacts, pages, hydrates, and protects active
     createdAt: 40,
     status: "success",
     txHash: `0x${"1".repeat(64)}`,
+    erc20FeePayment: { token: ADDRESS_B, amountWei: "5847" },
     assetChanges: {
       version: 2,
       blockNumber: "10",
@@ -59,6 +60,10 @@ test("IndexedDB history migrates, compacts, pages, hydrates, and protects active
     assert.equal(harness.stores.local.txHistory, undefined);
     assert.equal(migrated?.tx.data, undefined);
     assert.equal(migrated?.calldataSelector, "0x12345678");
+    assert.deepEqual(migrated?.erc20FeePayment, {
+      token: ADDRESS_B,
+      amountWei: "5847",
+    });
     assert.deepEqual(migrated?.assetChanges?.nftTransfers?.[0], {
       token: ADDRESS_B,
       counterparty: ADDRESS_A,

@@ -55,17 +55,25 @@ export async function pollFeePaymentReceipt(
         continue;
       }
       if (verified.success) {
-        await applyReceiptToHistory(txId, verified.txHash, chainId, verified.receipt);
+        await applyReceiptToHistory(
+          txId,
+          verified.txHash,
+          chainId,
+          verified.receipt,
+          { feePaymentPaymaster: verified.paymaster },
+        );
         await writeResultToStorage(`txResult:${txId}`, {
           success: true,
           txHash: verified.txHash,
         });
       } else {
-        await updateTxInHistory(txId, {
-          status: "failed",
-          txHash: verified.txHash,
-          error: "UserOperation reverted",
-        });
+        await applyReceiptToHistory(
+          txId,
+          verified.txHash,
+          chainId,
+          { ...verified.receipt, status: "reverted" },
+          { feePaymentPaymaster: verified.paymaster },
+        );
         await writeResultToStorage(`txResult:${txId}`, {
           success: false,
           error: "Transaction reverted",
@@ -109,7 +117,7 @@ export async function processUsdcTransactionInBackground(input: {
       accountType: signer.account.type,
       functionName,
       accountId: pending.accountId,
-      feePaymentToken: token.symbol,
+      erc20FeePayment: { token: token.address.toLowerCase() },
     });
 
     const context = await getFeePaymentChainContext(chainId, sender);
@@ -198,7 +206,7 @@ export async function processUsdcTransactionInBackground(input: {
     await updateTxInHistory(txId, {
       status: "pending",
       userOperationHash: submission.userOperationHash,
-      feePaymentToken: token.symbol,
+      erc20FeePayment: { token: token.address.toLowerCase() },
       ...(submission.outcomeUnknown ? { broadcastUncertain: true } : {}),
     });
     void pollFeePaymentReceipt(

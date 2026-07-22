@@ -1,7 +1,7 @@
 import { getRpcUrl } from "../transactions/rpcConfig";
-import { getTxById, updateTxInHistory } from "../txHistoryStorage";
+import { updateTxInHistory } from "../txHistoryStorage";
 import { fetchSettledReceiptAtRpcUrl } from "../history/receiptSettlement";
-import { isWalletOuterGasPayer } from "../history/nativeDelta";
+import { startReceiptAssetChangeExtraction } from "./receiptAssetEnrichment";
 import { showReceiptNotification } from "./receiptNotification";
 import { buildReceiptGasData } from "./receiptRpc";
 import {
@@ -14,7 +14,11 @@ export async function applyReceiptToHistory(
   txHash: string,
   chainId: number,
   receipt: any,
-  options: { rpcUrl?: string; signedGasLimit?: bigint | string } = {},
+  options: {
+    rpcUrl?: string;
+    signedGasLimit?: bigint | string;
+    feePaymentPaymaster?: string;
+  } = {},
 ): Promise<boolean> {
   const succeeded =
     receipt.status === "success" ||
@@ -47,7 +51,15 @@ export async function applyReceiptToHistory(
       completedAt: Date.now(),
       gasData,
     });
-    startAssetChangeExtraction(txId, txHash, chainId, settledReceipt, rpcUrl);
+    const extraction = startReceiptAssetChangeExtraction(
+      txId,
+      txHash,
+      chainId,
+      settledReceipt,
+      rpcUrl,
+      options.feePaymentPaymaster,
+    );
+    void extraction;
   } else {
     await updateTxInHistory(txId, {
       status: "failed",
@@ -56,6 +68,16 @@ export async function applyReceiptToHistory(
       error: "Transaction reverted onchain",
       completedAt: Date.now(),
     });
+    if (options.feePaymentPaymaster) {
+      void startReceiptAssetChangeExtraction(
+        txId,
+        txHash,
+        chainId,
+        receipt,
+        options.rpcUrl,
+        options.feePaymentPaymaster,
+      );
+    }
   }
   await applyReceiptStateMirrors({
     txId,
@@ -74,36 +96,4 @@ export async function applyReceiptToHistory(
     succeeded,
   });
   return succeeded;
-}
-
-function startAssetChangeExtraction(
-  txId: string,
-  txHash: string,
-  chainId: number,
-  receipt?: any,
-  rpcUrlOverride?: string,
-): void {
-  void (async () => {
-    try {
-      const rpcUrl = rpcUrlOverride ?? (await getRpcUrl(chainId));
-      if (!rpcUrl) return;
-      const tx = await getTxById(txId);
-      const sender = tx?.tx?.from;
-      if (!sender) return;
-      const { extractAssetChangesWhenReceiptAvailable } = await import(
-        "../receiptEnrichment"
-      );
-      extractAssetChangesWhenReceiptAvailable({
-        txId,
-        txHash,
-        chainId,
-        userAddress: sender,
-        receipt,
-        rpcUrl,
-        payerForGas: isWalletOuterGasPayer(tx?.feePaymentToken),
-      });
-    } catch (error) {
-      console.warn("[receipt] asset-changes extraction failed", error);
-    }
-  })();
 }

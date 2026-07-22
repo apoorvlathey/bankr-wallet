@@ -688,6 +688,15 @@ any credential is used. PK/seed and already-delegated Bankr accounts reuse the
 atomic fee-payment batch signer; Ledger, impersonator, and Safe accounts cannot
 enter this internal Swap token-payment path.
 
+New transaction history retains only the public fee-token contract and settled
+base-unit charge. Symbol, decimals, logo, price, quote maximum, and paymaster are
+not duplicated per row. The paymaster used for receipt classification comes
+from the exact verified onchain `UserOperationEvent`; the fee token and exact
+charge come from that paymaster's matching `UserOperationSponsored` event.
+Classification removes only a matching treasury debit or charge/refund pair.
+If that match cannot be proven, the transfer remains visible and no fee amount
+is invented. The bundler's native outer cost is never treated as an account debit.
+
 The confirmation renderer bounds option discovery to 10 seconds and quote
 preparation to 30 seconds. Timeout invalidates late callbacks and enters an
 explicit-retry error state; it never creates an automatic retry loop or silently

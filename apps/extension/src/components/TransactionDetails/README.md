@@ -36,6 +36,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `Erc7715RevokeReceipt.tsx` | Render a confirmed permission revocation as the shared summary ledger rather than reusing its pre-confirmation warning card | Address and token tools delegated to shared popovers |
 | `DecodedFunctionSummary.tsx` | Render the existing calldata decoder's resolved function, contract, and optional native payment when no clear-signed summary exists | Address actions delegated to the shared labeled-address popover |
 | `TransactionMeta.tsx` | Render the signing identity, gas fee, sequential-batch context, and timestamp as compact post-submission metadata | None |
+| `feeDisplay.ts` | Pure ERC-20 fee amount and unresolved-state formatting | None |
 | `AdvancedDetails.tsx` | Own the single technical disclosure, scroll its heading into view on user expansion, and compose raw transaction, gas diagnostics, then the signed nonce | Scrolls the existing detail viewport only |
 | `RawTransactionDetails.tsx` | Render function, transfer, addresses, value, calldata, and deploy data inside the advanced owner; publish the existing decoder's resolved function name | Copy/explorer actions delegated to shared components |
 | `GasDetails.tsx` | Render confirmed or estimated gas diagnostics inside the advanced owner | None |
@@ -75,6 +76,9 @@ large hook.
   private-key, and seed-phrase transactions.
 - Existing message names, receipt polling cadence, explorer URL validation,
   metadata fallback rules, and collapse defaults are compatibility behavior.
+- Token-funded entries show their settled ERC-20 fee in both compact metadata
+  and Advanced details, resolve metadata/prices lazily from shared caches, and
+  never present the bundler's outer native receipt cost as wallet-paid gas.
 - Non-zero balance changes must remain visible. Eighteen-decimal dust up to
   99,999 base units uses exact wei; other narrow tiny values use the shared
   compact subscript-zero notation rather than rounding to zero.

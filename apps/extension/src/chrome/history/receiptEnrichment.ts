@@ -1,5 +1,6 @@
 import { fetchRawTransactionReceipt } from "./receiptTransport";
 import { fetchSettledReceiptAtRpcUrl } from "./receiptSettlement";
+import type { Erc20FeeTransferContext } from "./erc20FeeSettlement";
 export {
   queueReceiptDerivedHistoryReconciliation as queueAssetChangesBackfill,
 } from "./receiptReconciliation";
@@ -14,6 +15,7 @@ export async function extractAssetChangesFromReceipt(args: {
   receipt: any;
   rpcUrl: string;
   payerForGas?: boolean;
+  feePayment?: Erc20FeeTransferContext;
 }): Promise<void> {
   const { extractAndStoreAssetChanges } = await import(
     "./assetChangePersistence"
@@ -21,7 +23,7 @@ export async function extractAssetChangesFromReceipt(args: {
   await extractAndStoreAssetChanges(args);
 }
 
-export function extractAssetChangesWhenReceiptAvailable(args: {
+export async function extractAssetChangesWhenReceiptAvailable(args: {
   txId: string;
   txHash: string;
   chainId: number;
@@ -30,8 +32,8 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
   rpcUrl?: string;
   logPrefix?: string;
   payerForGas?: boolean;
-}): void {
-  void (async () => {
+  feePayment?: Erc20FeeTransferContext;
+}): Promise<void> {
     const logPrefix = args.logPrefix ?? "[receipt]";
     try {
       if (args.rpcUrl) {
@@ -49,6 +51,7 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
           receipt,
           rpcUrl: args.rpcUrl,
           payerForGas: args.payerForGas,
+          feePayment: args.feePayment,
         });
         return;
       }
@@ -70,6 +73,7 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
             receipt,
             rpcUrl: raw.rpcUrl,
             payerForGas: args.payerForGas,
+            feePayment: args.feePayment,
           });
           return;
         }
@@ -80,7 +84,6 @@ export function extractAssetChangesWhenReceiptAvailable(args: {
     } catch (error) {
       console.warn(`${logPrefix} asset-changes extraction failed`, error);
     }
-  })();
 }
 
 function sleep(ms: number): Promise<void> {
