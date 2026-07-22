@@ -91,6 +91,7 @@ export function getOriginHostname(origin: string): string | null {
 }
 
 export function formatActivityFunctionName(value: string): string {
+  if (/^Execute Safe Tx #\d+$/.test(value)) return value;
   const normalized = value
     .trim()
     .replace(/[_-]+/g, " ")
@@ -332,8 +333,7 @@ export function getActivityPresentation(
       compactValue: getPrivacyShieldValue(tx, true),
     };
   }
-  const originHostname =
-    originDisplayHostname ?? getOriginHostname(tx.origin);
+  const originHostname = originDisplayHostname ?? getOriginHostname(tx.origin);
   if (tx.replacement?.kind === "cancel") {
     return {
       originHostname: null,

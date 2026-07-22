@@ -136,15 +136,16 @@ export function TxDetailController({
     !!tx.bridge ||
     !!privacyShieldMeta;
   const [errorExpanded, setErrorExpanded] = useState(false);
+  const semanticFunctionName = tx.safeExecutionMeta ? `Execute Safe Tx #${tx.safeExecutionMeta.nonce}` : tx.functionName;
   const [decodedFunctionName, setDecodedFunctionName] = useState<string | undefined>(
-    tx.functionName,
+    semanticFunctionName,
   );
   useEffect(() => {
-    setDecodedFunctionName(tx.functionName);
-  }, [tx.functionName, tx.id]);
+    setDecodedFunctionName(semanticFunctionName);
+  }, [semanticFunctionName, tx.id]);
   const handleDecodedFunctionName = useCallback((name: string) => {
-    setDecodedFunctionName((current) => (current === name ? current : name));
-  }, []);
+    if (!tx.safeExecutionMeta) setDecodedFunctionName((current) => (current === name ? current : name));
+  }, [tx.safeExecutionMeta]);
   const [isRebroadcasting, setIsRebroadcasting] = useState(false);
   const {
     sourceAssetChanges,
@@ -166,7 +167,6 @@ export function TxDetailController({
     !!tx.error &&
     tx.error.toLowerCase().includes("dropped from the mempool") &&
     !!tx.tx.to && (!tx.calldataSelector || !!calldata.data);
-
   const handleRebroadcast = async () => {
     if (!tx.tx.to) return;
     setIsRebroadcasting(true);

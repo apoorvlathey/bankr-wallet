@@ -85,13 +85,14 @@ test("pending details and replacement exits return to Activity", async () => {
     ),
   ]);
 
-  assert.equal(app.match(/returnToActivity\(\)/g)?.length, 3);
+  assert.equal(app.match(/returnToActivity\(\)/g)?.length, 4);
   assert.match(
     app,
     /selectedTxRequest\?\.replacement[\s\S]*?preNavigatedRef\.current = true;[\s\S]*?returnToActivity\(\)/,
   );
   assert.match(app, /selectedTxRequest\.replacement[\s\S]*?returnToActivity\(\)/);
   assert.match(app, /wasUserRejected && !selectedTxRequest\.replacement/);
+  assert.match(app, /if \(shouldReturnToActivity\) returnToActivity\(\)/);
   assert.match(portfolio, /activityTabTrigger > holdingsTabTrigger/);
   assert.match(portfolio, /holdingsTabTrigger > activityTabTrigger/);
 });

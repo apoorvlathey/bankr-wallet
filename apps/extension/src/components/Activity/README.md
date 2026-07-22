@@ -27,6 +27,11 @@ their two-line hierarchy. Speed-up rows retain the original transaction's
 identity and presentation. A displaced mempool transaction renders `Dropped`
 rather than sharing the `Failed` execution state.
 
+Safe executor rows retain a durable Safe address/nonce marker in normal
+account history. Activity uses that marker for the Safe mark and the
+`Execute Safe Tx #n` identity instead of presenting the outer
+`execTransaction` as a dapp contract interaction.
+
 ## Dependency direction
 
 `TxStatusList` facade → `ActivityList` → focused rows/presentation. Shield

@@ -1,6 +1,7 @@
-import { formatUnits } from "viem";
+import { formatUnits, toHex } from "viem";
 import type { SafeProposalRecord } from "@/chrome/safe/types";
 import { formatActivityAmount, formatActivityFunctionName } from "@/components/Activity/activityModel";
+import { getBatchActionSummary } from "@/components/BatchConfirmation/batchActionSummary";
 import { detectAbiEncodingError } from "@/lib/calldataValidation";
 import { parseApproveCalldata } from "@/lib/erc20Approve";
 import { parseTransferCalldata } from "@/lib/erc20Transfer";
@@ -31,6 +32,7 @@ function requestAction(
   nativeSymbol: string,
   nativeDecimals: number,
   addressLabels: ReadonlyMap<string, string> | undefined,
+  decodedFunctionNames: Readonly<Record<number, string>>,
 ) {
   if (item.purpose === "rejection") {
     return {
@@ -39,8 +41,17 @@ function requestAction(
     };
   }
   if (item.calls.length !== 1) {
+    const summary = getBatchActionSummary({
+      calls: item.calls.map((call) => ({
+        to: call.to,
+        value: toHex(BigInt(call.value)),
+        data: call.data,
+      })),
+      clearSigningActionNames: {},
+      decodedFunctionNames: { ...decodedFunctionNames },
+    });
     return {
-      intent: `${item.calls.length}-action request`,
+      intent: summary ?? `${item.calls.length}-action request`,
       counterparty: null,
     };
   }
@@ -83,7 +94,8 @@ function requestAction(
     };
   }
 
-  const knownCall = detectAbiEncodingError(call.data).functionName;
+  const knownCall = decodedFunctionNames[0] ??
+    detectAbiEncodingError(call.data).functionName;
   return {
     intent: knownCall
       ? formatActivityFunctionName(knownCall)
@@ -165,6 +177,7 @@ export function getSafeProposalPresentation(
     rejectionPending?: boolean;
     blockedByNonce?: number;
     addressLabels?: ReadonlyMap<string, string>;
+    decodedFunctionNames?: Readonly<Record<number, string>>;
   },
 ): SafeProposalPresentation {
   const action = requestAction(
@@ -172,6 +185,7 @@ export function getSafeProposalPresentation(
     options.nativeSymbol ?? "ETH",
     options.nativeDecimals ?? 18,
     options.addressLabels,
+    options.decodedFunctionNames ?? {},
   );
   const status = requestStatus(
     item,

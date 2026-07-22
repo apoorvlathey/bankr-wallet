@@ -87,7 +87,11 @@ for (const accountType of ["privateKey", "seedPhrase"] as const) {
     assert.equal(entry.chainName, "Base");
     assert.equal(entry.accountType, accountType);
     assert.equal(entry.accountId, `${accountType}-executor`);
-    assert.equal(entry.functionName, "Contract interaction");
+    assert.equal(entry.functionName, "Execute Safe Tx #7");
+    assert.deepEqual(entry.safeExecutionMeta, {
+      safeAddress: SAFE,
+      nonce: 7,
+    });
     assert.equal(entry.broadcastUncertain, false);
   });
 }
@@ -118,8 +122,8 @@ test("token-funded Safe execution records its pending UserOperation and fee toke
   assert.equal(decoded.executor?.feePaymentTokenAddress, FEE_TOKEN);
 });
 
-test("Safe execution persistence rejects Bankr, impersonator, and Safe executors", () => {
-  for (const accountType of ["bankr", "impersonator", "safe"]) {
+test("Safe execution persistence rejects Bankr, Ledger, impersonator, and Safe executors", () => {
+  for (const accountType of ["bankr", "ledger", "impersonator", "safe"]) {
     const invalid = proposal("privateKey") as any;
     invalid.executor = { ...invalid.executor, accountType };
     assert.throws(

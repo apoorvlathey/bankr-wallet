@@ -6478,9 +6478,15 @@ backoff. At that same irreversible boundary, WalletChan adds one deterministic
 normal transaction-history record for the private-key or seed-phrase executor
 that pays gas. Its `from` is the executor, its `to` is the Safe, and its data is
 the exact outer `execTransaction` envelope, so only the executor account's
-Activity list receives the standard contract-interaction row. The ordinary
+Activity list receives the normal history row. That row also stores the Safe
+address and nonce in additive `safeExecutionMeta`; Activity uses the marker to
+show the Safe logo and `Execute Safe Tx #n` instead of the originating dapp's
+generic contract-interaction identity. The ordinary
 receipt poller owns pending, confirmed, reverted, gas, asset-change, and details
-behavior; Safe reconciliation only repairs and resumes that same row after an
+behavior. Transaction details retain that semantic Safe execution label when
+the asynchronous calldata decoder later resolves the technical outer function
+as `execTransaction`; the lower-level decode remains available in Advanced
+details. Safe reconciliation only repairs and resumes that same row after an
 MV3 restart. A visible review wakes this same background route every ten seconds;
 it does not own or infer terminal state. The confirmation footer becomes a
 passive **Confirming onchain…** state rather than offering another Execute or
@@ -6493,9 +6499,16 @@ opens the Safe account's Activity tab; loading an already-terminal Activity
 record does not retrigger that navigation. Safe Activity retains all visible
 proposal records, sorts them by descending Safe nonce, and projects them through
 the same date-grouped ledger, origin identity, chain badge, and inline status
-grammar as ordinary transaction Activity. The app records whether a proposal
+grammar as ordinary transaction Activity. Visible Safe rows resolve the same
+local calldata function names as transaction details and reuse the batch action
+summary, so single and multi-call labels do not fall back to generic request
+copy when the reviewed calldata is decodable. The resolver keys its retained
+result by proposal ID and calldata rather than refreshed proposal-array identity,
+so routine Safe synchronization cannot flash the generic fallback between
+equivalent records. The app records whether a proposal
 detail was opened from Activity; its Back action then returns directly to the
-Activity tab instead of entering the pending-only Safe Requests inbox.
+Activity tab through the same tab-precedence action used by ordinary transaction
+details, while the screen stack restores the saved Activity scroll position.
 
 Injected dapps and WalletConnect expose a Safe only on an exact verified,
 actionable chain. Safe message signing/EIP-1271 remains disabled. Transaction

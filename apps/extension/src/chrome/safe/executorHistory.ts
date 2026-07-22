@@ -81,7 +81,11 @@ export function buildSafeExecutorHistoryEntry(
     broadcastUncertain,
     accountType: executor.accountType,
     accountId: executor.accountId,
-    functionName: "Contract interaction",
+    functionName: `Execute Safe Tx #${proposal.transaction.nonce}`,
+    safeExecutionMeta: {
+      safeAddress: proposal.safeAddress,
+      nonce: proposal.transaction.nonce,
+    },
   };
 }
 
@@ -104,7 +108,23 @@ export async function ensureSafeExecutorHistory(
     broadcastUncertain,
   );
   if (!entry) return null;
-  return addTxToHistoryIfAbsent(entry);
+  const stored = await addTxToHistoryIfAbsent(entry);
+  if (
+    stored.functionName !== entry.functionName ||
+    stored.safeExecutionMeta?.safeAddress !== entry.safeExecutionMeta?.safeAddress ||
+    stored.safeExecutionMeta?.nonce !== entry.safeExecutionMeta?.nonce
+  ) {
+    await updateTxInHistory(entry.id, {
+      functionName: entry.functionName,
+      safeExecutionMeta: entry.safeExecutionMeta,
+    });
+    return {
+      ...stored,
+      functionName: entry.functionName,
+      safeExecutionMeta: entry.safeExecutionMeta,
+    };
+  }
+  return stored;
 }
 
 export async function trackSafeExecutorBroadcast(

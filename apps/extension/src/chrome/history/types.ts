@@ -107,6 +107,9 @@ export interface TxCallOrigin {
   favicon: string | null;
 }
 
+/** Identifies the local account transaction that submitted a Safe proposal. */
+export interface SafeExecutionHistoryMeta { safeAddress: string; nonce: number }
+
 export interface GasData {
   gasUsed: string;
   gasLimit: string;
@@ -154,6 +157,8 @@ export interface CompletedTransaction {
   clearSignedMeta?: ClearSignedMeta;
   /** One origin per decoded ERC-7821 call in a cross-dapp batch. */
   batchCallOrigins?: TxCallOrigin[];
+  /** Durable presentation identity for a Safe executor's outer transaction. */
+  safeExecutionMeta?: SafeExecutionHistoryMeta;
   forceInclusionMeta?: ForceInclusionMeta;
   /** Cross-chain bridge metadata. Present only on source-chain bridge rows. */
   bridge?: BridgeMeta;

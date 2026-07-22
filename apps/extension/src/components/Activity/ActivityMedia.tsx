@@ -5,6 +5,7 @@ import SafeImage from "@/components/SafeImage";
 import { googleFaviconUrl } from "@/constants/externalUrls";
 import { INERT_IMAGE_SRC } from "@/hooks/useCachedAvatarSrc";
 import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
+import { SafeIcon } from "@/components/shared/AccountTypeIcons";
 import {
   getInternalSendSymbol,
   isShieldActivityTransaction,
@@ -159,6 +160,28 @@ export default function ActivityMedia({
           borderColor="border.subtle"
         >
           <PrivacyShieldIcon boxSize="20px" />
+        </Box>
+        <ChainBadge tx={tx} iconChipBg={iconChipBg} />
+      </Box>
+    );
+  }
+
+  if (tx.safeExecutionMeta) {
+    return (
+      <Box position="relative" flexShrink={0} w="32px" h="32px">
+        <Box
+          bg={isDarkTheme ? "status.success.bg" : iconChipBg}
+          color="status.success.emphasis"
+          borderRadius="md"
+          w="32px"
+          h="32px"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          border="1px solid"
+          borderColor="border.default"
+        >
+          <SafeIcon boxSize="20px" />
         </Box>
         <ChainBadge tx={tx} iconChipBg={iconChipBg} />
       </Box>

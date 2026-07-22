@@ -9,6 +9,7 @@ import { SafeIcon } from "@/components/shared/AccountTypeIcons";
 import { ListItem } from "@/components/ui";
 import { useIconChipBg, useTheme } from "@/theme";
 import { getSafeProposalPresentation } from "./safeProposalPresentation";
+import { useSafeProposalFunctionNames } from "./hooks/useSafeProposalFunctionNames";
 
 function SafeActivityMedia({
   proposal,
@@ -94,11 +95,16 @@ export function SafeProposalActivityRow({
   originDisplay: DappOriginDisplay;
   onOpen: () => void;
 }) {
+  const decodedFunctionNames = useSafeProposalFunctionNames(
+    proposal.id,
+    proposal.calls,
+  );
   const presentation = getSafeProposalPresentation(proposal, {
     nativeSymbol,
     nativeDecimals,
     threshold,
     addressLabels,
+    decodedFunctionNames,
   });
   const context = `${presentation.context} · ${originDisplay.label}`;
   const isReadyToExecute = proposal.state === "readyToExecute";

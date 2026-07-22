@@ -85,6 +85,24 @@ test("activity function labels use readable sentence case", () => {
   assert.equal(formatActivityFunctionName("multicall"), "Multicall");
 });
 
+test("Safe executor activity uses its durable Safe identity", () => {
+  const tx = transaction({
+    functionName: "Execute Safe Tx #13",
+    safeExecutionMeta: {
+      safeAddress: "0x1111111111111111111111111111111111111111",
+      nonce: 13,
+    },
+  });
+
+  assert.deepEqual(getActivityPresentation(tx), {
+    originHostname: "app.example.com",
+    intent: "Execute Safe Tx #13",
+    context: "app.example.com",
+    value: null,
+    compactValue: null,
+  });
+});
+
 test("activity grouping labels today, yesterday, and older dates", () => {
   const today = new Date(2026, 6, 13, 12);
   const groups = groupActivityByDate(

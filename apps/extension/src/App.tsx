@@ -2464,14 +2464,9 @@ function App() {
     if (activeAccount?.type !== "safe") {
       return <SafeFeatureUnavailable title="Safe account is no longer selected" onBack={() => setView("main")} />;
     }
-    const returnToActivity = safeProposalEntryPoint === "activity";
-    const leaveSafeApprovals = () => {
-      setSelectedSafeProposalId(null);
-      setSafeProposalEntryPoint("requests");
-      if (returnToActivity) setActivityTabTrigger((current) => current + 1);
-      setView("main");
-    };
-    return <SafeApprovalsSurface account={activeAccount} chainId={selectedChain?.chainId ?? 8453} accounts={accounts} proposalId={selectedSafeProposalId} fullscreen={isFullscreenTab} onBack={leaveSafeApprovals} onProposalBack={returnToActivity ? leaveSafeApprovals : undefined} onExecutionSubmitted={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} onExecutionConfirmed={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} />;
+    const shouldReturnToActivity = safeProposalEntryPoint === "activity";
+    const leaveSafeApprovals = () => { setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); if (shouldReturnToActivity) returnToActivity(); else setView("main"); };
+    return <SafeApprovalsSurface account={activeAccount} chainId={selectedChain?.chainId ?? 8453} accounts={accounts} proposalId={selectedSafeProposalId} fullscreen={isFullscreenTab} onBack={leaveSafeApprovals} onProposalBack={shouldReturnToActivity ? leaveSafeApprovals : undefined} onExecutionSubmitted={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} onExecutionConfirmed={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} />;
   }
 
   // Transfer view

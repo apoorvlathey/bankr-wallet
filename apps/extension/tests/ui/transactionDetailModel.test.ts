@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { AssetChangeRecord } from "../../src/chrome/txHistoryStorage";
 import { getForceInclusionState } from "../../src/components/TransactionDetails/forceInclusionState";
@@ -9,6 +10,11 @@ import {
   getErc20TransferGroups,
   pickAssetChangeAmount,
 } from "../../src/components/TransactionDetails/formatting";
+
+const txDetailControllerUrl = new URL(
+  "../../src/components/TransactionDetails/TxDetailController.tsx",
+  import.meta.url,
+);
 
 const record: AssetChangeRecord = {
   blockNumber: "1",
@@ -42,6 +48,12 @@ test("transaction detail token formatting preserves direction and display precis
   assert.equal(formatValue("1", "ETH"), "1 wei");
   assert.equal(formatValue("10000000000000000", "ETH"), "0.01 ETH");
   assert.equal(formatValue("0x0", "ETH"), "0 ETH");
+});
+
+test("Safe execution detail keeps its semantic action over decoded calldata", async () => {
+  const source = await readFile(txDetailControllerUrl, "utf8");
+  assert.match(source, /`Execute Safe Tx #\$\{tx\.safeExecutionMeta\.nonce\}`/);
+  assert.match(source, /if \(!tx\.safeExecutionMeta\) setDecodedFunctionName/);
 });
 
 test("duplicate token transfers group by token and direction while keeping rows", () => {

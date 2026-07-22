@@ -47,6 +47,10 @@ const safeActivityRowUrl = new URL(
   "../../src/components/SafeApprovals/SafeProposalActivityRow.tsx",
   import.meta.url,
 );
+const safeFunctionNamesHookUrl = new URL(
+  "../../src/components/SafeApprovals/hooks/useSafeProposalFunctionNames.ts",
+  import.meta.url,
+);
 const activityListUrl = new URL(
   "../../src/components/Activity/ActivityList.tsx",
   import.meta.url,
@@ -514,7 +518,8 @@ test("Safe request completion routes only on a same-proposal executed transition
   assert.match(requestsScreen, /onExecutionConfirmed\(\)/);
   assert.match(appSurfaces, /onExecutionConfirmed=\{onExecutionConfirmed\}/);
   assert.match(app, /safeProposalEntryPoint === "activity"/);
-  assert.match(app, /onProposalBack=\{returnToActivity \? leaveSafeApprovals : undefined\}/);
+  assert.match(app, /onProposalBack=\{shouldReturnToActivity \? leaveSafeApprovals : undefined\}/);
+  assert.match(app, /if \(shouldReturnToActivity\) returnToActivity\(\)/);
   assert.match(app, /openSafeApprovals\(proposalId, "activity"\)/);
   assert.match(app, /setActivityTabTrigger\(\(current\) => current \+ 1\)/);
   assert.match(appSurfaces, /onProposalBack=\{onProposalBack\}/);
@@ -591,6 +596,44 @@ test("Safe request rows describe the action and approval state", () => {
   assert.equal(presentation.context, "To Signer account");
   assert.equal(presentation.status, "Ready to execute");
   assert.equal(presentation.statusTone, "success");
+});
+
+test("Safe Activity uses decoded single and batch call names", () => {
+  const single = safeProposal();
+  single.calls = [{
+    to: single.safeAddress,
+    value: "0",
+    data: "0x12345678",
+    operation: 0,
+  }];
+  assert.equal(
+    getSafeProposalPresentation(single, {
+      decodedFunctionNames: { 0: "supply" },
+    }).intent,
+    "Supply",
+  );
+
+  const batch = {
+    ...single,
+    calls: [
+      { ...single.calls[0], data: "0x095ea7b3" as `0x${string}` },
+      { ...single.calls[0], data: "0x87654321" as `0x${string}` },
+    ],
+  };
+  assert.equal(
+    getSafeProposalPresentation(batch, {
+      decodedFunctionNames: { 0: "approve", 1: "swapExactAmountIn" },
+    }).intent,
+    "Approve + Swap",
+  );
+});
+
+test("Safe Activity retains decoded names across equivalent proposal refreshes", async () => {
+  const source = await readFile(safeFunctionNamesHookUrl, "utf8");
+  assert.match(source, /const decodeKey = useMemo/);
+  assert.match(source, /}, \[decodeKey\]\);/);
+  assert.match(source, /resolved\.key === decodeKey \? resolved\.names : \{\}/);
+  assert.doesNotMatch(source, /setNames\(\{\}\)/);
 });
 
 test("Safe rejection rows describe the onchain nonce replacement", () => {

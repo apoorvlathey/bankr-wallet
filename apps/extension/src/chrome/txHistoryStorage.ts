@@ -15,7 +15,7 @@ export type {
   NftTransferRecord,
   PrivacyRagequitHistoryMeta,
   PrivacyShieldHistoryMeta,
-  PrivacyUnshieldHistoryMeta,
+  PrivacyUnshieldHistoryMeta, SafeExecutionHistoryMeta,
   SwapMeta,
   TransferMeta,
   TxCallOrigin,

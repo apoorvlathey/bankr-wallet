@@ -76,6 +76,9 @@ large hook.
   private-key, and seed-phrase transactions.
 - Existing message names, receipt polling cadence, explorer URL validation,
   metadata fallback rules, and collapse defaults are compatibility behavior.
+- Safe executor history metadata owns the semantic detail action
+  `Execute Safe Tx #n`; the nested calldata decoder may expose the technical
+  `execTransaction` call in Advanced details but cannot replace that summary.
 - Token-funded entries show their settled ERC-20 fee in both compact metadata
   and Advanced details, resolve metadata/prices lazily from shared caches, and
   never present the bundler's outer native receipt cost as wallet-paid gas.

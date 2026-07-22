@@ -24,6 +24,11 @@
 - `hooks/useSafeExecutionRefresh.ts`: wakes background receipt reconciliation
   immediately and every ten seconds while a pending execution review is
   visible. It owns no receipt, nonce, or terminal-state authority.
+- `hooks/useSafeProposalFunctionNames.ts`: headless local calldata-name
+  resolution shared with the detail decoder so Activity can show one-call and
+  concise multi-call action summaries without mounting detail cards. Resolution
+  is keyed by proposal ID plus calldata, so equivalent background refreshes do
+  not clear an already-readable row while decoding the same calls again.
 - `SafeProposalDecisionSummary.tsx`: sticky `Signing with` / `Execute with`
   identity row, account dropdown, and shared transaction gas estimator.
   Execution choices that are also Safe owners carry an explicit `Owner` label;
@@ -72,7 +77,7 @@
 - `SafeProposalActivity.tsx`: descending-nonce proposal selection, shared date
   grouping, live origin resolution, and Activity-ledger composition.
 - `SafeProposalActivityRow.tsx`: compact Warm Midnight Activity row with dapp
-  identity, chain badge, plain-language intent/context, inline status, and
+  identity, chain badge, decoded plain-language intent/context, inline status, and
   muted-label/primary-value nonce metadata. Executable rows use an amber
   hourglass and full inset focus boundary, while Midnight Safe fallback marks
   use a dark success-tinted chip instead of the generic light favicon canvas.
