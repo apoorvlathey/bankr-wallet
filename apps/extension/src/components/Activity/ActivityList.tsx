@@ -23,6 +23,10 @@ import ActivityItem from "./ActivityItem";
 import { ActivityDateHeader } from "./ActivityDateHeader";
 import { buildActivityAddressLabels } from "./activityIdentityModel";
 import { groupActivityByDate } from "./activityModel";
+import { isTransactionVisibleInActivityScope } from "./activityScopeModel";
+import type { UnshieldOperation } from "@/components/Shield/model/unshield";
+import UnshieldActivityItem from "./UnshieldActivityItem";
+import { SHIELDED_ETH_CHAIN_ID } from "@/components/Shield/model/shieldedAsset";
 
 interface ActivityListProps {
   maxItems?: number;
@@ -37,6 +41,10 @@ interface ActivityListProps {
   onSelectTx?: (tx: CompletedTransaction) => void;
   /** Activity remains mounted behind other portfolio tabs. */
   isActive?: boolean;
+  /** Opens the same full-screen detail route used by ordinary transactions. */
+  onSelectUnshield?: (operation: UnshieldOperation) => void;
+  scope?: "public" | "private";
+  unshieldOperations?: readonly UnshieldOperation[];
 }
 
 const PAGE_SIZE = 30;
@@ -61,6 +69,27 @@ function mergeHistory(
   );
 }
 
+type ActivityEntry =
+  | { kind: "transaction"; createdAt: number; tx: CompletedTransaction }
+  | { kind: "unshield"; createdAt: number; operation: UnshieldOperation };
+
+const UNSHIELD_ACTIVITY_STATES = new Set<UnshieldOperation["state"]>([
+  "awaiting_wallet_confirmation",
+  "proof_preparing",
+  "proof_verified",
+  "submitting_to_relayer",
+  "submission_unknown",
+  "submitted",
+  "public_confirmed",
+  "private_balance_updated",
+  "proof_failed",
+  "relayer_rejected",
+  "public_reverted",
+  "nullifier_already_spent",
+  "failed_recoverable",
+  "failed_needs_support",
+]);
+
 function TxStatusList({
   maxItems = 5,
   address,
@@ -72,6 +101,9 @@ function TxStatusList({
   hideEmptyState = false,
   onSelectTx,
   isActive = true,
+  onSelectUnshield,
+  scope = "public",
+  unshieldOperations = [],
 }: ActivityListProps) {
   const [history, setHistory] = useState<CompletedTransaction[]>([]);
   const [cursor, setCursor] = useState<TxHistoryCursor | null>(null);
@@ -97,10 +129,10 @@ function TxStatusList({
       try {
         const page = await sendMessage<TxHistoryPage>({
           type: "getTxHistoryPage",
-          ownerAddress: address,
-          chainId: filterChainId,
+          ownerAddress: scope === "public" ? address : undefined,
+          chainId: scope === "public" ? filterChainId : undefined,
           cursor: nextCursor,
-          limit: hideHeader ? PAGE_SIZE : maxItems,
+          limit: hideHeader || scope === "private" ? PAGE_SIZE : maxItems,
         });
         if (generation !== requestGeneration.current) return;
         setHistory((current) => append ? mergeHistory(current, page.items) : page.items);
@@ -116,7 +148,7 @@ function TxStatusList({
         }
       }
     },
-    [address, filterChainId, hideHeader, maxItems],
+    [address, filterChainId, hideHeader, maxItems, scope],
   );
 
   useEffect(() => {
@@ -135,8 +167,8 @@ function TxStatusList({
       chainId?: number;
     }) => {
       if (message.type !== "txHistoryUpdated") return;
-      if (address && message.ownerAddress && message.ownerAddress !== address.toLowerCase()) return;
-      if (filterChainId != null && message.chainId != null && message.chainId !== filterChainId) return;
+      if (scope === "public" && address && message.ownerAddress && message.ownerAddress !== address.toLowerCase()) return;
+      if (scope === "public" && filterChainId != null && message.chainId != null && message.chainId !== filterChainId) return;
       if (!message.txId) {
         void requestPage(null, false);
         return;
@@ -152,7 +184,7 @@ function TxStatusList({
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [address, filterChainId, requestPage]);
+  }, [address, filterChainId, requestPage, scope]);
 
   useEffect(() => {
     if (!isActive || !hideHeader || !hasMore || loadingMore || !sentinelRef.current) return;
@@ -191,14 +223,38 @@ function TxStatusList({
     return () => clearInterval(interval);
   }, [hasPending, isActive]);
 
-  const displayItems = hideHeader ? history : history.slice(0, maxItems);
+  const transactionEntries: ActivityEntry[] = history
+    .filter((tx) => isTransactionVisibleInActivityScope(tx, scope))
+    .map((tx) => ({ kind: "transaction", createdAt: tx.createdAt, tx }));
+  const unshieldEntries: ActivityEntry[] = (
+    scope !== "private" || (filterChainId != null && filterChainId !== SHIELDED_ETH_CHAIN_ID)
+      ? []
+      : unshieldOperations.filter((operation) =>
+          UNSHIELD_ACTIVITY_STATES.has(operation.state),
+        )
+  ).map((operation) => ({
+    kind: "unshield",
+    createdAt: operation.createdAt,
+    operation,
+  }));
+  const entries = [...transactionEntries, ...unshieldEntries]
+    .sort((left, right) => right.createdAt - left.createdAt);
+  const displayItems = hideHeader ? entries : entries.slice(0, maxItems);
   const dateGroups = groupActivityByDate(displayItems, new Date());
   const cachedLogoMap = useCachedAvatarMap(
-    useMemo(() => displayItems.flatMap((tx) => [
-      tx.swapMeta?.sellTokenLogo,
-      tx.swapMeta?.buyTokenLogo,
-      tx.clearSignedMeta?.tokenLogo,
-    ]), [displayItems]),
+    useMemo(() => {
+      const urls: Array<string | null | undefined> = [];
+      for (const entry of displayItems) {
+        if (entry.kind !== "transaction") continue;
+        const tx = entry.tx;
+        if (tx.swapMeta?.sellTokenLogo) urls.push(tx.swapMeta.sellTokenLogo);
+        if (tx.swapMeta?.buyTokenLogo) urls.push(tx.swapMeta.buyTokenLogo);
+        if (tx.clearSignedMeta?.tokenLogo) {
+          urls.push(tx.clearSignedMeta.tokenLogo);
+        }
+      }
+      return urls;
+    }, [displayItems]),
   );
   const resolveLogo = (url: string | undefined): string | undefined =>
     url ? cachedLogoMap.get(url) : undefined;
@@ -222,7 +278,7 @@ function TxStatusList({
     <TxDetailModal isOpen onClose={() => setSelectedTx(null)} tx={selectedTx} />
   );
 
-  if (loading && history.length === 0) {
+  if (loading && entries.length === 0) {
     return (
       <Box pt={hideCard ? 0 : 4}>
         <ListSurface aria-label="Loading transaction activity">
@@ -232,7 +288,7 @@ function TxStatusList({
     );
   }
 
-  if (history.length === 0) {
+  if (entries.length === 0) {
     if (hideEmptyState) return <>{modal}</>;
     return (
       <Box pt={hideCard ? 0 : 4}>
@@ -240,12 +296,14 @@ function TxStatusList({
           <EmptyStateHeader>
             <EmptyStateTitle>{error ? "Activity unavailable" : "No activity yet"}</EmptyStateTitle>
             <EmptyStateDescription>
-              {error || "Transactions from this account will appear here."}
+              {error || (scope === "private"
+                ? "Shield and Unshield activity will appear here."
+                : "Transactions from this account will appear here.")}
             </EmptyStateDescription>
           </EmptyStateHeader>
           <EmptyStateActions>
             {error && <Button variant="secondary" onClick={() => void requestPage(null, false)}>Retry</Button>}
-            {!error && filterChainId != null && onShowAllNetworks && (
+            {!error && scope === "public" && filterChainId != null && onShowAllNetworks && (
               <Button variant="secondary" onClick={onShowAllNetworks}>View all networks</Button>
             )}
           </EmptyStateActions>
@@ -266,11 +324,22 @@ function TxStatusList({
         {dateGroups.map((group) => (
           <Fragment key={group.label}>
             <ActivityDateHeader label={group.label} />
-            {group.txs.map((tx) => (
-              <ActivityItem key={tx.id} tx={tx} originDisplay={formatOrigin(tx.origin)}
-                addressLabels={addressLabels}
-                onClick={() => openTransaction(tx)}
-                resolveLogo={resolveLogo} />
+            {group.txs.map((entry) => entry.kind === "transaction" ? (
+                <ActivityItem
+                  key={`tx-${entry.tx.id}`}
+                  tx={entry.tx}
+                  originDisplay={formatOrigin(entry.tx.origin)}
+                  addressLabels={addressLabels}
+                  onClick={() => openTransaction(entry.tx)}
+                  resolveLogo={resolveLogo}
+                />
+              ) : (
+                <UnshieldActivityItem
+                  key={`private-${entry.operation.id}`}
+                  operation={entry.operation}
+                  addressLabels={addressLabels}
+                  onClick={() => onSelectUnshield?.(entry.operation)}
+                />
             ))}
           </Fragment>
         ))}

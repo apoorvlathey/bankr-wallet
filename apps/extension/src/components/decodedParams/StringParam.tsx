@@ -16,6 +16,10 @@ interface StringParamProps {
 
 type TabKey = "rich" | "raw" | "image" | "rawSvg";
 
+function isEvmAddress(value: string): boolean {
+  return isAddress(value);
+}
+
 export function StringParam({ value, chainId, disableRich }: StringParamProps) {
   // See UintParam for the rationale behind chart.numeric.
   const numericColor = "chart.numeric";
@@ -26,7 +30,7 @@ export function StringParam({ value, chainId, disableRich }: StringParamProps) {
   const base64Result = !isJSON ? decodeBase64(str) : null;
   const isSVG = base64Result?.isSVG || str.trimStart().startsWith("<svg");
   const isURL = /^https?:\/\//.test(str) || str.startsWith("ipfs://");
-  const isAddressValue = isAddress(str);
+  const isAddressValue = isEvmAddress(str);
 
   const remoteImageUrl = isURL
     ? str.startsWith("ipfs://")

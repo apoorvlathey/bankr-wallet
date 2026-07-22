@@ -120,7 +120,7 @@ function concatHex(parts: `0x${string}`[]): `0x${string}` {
   return `0x${parts.map((part) => part.slice(2)).join("")}`;
 }
 
-function toAccount(wallet: PreviewWallet): Account {
+export function toAccount(wallet: PreviewWallet): Account {
   const base = {
     id: wallet.accountId,
     address: wallet.address,

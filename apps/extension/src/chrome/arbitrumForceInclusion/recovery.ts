@@ -72,7 +72,7 @@ export async function recoverArbitrumForceInclusion(tx: CompletedTransaction) {
       messageBlockHash: receipt.blockHash,
       messageTimestamp: delivered.timestamp.toString(),
       kind: delivered.kind,
-      sender: delivered.sender,
+      sender: delivered.sender as `0x${string}`,
       baseFeeL1: delivered.baseFeeL1.toString(),
       messageDataHash: delivered.messageDataHash,
       forceDeadlineBlock: deadline.toString(),

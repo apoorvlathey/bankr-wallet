@@ -8,7 +8,16 @@ import { Button, HStack, Spinner, Text, VStack } from "@chakra-ui/react";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import ChainIcon from "@/components/ChainIcon";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
+import ShieldComplianceInfoPopover from "@/components/Shield/ShieldComplianceInfoPopover";
+import { SHIELDED_ETH_NETWORK_NAME } from "@/components/Shield/model/shieldedAsset";
+import { PrivacyShieldIcon } from "@/components/shared/PrivacyShieldIcon";
 import type { ResolvedChain } from "@/lib/chains";
+import {
+  getPrivacyShieldActivityState,
+  isPrivacyShieldLifecycleState,
+  isPrivacyShieldCompliancePending,
+} from "@/lib/privacyShieldLifecycle";
+import { getPrivacyTransactionIdentity } from "@/lib/privacyTransactionIdentity";
 import { useIconChipBg } from "@/theme";
 import ForceInclusionSteps from "./ForceInclusionSteps";
 import { getForceInclusionState } from "./forceInclusionState";
@@ -33,11 +42,34 @@ function getOpenableOrigin(origin: string): string | null {
 }
 
 function getStatusPresentation(tx: CompletedTransaction) {
+  if (
+    tx.privacyShieldMeta &&
+    isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+  ) {
+    const privacy = getPrivacyShieldActivityState(
+      tx.privacyShieldMeta.state,
+      tx.chainName || SHIELDED_ETH_NETWORK_NAME,
+    );
+    const compliancePending = isPrivacyShieldCompliancePending(
+      tx.privacyShieldMeta.state,
+    );
+    return {
+      label: compliancePending ? "Compliance check" : privacy.statusLabel,
+      color: `status.${privacy.tone}.emphasis`,
+      icon: privacy.tone === "success"
+        ? CheckCircleIcon
+        : privacy.tone === "info"
+          ? TimeIcon
+          : WarningIcon,
+      pending: privacy.pending,
+    } as const;
+  }
   if (tx.status === "success") {
     return {
       label: tx.forceInclusionMeta ? "L1 + L2 confirmed" : "Confirmed",
       color: "status.success.emphasis",
       icon: CheckCircleIcon,
+      pending: false,
     } as const;
   }
 
@@ -56,6 +88,7 @@ function getStatusPresentation(tx: CompletedTransaction) {
       label,
       color: "status.error.emphasis",
       icon: WarningIcon,
+      pending: false,
     } as const;
   }
 
@@ -75,6 +108,7 @@ function getStatusPresentation(tx: CompletedTransaction) {
         : "Pending",
     color: "status.info.emphasis",
     icon: TimeIcon,
+    pending: true,
   } as const;
 }
 
@@ -92,10 +126,15 @@ export default function StatusHeader({
   const iconChipBg = useIconChipBg();
   const originHostname = getOriginHostname(tx.origin);
   const openableOrigin = getOpenableOrigin(tx.origin);
-  const isInternalWalletChan = !originHostname && tx.origin.startsWith("WalletChan");
+  const privacyIdentity = getPrivacyTransactionIdentity(tx);
+  const isInternalWalletChan =
+    !privacyIdentity && !originHostname && tx.origin.startsWith("WalletChan");
   const status = getStatusPresentation(tx);
   const StatusIcon = status.icon;
-  const isPending = tx.status === "pending" || tx.status === "processing";
+  const isPending = status.pending;
+  const compliancePending = tx.privacyShieldMeta
+    ? isPrivacyShieldCompliancePending(tx.privacyShieldMeta.state)
+    : false;
   const chainName = resolvedChain?.name ?? tx.chainName;
   const initials = (originHostname ?? tx.origin)
     .split(/[.\s-]+/u)
@@ -104,6 +143,42 @@ export default function StatusHeader({
     .map((part) => part[0])
     .join("")
     .toUpperCase() || "?";
+  const statusIndicatorContent = (
+    <>
+      {isPending ? (
+        <Spinner boxSize="12px" thickness="2px" speed="0.8s" color="currentColor" />
+      ) : (
+        <StatusIcon boxSize="13px" aria-hidden />
+      )}
+      <Text fontSize="xs" fontWeight="700">
+        {status.label}
+      </Text>
+    </>
+  );
+  const statusIndicator = compliancePending ? (
+    <HStack
+      as="button"
+      type="button"
+      spacing={1.5}
+      color={status.color}
+      bg="transparent"
+      border={0}
+      p={0}
+      cursor="help"
+      aria-label="About the Privacy Pools compliance check"
+      _focusVisible={{
+        outline: "2px solid",
+        outlineColor: "border.focus",
+        outlineOffset: "3px",
+      }}
+    >
+      {statusIndicatorContent}
+    </HStack>
+  ) : (
+    <HStack as="span" spacing={1.5} color={status.color}>
+      {statusIndicatorContent}
+    </HStack>
+  );
 
   return (
     <VStack align="stretch" spacing={3}>
@@ -114,6 +189,12 @@ export default function StatusHeader({
         iconChipBg={iconChipBg}
         isInternalWalletChan={isInternalWalletChan}
         originInitials={initials}
+        labelOverride={privacyIdentity?.label}
+        identityIcon={
+          privacyIdentity ? (
+            <PrivacyShieldIcon boxSize="24px" color="accent.highlight" />
+          ) : undefined
+        }
         onOpenOrigin={
           openableOrigin
             ? () => chrome.tabs.create({ url: openableOrigin })
@@ -127,16 +208,11 @@ export default function StatusHeader({
         minH="24px"
         aria-live={isPending ? "polite" : undefined}
       >
-        <HStack spacing={1.5} color={status.color}>
-          {isPending ? (
-            <Spinner boxSize="12px" thickness="2px" speed="0.8s" />
-          ) : (
-            <StatusIcon boxSize="13px" aria-hidden />
-          )}
-          <Text fontSize="xs" fontWeight="700">
-            {status.label}
-          </Text>
-        </HStack>
+        {compliancePending ? (
+          <ShieldComplianceInfoPopover placement="bottom-start">
+            {statusIndicator}
+          </ShieldComplianceInfoPopover>
+        ) : statusIndicator}
         <Text aria-hidden color="fg.muted" fontSize="xs">
           ·
         </Text>

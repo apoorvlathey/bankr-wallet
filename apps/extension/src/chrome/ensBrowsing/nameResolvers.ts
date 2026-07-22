@@ -80,7 +80,9 @@ export async function resolveEns(
 
   let address: `0x${string}` | null;
   try {
-    address = await client.getEnsAddress({ name: stripped });
+    address = await client.getEnsAddress({ name: stripped }) as
+      | `0x${string}`
+      | null;
   } catch (error) {
     const detail = describeResolverError(error);
     return {

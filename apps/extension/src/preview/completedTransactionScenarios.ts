@@ -4,6 +4,7 @@ import type { PreviewWalletType } from "./types";
 import {
   previewCompletedTransaction,
   previewFailedTransaction,
+  getPreviewActivityTransactions,
   previewMissingMetadataTransaction,
   previewPendingTransaction,
   previewStressTransaction,
@@ -56,6 +57,7 @@ const fixtures: Record<string, CompletedTransaction> = {
   "broadcast-uncertain": previewBroadcastUncertainTransaction,
   deployment: previewDeploymentTransaction,
   legacy: previewLegacyTransaction,
+  shield: getPreviewActivityTransactions()[0],
 };
 
 export function getPreviewCompletedTransaction(

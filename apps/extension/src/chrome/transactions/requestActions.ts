@@ -12,7 +12,39 @@ export async function handleRejectTransaction(
   if (!pending) {
     return { success: false, error: "Transaction request not found" };
   }
+  try {
+    const { recordPrivacyShieldWalletRejected } = await import(
+      "../privacy/operations/lifecycle"
+    );
+    await recordPrivacyShieldWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-shield] failed to persist wallet rejection", error);
+  }
+  try {
+    const { recordPrivacyRagequitWalletRejected } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-ragequit] failed to persist wallet rejection", error);
+  }
+  try {
+    const { recordPrivacyDirectUnshieldWalletRejected } = await import(
+      "../privacy/withdrawals/lifecycle"
+    );
+    await recordPrivacyDirectUnshieldWalletRejected(pending);
+  } catch (error) {
+    console.warn("[privacy-unshield] failed to persist wallet rejection", error);
+  }
   await removePendingTxRequest(txId);
+  try {
+    const { discardRejectedPrivacyShieldOperation } = await import(
+      "../privacy/operations/rejectionLifecycle"
+    );
+    await discardRejectedPrivacyShieldOperation(pending);
+  } catch (error) {
+    console.warn("[privacy-shield] failed to delete rejected operation", error);
+  }
   await writeResultToStorage(`txResult:${txId}`, {
     success: false,
     error: "Transaction rejected by user",

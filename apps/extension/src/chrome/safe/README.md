@@ -5,7 +5,12 @@ service coordination, execution, and MV3 reconciliation. No module stores a
 Safe private key or treats a Safe as an EOA.
 
 - `types.ts`, `featurePolicy.ts`: validated vocabulary and staged fail-closed policy.
-- `deploymentRegistry.ts`, `onchainState.ts`, `capabilities.ts`, `discovery.ts`: canonical onchain verification and import capability projection.
+- `deploymentMetadata.generated.json`, `deploymentRegistry.ts`, `onchainState.ts`,
+  `capabilities.ts`, `discovery.ts`: canonical onchain verification and import
+  capability projection. The generated metadata retains every released
+  network alias, address, and code hash from the pinned Safe Deployments
+  package, while excluding unused ABI and bytecode payloads from the MV3
+  service worker. Regenerate it with `pnpm regen:safe-deployment-metadata`.
 - `accountRepository.ts`, `proposalRepository.ts`: bounded versioned storage,
   atomic proposal nonce reservation/rebasing, and effect claims.
 - `accountRefresh.ts`: chain-scoped direct-RPC re-verification for already
@@ -16,7 +21,10 @@ Safe private key or treats a Safe as an EOA.
 - `proposalNonce.ts`, `proposalNonceReconciliation.ts`: lowest-free automatic
   allocation, explicit unsigned custom-nonce rules, and queued-request
   activation/terminalization as the verified onchain nonce advances.
-- `transactionBuilder.ts`, `transactionHash.ts`, `multiSend.ts`: immutable Safe transaction construction.
+- `transactionBuilder.ts`, `transactionHash.ts`, `multiSend.ts`: immutable Safe
+  transaction construction. The hash boundary implements the exact chain-bound
+  SafeTx EIP-712 schema shared by supported Safe 1.3.0–1.5.0 releases without
+  loading unrelated Protocol Kit surfaces into the service worker.
 - `proposalRejectionPolicy.ts`, `proposalRejection.ts`: canonical same-nonce
   rejection classification and creation. Unsigned requests may cancel locally;
   any supported or unsupported collected signature requires a fresh Safe

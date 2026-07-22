@@ -13,14 +13,7 @@ import {
   setCachedAutoLockTimeout,
   writeAutoLockTimeout,
 } from "./autoLockPolicy";
-import {
-  getCachedApiKey,
-  getCachedPassword,
-  getCachedVault,
-  getPasswordType,
-} from "./cacheAccess";
 import * as memoryCache from "./inMemoryCache";
-import { storeSessionAtomic } from "./persistence";
 import { clearSessionStorage } from "./teardown";
 
 export async function initializeAutoLockTimeoutDefault(): Promise<void> {
@@ -47,20 +40,6 @@ export async function setAutoLockTimeout(timeout: number): Promise<boolean> {
     await clearSessionStorage();
     memoryCache.setAuthSessionHardExpiry(null);
   }
-  if (
-    timeout === 0 &&
-    previousTimeout !== 0 &&
-    (getCachedApiKey() !== null || getCachedVault() !== null)
-  ) {
-    const password = getCachedPassword();
-    const passwordType = getPasswordType();
-    if (password && passwordType) {
-      const sessionId = crypto.randomUUID();
-      memoryCache.setCurrentSessionId(sessionId);
-      await storeSessionAtomic(sessionId, true, passwordType, password);
-    }
-  }
-
   return true;
 }
 

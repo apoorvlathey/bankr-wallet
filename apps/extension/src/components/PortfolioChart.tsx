@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Box, HStack, Text } from "@chakra-ui/react";
+import { Box, HStack, Skeleton, Text } from "@chakra-ui/react";
 import { getSnapshots } from "@/chrome/portfolio/snapshotStorage";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
@@ -9,6 +9,7 @@ import { playInteractionSound } from "@/sounds/soundManager";
 
 interface PortfolioChartProps {
   address: string;
+  snapshots?: ReadonlyArray<Snapshot>;
   hideValue?: boolean;
   refreshTrigger?: number;
   onHoverValueChange?: (value: number | null) => void;
@@ -17,11 +18,6 @@ interface PortfolioChartProps {
 interface Snapshot {
   timestamp: number;
   totalValueUsd: number;
-}
-
-interface SnapshotState {
-  address: string;
-  snapshots: Snapshot[];
 }
 
 const CHART_HEIGHT = 60;
@@ -33,45 +29,55 @@ const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
 export default function PortfolioChart({
   address,
+  snapshots: suppliedSnapshots,
   hideValue,
   refreshTrigger = 0,
   onHoverValueChange,
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const [snapshotState, setSnapshotState] = useState<SnapshotState>(() => ({
-    address,
-    snapshots: [],
-  }));
+  const [loadedSnapshots, setLoadedSnapshots] = useState<Snapshot[]>(() =>
+    suppliedSnapshots ? [...suppliedSnapshots] : [],
+  );
+  const [snapshotAddress, setSnapshotAddress] = useState(address);
+  const [loading, setLoading] = useState(suppliedSnapshots === undefined);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverIndexRef = useRef<number | null>(null);
   const isPointerDraggingRef = useRef(false);
 
   useEffect(() => {
+    if (suppliedSnapshots) {
+      setLoadedSnapshots([...suppliedSnapshots]);
+      setSnapshotAddress(address);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
     void getSnapshots(address)
       .then((snapshots) => {
         if (!cancelled) {
-          setSnapshotState({ address, snapshots });
+          setLoadedSnapshots(snapshots);
+          setSnapshotAddress(address);
+          setLoading(false);
         }
       })
       .catch(() => {
         // Snapshot history is optional. Preserve an already-rendered chart on
         // refresh failure and keep a different/new account chart-free.
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [address, refreshTrigger]);
+  }, [address, refreshTrigger, suppliedSnapshots]);
 
   // A same-account refresh keeps the last chart mounted until its replacement
   // data is ready. On account changes, never show snapshots from the previous
   // address while the new account's history is being resolved.
   const snapshots =
-    snapshotState.address === address
-      ? snapshotState.snapshots
-      : EMPTY_SNAPSHOTS;
+    snapshotAddress === address ? loadedSnapshots : EMPTY_SNAPSHOTS;
 
   const { path, areaPath, change, changePercent, points, dayTicks } = useMemo(() => {
     if (snapshots.length < 2)
@@ -80,8 +86,9 @@ export default function PortfolioChart({
     const first = snapshots[0];
     const last = snapshots[snapshots.length - 1];
     const change = last.totalValueUsd - first.totalValueUsd;
-    const changePercent =
-      first.totalValueUsd > 0 ? (change / first.totalValueUsd) * 100 : 0;
+    const changePercent = first.totalValueUsd > 0
+      ? (change / first.totalValueUsd) * 100
+      : null;
 
     const values = snapshots.map((s) => s.totalValueUsd);
     const minVal = Math.min(...values);
@@ -169,6 +176,14 @@ export default function PortfolioChart({
     [address, onHoverValueChange],
   );
 
+  if (loading) {
+    return (
+      <Box pt={2} pb={1}>
+        <Skeleton h="60px" />
+      </Box>
+    );
+  }
+
   if (snapshots.length < 2) return null;
 
   const isPositive = change >= 0;
@@ -230,7 +245,11 @@ export default function PortfolioChart({
                 {hideValue ? "+$***" : `${isPositive ? "+" : "-"}${formatChange(change)}`}
               </Text>
               <Text fontSize="xs" lineHeight="18px" fontWeight="700" color={lineColor}>
-                {hideValue ? "(+**%)" : `(${isPositive ? "+" : ""}${changePercent.toFixed(2)}%)`}
+                {hideValue
+                  ? "(+**%)"
+                  : changePercent === null
+                    ? "(new)"
+                    : `(${isPositive ? "+" : ""}${changePercent.toFixed(2)}%)`}
               </Text>
             </HStack>
           </>

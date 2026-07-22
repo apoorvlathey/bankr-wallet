@@ -54,14 +54,16 @@ export function buildStakingTransactions(input: {
   allowance: bigint;
 }): SwapTxEntry[] {
   const owner = input.owner as `0x${string}`;
+  const vaultAddress = STAKING_ADDRESSES.wchanVault as `0x${string}`;
+  const tokenAddress = STAKING_ADDRESSES.wchan as `0x${string}`;
   if (input.action === "claim") {
-    return [entry("Claim WETH rewards", STAKING_ADDRESSES.wchanVault, encodeFunctionData({
+    return [entry("Claim WETH rewards", vaultAddress, encodeFunctionData({
       abi: wchanVaultAbi,
       functionName: "claimRewards",
     }), owner, "claimRewards")];
   }
   if (input.action === "unstake") {
-    return [entry("Unstake WCHAN", STAKING_ADDRESSES.wchanVault, encodeFunctionData({
+    return [entry("Unstake WCHAN", vaultAddress, encodeFunctionData({
       abi: wchanVaultAbi,
       functionName: "redeem",
       args: [input.amount, owner, owner],
@@ -70,13 +72,13 @@ export function buildStakingTransactions(input: {
 
   const transactions: SwapTxEntry[] = [];
   if (input.allowance < input.amount) {
-    transactions.push(entry("Approve WCHAN for staking", STAKING_ADDRESSES.wchan, encodeFunctionData({
+    transactions.push(entry("Approve WCHAN for staking", tokenAddress, encodeFunctionData({
       abi: stakingErc20Abi,
       functionName: "approve",
-      args: [STAKING_ADDRESSES.wchanVault, input.amount],
+      args: [vaultAddress, input.amount],
     }), owner, "approve"));
   }
-  transactions.push(entry("Stake WCHAN", STAKING_ADDRESSES.wchanVault, encodeFunctionData({
+  transactions.push(entry("Stake WCHAN", vaultAddress, encodeFunctionData({
     abi: wchanVaultAbi,
     functionName: "deposit",
     args: [input.amount, owner],

@@ -79,17 +79,22 @@ test("local confirmation preserves PK, seed, and Never sessions", async (t) => {
         name: "local-transaction-confirmation-boundaries",
         enforce: "pre",
         resolveId(source, importer) {
-          if (!importer?.split("?", 1)[0].endsWith("/chrome/transactions/localConfirmation.ts")) return null;
+          const file = importer?.split("?", 1)[0] ?? "";
+          if (file.endsWith("/chrome/transactions/localKeyRecovery.ts")) {
+            return ({
+              "../sessionCache": "\0local-tx-session",
+              "../crypto": "\0local-tx-crypto",
+              "../vaultCrypto": "\0local-tx-vault",
+              "../authHandlers": "\0local-tx-auth",
+            } as Store)[source] ?? null;
+          }
+          if (!file.endsWith("/chrome/transactions/localConfirmation.ts")) return null;
           return ({
             "./localExecution": "\0local-tx-execution",
-            "../sessionCache": "\0local-tx-session",
-            "../crypto": "\0local-tx-crypto",
-            "../vaultCrypto": "\0local-tx-vault",
             "../delegatedAuthorityPolicy": "\0local-tx-delegation",
             "./runtime": "\0local-tx-runtime",
             "../requests/pendingRequestLifecycle": "\0local-tx-lifecycle",
             "../requests/pendingTxStorage": "\0local-tx-pending",
-            "../authHandlers": "\0local-tx-auth",
           } as Store)[source] ?? null;
         },
         load(id) {

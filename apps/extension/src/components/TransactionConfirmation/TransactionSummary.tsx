@@ -1,11 +1,23 @@
 import {
   Box,
+  HStack,
+  Image,
   Text,
+  VStack,
 } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
+import { ArrowDownIcon, InfoOutlineIcon } from "@chakra-ui/icons";
+import {
+  SHIELDED_ETH_LOGO_URL,
+  SHIELDED_ETH_NETWORK_NAME,
+} from "@/components/Shield/model/shieldedAsset";
+import ShieldComplianceInfoPopover from "@/components/Shield/ShieldComplianceInfoPopover";
+import { formatShieldWei } from "@/components/Shield/model/shieldQuote";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import { privacyShieldNetAmountWei } from "@/lib/privacyShieldAmounts";
 
 interface TransactionOutcomeProps {
   txRequest: PendingTxRequest;
@@ -31,6 +43,106 @@ export function TransactionOutcome({
       isInternalWalletChan={isInternalWalletChan}
       originInitials={originInitials}
     />
+  );
+}
+
+export function PrivacyShieldTransactionOutcome({
+  txRequest,
+}: {
+  txRequest: PendingTxRequest;
+}) {
+  let amountWei = 0n;
+  try {
+    amountWei = BigInt(txRequest.tx.value || "0");
+  } catch {
+    amountWei = 0n;
+  }
+  const feeBPS = PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS;
+  const shieldedWei = privacyShieldNetAmountWei(amountWei, feeBPS);
+
+  return (
+    <Box
+      bg="surface.raised"
+      borderWidth="1px"
+      borderColor="border.default"
+      borderRadius="lg"
+      px={4}
+      py={4}
+    >
+      <HStack justify="space-between" spacing={3}>
+        <VStack align="start" spacing={0} minW={0}>
+          <Text fontSize="xs" color="fg.secondary">
+            Total from {SHIELDED_ETH_NETWORK_NAME} wallet
+          </Text>
+          <Text fontFamily="mono" fontSize="xl" fontWeight="700">
+            {formatShieldWei(amountWei)} ETH
+          </Text>
+        </VStack>
+        <Image src="/chainIcons/ethereum.svg" alt="" boxSize="34px" />
+      </HStack>
+      <ArrowDownIcon my={2.5} color="fg.muted" />
+      <HStack justify="space-between" spacing={3}>
+        <VStack align="start" spacing={0} minW={0}>
+          <Text fontSize="xs" color="fg.secondary">Amount to shield</Text>
+          <Text fontFamily="mono" fontSize="xl" fontWeight="700">
+            {formatShieldWei(shieldedWei)} ETH
+          </Text>
+        </VStack>
+        <Image src={SHIELDED_ETH_LOGO_URL} alt="" boxSize="38px" />
+      </HStack>
+    </Box>
+  );
+}
+
+export function PrivacyShieldRequestContext() {
+  return (
+    <Box
+      bg="surface.raised"
+      borderWidth="1px"
+      borderColor="border.subtle"
+      borderRadius="lg"
+      px={3}
+      py={3}
+    >
+      <HStack justify="space-between" spacing={3}>
+        <Text fontSize="sm" color="fg.secondary">Network</Text>
+        <Text fontSize="sm" fontWeight="600">{SHIELDED_ETH_NETWORK_NAME}</Text>
+      </HStack>
+      <HStack mt={2.5} justify="space-between" spacing={3}>
+        <Text fontSize="sm" color="fg.secondary">Route</Text>
+        <Text fontSize="sm" fontWeight="600">Privacy Pools</Text>
+      </HStack>
+      <HStack mt={2.5} justify="space-between" spacing={3}>
+        <Text fontSize="sm" color="fg.secondary">Est. time</Text>
+        <ShieldComplianceInfoPopover placement="top-end">
+          <HStack
+            as="button"
+            type="button"
+            spacing={1.5}
+            minH="24px"
+            px={1}
+            bg="transparent"
+            border={0}
+            borderRadius="sm"
+            cursor="help"
+            color="fg.primary"
+            aria-label="About the estimated one-hour compliance check"
+            _hover={{ color: "accent.highlight" }}
+            _focusVisible={{
+              outline: "2px solid",
+              outlineColor: "border.focus",
+              outlineOffset: "2px",
+            }}
+          >
+            <Text as="span" fontSize="sm" fontWeight="600">1 hr</Text>
+            <InfoOutlineIcon boxSize="13px" aria-hidden />
+          </HStack>
+        </ShieldComplianceInfoPopover>
+      </HStack>
+      <Text mt={3} pt={3} borderTopWidth="1px" borderColor="border.subtle" fontSize="xs" color="fg.secondary">
+        This deposit account, amount, and timing will be public. A later relayed withdrawal does not directly link back to it.
+      </Text>
+    </Box>
   );
 }
 

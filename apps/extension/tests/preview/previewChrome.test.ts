@@ -141,6 +141,70 @@ test("App, Settings, and portfolio reads have explicit response shapes", async (
   assert.ok(BigInt(batchGas[1].estimatedCostWei) > BigInt(batchGas[0].estimatedCostWei));
 });
 
+test("Shield preview exposes the eligibility progress state", () => {
+  const environment = createPreviewEnvironment(
+    "http://localhost:4317/preview/shield?scenario=pending-eligibility&wallet=privateKey",
+  );
+  const response = responseForPreviewMessage(environment, {
+    type: "privacyListShieldOperations",
+  }) as { operations: Array<{ state: string }> };
+
+  assert.equal(response.operations.length, 1);
+  assert.equal(response.operations[0]?.state, "awaiting_asp");
+});
+
+test("Shield preview quotes all custody account types and rejects view-only", () => {
+  for (const wallet of ["bankr", "privateKey", "seedPhrase"] as const) {
+    const environment = createPreviewEnvironment(
+      `http://localhost:4317/preview/shield?wallet=${wallet}`,
+    );
+    const account = environment.activeAccount;
+    const response = responseForPreviewMessage(environment, {
+      type: "privacyQuoteShield",
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: account.type,
+      amount: "0.1",
+    }) as any;
+    assert.equal(response.success, true, wallet);
+    assert.equal(response.quote.amountWei, "101010101010101010");
+    assert.equal(response.quote.protocolFeeWei, "1010101010101010");
+
+    const review = responseForPreviewMessage(environment, {
+      type: "privacyPrepareShieldReview",
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: account.type,
+      amount: "0.1",
+      grossAmountWei: response.quote.amountWei,
+    }) as any;
+    assert.equal(review.success, true, wallet);
+    assert.equal(review.status, "ready");
+    assert.equal(review.review.accountType, wallet);
+    assert.equal(review.review.amountWei, "101010101010101010");
+    assert.equal(review.review.shieldedAmountWei, "100000000000000000");
+  }
+
+  const environment = createPreviewEnvironment(
+    "http://localhost:4317/preview/shield?wallet=viewOnly",
+  );
+  const account = environment.activeAccount;
+  assert.deepEqual(
+    responseForPreviewMessage(environment, {
+      type: "privacyQuoteShield",
+      accountId: account.id,
+      accountAddress: account.address,
+      accountType: account.type,
+      amount: "0.1",
+    }),
+    {
+      success: false,
+      code: "view-only-account",
+      error: "View-only accounts can’t Shield.",
+    },
+  );
+});
+
 test("tab getInfo and promise sendMessage use the active account shape", async () => {
   const { previewChrome, environment } = createPreviewChrome(
     "http://localhost:4317/preview/home?wallet=privateKey",

@@ -11,8 +11,36 @@ export async function handleTransactionFailure(
   txId: string,
   pending: PendingTxRequest,
   error: string,
+  options: { privacySubmissionOutcomeUncertain?: boolean } = {},
 ): Promise<void> {
   const notificationId = `tx-failed-${txId}`;
+
+  try {
+    const { recordPrivacyShieldSubmissionFailure } = await import(
+      "../privacy/operations/lifecycle"
+    );
+    await recordPrivacyShieldSubmissionFailure(pending);
+  } catch (trackingError) {
+    console.warn("[privacy-shield] failed to persist transaction failure", trackingError);
+  }
+  try {
+    const { recordPrivacyRagequitSubmissionFailure } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitSubmissionFailure(pending);
+  } catch (trackingError) {
+    console.warn("[privacy-ragequit] failed to persist transaction failure", trackingError);
+  }
+  try {
+    const { recordPrivacyDirectUnshieldSubmissionFailure } = await import(
+      "../privacy/withdrawals/lifecycle"
+    );
+    await recordPrivacyDirectUnshieldSubmissionFailure(pending, {
+      outcomeUncertain: options.privacySubmissionOutcomeUncertain,
+    });
+  } catch (trackingError) {
+    console.warn("[privacy-unshield] failed to persist transaction failure", trackingError);
+  }
 
   await updateTxInHistory(txId, {
     status: "failed",

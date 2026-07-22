@@ -339,7 +339,15 @@ test("status and acknowledgement messages are extension-only routed handlers", a
 });
 
 test("account removal and reset cannot destroy unresolved sponsored recovery state", async () => {
-  const [accountComposition, executionComposition, dataComposition, accountRouter, sponsoredRouter, resetRouter] = await Promise.all([
+  const [
+    accountComposition,
+    executionComposition,
+    dataComposition,
+    accountRouter,
+    sponsoredRouter,
+    resetRouter,
+    resetExecution,
+  ] = await Promise.all([
     readFile(
       new URL(
         "../../src/chrome/background/composition/accountRoutes.ts",
@@ -382,6 +390,13 @@ test("account removal and reset cannot destroy unresolved sponsored recovery sta
       ),
       "utf8",
     ),
+    readFile(
+      new URL(
+        "../../src/chrome/background/reset/execution.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
   ]);
   const removalStart = accountRouter.indexOf("async function removeAccount(");
   const removalEnd = accountRouter.indexOf(
@@ -414,7 +429,7 @@ test("account removal and reset cannot destroy unresolved sponsored recovery sta
 
   assert.match(resetRouter, /runWalletResetAgainstPendingResolutions/);
   assert.match(
-    resetRouter,
+    resetExecution,
     /dependencies\.hasUnresolvedSponsoredTransferIntent\(\)/,
   );
   assert.match(

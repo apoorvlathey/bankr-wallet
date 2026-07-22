@@ -62,6 +62,8 @@ test("history root paths remain policy-free identity-preserving facades", async 
 test("history implementations keep one-way audit boundaries", async () => {
   const names = [
     "history/types.ts",
+    "history/clearSignedTypes.ts",
+    "history/privacyTypes.ts",
     "history/gasDataPolicy.ts",
     "history/assetTransferParser.ts",
     "history/repository.ts",
@@ -130,6 +132,8 @@ test("history facades and implementations stay audit-sized", async () => {
     "assetChangesExtractor.ts": 15,
     "receiptEnrichment.ts": 20,
     "history/types.ts": 190,
+    "history/clearSignedTypes.ts": 30,
+    "history/privacyTypes.ts": 30,
     "history/forceInclusionTypes.ts": 30,
     "history/gasDataPolicy.ts": 35,
     "history/assetTransferParser.ts": 80,

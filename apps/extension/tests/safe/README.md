@@ -1,6 +1,8 @@
 # Safe test map
 
-- `protocol.test.ts`, `multiSend.test.ts`, `signatureValidation.test.ts`:
+- `deploymentMetadata.test.ts`, `protocol.test.ts`, `multiSend.test.ts`,
+  `signatureValidation.test.ts`:
+  exact generated-to-official deployment metadata parity,
   deterministic hashes, canonical batches, the canonical rejection self-call,
   signed-rejection policy, and EOA confirmation recovery.
 - `onchainState.test.ts`: canonical proxy/singleton verification, exact-block authority, contract-owner blocking, and EIP-7702 EOAs.

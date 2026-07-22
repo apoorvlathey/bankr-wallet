@@ -3,12 +3,9 @@ import { getTxById, updateTxInHistory } from "../txHistoryStorage";
 import { shouldRetainUnobservedBroadcast } from "./broadcastPolicy";
 import { applyReceiptToHistory } from "./receiptHistory";
 import { showReceiptNotification } from "./receiptNotification";
-import {
-  fetchLatestAccountNonce,
-  fetchReceipt,
-  fetchTxByHash,
-} from "./receiptRpc";
+import { fetchLatestAccountNonce, fetchReceipt, fetchTxByHash } from "./receiptRpc";
 import { maybeAdvanceSplitBundle } from "./receiptSideEffects";
+import { recordPrivacyTransactionDropped } from "./privacyDropMirrors";
 
 const DROPPED_NOT_FOUND_THRESHOLD = 3;
 const DROPPED_MIN_AGE_MS = 60_000;
@@ -83,6 +80,7 @@ async function markTransactionDropped(
     error: "Transaction dropped from the mempool",
     completedAt: Date.now(),
   });
+  await recordPrivacyTransactionDropped(txId, txHash);
   await showReceiptNotification(txId, txHash, chainId, false, "dropped");
   await maybeAdvanceSplitBundle(txId, txHash, "dropped");
   return false;

@@ -38,8 +38,9 @@ test("Address Book and Send share contact identity enrichment and contact-list c
   assert.match(recipientSection, /onClick=\{\(\) => setSuggestionsOpen\(true\)\}/u);
   assert.match(
     recipientSection,
-    /<HStack spacing=\{1\}>[\s\S]*?Recipient[\s\S]*?hasRecipientChoices && \([\s\S]*?My contacts/u,
+    /label = "Recipient"[\s\S]*?chooserLabel = "My contacts"/u,
   );
+  assert.match(recipientSection, /<HStack spacing=\{1\}>[\s\S]*?\{label\}[\s\S]*?hasRecipientChoices && \([\s\S]*?\{chooserLabel\}/u);
   assert.match(recipientSection, /<LabeledAddressPopover[\s\S]*?maxW="180px"/u);
   assert.match(recipientSection, /transition=\{tokens\.motion\.transitionBase\}/u);
   assert.doesNotMatch(recipientSection, /tokens\.transitions/u);

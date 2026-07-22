@@ -9,10 +9,45 @@ Review order:
 1. `bootstrap.ts` — route construction, pipeline construction, lifecycle registration.
 2. `messagePipeline.ts` — ENS-first, audience/provider gates, exact route order.
 3. `composition/` — audit-sized route-family dependencies and lifecycle wiring.
-4. `messageAccessPolicy.ts` — exhaustive `wallet-ui` vs `provider` audience.
+4. `messageAccessPolicy.ts` — exhaustive `wallet-ui` vs `provider` audience;
+   `privacyMessageTypes.ts` isolates the reviewed Privacy Pools route family.
 5. `providerRequestRejection.ts` — pure durable rejection mapping.
-6. `authRouter.ts`, `bankrCredentialRouter.ts`, `onboardingRouter.ts` —
-   trusted-UI auth transport and atomic Bankr credential/account binding.
+6. `authRouter.ts`, `bankrCredentialRouter.ts`, `onboardingRouter.ts`,
+   `privacyRouter.ts`, `privacyRecoveryRouter.ts` — trusted-UI auth transport, atomic Bankr
+   credential/account binding, status-only privacy identity initialization,
+   the deployment-first fixed-fixture Shield readiness trigger, aggregate-only
+   prover QA timing route, the
+   account-pinned read-only active-profile Shield quote, master-only non-submittable
+   review preparation, encrypted durable operation/list transport, and
+   explicit master-only Shield phrase backup/restore/rescan transport.
+   `privacyListShieldOperations` returns aggregates and bounded public
+   lifecycle projections only; it omits user-rejected public-withdrawal prompts
+   after the domain has safely released their claims while preserving genuine
+   failure and submitted/recovered states. A cold dedicated privacy key keeps
+   encrypted ready/recoverable balances unavailable, but the list route still
+   derives confirmed and ASP-pending totals from those same public operation
+   projections so popup reopen cannot erase visible processing state.
+   The sync route refreshes those known operation labels before the bounded
+   mainnet event-history scan; matching lifecycle broadcasts can therefore
+   update an open renderer without waiting for the backfill response.
+   `lifecycle/privacyAspRefresh.ts` handles the exact one-shot compliance alarm
+   so pending work can reach publicly verified `asp_approved` and emit its
+   generic approval notification while no WalletChan renderer is open and the
+   privacy key is cold. Secret-derived `private_ready` reconciliation remains
+   unlock-gated.
+   Transaction-detail public recovery
+   may include one bounded source Shield operation ID, which `privacy/ragequit/`
+   must bind to the exact encrypted commitment rather than treating as proof or
+   falling back to another deposit. `privacyPreviewRagequit` is the read-only
+   whole-commitment review boundary: it lists every current ragequittable
+   deposit with only its opaque commitment-record ID, timestamp, exact amount,
+   and original account/source binding. It cannot prove, persist a recovery
+   intent, claim, or queue. The router may materialize already-indexed encrypted
+   state. `privacyPrepareRagequit` repeats one selected commitment ID,
+   account/source binding, and reviewed amount before any proof or normal
+   transaction request is created. `privacyPrepareRagequitBatch` accepts 2–8
+   distinct selections only when every original-account field matches, then
+   queues an immutable atomic request with canonical operation-ID/call order.
 7. `accountStateRouter.ts`, `contactBookRouter.ts`, `accountManagementRouter.ts`,
    `ledgerRouter.ts` — non-secret account/contact state plus master-gated
    account/seed/Ledger mutation and hardware discovery transport.
@@ -44,10 +79,20 @@ Review order:
    reset-barrier-protected internal execution/recovery transport.
 18. `transactionStatusRouter.ts` — trusted-UI history, processing, failed-result,
    nonce-cache, enrichment, and receipt-status transport.
-19. `resetRouter.ts` — synchronous reset-barrier installation followed by the
-   master-only, serialized destructive reset sequence.
+19. `resetRouter.ts` and `reset/execution.ts` — public Shield-risk preflight,
+   exact acknowledgement, synchronous reset-barrier installation, then the
+   master-only serialized destructive reset sequence.
 20. `lifecycle/` — focused Chrome callbacks and immediate startup effects;
    review its `README.md` in service-worker execution order.
+
+`lifecycle/trustedUiPorts.ts` and `trustedUiPortProtocol.ts` treat a main wallet port as an authentication
+presence signal only after an exact `{ type: "wallet-ui-register", surfaceId }`
+handshake from a trusted top-level `index.html` sender. The port may then send
+only same-ID heartbeats. Duplicate/changing/malformed IDs disconnect. Popup,
+side-panel, and full-page documents share the bounded surface lease; onboarding
+uses `onboarding-keepalive` solely for worker liveness and never pauses
+auto-lock. Surface transitions are serialized with manual lock and factor
+changes through `session/uiSurfaceLease.ts`.
 
 Routers return an explicit handled/channel-lifetime result and delegate domain
 effects through focused modules or injected dependencies. They must not contain

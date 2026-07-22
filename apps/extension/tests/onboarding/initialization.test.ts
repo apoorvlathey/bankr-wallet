@@ -240,6 +240,7 @@ test("onboarding initialization preserves existing wallet data and recovers only
           ["passkeyUnlock", { version: 1, wrappedVaultKey: encrypted }],
           ["pkVault", { version: 1, entries: [] }],
           ["mnemonicVault", { version: 1, entries: [] }],
+          ["privacyVault", { version: 1, recovery: encrypted }],
           ["accounts", [{ id: "partial-account" }]],
           ["seedGroups", [{ id: "partial-seed-group" }]],
         ];

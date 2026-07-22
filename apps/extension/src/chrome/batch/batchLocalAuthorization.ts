@@ -26,5 +26,16 @@ export async function authorizePendingLocalBatchBroadcast(
       pending,
     );
   if (!authorization.authorized) throw new Error(authorization.error);
+  if (pending.privacyRagequitMeta) {
+    const { authorizePrivacyRagequitBatchConfirmation } = await import(
+      "../privacy/ragequit/submission"
+    );
+    const { beginPrivacyRagequitBatchSubmission } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    const privacyAuthorization =
+      await authorizePrivacyRagequitBatchConfirmation(pending);
+    await beginPrivacyRagequitBatchSubmission(pending, privacyAuthorization);
+  }
   beginEffect();
 }

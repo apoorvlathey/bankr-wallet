@@ -41,7 +41,7 @@ export type AppView =
   | "transfer"
   | "swap"
   | "staking"
-  // | "shield"
+  | "shield"
   | "more"
   | "hideTokens"
   | "hiddenTokens"
@@ -62,7 +62,7 @@ export const SCREEN_META: Record<AppView, ScreenMeta> = {
   accountSettings: { kind: "slide", depth: 1 },
   swap: { kind: "slide", depth: 1 },
   staking: { kind: "slide", depth: 2 },
-  // shield: { kind: "slide", depth: 1 },
+  shield: { kind: "slide", depth: 1 },
   transfer: { kind: "slide", depth: 1 },
   more: { kind: "slide", depth: 1 },
   hideTokens: { kind: "slide", depth: 2 },
@@ -138,7 +138,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
   const [enteredKeys, setEnteredKeys] = useState<Set<number>>(
     () => new Set([0]),
   );
-
   useEffect(() => {
     const prevView = lastViewRef.current;
 
@@ -205,8 +204,10 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
         scrollTop: scrollOwner?.scrollTop ?? 0,
         focusPath,
       });
+      const shouldReleaseFocus = (forward || useFade) &&
+        activeElement instanceof HTMLElement && container.contains(activeElement);
+      if (shouldReleaseFocus) activeElement.blur();
     }
-
     pendingBackRestoreRef.current = forward ? null : view;
 
     setState((s) => {
@@ -494,7 +495,6 @@ export function ScreenStack({ view, children }: ScreenStackProps) {
             key={layer.key}
             data-screen-layer={layer.key}
             {...inertProps}
-            aria-hidden={isCovered || undefined}
             initial={initial}
             animate={animate}
             transition={transition}

@@ -9,6 +9,8 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "passkeyUnlock",
   "pkVault",
   "mnemonicVault",
+  "privacyVault",
+  "privacyRecoveryBackup",
   "accounts",
   "ledgerDevices",
   "safeAccounts",
@@ -47,6 +49,7 @@ export const WALLET_LOCAL_STORAGE_KEYS = [
   "sessionEncKey",
   "onboardingInitialization",
   "sponsoredTransferIntents",
+  "walletHomeModeV1",
 ] as const;
 
 export const WALLET_SYNC_STORAGE_KEYS = [

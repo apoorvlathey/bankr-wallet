@@ -33,6 +33,8 @@ integration boundary, not the default home for new implementations.
 ## Feature domains
 
 - `Activity/` owns transaction-history list presentation.
+- `AccountPicker/` owns the shared searchable and reorderable account browser;
+  public-home selection and Settings management remain explicit parent modes.
 - `AssetChanges/` owns simulation lifecycle, retry projection, asset rows, and
   sanitized NFT preview presentation.
 - `BatchConfirmation/` owns ERC-5792 batch review, editing, and decisions.
@@ -42,6 +44,11 @@ integration boundary, not the default home for new implementations.
 - `Ledger/` owns hardware pairing/address selection and live device-signing status.
 - `Portfolio/Holdings/` owns portfolio hydration, display transforms, and asset rows.
 - `Settings/` owns settings navigation and configuration screens.
+- `Shield/` owns the balance-first private-balance screen, status-only automatic
+  recovery initialization, active-profile Shield review/activity, aggregate balance,
+  private Unshield, and original-depositor public-withdrawal presentation. All
+  custody, proving, RPC, signing, and submission effects remain in background
+  domains.
 - `SignatureConfirmation/` owns signature-decision screen composition.
 - `Swap/` owns swap/bridge selection, quoting, review, and execution UI.
 - `TransactionConfirmation/` owns single-transaction review and decisions.

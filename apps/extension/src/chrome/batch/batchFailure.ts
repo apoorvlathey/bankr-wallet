@@ -10,6 +10,14 @@ export async function handleBatchFailure(
   pending: PendingBatchTxRequest,
   error: string,
 ): Promise<void> {
+  if (pending.privacyRagequitMeta) {
+    const { recordPrivacyRagequitBatchSubmissionFailure } = await import(
+      "../privacy/ragequit/lifecycle"
+    );
+    await recordPrivacyRagequitBatchSubmissionFailure(pending).catch((cause) => {
+      console.warn("[privacy-ragequit] batch failure mirror failed", cause);
+    });
+  }
   await updateBundleStatus(bundleId, {
     status: BUNDLE_STATUS.OFFCHAIN_FAILURE,
     error,

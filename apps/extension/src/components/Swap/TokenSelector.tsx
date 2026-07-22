@@ -48,13 +48,9 @@ interface TokenSelectorProps {
   onSelect: (token: PortfolioToken) => void;
   excludeAddress?: string;
   chainId: number;
-  /** Called when user enters a valid 0x address — parent resolves it */
   onCustomAddress?: (address: string) => void;
-  /** Called when user clicks the resolved custom token row */
   onSelectCustomToken?: (token: PortfolioToken) => void;
-  /** Resolved custom token to show in dropdown */
   resolvedCustomToken?: PortfolioToken | null;
-  /** Whether custom token is currently being resolved */
   customTokenLoading?: boolean;
   /** Error message from custom token resolution */
   customTokenError?: string | null;

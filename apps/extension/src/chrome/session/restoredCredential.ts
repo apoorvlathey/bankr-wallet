@@ -1,36 +1,21 @@
 import type { PasswordType } from "../types";
+import type { RestoredSessionCapabilityCredential } from "./restoredCapabilityCredential";
+import type { RestoredPasskeySessionCredential } from "./restoredPasskeyCredential";
 
-const RESTORED_PASSKEY_SESSION = Symbol("restored-passkey-session");
-
-export interface RestoredPasskeySessionCredential {
-  readonly [RESTORED_PASSKEY_SESSION]: true;
-  readonly vaultKeyBytes: Uint8Array;
-  readonly passkeyBinding: string;
-}
-
-export function isRestoredPasskeySessionCredential(
-  value: unknown,
-): value is RestoredPasskeySessionCredential {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as RestoredPasskeySessionCredential)[RESTORED_PASSKEY_SESSION] === true
-  );
-}
-
-export function createRestoredPasskeySessionCredential(
-  vaultKeyBytes: Uint8Array,
-  passkeyBinding: string,
-): RestoredPasskeySessionCredential {
-  const credential = {} as RestoredPasskeySessionCredential;
-  Object.defineProperties(credential, {
-    [RESTORED_PASSKEY_SESSION]: { value: true },
-    vaultKeyBytes: { value: vaultKeyBytes },
-    passkeyBinding: { value: passkeyBinding },
-  });
-  return Object.freeze(credential);
-}
+export {
+  createRestoredSessionCapabilityCredential,
+  isRestoredSessionCapabilityCredential,
+  type RestoredSessionCapabilityCredential,
+} from "./restoredCapabilityCredential";
+export {
+  createRestoredPasskeySessionCredential,
+  isRestoredPasskeySessionCredential,
+  type RestoredPasskeySessionCredential,
+} from "./restoredPasskeyCredential";
 
 export type UnlockFn = (
-  credential: string | RestoredPasskeySessionCredential,
+  credential:
+    | string
+    | RestoredPasskeySessionCredential
+    | RestoredSessionCapabilityCredential,
 ) => Promise<{ success: boolean; passwordType?: PasswordType }>;

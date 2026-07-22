@@ -90,17 +90,7 @@ export async function markPendingBatchTxRequestReady(
   });
 }
 
-/**
- * Replace one call's `data` field in a pending batch request. Used by the
- * batch confirmation UI when the user edits a built-in field (e.g. an ERC-20
- * approve amount) — we re-encode that call's calldata and persist it back so
- * the downstream sign paths (Bankr ERC-7821, PK/Seed auto-sequential, and any
- * future EIP-7702 atomic path) read the edited value at sign time without any
- * per-handler plumbing. Simulation + gas re-run automatically because the
- * popup's storage listener re-pushes the updated PendingBatchTxRequest into
- * BatchTransactionConfirmation, whose synthetic batch tx is memoized on
- * `params.calls`.
- */
+/** Persist one reviewed calldata edit for every downstream signer path. */
 export async function updateCallInPendingBatchTxRequest(
   bundleId: string,
   callIndex: number,
@@ -112,6 +102,9 @@ export async function updateCallInPendingBatchTxRequest(
     if (idx === -1) return { success: false, error: "Batch not found" };
 
     const target = requests[idx];
+    if (target.privacyRagequitMeta) {
+      return { success: false, error: "Public exit calls cannot be changed" };
+    }
     if (target.intakeStatus === "validating") {
       return { success: false, error: "Batch request is still being validated" };
     }
@@ -152,6 +145,13 @@ export async function removeCallFromPendingBatchTxRequest(
     if (idx === -1) return { found: false, remainingCalls: 0 };
 
     const target = requests[idx];
+    if (target.privacyRagequitMeta) {
+      return {
+        found: true,
+        remainingCalls: target.params.calls?.length ?? 0,
+        error: "Public exit calls cannot be changed",
+      };
+    }
     if (target.intakeStatus === "validating") {
       return {
         found: true,

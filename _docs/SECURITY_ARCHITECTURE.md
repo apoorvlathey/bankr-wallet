@@ -531,10 +531,10 @@ This mapping is tested independently from Chrome listener return values.
 | Domain | Storage authority | Plaintext lifetime | Required compatibility coverage |
 | --- | --- | --- | --- |
 | Bankr credential | Stable `crypto.ts` facade over `cryptography/passwordCipher.ts`, `vaultKey.ts`, and `credentialStorage.ts`, plus `bankr/credentialBinding.ts`; remote effects under `bankr/` | Background session cache and immediate fixed-origin API operations | Legacy password ciphertext, general-vault ciphertext, partial migration, generation-bound pending requests |
-| General vault key | master/agent wrappers, V1/V2 passkey wrappers, and an explicit native-Never split session envelope | Non-extractable `CryptoKey` plus bounded setup/unlock/restore byte buffers | Master, agent, V1 passkey, V2 passkey, corrupt/mismatched wrappers, tampered/stale/torn session capability |
+| General vault key | master/agent wrappers, V1/V2 passkey wrappers, and the native unified split session envelope | Non-extractable `CryptoKey` plus bounded setup/unlock/restore byte buffers | Master, agent, V1 passkey, V2 passkey, corrupt/mismatched wrappers, tampered/stale/torn session capability |
 | Private keys | Stable `vaultCrypto.ts` facade over `vault/entryCrypto.ts`, `accountIntegrity.ts`, `generalIntegrity.ts`, `recordCodec.ts`, `repository.ts`, and `operations.ts` / `pkVault` | Immediate signing or bounded session cache | Frozen V1 bytes, unknown/malformed/oversized records, read-compatible duplicate IDs, zero-write mutation/migration refusal, legacy/current/mixed encryption, all local-account bindings |
 | Mnemonics | Stable `mnemonicStorage.ts` facade over the `mnemonic/` record/crypto/repository/operations/recovery layers plus derivation/master-access/integrity/address-preview/account workflow boundaries / `mnemonicVault` | Immediate derivation/reveal; dedicated cached mnemonic key only | V1 password vault, transitional shared-vault reads, early V2, current V2 key check, V1/V2 passkeys, empty vault |
-| Passkey orchestration | Stable `passkeyUnlock.ts` facade over status/preflight, setup, hydration, removal, and stable session binding layers / `passkeyUnlock` | Immediate V1/V2 unwrap; only non-extractable live capabilities plus the explicit-Never encrypted general-key envelope persist | Frozen V1/V2 records, auth-epoch races, atomic mnemonic/passkey setup, integrity-gated removal, factor-bound Never restore |
+| Passkey orchestration | Stable `passkeyUnlock.ts` facade over status/preflight, setup, hydration, removal, and stable session binding layers / `passkeyUnlock` | Immediate V1/V2 unwrap; only non-extractable live capabilities plus the factor-bound unified general/optional-privacy envelope persist | Frozen V1/V2 records, auth-epoch races, atomic mnemonic/passkey setup, integrity-gated removal, factor-bound restore |
 
 Within `chrome/vault/`, `entryCrypto.ts`, `accountIntegrity.ts`, and
 `recordCodec.ts` are storage-independent transformations/proofs. The codec
@@ -546,7 +546,7 @@ wallet-secret storage lock before add/remove read-modify-write mutations and
 performs the same pre-commit authorization recheck. `generalIntegrity.ts` is a
 read-only recovery proof. None imports the stable root `vaultCrypto.ts` facade,
 so dependencies cannot cycle back from implementation into compatibility.
-| Restorable session | `session/storage.ts`, `persistence.ts`, `passkeyPersistence.ts`, and `passkeyCredentialRecord.ts` / native `chrome.storage.session` | No plaintext at rest; ciphertext is browser-session memory readable by privileged extension contexts, while plaintext exists only in bounded service-worker restore buffers | Native storage, unavailable fallback, malformed/ambiguous/torn/tampered envelope, stale factor, Never-only restoration, all wallet types |
+| Restorable session | `session/capabilityPersistence.ts`, `uiSurfaceLease.ts`, `restoration.ts`, and `storage.ts`; `persistence.ts`/`passkeyPersistence.ts` are released-format migration readers / native `chrome.storage.session` | No plaintext at rest; ciphertext is browser-session memory readable by privileged extension contexts, while exact general/optional-privacy keys exist only in bounded service-worker buffers | Password/passkey, master/agent, popup/side-panel/full-page overlap, same/new renderer restart, inactivity expiry, unavailable fallback, malformed/torn/tampered/stale factor, all wallet types |
 
 `STORAGE.md` remains authoritative for exact schemas and version history.
 
@@ -696,7 +696,7 @@ The migration is intentionally incremental:
 6. Split unlock/hydration, legacy migration, factor management, credential
    mutation, and password rotation from `authHandlers.ts`. The completed
    layers are grouped under `chrome/auth/`: `walletUnlock.ts`,
-   `sessionHydration.ts`, `legacyVaultKeyMigration.ts`,
+   `restoredSessionUnlock.ts`, `sessionHydration.ts`, `legacyVaultKeyMigration.ts`,
    `masterPasswordVerification.ts`, `agentFactorHandlers.ts`,
    `bankrCredentialUpdate.ts`, `masterPasswordRotation.ts`, and
    `sessionTermination.ts`. `authHandlers.ts` is now only the stable
@@ -705,9 +705,10 @@ The migration is intentionally incremental:
 7. Split in-memory session state, persisted restoration, storage adaptation,
    and auto-lock policy from `sessionCache.ts` behind its stable compatibility
    facade. The resulting one-way layers live under `chrome/session/` as
-   `inMemoryCache.ts`, `persistence.ts`, `passkeyPersistence.ts`,
-   `passkeyCredentialRecord.ts`, `storage.ts`, and
-   `autoLockPolicy.ts`; transition/restore orchestration stays in the facade.
+   `inMemoryCache.ts`, `capabilityPersistence.ts`, `uiSurfaceLease.ts`,
+   `restoration.ts`, `storage.ts`, and `autoLockPolicy.ts`; released password and
+   passkey persistence modules remain migration-only and `sessionCache.ts`
+   remains the export facade.
 8. Split account metadata persistence, selection repair, Bankr atomic commits,
    local/view-only mutations, seed-derived rows, and seed groups behind the
    stable `accountStorage.ts` facade.

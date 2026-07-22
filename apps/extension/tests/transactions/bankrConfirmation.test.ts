@@ -33,7 +33,11 @@ test("aged Bankr transactions remain confirmable in immediate and background pat
         name: "bankr-transaction-confirmation-boundaries",
         enforce: "pre",
         resolveId(source, importer) {
-          if (!importer?.split("?", 1)[0].endsWith("/chrome/transactions/bankrConfirmation.ts")) return null;
+          const file = importer?.split("?", 1)[0] ?? "";
+          if (
+            !file.endsWith("/chrome/transactions/bankrConfirmation.ts") &&
+            !file.endsWith("/chrome/transactions/bankrImmediateConfirmation.ts")
+          ) return null;
           return ({
             "../bankr/response": "\0bankr-response",
             "../bankr/pendingAuthorization": "\0bankr-authorization",
@@ -88,6 +92,10 @@ test("aged Bankr transactions remain confirmable in immediate and background pat
           if (id === "\0bankr-session") return `
             export const getBankrApiKeyForConfirmation = async () => "bankr-key";`;
           if (id === "\0bankr-policy") return `
+            export const bankrPrivacyConfirmationError = (pending) =>
+              pending.privacyShieldMeta || pending.privacyRagequitMeta
+                ? "Bankr cannot submit Privacy Pools transactions on Sepolia"
+                : null;
             export const validatePinnedBankrTransaction = async () => ({ ok: true });
             export const validateBankrTransactionChain = () => ({ ok: true });`;
           if (id === "\0bankr-runtime") return `
@@ -134,6 +142,35 @@ test("aged Bankr transactions remain confirmable in immediate and background pat
       ),
       { success: true },
     );
+    assert.equal(hooks.submissions.length, 2);
+
+    queueAged("bankr-private-shield");
+    hooks.pending.privacyShieldMeta = {};
+    assert.deepEqual(
+      await confirmation.handleConfirmTransaction(
+        "bankr-private-shield",
+        "ignored",
+      ),
+      {
+        success: false,
+        error: "Bankr cannot submit Privacy Pools transactions on Sepolia",
+      },
+    );
+    assert.equal(hooks.pending.id, "bankr-private-shield");
+
+    queueAged("bankr-private-ragequit");
+    hooks.pending.privacyRagequitMeta = {};
+    assert.deepEqual(
+      await confirmation.handleConfirmTransactionAsync(
+        "bankr-private-ragequit",
+        "ignored",
+      ),
+      {
+        success: false,
+        error: "Bankr cannot submit Privacy Pools transactions on Sepolia",
+      },
+    );
+    assert.equal(hooks.pending.id, "bankr-private-ragequit");
     assert.equal(hooks.submissions.length, 2);
   } finally {
     await server?.close();

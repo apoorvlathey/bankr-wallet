@@ -42,6 +42,8 @@ export interface SettingsRowProps {
   icon: ReactNode;
   iconBg: string;
   iconColor?: string;
+  /** Optional dark-theme resting glyph color for intentionally accented rows. */
+  iconDarkColor?: string;
   /** Midnight-only glyph accent used while the interactive row is hovered. */
   iconHoverColor?: string;
   cornerAccent?: DecoratorAccent;
@@ -59,6 +61,7 @@ export function SettingsRow({
   icon,
   iconBg,
   iconColor = "fg.inverse",
+  iconDarkColor,
   iconHoverColor = iconBg,
   cornerAccent = "highlight",
   cornerBg,
@@ -138,7 +141,7 @@ export function SettingsRow({
           justifyContent="center"
           flexShrink={0}
           bg={isDarkTheme ? "surface.sunken" : iconBg}
-          color={isDarkTheme ? "fg.secondary" : iconColor}
+          color={isDarkTheme ? iconDarkColor ?? "fg.secondary" : iconColor}
           transitionProperty="color"
           transitionDuration="fast"
           borderWidth={isDarkTheme ? "1px" : "2px"}

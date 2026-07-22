@@ -14,13 +14,15 @@ import {
   getCachedPassword,
   setCachedApiKey,
   setCachedMnemonicKey,
+  setCachedPrivacyKey,
   setCachedPasswordDirect,
   setCachedPasswordType,
   setCachedVault,
   setCachedVaultKey,
   setCurrentSessionId,
-  storeSessionAtomic,
 } from "../sessionCache";
+import { storeSessionCapabilityAtomic } from "../session/capabilityPersistence";
+import { getActiveWalletUiSurfaceIds } from "../session/uiSurfaceLease";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
@@ -37,6 +39,11 @@ export interface HydrateAuthSessionOptions {
   persistPasswordSession?: boolean;
   migrateLegacyPrivateKeys?: boolean;
   mnemonicKey?: { key: CryptoKey; keyId: string } | null;
+  privacyKey?: {
+    key: CryptoKey;
+    keyBytes: Uint8Array;
+    keyId: string;
+  } | null;
   // Current-session biometric setup must not refresh a passively expired
   // master session while it performs migration/decryption work.
   expectedMasterAuthEpoch?: string;
@@ -204,17 +211,24 @@ async function hydrateAuthSessionFromVaultKeyBytesWithinSecretOperation(
       assertCurrentMasterAuthorization(options.expectedMasterAuthEpoch);
     }
     const autoLockTimeout = await getAutoLockTimeout();
-    if (autoLockTimeout === 0) {
-      persistedSessionId = crypto.randomUUID();
-      // Persist before committing in-memory credentials. If either storage
-      // write fails, callers receive an error while the cache stays unchanged.
-      await storeSessionAtomic(
-        persistedSessionId,
-        true,
-        passwordType,
-        options.password,
-      );
-    }
+    persistedSessionId = crypto.randomUUID();
+    // Persist a key capability, never the supplied password. Finite sessions
+    // are restorable across MV3 worker suspension and use the same surface
+    // lease as the live in-memory generation.
+    await storeSessionCapabilityAtomic({
+      sessionId: persistedSessionId,
+      unlockMethod: "password",
+      passwordType,
+      vaultKeyBytes,
+      privacyKey: passwordType === "master" && options.privacyKey
+        ? {
+            keyBytes: options.privacyKey.keyBytes,
+            keyId: options.privacyKey.keyId,
+          }
+        : null,
+      autoLockTimeout,
+      activeSurfaceIds: getActiveWalletUiSurfaceIds(),
+    });
   }
 
   // Commit the prepared session synchronously only after every fallible step.
@@ -224,6 +238,9 @@ async function hydrateAuthSessionFromVaultKeyBytesWithinSecretOperation(
   setCachedVaultKey(vaultKey);
   setCachedMnemonicKey(
     passwordType === "master" ? options.mnemonicKey ?? null : null,
+  );
+  setCachedPrivacyKey(
+    passwordType === "master" ? options.privacyKey ?? null : null,
   );
   setCachedPasswordType(passwordType);
   setCachedPasswordDirect(options.password ?? null);

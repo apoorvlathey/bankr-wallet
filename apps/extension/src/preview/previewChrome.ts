@@ -1,11 +1,17 @@
 import { DEFAULT_NETWORKS } from "@/constants/networks";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
+import type { Account } from "@/chrome/types";
+import { isPrivacyPoolsCustodyAccountType } from "@/chrome/privacy/deployment/accountPolicy";
 import { SELECTED_THEME_STORAGE_KEY } from "@/theme";
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from "@/constants/securityPolicy";
+import { createPrivacyShieldQuoteValues } from "@/chrome/privacy/deposit/quotePolicy";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import { formatEther } from "viem";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { previewSafeAccountRecords, previewSafeProposals } from "./safeHomePreview";
 import { PREVIEW_EPOCH_MS } from "./fixtures";
+import { previewShieldPortfolioResponse } from "./shieldFixtures";
 import {
   createPreviewEnvironment,
   createPreviewFetch,
@@ -24,6 +30,128 @@ import {
 
 export type { PreviewChromeLogger } from "./previewChromeSupport";
 
+type PreviewPrivacyAccount = Extract<
+  Account,
+  { type: "bankr" | "privateKey" | "seedPhrase" }
+>;
+
+function isPreviewPrivacyAccount(account: Account): account is PreviewPrivacyAccount {
+  return isPrivacyPoolsCustodyAccountType(account.type);
+}
+
+const PREVIEW_SHIELD_BALANCE_WEI = 250_000_000_000_000_000n;
+const PREVIEW_SHIELD_GAS_RESERVE_WEI = 50_000_000_000_000n;
+const PREVIEW_SHIELD_MINIMUM_WEI =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
+const PREVIEW_MAX_UINT256 = (1n << 256n) - 1n;
+const PREVIEW_SHIELD_ENTRYPOINT =
+  PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address;
+
+function parsePreviewShieldAmount(value: unknown): bigint | null {
+  if (
+    typeof value !== "string" ||
+    !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)
+  ) return null;
+  const [whole, fraction = ""] = value.split(".");
+  try {
+    const amountWei =
+      BigInt(whole) * 1_000_000_000_000_000_000n +
+      BigInt(fraction.padEnd(18, "0") || "0");
+    return amountWei <= PREVIEW_MAX_UINT256 ? amountWei : null;
+  } catch {
+    return null;
+  }
+}
+
+function previewPrivacyShieldQuote(
+  environment: PreviewEnvironment,
+  message: any,
+): unknown {
+  const account = activePreviewAccount(environment);
+  if (account.type === "impersonator") {
+    return {
+      success: false,
+      code: "view-only-account",
+      error: "View-only accounts can’t Shield.",
+    };
+  }
+  if (!isPreviewPrivacyAccount(account)) {
+    return {
+      success: false,
+      code: "account-unavailable",
+      error: "This account type cannot Shield.",
+    };
+  }
+  if (
+    message?.accountId !== account.id ||
+    message?.accountAddress?.toLowerCase() !== account.address.toLowerCase() ||
+    message?.accountType !== account.type
+  ) {
+    return {
+      success: false,
+      code: "account-unavailable",
+      error: "Switch accounts and try again.",
+    };
+  }
+  const shieldedAmountWei = parsePreviewShieldAmount(message?.amount);
+  if (shieldedAmountWei === null) {
+    return {
+      success: false,
+      code: "invalid-amount",
+      error: "Enter a valid ETH amount.",
+    };
+  }
+  if (shieldedAmountWei < PREVIEW_SHIELD_MINIMUM_WEI) {
+    return {
+      success: false,
+      code: "amount-below-minimum",
+      error: `Minimum amount to shield is ${formatEther(PREVIEW_SHIELD_MINIMUM_WEI)} ETH. The protocol fee is added on top.`,
+    };
+  }
+  return {
+    success: true,
+    quote: createPrivacyShieldQuoteValues({
+      shieldedAmountWei,
+      balanceWei: PREVIEW_SHIELD_BALANCE_WEI,
+      gasLimit: 1n,
+      maxFeePerGas: PREVIEW_SHIELD_GAS_RESERVE_WEI,
+    }),
+  };
+}
+
+function previewPrivacyShieldReview(
+  environment: PreviewEnvironment,
+  message: any,
+): unknown {
+  const quoted = previewPrivacyShieldQuote(environment, message) as any;
+  if (quoted?.success !== true) return quoted;
+  if (quoted.quote?.canAfford !== true) {
+    return {
+      success: false,
+      code: "insufficient-funds",
+      error: `Not enough ${PRIVACY_POOLS_DEPLOYMENT.chainName} ETH for this amount and gas.`,
+    };
+  }
+  const account = activePreviewAccount(environment);
+  if (!isPreviewPrivacyAccount(account)) {
+    return { success: false, code: "account-unavailable", error: "This account type cannot Shield." };
+  }
+  return {
+    success: true,
+    status: "ready",
+    review: {
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+      accountId: account.id,
+      accountAddress: account.address.toLowerCase(),
+      accountType: account.type,
+      amountWei: quoted.quote.amountWei,
+      protocolFeeWei: quoted.quote.protocolFeeWei,
+      shieldedAmountWei: quoted.quote.shieldedAmountWei,
+      destinationAddress: PREVIEW_SHIELD_ENTRYPOINT,
+    },
+  };
+}
+
 export function responseForPreviewMessage(
   environment: PreviewEnvironment,
   message: any,
@@ -31,6 +159,24 @@ export function responseForPreviewMessage(
 ): unknown {
   const { route, scenario } = environment.parsed.state;
   switch (message?.type) {
+    case "privacyEnsureInitialized":
+      return { success: true, status: "ready" };
+    case "privacyRunShieldReadinessCheck":
+      return { success: true, status: "ready" };
+    case "privacyListShieldOperations":
+      {
+        const account = activePreviewAccount(environment);
+      return previewShieldPortfolioResponse(
+        scenario,
+          isPreviewPrivacyAccount(account) ? account : undefined,
+      );
+      }
+    case "privacySyncShield":
+      return { success: true, status: "synced" };
+    case "privacyQuoteShield":
+      return previewPrivacyShieldQuote(environment, message);
+    case "privacyPrepareShieldReview":
+      return previewPrivacyShieldReview(environment, message);
     case "ensureNetworksInfo":
       return {
         success: true,

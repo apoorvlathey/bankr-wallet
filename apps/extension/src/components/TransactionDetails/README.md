@@ -25,7 +25,9 @@ here and should stay organized by one user-facing responsibility per file.
 | `PendingTransactionActions.tsx` | Render the paired Cancel and Speed Up actions for an eligible pending row | Callback-driven only |
 | `transactionReplacementModel.ts` | Pure renderer eligibility hint for pending replacement actions | None |
 | `usePendingReplacementActions.ts` | Prepare one background-authored replacement review and surface bounded errors | Trusted runtime message |
-| `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status | Opens the requesting site and transaction explorer |
+| `StatusHeader.tsx` | Render the requesting identity plus color-independent chain and terminal/pending status; privacy transactions use the shared Shield mark and Activity label, and pending Shield status exposes the shared compliance-time explanation | Opens the requesting site and transaction explorer |
+| `PrivacyShieldLifecycleSummary.tsx` | Render the same durable Shield state used by Activity, plus net Shielded ETH, the receipt-timed compliance indicator and elapsed value, and locally bundled Privacy Pools attribution | Elapsed value delegates its renderer-only timer to the Shield compliance component |
+| `PrivacyShieldPendingAction.tsx` | Render the centered pending-only `Cancel Shielding and Withdraw?` navigation action | Invokes the host's existing Unshield-screen callback only; the host carries the selected operation and net amount |
 | `BridgeSummary.tsx` | Render source and destination bridge legs, status, amounts, and explorer actions | Explorer navigation |
 | `TransactionImpact.tsx` | Render source/destination asset changes in the shared request-review direction hierarchy | None |
 | `ClearSigningSummary.tsx` | Render ERC-7715 revoke, ERC-7821 batch, EIP-7702 delegation, and clear-signed summaries | Copy/explorer actions delegated to shared components |
@@ -112,6 +114,18 @@ large hook.
 - Leaving full-screen pending details restores Activity. Home honors only the
   newer monotonic Activity/Holdings trigger so stale Holdings state cannot
   override the return destination when `PortfolioTabs` remounts.
+- Shield deposits replace the generic confirmed label with their durable
+  Privacy Pools stage and show the same stage/context projection as Activity.
+  Their hero identity, plus Shield Recovery and Public Exit identities, also
+  reuse Activity's shared privacy mark and concise action label instead of the
+  mascot and internal persistence origin.
+  The ordinary transaction, fee, account, explorer, and technical details stay
+  available beneath that lifecycle summary. While the compliance check is
+  pending, both its header loader and its Privacy Pools-attributed status card
+  expose the shared one-hour timing popover. The pending-only cancellation
+  action opens the existing Unshield screen with the selected operation ID and
+  exact net Shielded ETH amount; it never starts a withdrawal from the details
+  surface itself.
 - Confirmed ERC-7715 revocations use a receipt-specific ledger. The blue
   explanatory warning and nested allowance panel remain exclusive to the
   pre-confirmation review surface.

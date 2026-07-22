@@ -83,6 +83,14 @@ export async function terminalizeUnauthorizedPendingRequest(
     return;
   }
   if (kind === "batchTransaction") {
+    if ((pending as { privacyRagequitMeta?: unknown }).privacyRagequitMeta) {
+      const { recordPrivacyRagequitBatchSubmissionFailure } = await import(
+        "../privacy/ragequit/lifecycle"
+      );
+      await recordPrivacyRagequitBatchSubmissionFailure(
+        pending as import("../erc5792Types").PendingBatchTxRequest,
+      );
+    }
     await removePendingBatchTxRequest(pending.id);
     await updateBundleStatus(pending.id, {
       status: BUNDLE_STATUS.OFFCHAIN_FAILURE,

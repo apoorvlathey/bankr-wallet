@@ -21,6 +21,7 @@ export async function authorizePendingBankrSubmit(
   kind: Extract<PendingRequestLifecycleKind, "transaction" | "batchTransaction">,
   pending: PinnedBankrPending,
   beginEffect: () => void,
+  beforeEffect?: () => void | Promise<void>,
 ): Promise<void> {
   if (
     !pending.accountId ||
@@ -40,5 +41,6 @@ export async function authorizePendingBankrSubmit(
   const authorization =
     await enforcePendingRequestAuthorizationAtConfirmation(kind, pending);
   if (!authorization.authorized) throw new Error(authorization.error);
+  await beforeEffect?.();
   beginEffect();
 }

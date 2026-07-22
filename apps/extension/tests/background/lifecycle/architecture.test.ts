@@ -18,9 +18,11 @@ test("lifecycle audit domain has one focused module per registration concern", a
       "installUpdate.ts",
       "maintenance.ts",
       "notificationClicks.ts",
+      "privacyAspRefresh.ts",
       "startupRecovery.ts",
       "storageAuthLock.ts",
       "tabAccounts.ts",
+      "trustedUiPortProtocol.ts",
       "trustedUiPorts.ts",
     ],
   );
@@ -40,6 +42,7 @@ test("composition root preserves lifecycle registration and startup order", asyn
   );
   const ordered = [
     "registerStorageAuthLockLifecycle({",
+    "registerPrivacyAspRefreshLifecycle({",
     "registerTabAccountLifecycle({",
     "startMaintenanceLifecycle({",
     "registerInstallUpdateLifecycle({",

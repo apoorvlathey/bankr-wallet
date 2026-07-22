@@ -35,7 +35,7 @@ export function toPimlicoEip7702Authorization(
     throw new Error("EIP-7702 authorization has invalid yParity");
   }
   return {
-    address: authorization.address,
+    address: authorization.address as `0x${string}`,
     chainId: numberToHex(authorization.chainId),
     nonce: numberToHex(authorization.nonce),
     r: authorization.r,

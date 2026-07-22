@@ -62,6 +62,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const formatOrigin = useDappOriginFormatter();
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
+  const isPrivacyRagequitBatch = batchRequest.privacyRagequitMeta?.version === 1;
   const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>(
     "native",
   );
@@ -82,7 +83,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const isNonAtomic = isLocalSigningAccount && !isAtomic7702;
   const resolvedChainName = resolvedChain?.name ?? chainName;
   const originHostname = formatOrigin(origin).hostname ?? getOriginHostname(origin);
-  const isInternalWalletChan = origin === "WalletChan" || origin === "Cross-Dapp Batch";
+  const isInternalWalletChan = origin === "WalletChan" || origin === "Cross-Dapp Batch" ||
+    isPrivacyRagequitBatch;
   const originInitials = (originHostname || origin || "?")
     .split(/[.\s-]+/)
     .filter(Boolean)
@@ -116,17 +118,18 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   );
 
   const forceInclusionInfo = useMemo<ForceInclusionInfo | null>(() => {
-    if (isAtomic7702 || !isForceInclusionSupportedForAccount(chainId, accountType)) return null;
+    if (isPrivacyRagequitBatch || isAtomic7702 ||
+      !isForceInclusionSupportedForAccount(chainId, accountType)) return null;
     const entry = FORCE_INCLUSION_CHAINS.get(chainId)!;
     if (entry.protocol !== "op-stack") return null;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
-  }, [chainId, accountType, isAtomic7702]);
+  }, [chainId, accountType, isAtomic7702, isPrivacyRagequitBatch]);
   useEffect(() => {
-    if (review.forceInclusion || customConfirmHandler) {
+    if (review.forceInclusion || customConfirmHandler || isPrivacyRagequitBatch) {
       setFeePaymentToken("native");
       setFeePaymentQuote(null);
     }
-  }, [customConfirmHandler, review.forceInclusion]);
+  }, [customConfirmHandler, isPrivacyRagequitBatch, review.forceInclusion]);
   useEffect(() => {
     setFeePaymentToken("native");
     setFeePaymentQuote(null);
@@ -153,7 +156,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const isValueMalformed = !!malformedValueInfo;
   const isCalldataMalformed = !!malformedCallInfo;
   const hasDeploymentCall = calls.some((call) => !call.to);
-  const canSplitBatch = !isIntakeValidating && isNonAtomic && !customConfirmHandler
+  const canSplitBatch = !isPrivacyRagequitBatch && !isIntakeValidating && isNonAtomic && !customConfirmHandler
     && !review.forceInclusion && calls.length > 0;
   const canBatchAccount = accountType === "bankr" || isLocalSigningAccount;
   const addToBatchDisabledReason = useMemo(() => {
@@ -166,7 +169,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     }
     return null;
   }, [crossDappBatch, fromAddress, chainId]);
-  const showAddToBatch = !isIntakeValidating && canBatchAccount && !customConfirmHandler && !!onAddedToBatch
+  const showAddToBatch = !isPrivacyRagequitBatch && !isIntakeValidating && canBatchAccount && !customConfirmHandler && !!onAddedToBatch
     && !isNonAtomic && !hasDeploymentCall && !isValueMalformed && !encodingError;
 
   if (actions.state === "forceInclusion" && forceInclusionInfo) {
@@ -186,7 +189,9 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     return <SentState isDarkTheme={isDarkThemeId(themeId)} borders={tokens.borders} />;
   }
 
-  const screenTitle = titleOverride
+  const screenTitle = isPrivacyRagequitBatch
+    ? "Public exit"
+    : titleOverride
     ? titleOverride.replace(/\s*\([^)]*\)\s*$/, "")
     : calls.length === 1 ? "Transaction request" : "Batch request";
   const canConfirmBatch =
@@ -267,8 +272,9 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
             expandedCalls={review.expandedCalls}
             decodedFunctionNames={review.decodedFunctionNames}
             originPerCall={originPerCall}
-            onEditCallData={isIntakeValidating ? undefined : onEditCallData}
-            onRemoveCall={isIntakeValidating ? undefined : onRemoveCall}
+            readOnly={isPrivacyRagequitBatch}
+            onEditCallData={isIntakeValidating || isPrivacyRagequitBatch ? undefined : onEditCallData}
+            onRemoveCall={isIntakeValidating || isPrivacyRagequitBatch ? undefined : onRemoveCall}
             onToggleCall={review.toggleCall}
             onFunctionName={review.recordFunctionName}
             onClearSigningAction={review.recordClearSigningAction}
@@ -337,7 +343,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           bundleId={batchRequest.id}
           feePaymentToken={feePaymentToken}
           feePaymentQuote={feePaymentQuote}
-          allowFeePaymentSelection={!customConfirmHandler}
+          allowFeePaymentSelection={!customConfirmHandler && !isPrivacyRagequitBatch}
           onFeePaymentTokenChange={setFeePaymentToken}
           onFeePaymentQuoteChange={setFeePaymentQuote}
         />}

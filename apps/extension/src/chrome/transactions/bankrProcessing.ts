@@ -1,30 +1,36 @@
 import { CHAIN_CONFIG } from "../../constants/chainConfig";
+import { BankrApiError } from "../bankr/response";
 import { authorizePendingBankrSubmit } from "../bankr/pendingAuthorization";
 import { submitTransactionDirect } from "../bankr/submission";
-import { attachClearSignedMetaToHistory } from "../clearSignedMetaSnapshot";
 import { extractAssetChangesWhenReceiptAvailable } from "../receiptEnrichment";
 import { startReceiptPolling } from "../forceInclusion/receiptPoller";
 import type { PendingTxRequest } from "../requests/pendingTxStorage";
-import {
-  enforcePendingRequestAuthorizationAtConfirmation,
-} from "../requests/pendingRequestLifecycle";
+import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import {
   guardPendingRequestEffectLease,
   type PendingRequestEffectLease,
 } from "../requests/pendingRequestResolution";
-import {
-  addTxToHistory,
-  updateTxInHistory,
-} from "../txHistoryStorage";
-import { fetchAndStoreGasData, lookupFunctionName } from "./displayMetadata";
+import { updateTxInHistory } from "../txHistoryStorage";
+import { fetchAndStoreGasData } from "./displayMetadata";
 import { handleTransactionFailure } from "./failure";
 import { showNotification } from "./notification";
+import { activeAbortControllers, processingTxIds, writeResultToStorage } from "./runtime";
 import {
-  activeAbortControllers,
-  processingTxIds,
-  writeResultToStorage,
-} from "./runtime";
-
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+} from "../privacy/operations/lifecycle";
+import type { PrivacyShieldConfirmationAuthorization } from "../privacy/operations/submission";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+} from "../privacy/ragequit/lifecycle";
+import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
+import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+} from "../privacy/withdrawals/lifecycle";
+import type { PrivacyDirectUnshieldAuthorization } from "../privacy/withdrawals/directConfirmation";
+import { initializeBankrTransactionHistory } from "./bankrHistory";
 /** Own the fire-and-forget Bankr submission and terminal publication flow. */
 export async function processBankrTransactionInBackground(
   txId: string,
@@ -32,37 +38,19 @@ export async function processBankrTransactionInBackground(
   apiKey: string,
   functionName?: string,
   effectLease?: PendingRequestEffectLease,
+  privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
+  privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
+  privacyDirectUnshieldAuthorization?: PrivacyDirectUnshieldAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   let submittedTxHash: string | undefined;
   let submittedSuccessfully = false;
+  let publishedTxHash: string | null = null;
 
   try {
-    await addTxToHistory({
-      id: txId,
-      status: "processing",
-      tx: pending.tx,
-      origin: pending.origin,
-      favicon: pending.favicon,
-      chainName: pending.chainName,
-      chainId: pending.tx.chainId,
-      createdAt: pending.timestamp,
-      accountType: "bankr",
-      functionName,
-    });
-
-    if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
-      lookupFunctionName(pending.tx.data).then((name) => {
-        if (name) updateTxInHistory(txId, { functionName: name });
-      });
-    }
-    attachClearSignedMetaToHistory(
-      txId,
-      { ...pending.tx, to: pending.tx.to ?? undefined },
-      pending.tx.chainId,
-    );
+    await initializeBankrTransactionHistory(txId, pending, functionName);
 
     const authorization =
       await enforcePendingRequestAuthorizationAtConfirmation(
@@ -80,6 +68,20 @@ export async function processBankrTransactionInBackground(
           "transaction",
           pending,
           effectGuard.beginEffect,
+          async () => {
+            await beginPrivacyShieldSubmission(
+              pending,
+              privacyShieldAuthorization ?? null,
+            );
+            await beginPrivacyRagequitSubmission(
+              pending,
+              privacyRagequitAuthorization ?? null,
+            );
+            await beginPrivacyDirectUnshieldSubmission(
+              pending,
+              privacyDirectUnshieldAuthorization ?? null,
+            );
+          },
         ),
     );
     effectGuard.settleEffect();
@@ -87,6 +89,21 @@ export async function processBankrTransactionInBackground(
     submittedTxHash = txHash;
     submittedSuccessfully = result.status !== "reverted";
 
+    if (txHash) {
+      publishedTxHash = txHash;
+      await recordPrivacyShieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-shield] failed to persist submitted hash", error),
+      );
+      await recordPrivacyRagequitSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-ragequit] failed to persist submitted hash", error),
+      );
+      await recordPrivacyDirectUnshieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-unshield] failed to persist submitted hash", error),
+      );
+      if (pending.privacyShieldMeta || pending.privacyRagequitMeta || pending.privacyUnshieldMeta) {
+        startReceiptPolling(txId, txHash, pending.tx.chainId);
+      }
+    }
     if (result.status === "reverted") {
       await handleTransactionFailure(txId, pending, "Transaction reverted");
     } else if (result.status === "success" && txHash) {
@@ -146,7 +163,11 @@ export async function processBankrTransactionInBackground(
         txHash: submittedTxHash,
       });
     } else {
-      await handleTransactionFailure(txId, pending, errorMessage);
+      await handleTransactionFailure(txId, pending, errorMessage, {
+        privacySubmissionOutcomeUncertain:
+          publishedTxHash !== null ||
+          (error instanceof BankrApiError && error.outcomeUncertain),
+      });
     }
   } finally {
     effectGuard.releaseIfSafe();

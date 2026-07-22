@@ -200,6 +200,9 @@ test("startup recovery preserves immediate effect and startup-listener order", a
     initSidePanel: () => events.push("sidepanel"),
     cleanupStaleProcessingTxs: () => events.push("processing"),
     resumePendingPollers: () => events.push("receipts"),
+    resumePrivacyShieldTracking: () => events.push("privacy"),
+    resumePrivacyUnshieldTracking: () => events.push("privacy-unshield"),
+    resumePrivacyRagequitTracking: () => events.push("privacy-ragequit"),
     prunePendingBridges: async () => {
       events.push("bridge:prune");
     },
@@ -223,6 +226,9 @@ test("startup recovery preserves immediate effect and startup-listener order", a
     "sidepanel",
     "processing",
     "receipts",
+    "privacy",
+    "privacy-unshield",
+    "privacy-ragequit",
     "bridge:prune",
     "force:recover",
     "ens",
@@ -255,8 +261,18 @@ test("action fallback, trusted ports, and notification clicks retain behavior", 
   registerTrustedUiPortLifecycle({
     connectEvent: { addListener: (listener) => (connect = listener) },
     isTrustedWalletUiSender: (sender) => sender.id === "trusted",
-    incrementUIConnections: () => events.push("ui:+"),
-    decrementUIConnections: () => events.push("ui:-"),
+    isValidSurfaceId: (surfaceId): surfaceId is string => typeof surfaceId === "string",
+    registerUiSurface: async (surfaceId) => {
+      events.push(`ui:+:${surfaceId}`);
+      return true;
+    },
+    heartbeatUiSurface: async (surfaceId) => {
+      events.push(`ui:pulse:${surfaceId}`);
+      return true;
+    },
+    disconnectUiSurface: async (surfaceId) => {
+      events.push(`ui:-:${surfaceId}`);
+    },
     log: () => {},
   });
   connect({ sender: {}, disconnect: () => events.push("port:disconnect") });
@@ -264,20 +280,28 @@ test("action fallback, trusted ports, and notification clicks retain behavior", 
     name: "ui-keepalive",
     sender: { id: "trusted" },
     disconnect: () => events.push("trusted-port:disconnect"),
+    postMessage: (message: { type: string }) => events.push(message.type),
     onMessage: {
       addListener: (listener: (message: unknown) => void) =>
         (portMessageListener = listener),
     },
     onDisconnect: { addListener: (listener: () => void) => (disconnectListener = listener) },
   });
-  portMessageListener({ type: "wallet-ui-keepalive" });
+  portMessageListener({ type: "wallet-ui-register", surfaceId: "surface-1" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  portMessageListener({ type: "wallet-ui-keepalive", surfaceId: "surface-1" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   portMessageListener({ type: "unexpected" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   disconnectListener();
-  assert.deepEqual(events.slice(-4), [
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(events.slice(-6), [
     "port:disconnect",
-    "ui:+",
+    "ui:+:surface-1",
+    "wallet-ui-registered",
+    "ui:pulse:surface-1",
     "trusted-port:disconnect",
-    "ui:-",
+    "ui:-:surface-1",
   ]);
 
   let notification!: (id: string) => Promise<void>;

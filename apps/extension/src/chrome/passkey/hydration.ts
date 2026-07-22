@@ -4,11 +4,6 @@ import {
   invalidateAuthCeremonies,
   isCurrentAuthCeremonyEpoch,
 } from "../authTransition";
-import { importVaultKey } from "../crypto";
-import {
-  loadMnemonicVault,
-  verifyMnemonicKeyForVault,
-} from "../mnemonicStorage";
 import {
   isValidPasskeyCredentialPayload,
   type PasskeyCredentialPayload,
@@ -26,13 +21,15 @@ import { stalePasskeyCeremonyResult } from "./status";
 import {
   clearAllAuthState,
   setCurrentSessionId,
-  storePasskeySessionAtomic,
 } from "../sessionCache";
+import { storeSessionCapabilityAtomic } from "../session/capabilityPersistence";
+import { getActiveWalletUiSurfaceIds } from "../session/uiSurfaceLease";
 import {
   readStoredAutoLockTimeout,
   setCachedAutoLockTimeout,
 } from "../session/autoLockPolicy";
-import { getPasskeySessionBinding } from "./sessionBinding";
+import { unlockPrivacyVaultForPasskeySession } from "../privacy/passkey";
+import { preparePasskeyMnemonicKey } from "./mnemonicHydration";
 
 export async function handleUnlockWithPasskey(
   payload: Partial<PasskeyCredentialPayload>,
@@ -45,6 +42,7 @@ export async function handleUnlockWithPasskey(
   }
 
   let unwrapped: UnwrappedPasskeyRecordKeys | null = null;
+  let privacyKeyBytes: Uint8Array | null = null;
   try {
     const record = await loadPasskeyUnlockRecord();
     if (!record) {
@@ -65,57 +63,51 @@ export async function handleUnlockWithPasskey(
       return { success: false, error: "Biometric unlock failed" };
     }
 
-    let mnemonicKey: { key: CryptoKey; keyId: string } | null = null;
-    if (unwrapped.mnemonicKeyBytes && unwrapped.mnemonicKeyId) {
-      const mnemonicVault = await loadMnemonicVault();
-      if (
-        !mnemonicVault ||
-        mnemonicVault.version !== 2 ||
-        mnemonicVault.keyId !== unwrapped.mnemonicKeyId
-      ) {
-        return {
-          success: false,
-          error: "Biometric seed protection does not match this wallet",
-        };
-      }
-      const importedMnemonicKey = await importVaultKey(
-        unwrapped.mnemonicKeyBytes,
+    const mnemonic = await preparePasskeyMnemonicKey(unwrapped);
+    if (!mnemonic.ok) return { success: false, error: mnemonic.error };
+    const mnemonicKey = mnemonic.mnemonicKey;
+    let privacyKey: {
+      key: CryptoKey;
+      keyBytes: Uint8Array;
+      keyId: string;
+    } | null = null;
+    try {
+      const preparedPrivacy = await unlockPrivacyVaultForPasskeySession(
+        payload.prfKeyMaterial,
       );
-      if (
-        !(await verifyMnemonicKeyForVault(
-          mnemonicVault,
-          importedMnemonicKey,
-        ))
-      ) {
-        return {
-          success: false,
-          error:
-            "Biometric seed protection could not be verified. Unlock with the master password and upgrade biometric unlock.",
+      if (preparedPrivacy) {
+        privacyKey = {
+          key: preparedPrivacy.key,
+          keyId: preparedPrivacy.keyId,
+          keyBytes: preparedPrivacy.keyBytes,
         };
+        privacyKeyBytes = preparedPrivacy.keyBytes;
       }
-      mnemonicKey = {
-        key: importedMnemonicKey,
-        keyId: unwrapped.mnemonicKeyId,
-      };
+    } catch (error) {
+      // Keep the wallet unlockable if optional Shield state is damaged. The
+      // Shield route will surface the fail-closed repair state when opened.
+      console.error("Failed to unlock privacy vault with biometrics:", error);
     }
 
     await clearAllAuthState();
     const autoLockTimeout = await readStoredAutoLockTimeout();
     setCachedAutoLockTimeout(autoLockTimeout);
-    const sessionStartedAt = Date.now();
-    const expiresAt =
-      autoLockTimeout === 0 ? null : sessionStartedAt + autoLockTimeout;
     const persistedSessionId = crypto.randomUUID();
-    await storePasskeySessionAtomic(
-      persistedSessionId,
-      unwrapped.vaultKeyBytes,
-      await getPasskeySessionBinding(record),
-      { autoLockTimeout, startedAt: sessionStartedAt, expiresAt },
-    );
+    await storeSessionCapabilityAtomic({
+      sessionId: persistedSessionId,
+      unlockMethod: "passkey",
+      passwordType: "master",
+      vaultKeyBytes: unwrapped.vaultKeyBytes,
+      privacyKey: privacyKey
+        ? { keyBytes: privacyKey.keyBytes, keyId: privacyKey.keyId }
+        : null,
+      autoLockTimeout,
+      activeSurfaceIds: getActiveWalletUiSurfaceIds(),
+    });
     const hydrated = await hydrateAuthSessionFromVaultKeyBytes(
       unwrapped.vaultKeyBytes,
       "master",
-      { password: null, mnemonicKey },
+      { password: null, mnemonicKey, privacyKey },
     );
     if (!hydrated.success) {
       await clearAllAuthState();
@@ -130,7 +122,7 @@ export async function handleUnlockWithPasskey(
         error: "Auto-lock setting changed during biometric unlock",
       };
     }
-    setCurrentSessionId(persistedSessionId, expiresAt);
+    setCurrentSessionId(persistedSessionId);
     invalidateAuthCeremonies();
 
     // Usage metadata is non-essential. Never turn successful hydration into a
@@ -154,5 +146,6 @@ export async function handleUnlockWithPasskey(
   } finally {
     unwrapped?.vaultKeyBytes.fill(0);
     unwrapped?.mnemonicKeyBytes?.fill(0);
+    privacyKeyBytes?.fill(0);
   }
 }

@@ -62,9 +62,11 @@ export function bookmarkKey(
 export function sortBookmarks(bookmarks: readonly EnsBookmark[]): EnsBookmark[] {
   return [...bookmarks].sort((a, b) => {
     const aOrder = typeof a.sortOrder === "number" && Number.isSafeInteger(a.sortOrder)
-      ? a.sortOrder : null;
+      ? a.sortOrder
+      : null;
     const bOrder = typeof b.sortOrder === "number" && Number.isSafeInteger(b.sortOrder)
-      ? b.sortOrder : null;
+      ? b.sortOrder
+      : null;
     if (aOrder !== null && bOrder !== null) return aOrder - bOrder;
     if (aOrder !== null) return 1;
     if (bOrder !== null) return -1;

@@ -9,6 +9,7 @@
  * ENS browsing messages are intentionally not listed here. They are handled
  * before the main router and enforce their own page-specific sender policy.
  */
+import { PRIVACY_WALLET_UI_MESSAGE_TYPES } from "./privacyMessageTypes";
 
 export const PROVIDER_MESSAGE_TYPES = [
   "openProviderRequestSidePanel",
@@ -27,7 +28,6 @@ export const PROVIDER_MESSAGE_TYPES = [
   "walletShowCallsStatus",
   "walletExecutionPermissions",
 ] as const;
-
 export const WALLET_UI_MESSAGE_TYPES = [
   // Onboarding lifecycle
   "getOnboardingInitializationStatus",
@@ -36,6 +36,9 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "completeOnboardingInitialization",
   "rollbackOnboardingInitialization",
   "onboardingComplete",
+
+  // Privacy Pools identity
+  ...PRIVACY_WALLET_UI_MESSAGE_TYPES,
 
   // Transaction/signature confirmations and rejection
   "confirmTransaction",

@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Box,
-  Container,
-} from "@chakra-ui/react";
+import { Box, Container } from "@chakra-ui/react";
 import App from "@/App";
 import Onboarding from "@/pages/Onboarding";
 import UnlockScreen from "@/components/UnlockScreen";
@@ -33,6 +30,7 @@ import TxDetailScreen from "@/components/TxDetailScreen";
 import { ScreenStack } from "@/components/ScreenTransition";
 import SwapView from "@/components/Swap/SwapView";
 import BridgeChainTokenModal from "@/components/Swap/BridgeChainTokenModal";
+import { ShieldPreview } from "./ShieldPreview";
 import ComponentLab from "./ComponentLab";
 import MobilePrimitivesPreview from "./MobilePrimitivesPreview";
 import DecisionPrimitivesPreview from "./DecisionPrimitivesPreview";
@@ -134,6 +132,7 @@ function SettingsPreview({ scenario }: { scenario: string }) {
           initialChainsTab={scenario === "network-add" ? "add" : "list"}
           initialEditChainName={scenario === "network-edit" ? "Base" : undefined}
           initialQuery={scenario === "no-results" ? "not-a-real-setting" : ""}
+          accountsView={{ accounts: previewAccounts, activeAccount: previewAccounts[0] ?? null, onAddAccount: () => {}, onAccountSettings: () => {} }}
         />
       </Container>
     </PreviewShell>
@@ -347,6 +346,10 @@ function UnlockScenarioPreview({ scenario }: { scenario: string }) {
       resetDialog={{
         isOpen: false,
         isResetting: false,
+        hasShieldData: false,
+        backupVerified: false,
+        shieldAcknowledged: false,
+        onShieldAcknowledgedChange: noop,
         onClose: noop,
         onConfirm: noop,
       }}
@@ -563,6 +566,8 @@ export function PreviewScreen({
       );
     case "swap":
       return <SwapPreview wallet={wallet} scenario={scenario} />;
+    case "shield":
+      return <ShieldPreview wallet={wallet} scenario={scenario} />;
     case "swap-picker":
       return (
         <SwapPickerPreview

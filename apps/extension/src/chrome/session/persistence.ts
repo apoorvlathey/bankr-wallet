@@ -1,8 +1,9 @@
 /**
- * Encrypted native-session password persistence for explicit Never auto-lock.
+ * Split-key authority and released native password-session compatibility.
  *
  * This layer owns the split AES-GCM envelope only. It has no dependency on the
  * in-memory cache, auth transitions, unlock handlers, or the session facade.
+ * Current unlocks use capabilityPersistence.ts and never persist a password.
  * Browsers without native storage.session persist non-secret metadata only.
  */
 
@@ -68,6 +69,7 @@ async function revokeSplitSessionSecret(
 export async function clearPersistedSessionSecret(): Promise<void> {
   await revokeSplitSessionSecret(() =>
     removeSessionItems([
+      "encryptedSessionCapabilities",
       "encryptedSessionPassword",
       "encryptedSessionVaultKey",
       "sessionCredentialKind",
@@ -91,6 +93,7 @@ export async function readPersistedSessionRecord(): Promise<
     "sessionId",
     "sessionStartedAt",
     "autoLockNever",
+    "encryptedSessionCapabilities",
     "encryptedSessionPassword",
     "encryptedSessionVaultKey",
     "sessionCredentialKind",

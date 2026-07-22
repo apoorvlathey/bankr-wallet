@@ -98,7 +98,11 @@ export async function prepareSignedArbitrumMessage(
 ) {
   requireArbitrum(info);
   const account = privateKeyToAccount(privateKey);
-  const request = await prepareChildRequest(tx, info, account.address);
+  const request = await prepareChildRequest(
+    tx,
+    info,
+    account.address as `0x${string}`,
+  );
   const serialized = await withStorageLock(
     WALLET_SECRET_OPERATION_LOCK_KEY,
     () => account.signTransaction(request as any),

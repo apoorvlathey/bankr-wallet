@@ -76,6 +76,8 @@ test("session layers have one-way dependencies and the facade is export-only", a
     teardown,
     timeoutTransitions,
     restoration,
+    legacyRestoration,
+    unifiedRestoration,
     facade,
   ] = await Promise.all([
     readModule("session/inMemoryCache.ts"),
@@ -86,6 +88,8 @@ test("session layers have one-way dependencies and the facade is export-only", a
     readModule("session/teardown.ts"),
     readModule("session/timeoutTransitions.ts"),
     readModule("session/restoration.ts"),
+    readModule("session/legacyRestoration.ts"),
+    readModule("session/unifiedRestoration.ts"),
     readModule("sessionCache.ts"),
   ]);
 
@@ -126,20 +130,21 @@ test("session layers have one-way dependencies and the facade is export-only", a
 
   assert.match(timeoutTransitions, /from "\.\.\/authTransition"/);
   assert.match(timeoutTransitions, /from "\.\/autoLockPolicy"/);
-  assert.match(timeoutTransitions, /from "\.\/cacheAccess"/);
   assert.match(timeoutTransitions, /from "\.\/inMemoryCache"/);
-  assert.match(timeoutTransitions, /from "\.\/persistence"/);
   assert.match(timeoutTransitions, /from "\.\/teardown"/);
 
   assert.match(restoration, /from "\.\.\/authTransition"/);
   assert.match(restoration, /from "\.\/autoLockPolicy"/);
   assert.match(restoration, /from "\.\/cacheAccess"/);
-  assert.match(restoration, /from "\.\/inMemoryCache"/);
-  assert.match(restoration, /from "\.\/persistence"/);
-  assert.match(restoration, /from "\.\/passkeyPersistence"/);
-  assert.match(restoration, /from "\.\/teardown"/);
+  assert.match(restoration, /from "\.\/legacyRestoration"/);
+  assert.match(restoration, /from "\.\/unifiedRestoration"/);
+  const restorationLayers = restoration + legacyRestoration + unifiedRestoration;
+  assert.match(restorationLayers, /from "\.\/inMemoryCache"/);
+  assert.match(restorationLayers, /from "\.\/persistence"/);
+  assert.match(restorationLayers, /from "\.\/passkeyPersistence"/);
+  assert.match(restorationLayers, /from "\.\/teardown"/);
   assert.doesNotMatch(timeoutTransitions, /authHandlers|sessionCache|restoration/);
-  assert.doesNotMatch(restoration, /authHandlers|sessionCache|timeoutTransitions/);
+  assert.doesNotMatch(restorationLayers, /authHandlers|sessionCache|timeoutTransitions/);
 
   for (const dependency of [
     "session/autoLockPolicy",
@@ -169,7 +174,7 @@ test("session layers have one-way dependencies and the facade is export-only", a
     const source = await readModule(name);
     assert.doesNotMatch(
       source,
-      /from "\.\/session\/(?:inMemoryCache|autoLockPolicy|cacheAccess|passkeyPersistence|persistence|restoration|storage|teardown|timeoutTransitions)"/,
+      /from "\.\/session\/(?:inMemoryCache|inMemoryExpiry|autoLockPolicy|cacheAccess|passkeyPersistence|persistence|restoration|legacyRestoration|unifiedRestoration|storage|teardown|timeoutTransitions)"/,
       `${name} must use the stable sessionCache facade`,
     );
   }

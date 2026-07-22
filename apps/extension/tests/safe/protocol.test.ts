@@ -6,7 +6,10 @@ import {
   isCanonicalSafeProxyRuntime,
   resolveSafeSingleton,
 } from "../../src/chrome/safe/deploymentRegistry";
-import { computeSafeTransactionHash } from "../../src/chrome/safe/transactionHash";
+import {
+  buildSafeTransactionTypedData,
+  computeSafeTransactionHash,
+} from "../../src/chrome/safe/transactionHash";
 import { buildSafeRejectionTransaction } from "../../src/chrome/safe/transactionBuilder";
 import {
   canStartSafeProposalRejection,
@@ -30,6 +33,13 @@ const TRANSACTION: SafeTransactionData = {
 };
 
 test("Safe transaction hash fixture is deterministic and chain-bound", () => {
+  const typedData = buildSafeTransactionTypedData({
+    chainId: 8453,
+    safeAddress: "0x1111111111111111111111111111111111111111",
+    safeVersion: "1.4.1",
+    transaction: TRANSACTION,
+  });
+  assert.equal(typedData.domain.chainId, 8453);
   const baseHash = computeSafeTransactionHash({
     chainId: 8453,
     safeAddress: "0x1111111111111111111111111111111111111111",
@@ -49,6 +59,18 @@ test("Safe transaction hash fixture is deterministic and chain-bound", () => {
     }),
     baseHash,
   );
+  for (const safeVersion of ["1.3.0", "1.4.1", "1.5.0"] as const) {
+    assert.equal(
+      computeSafeTransactionHash({
+        chainId: 8453,
+        safeAddress: "0x1111111111111111111111111111111111111111",
+        safeVersion,
+        transaction: TRANSACTION,
+      }),
+      baseHash,
+      `Safe ${safeVersion} must retain the canonical chain-bound hash`,
+    );
+  }
 });
 
 test("canonical Safe proxy runtime hashes are version pinned", () => {

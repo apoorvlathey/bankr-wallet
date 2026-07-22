@@ -1,8 +1,7 @@
 /** Local signer credential restoration and batch execution path selection. */
 import { getAccountById } from "../accountStorage";
-import { handleUnlockWallet } from "../authHandlers";
-import { hasEncryptedApiKey, loadDecryptedApiKey } from "../crypto";
 import { resolveActiveDelegate } from "../../utils/delegationResolution";
+import { handleBatchFailure } from "./batchFailure";
 import { getStoredResolvedChainById } from "../../lib/chains";
 import { updateBundleStatus } from "./bundleStatusStorage";
 import { processingBundleIds } from "./batchExecutionRuntime";
@@ -10,10 +9,9 @@ import type { PendingBatchTxRequest } from "../erc5792Types";
 import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
 import { beginPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
-import { getPrivateKeyFromCache, getCachedVaultKey, tryRestoreSession, setCachedVault, setCachedApiKey } from "../sessionCache";
-import { decryptAllKeys } from "../vaultCrypto";
 import type { GasEstimate } from "../gasEstimation";
 import { resolveLocalBatchForceInclusion } from "./batchForceInclusionPolicy";
+import { resolveLocalBatchPrivateKey } from "./batchLocalKeyRecovery";
 
 type LocalBatchAccount = { id: string; address: string; type: string };
 export interface LocalBatchExecutors {
@@ -42,6 +40,27 @@ export async function confirmLocalBatchWithExecutors(
   if (pending.intakeStatus === "validating") {
     return { success: false, error: "Batch request is still being validated" };
   }
+  if (pending.privacyRagequitMeta) {
+    if (forceInclusion || feePaymentToken === "token") {
+      return {
+        success: false,
+        error: "Privacy Pools public exits require normal network gas payment",
+      };
+    }
+    try {
+      const { authorizePrivacyRagequitBatchConfirmation } = await import(
+        "../privacy/ragequit/submission"
+      );
+      await authorizePrivacyRagequitBatchConfirmation(pending);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message === "auth-required"
+          ? "Unlock with your main password or biometrics and try again"
+          : "Privacy Pools public exit is no longer available",
+      };
+    }
+  }
 
   processingBundleIds.add(bundleId);
 
@@ -68,51 +87,12 @@ export async function confirmLocalBatchWithExecutors(
     return { success: false, error: "Account does not support local signing" };
   }
 
-  // Get private key — try cache, then session restoration, then vault decryption
-  let privateKey = getPrivateKeyFromCache(account.id);
-
-  if (!privateKey) {
-    const vaultKey = getCachedVaultKey();
-    if (!vaultKey) {
-      const restored = await tryRestoreSession(handleUnlockWallet);
-      if (restored) {
-        privateKey = getPrivateKeyFromCache(account.id);
-      }
-    }
-
-    if (!privateKey) {
-      const cachedVaultKey = getCachedVaultKey();
-      let vault;
-
-      if (cachedVaultKey) {
-        const { decryptAllKeysWithVaultKey } = await import("../authHandlers");
-        vault = await decryptAllKeysWithVaultKey(cachedVaultKey);
-      } else {
-        vault = await decryptAllKeys(password);
-      }
-
-      if (!vault) {
-        processingBundleIds.delete(bundleId);
-        return { success: false, error: "Invalid password" };
-      }
-      setCachedVault(vault);
-
-      // Also cache API key if available
-      const hasApiKeyStored = await hasEncryptedApiKey();
-      if (hasApiKeyStored) {
-        const apiKey = await loadDecryptedApiKey(password);
-        if (apiKey) {
-          setCachedApiKey(apiKey, password);
-        }
-      }
-
-      privateKey = getPrivateKeyFromCache(account.id);
-      if (!privateKey) {
-        processingBundleIds.delete(bundleId);
-        return { success: false, error: "Private key not found for account" };
-      }
-    }
+  const key = await resolveLocalBatchPrivateKey(account.id, password);
+  if (!key.ok) {
+    processingBundleIds.delete(bundleId);
+    return { success: false, error: key.error };
   }
+  const privateKey = key.privateKey;
 
   const forceResolution = await resolveLocalBatchForceInclusion(
     pending.chainId,
@@ -281,6 +261,16 @@ export async function confirmLocalBatchWithExecutors(
       effectLease,
     );
     return { success: true };
+  }
+
+  if (pending.privacyRagequitMeta) {
+    await handleBatchFailure(
+      bundleId,
+      pending,
+      "Atomic execution is no longer available for this account",
+    );
+    processingBundleIds.delete(bundleId);
+    return { success: false, error: "Atomic execution is no longer available for this account" };
   }
 
   // Process in background (non-atomic: sequential nonces, individual

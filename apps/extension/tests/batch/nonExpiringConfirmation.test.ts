@@ -54,6 +54,14 @@ test("aged batches remain confirmable for Bankr, private-key, and seed accounts"
               "../vaultCrypto": "\0batch-vault",
             } as Record<string, string>)[source] ?? null;
           }
+          if (file?.endsWith("/chrome/batch/batchLocalKeyRecovery.ts")) {
+            return ({
+              "../authHandlers": "\0batch-auth",
+              "../crypto": "\0batch-crypto",
+              "../sessionCache": "\0batch-session",
+              "../vaultCrypto": "\0batch-vault",
+            } as Record<string, string>)[source] ?? null;
+          }
           if (file?.endsWith("/chrome/batch/batchBankrExecution.ts")) {
             return ({
               "../../constants/networks": "\0bankr-networks",
@@ -75,6 +83,26 @@ test("aged batches remain confirmable for Bankr, private-key, and seed accounts"
               "../transactions/runtime": "\0bankr-tx-runtime",
               "../receiptEnrichment": "\0bankr-receipts",
               "../sessionCache": "\0batch-session",
+              "../forceInclusion/receiptPoller": "\0bankr-poller",
+              "../txHistoryStorage": "\0bankr-history",
+              "../transactions/notification": "\0bankr-notification",
+            } as Record<string, string>)[source] ?? null;
+          }
+          if (file?.endsWith("/chrome/batch/batchBankrProcessing.ts")) {
+            return ({
+              "../../constants/chainConfig": "\0bankr-chain-config",
+              "../bankr/submission": "\0bankr-submission",
+              "../bankr/pendingAuthorization": "\0bankr-authorization",
+              "./batchTxEncoding": "\0bankr-encoding",
+              "./batchExecutionRuntime": "\0batch-runtime",
+              "./batchGasEnrichment": "\0bankr-gas",
+              "./batchFailure": "\0bankr-failure",
+              "../erc5792Types": "\0bankr-erc5792",
+              "./bundleStatusStorage": "\0batch-status",
+              "../requests/pendingRequestLifecycle": "\0batch-lifecycle",
+              "../requests/pendingRequestResolution": "\0batch-resolution",
+              "../transactions/runtime": "\0bankr-tx-runtime",
+              "../receiptEnrichment": "\0bankr-receipts",
               "../forceInclusion/receiptPoller": "\0bankr-poller",
               "../txHistoryStorage": "\0bankr-history",
               "../transactions/notification": "\0bankr-notification",

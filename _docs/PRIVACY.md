@@ -1,9 +1,44 @@
 # Native privacy and shielded assets exploration
 
 > Research status: exploration, not an implementation specification  
-> Last verified: 2026-07-12  
+> Last verified: 2026-07-20
 > Scope: Railgun, Privacy Pools v1, Veil Cash, Kohaku, WalletChan UX,
 > key recovery, extension architecture, and security gates
+
+> **Implementation PRD:** The approved WalletChan product and engineering
+> requirements for the first Privacy Pools integration live in
+> [`PRIVACY_POOLS_PRD.md`](./PRIVACY_POOLS_PRD.md). This document remains the
+> broader protocol comparison and research record.
+> The fresh-session implementation handoff is
+> [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md).
+
+> **Current implementation slice (2026-07-20):** First eligible Private-mode entry
+> creates a separate encrypted Privacy Pools recovery phrase in the background.
+> Password login and fresh biometric login both support this; a biometric
+> factor that predates Shield receives an empty purpose-separated scaffold on
+> its next assertion. Pressing Shield opens the exact ETH quote/review flow
+> immediately above the active deployment's onchain minimum; no proof-readiness
+> wait blocks amount entry. Final durable preparation independently verifies the
+> compile-time-selected official Sepolia/mainnet ETH deployment, while packaged proof self-tests stay
+> available as a trusted diagnostic and release gate.
+> Private-key and seed-phrase accounts can Shield on Sepolia through the normal
+> pinned confirmation flow; receipt/event sync, encrypted commitments, strict
+> ASP verification, partial/full relayed Unshield, public recovery, and clean
+> phrase restore/rescan are implemented. The normal wallet Activity row mirrors
+> only a public exact-bound Shield stage and amount snapshot, remains linked to
+> the underlying Sepolia transaction details, and never receives commitment,
+> label, index, proof, or recovery material. Confirmed/indexed deposits count
+> in the headline balance before ASP approval, while the pending subset is
+> displayed separately and can be withdrawn publicly by the exact original
+> depositor. One real Sepolia public withdrawal has been observed after fixing
+> and regression-testing the distinction between the deposit precommitment and
+> spent-nullifier hash. Normal production builds now select the pinned Ethereum
+> mainnet profile and support Bankr/private-key/seed-phrase mutations; Sepolia
+> development continues to block Bankr. Impersonator signing, agent-password
+> mutations, value-bearing mainnet rollout, and store distribution remain
+> blocked by their respective gates. The automated dual-profile implementation
+> is complete, but the complete written browser rehearsals are not. See
+> [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 
 [privacy.eth.sh](https://privacy.eth.sh/) was used as the discovery directory
 for this comparison. Its comparison data is helpful for orientation, but all
@@ -136,7 +171,14 @@ withdrawal proves both ownership of a commitment and membership of its label in
 the ASP's approved set. A partial withdrawal creates a replacement commitment
 for the remaining amount. The original depositor can use **ragequit** to recover
 the remaining value without ASP approval, but that exit is public and is
-available only to the original depositor.
+available only to the original depositor. WalletChan exposes every current
+ragequittable deposit in a selector as soon as it is indexed. Deposits are
+grouped by original account. One or more whole commitments from the same group
+may exit in one atomic EIP-7702/ERC-7821 transaction; commitments belonging to
+different depositors cannot share a transaction because the pool authorizes
+and pays the original `msg.sender`. Ragequit is not an arbitrary partial-
+withdrawal path, so WalletChan reviews each exact amount and original account
+before preparation.
 
 The official deployment page currently lists one Ethereum mainnet ETH pool:
 
@@ -411,40 +453,40 @@ only backup.
 
 ### Setup and backup UX
 
-Before the first mainnet deposit:
-
-1. Explain in one screen: “Private funds need a separate recovery phrase. Your
-   normal wallet address or Bankr account cannot recover them.”
-2. Require a master-capable session. Agent-password sessions cannot create,
-   reveal, export, replace, or delete privacy recovery material.
-3. Generate the phrase in the background service worker using a CSPRNG.
-4. Reveal it only in a dedicated extension page, never a content script or dapp
-   frame. Prevent screenshots only where the platform supports it; never claim
-   screenshot prevention is guaranteed.
-5. Require a word-position verification challenge.
-6. Mark recovery as verified only after the challenge.
-7. Offer a second explicit backup later under Settings → Security → Privacy
-   recovery, with master-password step-up.
-8. Do not default to clipboard copy. If copy is offered, use an explicit danger
-   acknowledgement and visual CopyIcon → CheckIcon feedback, never a toast.
-
-“Skip for now” may exit setup, but must also cancel the mainnet deposit. A
-testnet-only developer mode may relax this with an unmistakable testnet label.
+Sepolia setup is deliberately invisible: first eligible Private-mode entry under a master or
+fresh biometric session creates the identity in the service worker and shows
+only the balance/actions dashboard. Backup and restore live in one compact
+Settings -> Shield Recovery leaf. Reveal requires the explicitly entered
+current main password; restore validates a user-entered BIP-39 phrase and runs
+a bounded rescan. Agent sessions cannot create, reveal, restore, or rescan.
+Plaintext exists in renderer memory only while that trusted Settings leaf is
+open and is cleared on close; content scripts, dapp frames, and ordinary Shield
+routes never receive it. The production mainnet profile retains the same
+recovery boundary; value-bearing rollout may add a stricter pre-deposit backup
+gate after product/security review.
 
 ### Storage and access control
 
-The future implementation changes storage and must follow `_docs/STORAGE.md`
-and `_docs/PUBLISHING.md` with an idempotent migration. Recommended separation:
+The implementation stores its independent encrypted recovery in `privacyVault`.
+Sepolia development preserves the released `walletchan-privacy-*-v1` database
+names; production uses corresponding `*-mainnet-v1` names for durable
+pre-signing operations, commitments, withdrawals, ragequits, portfolio, and
+public event checkpoints. All
+follow `_docs/STORAGE.md` and `_docs/PUBLISHING.md` and need no eager migration.
+The implemented separation is:
 
 - encrypted privacy root and versioned derivation metadata in the vault;
-- non-secret protocol configuration and recovery-verification flag in
-  `chrome.storage.local`;
-- encrypted protocol notes/checkpoints in IndexedDB;
+- non-secret protocol configuration and an exact key-ID/timestamp backup marker
+  in `chrome.storage.local`;
+- encrypted protocol notes and operation intents in IndexedDB (deposit and
+  withdrawal indexes, current lineage, relayer payloads, nullifiers, and
+  calldata use summary/revision-bound AAD);
 - public, rebuildable Merkle/index caches in IndexedDB, integrity-checked;
 - no privacy keys, notes, balances, recipient history, or viewing keys in
   `chrome.storage.sync`;
-- no plaintext secret persistence in renderer state, React state, logs, crash
-  reports, analytics, Sentry, or MCP working directories.
+- no plaintext secret persistence in storage, logs, crash reports, analytics,
+  Sentry, or MCP working directories; the explicit recovery leaf holds its
+  reveal/import value only in transient local component state.
 
 The privacy root should have a dedicated random encryption key with wrappers
 matching WalletChan's master, passkey, and intentionally agent-capable signing
@@ -455,10 +497,11 @@ phrase reveal/export and protocol viewing-key export remain master-only.
 Account removal, reset, password rotation, and passkey changes need special
 handling:
 
-- Do not let account removal hide the only public account required for a
-  Privacy Pools ragequit without a blocking warning and recovery check.
-- Reset must show detected private balances/pending deposits and require a
-  verified backup acknowledgement.
+- Account removal is blocked before any dapp revocation and rechecked inside
+  the final mutation lock when unresolved Shield operations, active recovery,
+  unspent commitments, or unverifiable privacy state exist.
+- Reset exposes only public Shield-data/backup status and requires an explicit
+  phrase-saved-or-loss-risk acknowledgement before destructive effects.
 - Password rotation rewraps keys; it must never derive a new privacy identity.
 - Removing a passkey must not delete privacy material.
 - A full rescan from the privacy phrase must restore balances without relying
@@ -472,11 +515,12 @@ handling:
 | Railgun | Spending/viewing identity and balances after full scan | Network/index availability; optional PPOI services for normal spendability |
 | Veil | Imported Veil private key if WalletChan's derivation is documented | Registration mapping and hosted relay availability for normal UX |
 
-For Bankr API accounts, make the Privacy Pools ragequit dependency explicit:
-losing Bankr account control can remove the emergency exit even if the privacy
-phrase survives. This may justify disabling Privacy Pools deposits from an
-impersonator account until the exact Bankr signing/recovery guarantee is
-verified.
+Bankr Sepolia Shield is disabled because the Bankr raw transaction API does not
+support Sepolia. The production mainnet path is implemented through the normal
+Bankr confirmation/submission coordinator with privacy authorization at its
+final effect boundary. Impersonator deposits are always disabled. Before a
+value-bearing Bankr rollout, WalletChan must prove that the same original Bankr
+depositor can still authorize public recovery after a clean phrase rescan.
 
 ## Proposed UX
 
@@ -792,7 +836,10 @@ of custody if the exit path works, but it is an availability and UX risk.
 WalletChan must show eligibility as a state, never as a generic failure. It must
 retain the exact depositor and commitment needed for recovery, verify published
 roots against onchain state, and keep emergency recovery available when new
-deposits are disabled.
+deposits are disabled, review remains pending, or the ASP endpoint/root is
+unavailable. A confirmed pending deposit may be returned immediately to its
+exact original depositor through the public recovery path. Pending or
+unavailable status must never be treated as approval for a private withdrawal.
 
 ### Key compromise and viewing-key threat model
 
@@ -817,13 +864,14 @@ it is incomplete until all three wallet types pass.
 | Create privacy recovery root with master session | Required | Required | Required |
 | Block setup/export under agent password | Required | Required | Required |
 | Restore root after service-worker restart | Required | Required | Required |
-| Public shield confirmation and signing | Required | Required | Required |
-| ERC-20 approval then shield | Required | Required | Required |
+| Public Sepolia shield confirmation and signing | Rejected before prompt | Required | Required |
+| Production mainnet native ETH shield | Required | Required | Required |
 | Resume after popup closes | Required | Required | Required |
-| Private send/withdraw confirmation | Required | Required | Required |
+| Private Sepolia withdrawal confirmation | Rejected | Required | Required |
 | Relayer quote substitution rejected | Required | Required | Required |
 | Full rescan from privacy phrase | Required | Required | Required |
-| Emergency exit/ragequit | Verify Bankr recovery guarantee first | Required | Required |
+| Emergency exit/ragequit on Sepolia | Rejected | Required | Required |
+| Production mainnet original-depositor ragequit | Required | Required | Required |
 | Password change preserves identity | Required | Required | Required |
 | Passkey unlock preserves identity | Required | Required | Required |
 | Reset/account removal warns on funds | Required | Required | Required |
@@ -841,6 +889,8 @@ Protocol tests must include:
 - exact-amount and fast-withdraw privacy warnings;
 - relayer timeout before and after submission;
 - nullifier already spent and idempotent retry;
+- real pinned-artifact vectors for every public signal, including distinct
+  precommitment and spent-nullifier hashes;
 - corrupted IndexedDB cache and full rebuild;
 - proving worker crash, browser restart, extension update, and lock during proof;
 - compromised/tampered proving artifact;
@@ -855,7 +905,7 @@ Protocol tests must include:
 - Benchmark packaged MV3 proving and full rescan on low/mid/high-end devices.
 - Record bundle size, first sync time, proving time, peak memory, and retry
   behavior.
-- No mainnet secret creation or deposits.
+- No value-bearing mainnet transactions during this historical prototype phase.
 
 ### Phase 1: testnet Privacy Pools spike
 

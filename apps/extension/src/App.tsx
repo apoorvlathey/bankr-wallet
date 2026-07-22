@@ -43,13 +43,11 @@ import {
   preloadApprovalRequestScreen,
   QRCodeModal,
   Settings,
-  // ShieldView,
   SignatureRequestConfirmation,
   SwapView,
   StakingScreen,
   TokenTransfer,
   TransactionConfirmation,
-  TxDetailScreen,
   WalletConnectView,
   WatchAssetConfirmation,
 } from "@/app/lazyScreens";
@@ -57,6 +55,7 @@ import { resolveSendEntryToken } from "@/components/Transfer/model/sendEntry";
 import LoadingFallback from "@/app/LoadingFallback";
 import AppFeatureFrame from "@/app/AppFeatureFrame";
 import { isArcBrowser } from "@/app/isArcBrowser";
+import { findPendingShieldConfirmation } from "@/components/Shield/model/pendingShield";
 
 // Eager load components needed immediately
 import UnlockScreen from "@/components/UnlockScreen";
@@ -82,6 +81,7 @@ import { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAssetSto
 import { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermissionStorage";
 import type { Account, PasswordType } from "@/chrome/types";
+import { isPrivacyPoolsMutationAccount } from "@/chrome/privacy/deployment/accountPolicy";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import type {
@@ -89,6 +89,7 @@ import type {
   WalletConnectRetryNotice,
   WalletConnectSessionSummary,
 } from "@/types/walletConnect";
+
 import { WALLETCHAN_OS_URL } from "@/constants/externalUrls";
 import {
   getDefaultChainName,
@@ -131,11 +132,16 @@ import {
 } from "@/app/unlockRouting";
 import { SafeApprovalsSurface, SafeFeatureUnavailable, SafeHomeActivity, SafeHomeApprovalRail, SafeHomeQuickActions } from "@/app/SafeAppSurfaces";
 import { toLegacyAccountType } from "@/app/safeAccountType";
+import { PrivatePortfolioHome, useWalletHomeMode, WalletModeToggle } from "@/app/home";
+import type { UnshieldOperation } from "@/components/Shield/model/unshield";
+import PrivacyActionRoute from "@/app/screens/PrivacyActionRoute";
+import TransactionDetailRoute from "@/app/screens/TransactionDetailRoute";
 
 function App() {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
+  const { mode: walletHomeMode, setMode: setWalletHomeMode } = useWalletHomeMode();
   const [view, setView] = useState<AppView>("main");
   const ledgerSetupRequestedRef = useRef(
     isLedgerSetupRoute(window.location.search),
@@ -147,35 +153,19 @@ function App() {
   const [displayAddress, setDisplayAddress] = useState<string>("");
   const [chainName, setChainName] = useState<string>();
   const [hasApiKey, setHasApiKey] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<PendingTxRequest[]>(
-    [],
-  );
-  const [selectedTxRequest, setSelectedTxRequest] =
-    useState<PendingTxRequest | null>(null);
-  const [selectedCompletedTx, setSelectedCompletedTx] =
-    useState<CompletedTransaction | null>(null);
-  const [pendingSignatureRequests, setPendingSignatureRequests] = useState<
-    PendingSignatureRequest[]
-  >([]);
-  const [selectedSignatureRequest, setSelectedSignatureRequest] =
-    useState<PendingSignatureRequest | null>(null);
-  const [pendingErc7715PermissionRequests, setPendingErc7715PermissionRequests] =
-    useState<PendingErc7715PermissionRequest[]>([]);
-  const [
-    selectedErc7715PermissionRequest,
-    setSelectedErc7715PermissionRequest,
-  ] = useState<PendingErc7715PermissionRequest | null>(null);
-  const [pendingWatchAssetRequest, setPendingWatchAssetRequest] =
-    useState<PendingWatchAssetRequest | null>(null);
-  const [pendingAddChainRequest, setPendingAddChainRequest] =
-    useState<PendingAddChainRequest | null>(null);
-  const [pendingDappConnectionRequest, setPendingDappConnectionRequest] =
-    useState<PendingDappConnectionRequest | null>(null);
-  const [activeDappContext, setActiveDappContext] =
-    useState<ActiveDappConnectionContext | null>(null);
-  const [homeChainBalances, setHomeChainBalances] = useState<
-    ReadonlyMap<number, number>
-  >(new Map());
+  const [pendingRequests, setPendingRequests] = useState<PendingTxRequest[]>([]);
+  const [selectedTxRequest, setSelectedTxRequest] = useState<PendingTxRequest | null>(null);
+  const [selectedCompletedTx, setSelectedCompletedTx] = useState<CompletedTransaction | null>(null);
+  const [selectedUnshieldOperation, setSelectedUnshieldOperation] = useState<UnshieldOperation | null>(null);
+  const [pendingSignatureRequests, setPendingSignatureRequests] = useState<PendingSignatureRequest[]>([]);
+  const [selectedSignatureRequest, setSelectedSignatureRequest] = useState<PendingSignatureRequest | null>(null);
+  const [pendingErc7715PermissionRequests, setPendingErc7715PermissionRequests] = useState<PendingErc7715PermissionRequest[]>([]);
+  const [selectedErc7715PermissionRequest, setSelectedErc7715PermissionRequest] = useState<PendingErc7715PermissionRequest | null>(null);
+  const [pendingWatchAssetRequest, setPendingWatchAssetRequest] = useState<PendingWatchAssetRequest | null>(null);
+  const [pendingAddChainRequest, setPendingAddChainRequest] = useState<PendingAddChainRequest | null>(null);
+  const [pendingDappConnectionRequest, setPendingDappConnectionRequest] = useState<PendingDappConnectionRequest | null>(null);
+  const [activeDappContext, setActiveDappContext] = useState<ActiveDappConnectionContext | null>(null);
+  const [homeChainBalances, setHomeChainBalances] = useState<ReadonlyMap<number, number>>(new Map());
   const [homeChainBalancesHidden, setHomeChainBalancesHidden] = useState(false);
   const {
     visibleChainIds: visibleRpcIssueChainIds,
@@ -183,21 +173,20 @@ function App() {
     dismissRpcIssues,
     clearRpcIssue,
   } = useRpcIssueAlert();
-  const [pendingBatchRequests, setPendingBatchRequests] = useState<
-    PendingBatchTxRequest[]
-  >([]);
-  const [selectedBatchRequest, setSelectedBatchRequest] =
-    useState<PendingBatchTxRequest | null>(null);
+  const [pendingBatchRequests, setPendingBatchRequests] = useState<PendingBatchTxRequest[]>([]);
+  const [selectedBatchRequest, setSelectedBatchRequest] = useState<PendingBatchTxRequest | null>(null);
   // User-assembled cross-dapp batch (Bankr/impersonator accounts only).
   // Single batch at a time, locked to the from + chainId of whatever was added first.
-  const [crossDappBatch, setCrossDappBatch] = useState<CrossDappBatch | null>(
-    null,
-  );
+  const [crossDappBatch, setCrossDappBatch] = useState<CrossDappBatch | null>(null);
   const [activityTabTrigger, setActivityTabTrigger] = useState(0);
   const [holdingsTabTrigger, setHoldingsTabTrigger] = useState(0);
+  const [privateHomeTab, setPrivateHomeTab] = useState<"assets" | "activity">("assets");
+  const openPrivateActivity = useCallback(() => {
+    setWalletHomeMode("private");
+    setPrivateHomeTab("activity");
+  }, [setWalletHomeMode]);
   const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0);
-  const [portfolioChainRelinkRequest, setPortfolioChainRelinkRequest] =
-    useState<PortfolioChainRelinkRequest | null>(null);
+  const [portfolioChainRelinkRequest, setPortfolioChainRelinkRequest] = useState<PortfolioChainRelinkRequest | null>(null);
   const portfolioChainRelinkRevisionRef = useRef(0);
   // Set by navigateToAdjacentRequest when the popup has already pre-switched
   // to an adjacent pending request. The async onRejected/onCancelled handlers
@@ -207,6 +196,7 @@ function App() {
   // Storage changes can arrive before or after the reject callback. Remember
   // explicit rejections so removal does not masquerade as submission.
   const rejectingTxIdsRef = useRef(new Set<string>());
+  const rejectingBatchIdsRef = useRef(new Set<string>());
 
   const [sidePanelSupported, setSidePanelSupported] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState(false);
@@ -238,6 +228,7 @@ function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [settingsAccount, setSettingsAccount] = useState<Account | null>(null);
+  const [accountSettingsReturnTarget, setAccountSettingsReturnTarget] = useState<"home" | "settingsAccounts">("home");
   const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false);
   const [accountSettingsInitialView, setAccountSettingsInitialView] =
     useState<AccountSettingsSubView>("settings");
@@ -248,6 +239,8 @@ function App() {
   const isWalletUnlockedRef = useRef(isWalletUnlocked);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
+
+  const openAccountSettingsView = (account: Account, returnTarget: "home" | "settingsAccounts") => { setAccountSettingsReturnTarget(returnTarget); setAccountSettingsInitialView("settings"); setAccountSettingsApiKeyDraft(null); setSettingsAccount(account); setView("accountSettings"); };
 
   const requestPortfolioChainRelink = useCallback(
     (tabId: number, chainId: number) => {
@@ -295,14 +288,18 @@ function App() {
     setView("safeApprovals");
   };
   const [swapInitialBuyToken, setSwapInitialBuyToken] = useState<
-    { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined
-  >();
+    { address: string; name: string; symbol: string; decimals: number; logoURI?: string } | undefined>();
   const [swapInitialSellToken, setSwapInitialSellToken] = useState<PortfolioToken | undefined>();
+  const [privacyAction, setPrivacyAction] = useState<{ mode: "shield" | "unshield" | "status"; unshieldTarget: NonNullable<CompletedTransaction["privacyShieldMeta"]> | null }>({ mode: "shield", unshieldTarget: null });
+  const openPrivacyAction = (mode: "shield" | "unshield" | "status", unshieldTarget: CompletedTransaction["privacyShieldMeta"] | null = null) => {
+    const pendingShield = mode === "shield" ? findPendingShieldConfirmation(pendingRequests) : null;
+    if (pendingShield) { setSelectedTxRequest(pendingShield); setView("txConfirm"); return; }
+    setPrivacyAction({ mode, unshieldTarget }); setView("shield");
+  };
   const [walletConnectSessionCount, setWalletConnectSessionCount] = useState(0);
   const [walletConnectChainId, setWalletConnectChainId] = useState<number | null>(null);
   const { establishKeepalivePort, sendMessageWithRetry } =
     useRuntimeMessaging();
-
   const walletConnectStoredChain = walletConnectChainId
     ? getResolvedChainById(walletConnectChainId, networksInfo)
     : undefined;
@@ -747,7 +744,7 @@ function App() {
         }
       }
 
-      establishKeepalivePort();
+      await establishKeepalivePort();
 
       const isUnlocked = await checkLockState();
       const initialApprovalRequests = await loadInitialApprovalRequests([
@@ -980,9 +977,9 @@ function App() {
       if (message.type === "newPendingTxRequest" && message.txRequest) {
         void playInteractionSound("requestReceived");
         const txRequest = message.txRequest;
-        // Don't append to pendingRequests here — the storage change listener
-        // will sync the full list from chrome.storage.local, avoiding duplicates.
-        // Just handle view switching.
+        setPendingRequests((current) =>
+          current.some((request) => request.id === txRequest.id) ? current : [...current, txRequest]
+        );
         (async () => {
           const isUnlocked = await checkLockState();
           setIsWalletUnlocked(isUnlocked);
@@ -1207,12 +1204,18 @@ function App() {
             const wasUserRejected = rejectingTxIdsRef.current.delete(
               selectedTxRequest.id,
             );
+            if (
+              !wasUserRejected &&
+              (selectedTxRequest.privacyShieldMeta ||
+                selectedTxRequest.privacyRagequitMeta ||
+                selectedTxRequest.privacyUnshieldMeta)
+            ) {
+              openPrivateActivity();
+            }
             if (updated.length > 0) {
               setSelectedTxRequest(updated[0]);
             } else {
-              // In popup mode during tx confirm, don't clear state —
-              // TransactionConfirmation shows the success animation then
-              // closes the popup itself via window.close()
+              // Popup confirmation owns its success animation and close.
               if (view === "txConfirm" && !isInSidePanel && !isFullscreenTab) {
                 // Let the animation play; popup will close itself
               } else {
@@ -1333,6 +1336,15 @@ function App() {
             selectedBatchRequest &&
             !updated.find((r) => r.id === selectedBatchRequest.id)
           ) {
+            const wasUserRejected = rejectingBatchIdsRef.current.delete(
+              selectedBatchRequest.id,
+            );
+            if (
+              !wasUserRejected &&
+              selectedBatchRequest.privacyRagequitMeta
+            ) {
+              openPrivateActivity();
+            }
             if (updated.length > 0) {
               setSelectedBatchRequest(updated[0]);
             } else if (view === "batchTxConfirm" && !isInSidePanel && !isFullscreenTab) {
@@ -1405,7 +1417,7 @@ function App() {
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab, activityTabTrigger, holdingsTabTrigger]);
+  }, [chainName, address, displayAddress, selectedTxRequest, selectedSignatureRequest, selectedErc7715PermissionRequest, selectedBatchRequest, pendingWatchAssetRequest, pendingRequests, pendingBatchRequests, pendingSignatureRequests, pendingErc7715PermissionRequests, crossDappBatch, view, isInSidePanel, isFullscreenTab, activityTabTrigger, holdingsTabTrigger, openPrivateActivity]);
 
   // Keep the Home dapp context synchronized with both tab switches and
   // same-tab navigations (for example New Tab -> app.aave.com).
@@ -1596,6 +1608,10 @@ function App() {
         return;
       }
 
+      if (unlockReturnTarget.view === "privacyAction") {
+        void chrome.runtime.sendMessage({ type: "privacySyncShield" }); setView("shield"); return;
+      }
+
       setAccountSettingsInitialView(unlockReturnTarget.subView);
       setView("accountSettings");
       return;
@@ -1783,10 +1799,23 @@ function App() {
     navigateToAdjacentRequest();
   }, [navigateToAdjacentRequest, selectedTxRequest?.id]);
 
+  const handleBeforeBatchReject = useCallback(() => {
+    if (selectedBatchRequest?.id) {
+      rejectingBatchIdsRef.current.add(selectedBatchRequest.id);
+    }
+    navigateToAdjacentRequest();
+  }, [navigateToAdjacentRequest, selectedBatchRequest?.id]);
+
   const handleTxConfirmed = useCallback(async () => {
     const currentTxId = selectedTxRequest?.id;
+    if (
+      selectedTxRequest?.privacyShieldMeta ||
+      selectedTxRequest?.privacyRagequitMeta ||
+      selectedTxRequest?.privacyUnshieldMeta
+    ) {
+      openPrivateActivity();
+    }
     const requests = await loadPendingRequests();
-
     // Check if more pending requests (use fresh data from loadPendingRequests)
     const remaining = requests.filter((r) => r.id !== currentTxId);
     if (remaining.length > 0) {
@@ -1798,7 +1827,7 @@ function App() {
     }
   // Follow-up routing reads the current pending-request helpers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTxRequest?.id]);
+  }, [openPrivateActivity, selectedTxRequest?.id]);
 
   const handleTxRejected = useCallback(async () => {
     // If onBeforeReject pre-navigated to an adjacent pending request, the
@@ -2194,6 +2223,7 @@ function App() {
                 initialTab={settingsInitialTab}
                 initialEditChainName={settingsInitialEditChainName}
                 onChainSaved={handleChainSaved}
+                accountsView={{ accounts, activeAccount, onAddAccount: () => setView("addAccount"), onAccountSettings: (account) => openAccountSettingsView(account, "settingsAccounts"), onAccountsReordered: setAccounts }}
                 close={async () => {
                   setSettingsInitialTab("main");
                   setSettingsInitialEditChainName(undefined);
@@ -2206,8 +2236,7 @@ function App() {
                   if (has) {
                     // Ensure keepalive port is connected before checking lock state
                     // (service worker may have restarted while we were in settings)
-                    establishKeepalivePort();
-                    await new Promise((r) => setTimeout(r, 50));
+                    await establishKeepalivePort();
 
                     const unlocked = await checkLockState();
 
@@ -2279,6 +2308,7 @@ function App() {
                 onInitialAddChainCancelled={() =>
                   setSettingsAddChainReturnTarget(null)
                 }
+                accountsView={{ accounts, activeAccount, onAddAccount: () => setView("addAccount"), onAccountSettings: (account) => openAccountSettingsView(account, "settingsAccounts"), onAccountsReordered: setAccounts }}
                 close={async () => {
                   setSettingsAddChainInitialRequest(undefined);
                   setSettingsAddChainReturnTarget(null);
@@ -2286,7 +2316,7 @@ function App() {
                   setHasApiKey(has);
 
                   if (has) {
-                    establishKeepalivePort();
+                    await establishKeepalivePort();
                     const isUnlocked = await checkLockState();
                     setIsWalletUnlocked(isUnlocked);
                     setView(isUnlocked ? "main" : "unlock");
@@ -2323,8 +2353,8 @@ function App() {
                 setSettingsAccount(null);
                 setAccountSettingsInitialView("settings");
                 setAccountSettingsApiKeyDraft(null);
-                setIsAccountPickerOpen(true);
-                setView("main");
+                if (accountSettingsReturnTarget === "settingsAccounts") { setSettingsInitialTab("accounts"); setView("settings"); }
+                else { setIsAccountPickerOpen(true); setView("main"); }
               }}
               onAccountUpdated={loadAccounts}
               accounts={accounts}
@@ -2524,26 +2554,20 @@ function App() {
     );
   }
 
-  /* Shield placeholder view — retained for a future release.
+  // Privacy Pools Shield, Unshield, and deposit-status routes.
   if (view === "shield") {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <Suspense fallback={<LoadingFallback />}>
-            <ShieldView onBack={() => setView("main")} />
-          </Suspense>
-        </Box>
-      </Box>
+      <PrivacyActionRoute
+        isFullscreenTab={isFullscreenTab} mode={privacyAction.mode}
+        unshieldTarget={privacyAction.unshieldTarget}
+        account={activeAccount && isPrivacyPoolsMutationAccount(activeAccount) ? activeAccount : null}
+        accounts={accounts} fallback={<LoadingFallback />}
+        onBack={() => setView("main")}
+        onUnlockRequired={() => requestUnlockReturn({ view: "privacyAction" })}
+        onUnshieldSubmitted={() => { openPrivateActivity(); setActivityTabTrigger((current) => current + 1); setView("main"); }}
+      />
     );
   }
-  */
 
   // More actions view
   if (view === "more") {
@@ -2627,12 +2651,7 @@ function App() {
               onBack={() => setView("more")}
               onAccountSelect={handleAccountSwitch}
               onAddAccount={() => setView("addAccount")}
-              onAccountSettings={(account) => {
-                setAccountSettingsInitialView("settings");
-                setAccountSettingsApiKeyDraft(null);
-                setSettingsAccount(account);
-                setView("accountSettings");
-              }}
+              onAccountSettings={(account) => openAccountSettingsView(account, "home")}
               onChainSelect={handleWalletConnectChainSelect}
               onAddChain={() => openWalletConnectAddChain()}
               onAddChainRequest={openWalletConnectAddChain}
@@ -2644,30 +2663,15 @@ function App() {
       </Box>
     );
   }
-
-  if (view === "txDetail" && selectedCompletedTx) {
+  if (view === "txDetail" && (selectedUnshieldOperation || selectedCompletedTx)) {
     return (
-      <Box bg="bg.base" h="100%" display="flex" flexDirection="column">
-        <Box
-          maxW={isFullscreenTab ? "480px" : "100%"}
-          mx="auto"
-          w="100%"
-          h="100%"
-          display="flex"
-          flexDirection="column"
-          minH={0}
-        >
-          <Suspense fallback={<LoadingFallback />}>
-            <TxDetailScreen
-              tx={selectedCompletedTx}
-              onBack={() => {
-                setSelectedCompletedTx(null);
-                returnToActivity();
-              }}
-            />
-          </Suspense>
-        </Box>
-      </Box>
+      <TransactionDetailRoute
+        isFullscreenTab={isFullscreenTab} transaction={selectedCompletedTx}
+        unshieldOperation={selectedUnshieldOperation} fallback={<LoadingFallback />}
+        onUnshield={() => { openPrivacyAction("unshield", selectedCompletedTx?.privacyShieldMeta ?? null); setSelectedCompletedTx(null); }}
+        onBackUnshield={() => { setSelectedUnshieldOperation(null); openPrivateActivity(); setActivityTabTrigger((current) => current + 1); setView("main"); }}
+        onBackTransaction={() => { setSelectedCompletedTx(null); returnToActivity(); }}
+      />
     );
   }
 
@@ -2881,6 +2885,9 @@ function App() {
                 }
               }}
               onConfirmed={() => {
+                if (selectedBatchRequest.privacyRagequitMeta) {
+                  openPrivateActivity();
+                }
                 setSelectedBatchRequest(null);
                 setActivityTabTrigger((k) => k + 1);
                 if (pendingBatchRequests.length > 1) {
@@ -2923,7 +2930,7 @@ function App() {
                 }
               }}
               onRejectAll={handleRejectAll}
-              onBeforeReject={navigateToAdjacentRequest}
+              onBeforeReject={handleBeforeBatchReject}
               onNavigate={(direction) => {
                 const currentIdx = combinedRequests.findIndex(
                   (r) =>
@@ -3300,7 +3307,6 @@ function App() {
       </Box>
     );
   }
-
   // Main view
   const openWchanSwap = () => {
     const baseName = getResolvedChainById(8453, networksInfo)?.name ?? "Base";
@@ -3326,10 +3332,9 @@ function App() {
     });
     setView("swap");
   };
-
+  const walletModeToggle = <WalletModeToggle mode={walletHomeMode} publicDappConnected={Boolean(activeDappContext?.connected)} onChange={setWalletHomeMode} />;
   return (
     <Box bg="surface.base" h="100%" minH={0} display="flex" flexDirection="column">
-      {/* Fullscreen centered wrapper */}
       <Box
         maxW={isFullscreenTab ? "480px" : "100%"}
         mx="auto"
@@ -3341,7 +3346,7 @@ function App() {
       >
         <AppHeaderBar
           isAgentSession={passwordType === "agent"}
-          canChat={activeAccount?.type === "bankr"}
+          canChat={walletHomeMode === "public" && activeAccount?.type === "bankr"}
           sidePanelSupported={sidePanelSupported}
           sidePanelMode={sidePanelMode}
           isFullscreenTab={isFullscreenTab}
@@ -3358,9 +3363,8 @@ function App() {
             chrome.tabs.create({ url: WALLETCHAN_OS_URL });
           }}
         />
-
         <Container
-          data-screen-scroll-owner
+          data-screen-scroll-owner data-wallet-mode={walletHomeMode}
           pt={3}
           pb={4}
           flex="1"
@@ -3368,16 +3372,16 @@ function App() {
           display="flex"
           flexDirection="column"
           overflowY="auto"
+          bg="surface.base"
         >
           <VStack spacing={4} align="stretch">
-            {failedTxError && (
+            {walletHomeMode === "public" && failedTxError && (
               <FailedTransactionAlert
                 error={failedTxError}
                 onDismiss={() => setFailedTxError(null)}
               />
             )}
 
-            {/* Pending Requests Banner */}
             <PendingTxBanner
               txCount={pendingRequests.length}
               signatureCount={pendingSignatureRequests.length}
@@ -3442,7 +3446,7 @@ function App() {
               }}
             />
 
-            <RpcIssueAlert
+            {walletHomeMode === "public" && <RpcIssueAlert
               chainIds={visibleRpcIssueChainIds}
               networksInfo={networksInfo}
               isDarkTheme={isDarkTheme}
@@ -3452,22 +3456,16 @@ function App() {
                 setView("settings");
               }}
               onDismiss={dismissRpcIssues}
-            />
+            />}
 
-            {/* Account Switcher + Chain Selector Row */}
-            <AccountNetworkControls
+            {walletHomeMode === "public" && <AccountNetworkControls
               accounts={accounts}
               activeAccount={activeAccount}
               selectedChain={selectedChain}
               visibleChains={visibleChains}
               onAccountSelect={handleAccountSwitch}
               onAddAccount={() => setView("addAccount")}
-              onAccountSettings={(account) => {
-                setAccountSettingsInitialView("settings");
-                setAccountSettingsApiKeyDraft(null);
-                setSettingsAccount(account);
-                setView("accountSettings");
-              }}
+              onAccountSettings={(account) => openAccountSettingsView(account, "home")}
               onShowQr={onQROpen}
               onChainSelect={handleHomepageChainSelect}
               onAddChain={() => openSettingsAddChain()}
@@ -3475,9 +3473,9 @@ function App() {
               isAccountPickerOpen={isAccountPickerOpen}
               onAccountPickerOpenChange={setIsAccountPickerOpen}
               onAccountsReordered={setAccounts}
-            />
+            />}
 
-            {activeAccount?.type === "safe" && (
+            {walletHomeMode === "public" && activeAccount?.type === "safe" && (
               <SafeHomeApprovalRail
                 accountId={activeAccount.id}
                 onOpen={() => openSafeApprovals(null)}
@@ -3485,7 +3483,7 @@ function App() {
             )}
 
             {/* Portfolio balance, primary actions, assets, positions, and activity */}
-            {address && (
+            {walletHomeMode === "public" && address && (
               <PortfolioTabs
                 address={address}
                 accounts={accounts}
@@ -3502,20 +3500,15 @@ function App() {
                 chainRelinkRequest={portfolioChainRelinkRequest}
                 onChainBalancesChange={handleHomeChainBalancesChange}
                 onHideTokens={() => setView("hideTokens")}
+                modeToggle={walletModeToggle}
                 quickActions={
                   activeAccount?.type !== "safe" ? (
                     <HomeQuickActions
                       hasConnectedApps={walletConnectSessionCount > 0}
-                      onSend={() => {
-                        setTransferToken(resolveSendEntryToken(null, networksInfo));
-                        setView("transfer");
-                      }}
-                      onSwap={() => {
-                        setSwapInitialBuyToken(undefined);
-                        setSwapInitialSellToken(undefined);
-                        setView("swap");
-                      }}
+                      onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
+                      onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
                       onReceive={onQROpen}
+                      onShield={activeAccount && isPrivacyPoolsMutationAccount(activeAccount) ? () => openPrivacyAction("shield") : undefined}
                       onMore={() => setView("more")}
                     />
                   ) : activeAccount?.type === "safe" ? (
@@ -3544,6 +3537,7 @@ function App() {
                 refreshTrigger={portfolioRefreshTrigger}
                 onRpcIssuesChange={reportRpcIssues}
                 onTransactionClick={(tx) => {
+                  setSelectedUnshieldOperation(null);
                   setSelectedCompletedTx(tx);
                   setView("txDetail");
                 }}
@@ -3567,7 +3561,26 @@ function App() {
                 }}
               />
             )}
-
+            {walletHomeMode === "private" && (
+              <PrivatePortfolioHome
+                accounts={accounts}
+                modeToggle={walletModeToggle}
+                onShield={() => openPrivacyAction("shield")}
+                onUnshield={() => openPrivacyAction("unshield")}
+                onDeposits={() => openPrivacyAction("status")}
+                onTransactionClick={(tx) => {
+                  setSelectedUnshieldOperation(null);
+                  setSelectedCompletedTx(tx);
+                  setView("txDetail");
+                }}
+                onUnshieldTransactionClick={(operation) => {
+                  setSelectedCompletedTx(null);
+                  setSelectedUnshieldOperation(operation);
+                  setView("txDetail");
+                }}
+                activeTab={privateHomeTab} onTabChange={setPrivateHomeTab}
+              />
+            )}
             {reloadRequired && (
               <ReloadRequiredAlert
                 onReload={async () => {
@@ -3582,7 +3595,7 @@ function App() {
           </VStack>
         </Container>
 
-        {activeDappContext?.connected && (
+        {walletHomeMode === "public" && activeDappContext?.connected && (
           <HomeDappDock
             context={activeDappContext}
             selectedChain={selectedChain}
@@ -3596,9 +3609,7 @@ function App() {
             }}
           />
         )}
-
       </Box>
-      {/* End fullscreen centered wrapper */}
     </Box>
   );
   })();

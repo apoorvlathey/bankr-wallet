@@ -39,6 +39,8 @@ import { routeBackgroundContactBookMessage } from "../contactBookRouter";
 import { createBackgroundBankrCredentialMessageRouter } from "../bankrCredentialRouter";
 import { createBackgroundOnboardingMessageRouter } from "../onboardingRouter";
 import { createBackgroundSettingsMessageRouter } from "../settingsRouter";
+import { createBackgroundPrivacyMessageRouter } from "../privacyRouter";
+import { createBackgroundPrivacyRecoveryMessageRouter } from "../privacyRecoveryRouter";
 
 // Keep this adapter local to the only route family that publishes account
 // compatibility messages to tabs.
@@ -89,10 +91,17 @@ export function composeIdentityRoutes() {
     popupPath: POPUP_PATH,
   });
 
+  const routeBackgroundPrivacyMessage =
+    createBackgroundPrivacyMessageRouter();
+  const routeBackgroundPrivacyRecoveryMessage =
+    createBackgroundPrivacyRecoveryMessageRouter();
+
   return {
     routeBackgroundAuthMessage,
     routeBackgroundBankrCredentialMessage,
     routeBackgroundOnboardingMessage,
+    routeBackgroundPrivacyMessage,
+    routeBackgroundPrivacyRecoveryMessage,
     routeBackgroundAccountStateMessage,
     routeBackgroundContactBookMessage,
     routeBackgroundSettingsMessage,

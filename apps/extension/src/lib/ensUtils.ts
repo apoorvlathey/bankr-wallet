@@ -5,6 +5,7 @@ import {
   encodePacked,
   keccak256,
   namehash,
+  stringToHex,
 } from "viem";
 import { mainnet, base } from "viem/chains";
 import { normalize } from "viem/ens";
@@ -174,7 +175,7 @@ export const convertReverseNodeToBytes = (
   chainId: number
 ): Hex => {
   const addressFormatted = address.toLocaleLowerCase() as Address;
-  const addressNode = keccak256(addressFormatted.substring(2) as Address);
+  const addressNode = keccak256(stringToHex(addressFormatted.substring(2)));
   const chainCoinType = convertChainIdToCoinType(chainId);
   const baseReverseNode = namehash(
     `${chainCoinType.toLocaleUpperCase()}.reverse`

@@ -1,27 +1,14 @@
 /** Bankr batch confirmation, submission, and terminalization pipeline. */
 import { BANKR_SUPPORTED_CHAIN_IDS, CHAIN_NAMES } from "../../constants/networks";
-import { CHAIN_CONFIG } from "../../constants/chainConfig";
-import { submitTransactionDirect, type TransactionParams } from "../bankr/submission";
-import { authorizePendingBankrSubmit } from "../bankr/pendingAuthorization";
-import { encodeBatchCalls } from "./batchTxEncoding";
 import { processingBundleIds } from "./batchExecutionRuntime";
-import { fetchAndStoreBatchGasData } from "./batchGasEnrichment";
-import { handleBatchFailure } from "./batchFailure";
 import { getAccountById } from "../accountStorage";
 import { handleUnlockWallet } from "../authHandlers";
 import { loadDecryptedApiKey } from "../crypto";
-import { BUNDLE_STATUS } from "../erc5792Types";
-import type { PendingBatchTxRequest } from "../erc5792Types";
-import { updateBundleStatus } from "./bundleStatusStorage";
 import { removePendingBatchTxRequest, getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
 import { enforcePendingRequestAuthorizationAtConfirmation } from "../requests/pendingRequestLifecycle";
-import { beginPendingRequestEffectLease, guardPendingRequestEffectLease, type PendingRequestEffectLease } from "../requests/pendingRequestResolution";
-import { writeResultToStorage } from "../transactions/runtime";
-import { fetchRawTransactionReceipt, toBundleReceipt, extractAssetChangesWhenReceiptAvailable } from "../receiptEnrichment";
+import { beginPendingRequestEffectLease } from "../requests/pendingRequestResolution";
 import { getCachedApiKey, getCachedPassword, tryRestoreSession, setCachedApiKey } from "../sessionCache";
-import { startReceiptPolling } from "../forceInclusion/receiptPoller";
-import { addTxToHistory, updateTxInHistory } from "../txHistoryStorage";
-import { showNotification } from "../transactions/notification";
+import { processBatchTransactionInBackground } from "./batchBankrProcessing";
 
 export async function handleConfirmBatchTransaction(
   bundleId: string,
@@ -39,6 +26,27 @@ export async function handleConfirmBatchTransaction(
   if (!pending) return { success: false, error: "Batch request not found" };
   if (pending.intakeStatus === "validating") {
     return { success: false, error: "Batch request is still being validated" };
+  }
+  if (pending.privacyRagequitMeta) {
+    if (forceInclusion || feePaymentToken === "token") {
+      return {
+        success: false,
+        error: "Privacy Pools public exits require normal network gas payment",
+      };
+    }
+    try {
+      const { authorizePrivacyRagequitBatchConfirmation } = await import(
+        "../privacy/ragequit/submission"
+      );
+      await authorizePrivacyRagequitBatchConfirmation(pending);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message === "auth-required"
+          ? "Unlock with your main password or biometrics and try again"
+          : "Privacy Pools public exit is no longer available",
+      };
+    }
   }
 
   // SECURITY: resolve the pinned account; reject stale/missing bindings.
@@ -193,166 +201,6 @@ export async function handleConfirmBatchTransaction(
   );
 
   return { success: true };
-}
-
-async function processBatchTransactionInBackground(
-  bundleId: string,
-  pending: PendingBatchTxRequest,
-  apiKey: string,
-  pinnedAddress: string,
-  functionNames?: string[],
-  effectLease?: PendingRequestEffectLease,
-): Promise<void> {
-  const effectGuard = guardPendingRequestEffectLease(effectLease);
-  try {
-    // Encode calls into single ERC-7821 tx using the pinned account address.
-    const batchTx = encodeBatchCalls(pending.params.calls, pinnedAddress);
-
-    const tx: TransactionParams = {
-      from: pinnedAddress,
-      to: batchTx.to,
-      data: batchTx.data,
-      value: batchTx.value,
-      chainId: pending.chainId,
-    };
-
-    // Compose display function name
-    const displayName = functionNames?.length
-      ? `Batch: ${functionNames.join(", ")}`
-      : `Batch (${pending.params.calls.length} calls)`;
-
-    // Save to tx history as "processing"
-    await addTxToHistory({
-      id: bundleId,
-      status: "processing",
-      tx,
-      origin: pending.origin,
-      favicon: pending.favicon,
-      chainName: pending.chainName,
-      chainId: pending.chainId,
-      createdAt: pending.timestamp,
-      accountType: "bankr",
-      functionName: displayName,
-    });
-
-    const authorization =
-      await enforcePendingRequestAuthorizationAtConfirmation(
-        "batchTransaction",
-        pending,
-      );
-    if (!authorization.authorized) {
-      throw new Error(authorization.error);
-    }
-
-    const result = await submitTransactionDirect(
-      apiKey,
-      tx,
-      undefined,
-      () =>
-        authorizePendingBankrSubmit(
-          "batchTransaction",
-          pending,
-          effectGuard.beginEffect,
-        ),
-    );
-    effectGuard.settleEffect();
-    const txHash = result.transactionHash;
-
-    if (result.status === "reverted") {
-      await handleBatchFailure(bundleId, pending, "Transaction reverted");
-      await updateBundleStatus(bundleId, {
-        status: BUNDLE_STATUS.REVERTED,
-        txHash,
-        completedAt: Date.now(),
-      });
-    } else if (result.status === "success" && txHash) {
-      // Fetch receipt once: sanitized shape goes to wallet_getCallsStatus,
-      // raw shape feeds internal history enrichers such as asset changes.
-      const rawReceipt = await fetchRawTransactionReceipt(
-        txHash,
-        pending.chainId,
-      );
-      const receipt = rawReceipt ? toBundleReceipt(rawReceipt.receipt) : null;
-
-      await updateBundleStatus(bundleId, {
-        status: BUNDLE_STATUS.CONFIRMED,
-        txHash,
-        receipts: receipt ? [receipt] : undefined,
-        completedAt: Date.now(),
-      });
-
-      await updateTxInHistory(bundleId, {
-        status: "success",
-        txHash,
-        completedAt: Date.now(),
-      });
-
-      extractAssetChangesWhenReceiptAvailable({
-        txId: bundleId,
-        txHash,
-        chainId: pending.chainId,
-        userAddress: pinnedAddress,
-        receipt: rawReceipt?.receipt,
-        rpcUrl: rawReceipt?.rpcUrl,
-        logPrefix: "[batch]",
-      });
-
-      // Fire-and-forget gas fee fetch
-      fetchAndStoreBatchGasData(bundleId, txHash, pending.chainId);
-
-      const chainConfig = CHAIN_CONFIG[pending.chainId];
-      const explorerUrl = chainConfig?.explorer
-        ? `${chainConfig.explorer}/tx/${txHash}`
-        : null;
-
-      const notificationId = `tx-success-${bundleId}`;
-      if (explorerUrl) {
-        chrome.storage.local.set({
-          [`notification-${notificationId}`]: explorerUrl,
-        });
-      }
-
-      await showNotification(
-        notificationId,
-        "Batch Transaction Confirmed",
-        `Batch transaction (${pending.params.calls.length} calls) on ${pending.chainName} was successful.`,
-      );
-
-      await writeResultToStorage(`batchTxResult:${bundleId}`, {
-        success: true,
-        txHash,
-      });
-    } else {
-      // Pending — submitted but not yet confirmed
-      await updateBundleStatus(bundleId, {
-        status: BUNDLE_STATUS.PENDING,
-        txHash,
-      });
-
-      await updateTxInHistory(bundleId, {
-        status: "pending",
-        txHash,
-      });
-
-      if (txHash) {
-        startReceiptPolling(bundleId, txHash, pending.chainId);
-      }
-
-      await writeResultToStorage(`batchTxResult:${bundleId}`, {
-        success: true,
-        txHash,
-      });
-    }
-  } catch (error) {
-    let errorMessage = "Unknown error";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    await handleBatchFailure(bundleId, pending, errorMessage);
-  } finally {
-    effectGuard.releaseIfSafe();
-    processingBundleIds.delete(bundleId);
-  }
 }
 
 

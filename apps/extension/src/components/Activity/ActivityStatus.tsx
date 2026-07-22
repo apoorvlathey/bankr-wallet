@@ -66,6 +66,15 @@ export function ActivityStatusLabel({
 }
 
 export default function ActivityStatus({ tx, model }: ActivityStatusProps) {
+  if (model.privacyShield) {
+    return (
+      <ActivityStatusLabel
+        label={model.privacyShield.statusLabel}
+        tone={model.privacyShield.tone}
+        isPending={model.privacyShield.pending}
+      />
+    );
+  }
   if (model.isBridgePendingDest) {
     return <ActivityStatusLabel label="Bridging" tone="info" isPending />;
   }

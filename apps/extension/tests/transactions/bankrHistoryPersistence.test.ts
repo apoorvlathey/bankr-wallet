@@ -25,7 +25,11 @@ test("Bankr broadcast success is not reported failed when history persistence fa
         name: "bankr-history-persistence-boundaries",
         enforce: "pre",
         resolveId(source, importer) {
-          if (!importer?.split("?", 1)[0].endsWith("/chrome/transactions/bankrProcessing.ts")) return null;
+          const file = importer?.split("?", 1)[0] ?? "";
+          if (
+            !file.endsWith("/chrome/transactions/bankrProcessing.ts") &&
+            !file.endsWith("/chrome/transactions/bankrHistory.ts")
+          ) return null;
           return ({
             "../../constants/chainConfig": "\0bankr-chain",
             "../bankr/pendingAuthorization": "\0bankr-auth",

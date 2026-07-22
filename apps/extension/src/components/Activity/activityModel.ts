@@ -1,7 +1,4 @@
-import type {
-  ClearSignedMeta,
-  CompletedTransaction,
-} from "@/chrome/txHistoryStorage";
+import type { ClearSignedMeta, CompletedTransaction } from "@/chrome/txHistoryStorage";
 import { VIEM_CHAINS } from "@/constants/chainRegistry";
 import {
   formatSmallBaseUnitLabel,
@@ -12,8 +9,15 @@ import {
   formatActivityAddress,
   getLiveActivityAddressLabel,
 } from "./activityIdentityModel";
+import {
+  getPrivacyShieldActivityState,
+  isPrivacyShieldLifecycleState,
+  type PrivacyShieldActivityState,
+} from "@/lib/privacyShieldLifecycle";
+import { getPrivacyTransactionIdentity } from "@/lib/privacyTransactionIdentity";
+import { formatEther } from "viem";
 
-export interface ActivityDateGroup<T = CompletedTransaction> {
+export interface ActivityDateGroup<T extends { createdAt: number } = CompletedTransaction> {
   label: string;
   txs: T[];
 }
@@ -28,6 +32,7 @@ export interface ActivityStatusModel {
   bridgeRefunded: boolean;
   bridgeFailedTerminal: boolean;
   isBridgePendingDest: boolean;
+  privacyShield: PrivacyShieldActivityState | null;
 }
 
 export interface ActivityPresentation {
@@ -218,6 +223,25 @@ function getActivityValue(
   );
 }
 
+function getPrivacyShieldValue(
+  tx: CompletedTransaction,
+  compactTiny: boolean,
+): string | null {
+  const meta = tx.privacyShieldMeta;
+  if (!meta || !/^\d+$/.test(meta.amountWei)) return null;
+  try {
+    return formatActivityValueLabel(
+      formatEther(BigInt(meta.amountWei)),
+      "ETH",
+      "+",
+      18,
+      compactTiny,
+    );
+  } catch {
+    return null;
+  }
+}
+
 function getClearSignedContext(
   meta: ClearSignedMeta,
   addressLabels?: ReadonlyMap<string, string>,
@@ -246,9 +270,17 @@ export function getInternalSendSymbol(
   return symbol || null;
 }
 
+export function isShieldActivityTransaction(tx: CompletedTransaction): boolean {
+  return getPrivacyTransactionIdentity(tx) !== null;
+}
+
 export function getActivityStatusModel(
   tx: CompletedTransaction,
 ): ActivityStatusModel {
+  const privacyShield = tx.privacyShieldMeta &&
+      isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+    ? getPrivacyShieldActivityState(tx.privacyShieldMeta.state, tx.chainName)
+    : null;
   const isForceInclusion = !!tx.forceInclusionMeta;
   const isForcePendingL2 =
     tx.status === "pending" &&
@@ -277,6 +309,7 @@ export function getActivityStatusModel(
     bridgeRefunded,
     bridgeFailedTerminal,
     isBridgePendingDest,
+    privacyShield,
   };
 }
 
@@ -285,6 +318,20 @@ export function getActivityPresentation(
   addressLabels?: ReadonlyMap<string, string>,
   originDisplayHostname?: string | null,
 ): ActivityPresentation {
+  const privacyIdentity = getPrivacyTransactionIdentity(tx);
+  if (
+    tx.privacyShieldMeta &&
+    isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state)
+  ) {
+    const activity = getPrivacyShieldActivityState(tx.privacyShieldMeta.state, tx.chainName);
+    return {
+      originHostname: null,
+      intent: "Shield ETH",
+      context: activity.context,
+      value: getPrivacyShieldValue(tx, false),
+      compactValue: getPrivacyShieldValue(tx, true),
+    };
+  }
   const originHostname =
     originDisplayHostname ?? getOriginHostname(tx.origin);
   if (tx.replacement?.kind === "cancel") {
@@ -310,9 +357,11 @@ export function getActivityPresentation(
     }
   }
 
-  const intent = tx.clearSignedMeta
-    ? getClearSignedIntent(tx.clearSignedMeta)
-    : tx.transferMeta
+  const intent = privacyIdentity
+    ? privacyIdentity.label
+    : tx.clearSignedMeta
+      ? getClearSignedIntent(tx.clearSignedMeta)
+      : tx.transferMeta
       ? `Send ${tx.transferMeta.symbol}`
       : bridgeIntent
         ? bridgeIntent

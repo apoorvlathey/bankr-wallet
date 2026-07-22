@@ -28,6 +28,24 @@ import { getAccountById } from "../accountStorage";
 import type { Account } from "../types";
 import { lookupFunctionName } from "./displayMetadata";
 import { handleTransactionFailure } from "./failure";
+import {
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+  recordPrivacyShieldSubmissionFailure,
+} from "../privacy/operations/lifecycle";
+import type { PrivacyShieldConfirmationAuthorization } from "../privacy/operations/submission";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+  recordPrivacyRagequitSubmissionFailure,
+} from "../privacy/ragequit/lifecycle";
+import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
+import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+  recordPrivacyDirectUnshieldSubmissionFailure,
+} from "../privacy/withdrawals/lifecycle";
+import type { PrivacyDirectUnshieldAuthorization } from "../privacy/withdrawals/directConfirmation";
 
 export interface GasOverrides {
   gasLimit: string;
@@ -54,11 +72,15 @@ export async function processLocalTransactionInBackground(
   effectLease?: PendingRequestEffectLease,
   expectedDelegatedAuthorityAuthEpoch?: string,
   nonceOverride?: number,
+  privacyShieldAuthorization?: PrivacyShieldConfirmationAuthorization | null,
+  privacyRagequitAuthorization?: PrivacyRagequitAuthorization | null,
+  privacyDirectUnshieldAuthorization?: PrivacyDirectUnshieldAuthorization | null,
 ): Promise<void> {
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   let broadcastTxHash: string | undefined;
+  let publishedTxHash: string | null = null;
 
   try {
     const txForHistory = gasOverrides
@@ -92,6 +114,8 @@ export async function processLocalTransactionInBackground(
       erc7715PermissionRevokeMeta: pending.erc7715PermissionRevokeMeta,
       replacement: pending.replacement,
       accountId: pending.accountId,
+      privacyRagequitMeta: pending.privacyRagequitMeta ? { version: 1 } : undefined,
+      privacyUnshieldMeta: pending.privacyUnshieldMeta ? { version: 1 } : undefined,
     });
 
     if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
@@ -201,6 +225,18 @@ export async function processLocalTransactionInBackground(
             expectedDelegatedAuthorityAuthEpoch,
           );
         }
+        await beginPrivacyShieldSubmission(
+          pending,
+          privacyShieldAuthorization ?? null,
+        );
+        await beginPrivacyRagequitSubmission(
+          pending,
+          privacyRagequitAuthorization ?? null,
+        );
+        await beginPrivacyDirectUnshieldSubmission(
+          pending,
+          privacyDirectUnshieldAuthorization ?? null,
+        );
         effectGuard.beginEffect();
       },
     );
@@ -215,6 +251,18 @@ export async function processLocalTransactionInBackground(
       ).catch((error) => {
         console.warn("[local-transaction] Replacement link update failed", error);
       });
+    }
+    if (txHash) {
+      publishedTxHash = txHash;
+      await recordPrivacyShieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-shield] failed to persist submitted hash", error),
+      );
+      await recordPrivacyRagequitSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-ragequit] failed to persist submitted hash", error),
+      );
+      await recordPrivacyDirectUnshieldSubmitted(pending, txHash).catch((error) =>
+        console.warn("[privacy-unshield] failed to persist submitted hash", error),
+      );
     }
     if (txHash && result.receipt) {
       await applyReceiptToHistory(
@@ -244,7 +292,20 @@ export async function processLocalTransactionInBackground(
       });
     } else {
       resetNonce(pending.tx.from, pending.tx.chainId);
-      await handleTransactionFailure(txId, pending, errorMessage);
+      await recordPrivacyShieldSubmissionFailure(pending).catch((trackingError) =>
+        console.warn("[privacy-shield] failed to persist submission failure", trackingError),
+      );
+      await recordPrivacyRagequitSubmissionFailure(pending).catch((trackingError) =>
+        console.warn("[privacy-ragequit] failed to persist submission failure", trackingError),
+      );
+      await recordPrivacyDirectUnshieldSubmissionFailure(pending, {
+        outcomeUncertain: publishedTxHash !== null,
+      }).catch((trackingError) =>
+        console.warn("[privacy-unshield] failed to persist submission failure", trackingError),
+      );
+      await handleTransactionFailure(txId, pending, errorMessage, {
+        privacySubmissionOutcomeUncertain: publishedTxHash !== null,
+      });
     }
   } finally {
     effectGuard.releaseIfSafe();

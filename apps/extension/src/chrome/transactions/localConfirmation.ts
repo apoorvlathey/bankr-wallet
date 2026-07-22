@@ -1,9 +1,7 @@
-import { hasEncryptedApiKey, loadDecryptedApiKey } from "../crypto";
 import { captureEip7702DelegationAuthorization } from "../delegatedAuthorityPolicy";
 import {
   processLocalTransactionInBackground,
   type GasOverrides,
-  type LocalSigningAccount,
 } from "./localExecution";
 import {
   getPendingTxRequestById,
@@ -15,52 +13,15 @@ import {
   resolvePinnedAccount,
 } from "./runtime";
 import { beginPendingRequestEffectLease } from "../requests/pendingRequestResolution";
-import {
-  getCachedVaultKey,
-  getPrivateKeyFromCache,
-  setCachedApiKey,
-  setCachedVault,
-  tryRestoreSession,
-} from "../sessionCache";
-import { decryptAllKeys } from "../vaultCrypto";
 import { validateTransactionNonceSelection } from "./noncePolicy";
 import { replacementGasSelectionError } from "@/lib/transactionReplacement";
+import {
+  authorizePrivacyConfirmation,
+  privacyConfirmationGasError,
+} from "./privacyConfirmation";
+import { resolveLocalTransactionKey } from "./localKeyRecovery";
 
 type ConfirmationResult = { success: boolean; error?: string };
-async function resolveLocalTransactionKey(
-  account: LocalSigningAccount,
-  password: string,
-): Promise<
-  | { ok: true; privateKey: `0x${string}` }
-  | { ok: false; error: string }
-> {
-  let privateKey = getPrivateKeyFromCache(account.id);
-  if (privateKey) return { ok: true, privateKey };
-  if (!getCachedVaultKey()) {
-    const { handleUnlockWallet } = await import("../authHandlers");
-    if (await tryRestoreSession(handleUnlockWallet)) {
-      privateKey = getPrivateKeyFromCache(account.id);
-    }
-  }
-  if (privateKey) return { ok: true, privateKey };
-  const cachedVaultKey = getCachedVaultKey();
-  const vault = cachedVaultKey
-    ? await (async () => {
-        const { decryptAllKeysWithVaultKey } = await import("../authHandlers");
-        return decryptAllKeysWithVaultKey(cachedVaultKey);
-      })()
-    : await decryptAllKeys(password);
-  if (!vault) return { ok: false, error: "Invalid password" };
-  setCachedVault(vault);
-  if (await hasEncryptedApiKey()) {
-    const apiKey = await loadDecryptedApiKey(password);
-    if (apiKey) setCachedApiKey(apiKey, password);
-  }
-  privateKey = getPrivateKeyFromCache(account.id);
-  return privateKey
-    ? { ok: true, privateKey }
-    : { ok: false, error: "Private key not found for account" };
-}
 /** Confirms a pinned private-key or seed-phrase transaction for background execution. */
 export async function handleConfirmTransactionAsyncPK(
   txId: string,
@@ -78,6 +39,12 @@ export async function handleConfirmTransactionAsyncPK(
   }
   const pending = await getPendingTxRequestById(txId);
   if (!pending) return { success: false, error: "Transaction request not found" };
+  const privacyGasError = privacyConfirmationGasError(
+    pending,
+    forceInclusion,
+    feePaymentToken,
+  );
+  if (privacyGasError) return { success: false, error: privacyGasError };
   processingTxIds.add(txId);
 
   const pinned = await resolvePinnedAccount(pending);
@@ -124,6 +91,13 @@ export async function handleConfirmTransactionAsyncPK(
     processingTxIds.delete(txId);
     return { success: false, error: replacementGasError };
   }
+
+  const privacyAuthorization = await authorizePrivacyConfirmation(pending);
+  if (!privacyAuthorization.ok) {
+    processingTxIds.delete(txId);
+    return { success: false, error: privacyAuthorization.error };
+  }
+
   let expectedDelegatedAuthorityAuthEpoch: string | undefined;
   try {
     expectedDelegatedAuthorityAuthEpoch =
@@ -233,6 +207,9 @@ export async function handleConfirmTransactionAsyncPK(
       effectLease,
       expectedDelegatedAuthorityAuthEpoch,
       reviewedNonce,
+      privacyAuthorization.shield,
+      privacyAuthorization.ragequit,
+      privacyAuthorization.directUnshield,
     );
   }
   return { success: true };

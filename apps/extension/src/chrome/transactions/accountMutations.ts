@@ -100,6 +100,7 @@ export async function handleAddPrivateKeyAccount(
 export async function handleRemoveAccount(
   accountId: string,
   expectedAuthEpoch?: string,
+  validateRemoval?: () => Promise<void>,
 ): Promise<{ success: boolean; error?: string }> {
   return withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, async () => {
     try {
@@ -110,6 +111,7 @@ export async function handleRemoveAccount(
       if (!account) {
         return { success: false, error: "Account not found" };
       }
+      await validateRemoval?.();
 
       const allAccounts = await getAccounts();
       if (allAccounts.length <= 1) {

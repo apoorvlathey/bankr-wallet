@@ -90,6 +90,7 @@ import {
 import { createBackgroundLedgerMessageRouter } from "../ledgerRouter";
 import { handleConfirmLedgerSignatureRequest } from "../../ledger/signatureConfirmation";
 import { clearTxHistoryForAddresses } from "../../txHistoryStorage";
+import { assertPrivacyAccountRemovalSafe } from "../../privacy/accountSafety";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
@@ -152,6 +153,7 @@ export function composeAccountRoutes(
       removeAccountWithDappPrivacyBoundary,
       getAccountById,
       hasUnresolvedSponsoredTransferIntent,
+      assertPrivacyAccountRemovalSafe,
       getAccounts,
       handleRevokeDappPermission,
       handleRemoveAccount,

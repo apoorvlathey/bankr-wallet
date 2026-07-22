@@ -9,10 +9,11 @@ const readChromeModule = (name: string) =>
   readFile(new URL(`../../src/chrome/${name}`, import.meta.url), "utf8");
 
 test("passkey status, setup, hydration, removal, and facade keep focused boundaries", async () => {
-  const [status, setup, hydration, removal, facade] = await Promise.all([
+  const [status, setup, hydration, mnemonicHydration, removal, facade] = await Promise.all([
     readChromeModule("passkey/status.ts"),
     readChromeModule("passkey/setup.ts"),
     readChromeModule("passkey/hydration.ts"),
+    readChromeModule("passkey/mnemonicHydration.ts"),
     readChromeModule("passkey/removal.ts"),
     readChromeModule("passkeyUnlock.ts"),
   ]);
@@ -29,6 +30,8 @@ test("passkey status, setup, hydration, removal, and facade keep focused boundar
     hydration,
     /from ["'].\/(?:setup|removal)["']|from ["']\.\.\/storageLock["']/,
   );
+  assert.match(hydration, /mnemonicHydration/);
+  assert.match(mnemonicHydration, /verifyMnemonicKeyForVault/);
   assert.match(removal, /validateGeneralVaultMasterRecovery/);
   assert.match(removal, /validateV2MnemonicMasterRecovery/);
   assert.match(removal, /WALLET_SECRET_OPERATION_LOCK_KEY/);

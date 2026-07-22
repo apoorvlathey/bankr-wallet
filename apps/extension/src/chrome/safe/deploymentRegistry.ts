@@ -1,11 +1,41 @@
-import {
-  getCompatibilityFallbackHandlerDeployments,
-  getMultiSendDeployments,
-  getSafeL2SingletonDeployments,
-  getSafeSingletonDeployments,
-  type SingletonDeploymentV2,
-} from "@safe-global/safe-deployments";
+import generatedDeploymentMetadata from "./deploymentMetadata.generated.json";
 import type { SafeAddress, SafeSupportedVersion } from "./types";
+
+type SafeDeploymentKind =
+  | "singleton"
+  | "l2Singleton"
+  | "multiSend"
+  | "fallbackHandler";
+
+interface CompactSafeDeployment {
+  contractName: string;
+  version: SafeSupportedVersion;
+  released: boolean;
+  deployments: Record<string, { address: string; codeHash: string }>;
+}
+
+interface SafeDeploymentMetadata {
+  schemaVersion: 1;
+  packageVersion: string;
+  networkAliases: Record<
+    SafeSupportedVersion,
+    Record<string, string | string[]>
+  >;
+  artifacts: Record<
+    SafeSupportedVersion,
+    Record<SafeDeploymentKind, CompactSafeDeployment>
+  >;
+}
+
+const deploymentMetadata =
+  generatedDeploymentMetadata as unknown as SafeDeploymentMetadata;
+
+function deploymentFor(
+  version: SafeSupportedVersion,
+  kind: SafeDeploymentKind,
+): CompactSafeDeployment {
+  return deploymentMetadata.artifacts[version][kind];
+}
 
 /**
  * Runtime hashes produced by the canonical released SafeProxy factories.
@@ -37,16 +67,22 @@ export interface SafeDeploymentIdentity {
 }
 
 function addressesForNetwork(
-  deployment: SingletonDeploymentV2 | undefined,
+  deployment: CompactSafeDeployment | undefined,
   chainId: number,
 ): string[] {
-  const configured = deployment?.networkAddresses[String(chainId)];
+  if (!deployment) return [];
+  const configured =
+    deploymentMetadata.networkAliases[deployment.version][String(chainId)];
   if (!configured) return [];
-  return Array.isArray(configured) ? configured : [configured];
+  const aliases = Array.isArray(configured) ? configured : [configured];
+  return aliases.flatMap((alias) => {
+    const candidate = deployment.deployments[alias];
+    return candidate ? [candidate.address] : [];
+  });
 }
 
 function identitiesForDeployment(
-  deployment: SingletonDeploymentV2 | undefined,
+  deployment: CompactSafeDeployment | undefined,
   chainId: number,
   version: SafeSupportedVersion,
   deploymentKind: SafeDeploymentIdentity["deploymentKind"],
@@ -70,7 +106,7 @@ function identitiesForDeployment(
 }
 
 function globalIdentitiesForDeployment(
-  deployment: SingletonDeploymentV2 | undefined,
+  deployment: CompactSafeDeployment | undefined,
   version: SafeSupportedVersion,
   deploymentKind: SafeDeploymentIdentity["deploymentKind"],
 ): SafeDeploymentIdentity[] {
@@ -97,21 +133,13 @@ export function getSafeSingletonAllowlist(
   for (const version of SAFE_SUPPORTED_VERSIONS) {
     const networkCandidates = [
       ...identitiesForDeployment(
-        getSafeSingletonDeployments({
-          version,
-          released: true,
-          network: String(chainId),
-        }),
+        deploymentFor(version, "singleton"),
         chainId,
         version,
         "singleton",
       ),
       ...identitiesForDeployment(
-        getSafeL2SingletonDeployments({
-          version,
-          released: true,
-          network: String(chainId),
-        }),
+        deploymentFor(version, "l2Singleton"),
         chainId,
         version,
         "l2Singleton",
@@ -121,12 +149,12 @@ export function getSafeSingletonAllowlist(
       ? networkCandidates
       : [
           ...globalIdentitiesForDeployment(
-            getSafeSingletonDeployments({ version, released: true }),
+            deploymentFor(version, "singleton"),
             version,
             "singleton",
           ),
           ...globalIdentitiesForDeployment(
-            getSafeL2SingletonDeployments({ version, released: true }),
+            deploymentFor(version, "l2Singleton"),
             version,
             "l2Singleton",
           ),
@@ -155,18 +183,18 @@ export function getCanonicalMultiSendAddress(
   chainId: number,
   version: SafeSupportedVersion,
 ): SafeAddress | null {
-  const deployment = getMultiSendDeployments({
-    version,
-    released: true,
-    network: String(chainId),
-  });
+  const deployment = deploymentFor(version, "multiSend");
   const addresses = addressesForNetwork(deployment, chainId);
   if (addresses.length === 1) return addresses[0] as SafeAddress;
   if (!deployment?.released) return null;
 
   const counts = new Map<string, { address: SafeAddress; count: number }>();
-  for (const configured of Object.values(deployment.networkAddresses)) {
-    for (const address of Array.isArray(configured) ? configured : [configured]) {
+  for (const configured of Object.values(
+    deploymentMetadata.networkAliases[version],
+  )) {
+    for (const alias of Array.isArray(configured) ? configured : [configured]) {
+      const address = deployment.deployments[alias]?.address;
+      if (!address) continue;
       const key = address.toLowerCase();
       const current = counts.get(key);
       counts.set(key, {
@@ -182,11 +210,7 @@ export function getCanonicalFallbackHandlerAddresses(
   chainId: number,
   version: SafeSupportedVersion,
 ): SafeAddress[] {
-  const deployment = getCompatibilityFallbackHandlerDeployments({
-    version,
-    released: true,
-    network: String(chainId),
-  });
+  const deployment = deploymentFor(version, "fallbackHandler");
   const networkAddresses = addressesForNetwork(deployment, chainId);
   const addresses = networkAddresses.length > 0
     ? networkAddresses

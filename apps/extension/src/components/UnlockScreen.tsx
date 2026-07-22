@@ -43,6 +43,11 @@ interface PasskeyUnlockStatus {
   prfSalt?: string;
 }
 
+interface PrivacyResetRisk {
+  hasShieldData: boolean;
+  backupVerified: boolean;
+}
+
 function UnlockScreen({
   onUnlock,
   showMascotSuccess = false,
@@ -65,6 +70,11 @@ function UnlockScreen({
   const [passkeyStatus, setPasskeyStatus] = useState<PasskeyUnlockStatus | null>(null);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [isPasskeyUnlocking, setIsPasskeyUnlocking] = useState(false);
+  const [privacyResetRisk, setPrivacyResetRisk] = useState<PrivacyResetRisk>({
+    hasShieldData: false,
+    backupVerified: false,
+  });
+  const [privacyResetAcknowledged, setPrivacyResetAcknowledged] = useState(false);
   const passkeyPromptGateRef = useRef(createPasskeyPromptGate());
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const pendingSafeCount = usePendingSafeProposalCount();
@@ -308,13 +318,40 @@ function UnlockScreen({
     );
   };
 
+  const openReset = async () => {
+    setPrivacyResetAcknowledged(false);
+    try {
+      const risk = await chrome.runtime.sendMessage({
+        type: "privacyGetResetRisk",
+      }) as Partial<PrivacyResetRisk> & { success?: boolean };
+      setPrivacyResetRisk({
+        hasShieldData: risk?.success === true
+          ? risk.hasShieldData === true
+          : true,
+        backupVerified: risk?.success === true && risk.backupVerified === true,
+      });
+    } catch {
+      setPrivacyResetRisk({ hasShieldData: true, backupVerified: false });
+    }
+    onResetModalOpen();
+  };
+
+  const closeReset = () => {
+    setPrivacyResetAcknowledged(false);
+    onResetModalClose();
+  };
+
   const handleResetExtension = () => {
     setIsResetting(true);
-    chrome.runtime.sendMessage({ type: "resetExtension" }, (result) => {
+    chrome.runtime.sendMessage({
+      type: "resetExtension",
+      privacyAcknowledged: !privacyResetRisk.hasShieldData ||
+        privacyResetAcknowledged,
+    }, (result) => {
       setIsResetting(false);
       if (result?.success) {
         clearPortfolioHoldingsLocalMirror();
-        onResetModalClose();
+        closeReset();
         toast({
           title: "Extension reset",
           description: "Please set up your API key and password again",
@@ -383,13 +420,17 @@ function UnlockScreen({
         setError("");
         setMode("setupBiometric");
       }}
-      onOpenReset={onResetModalOpen}
+      onOpenReset={() => void openReset()}
       onOpenFullscreen={() => void openFullScreen()}
       onToggleSidePanel={() => void toggleSidePanelMode()}
       resetDialog={{
         isOpen: isResetModalOpen,
         isResetting,
-        onClose: onResetModalClose,
+        hasShieldData: privacyResetRisk.hasShieldData,
+        backupVerified: privacyResetRisk.backupVerified,
+        shieldAcknowledged: privacyResetAcknowledged,
+        onShieldAcknowledgedChange: setPrivacyResetAcknowledged,
+        onClose: closeReset,
         onConfirm: handleResetExtension,
       }}
     />

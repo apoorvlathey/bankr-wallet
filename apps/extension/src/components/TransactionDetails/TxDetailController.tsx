@@ -10,6 +10,9 @@ import {
 import { useThemedToast } from "@/hooks/useThemedToast";
 import { useCachedAvatarMap } from "@/hooks/useCachedAvatarSrc";
 import {
+  isPrivacyShieldLifecycleState,
+} from "@/lib/privacyShieldLifecycle";
+import {
   decodeErc7821Batch,
   looksLikeErc7821SelfBatch,
 } from "@/lib/erc7821Decode";
@@ -27,6 +30,7 @@ import SwapSummary from "./SwapSummary";
 import TransactionMeta from "./TransactionMeta";
 import TransactionError from "./TransactionError";
 import TransactionImpact from "./TransactionImpact";
+import PrivacyShieldDetailSection from "./PrivacyShieldDetailSection";
 import { useAssetChangeData } from "./useAssetChangeData";
 import { useGasData } from "./useGasData";
 import ArbitrumForceInclusionAction from "./ArbitrumForceInclusionAction";
@@ -39,6 +43,7 @@ interface TxDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   tx: CompletedTransaction;
+  onUnshield?: () => void;
 }
 
 export interface TxDetailControllerProps extends TxDetailModalProps {
@@ -49,6 +54,7 @@ export function TxDetailController({
   isOpen,
   onClose,
   tx,
+  onUnshield,
   presentation = "modal",
 }: TxDetailControllerProps) {
   const { networksInfo } = useNetworks();
@@ -96,6 +102,7 @@ export function TxDetailController({
   // permission summary, not a second generic ERC-7730/clear-signing card for
   // the same DelegationManager calldata.
   const clearSignedMeta = hasErc7715Revoke ? undefined : tx.clearSignedMeta;
+  const privacyShieldMeta = tx.privacyShieldMeta && isPrivacyShieldLifecycleState(tx.privacyShieldMeta.state) ? tx.privacyShieldMeta : null;
   // eth.sh label for the delegation target — shared cache, so this is free
   // on reopen and free if any other surface (tx-confirmation screen, etc.)
   // already fetched it.
@@ -133,7 +140,8 @@ export function TxDetailController({
     hasBatchCalls ||
     hasDelegation ||
     !!tx.swapMeta ||
-    !!tx.bridge;
+    !!tx.bridge ||
+    !!privacyShieldMeta;
   const [errorExpanded, setErrorExpanded] = useState(false);
   const [decodedFunctionName, setDecodedFunctionName] = useState<string | undefined>(
     tx.functionName,
@@ -279,6 +287,8 @@ export function TxDetailController({
             onSpeedUp={() => replacementActions.prepare("speedUp")}
           />
         )}
+
+        <PrivacyShieldDetailSection meta={privacyShieldMeta} networkName={chainName} confirmedAt={tx.completedAt} onUnshield={onUnshield} />
 
         <ArbitrumForceInclusionAction isOpen={isOpen} tx={tx} />
 

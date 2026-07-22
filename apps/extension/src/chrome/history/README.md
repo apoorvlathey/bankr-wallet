@@ -4,8 +4,11 @@ Transaction history is public display state, but its ordering, durable status,
 and post-confirm enrichment feed recovery and user-visible transaction truth.
 Review this domain in dependency order:
 
-1. `types.ts`, `forceInclusionTypes.ts`, and `queryTypes.ts` — the public
-   history, force-inclusion recovery, and paging shapes.
+1. `types.ts`, `clearSignedTypes.ts`, `privacyTypes.ts`,
+   `forceInclusionTypes.ts`, and `queryTypes.ts` — the public history,
+   clear-signing, privacy lifecycle, force-inclusion recovery, and paging
+   shapes. `types.ts` re-exports the focused metadata shapes so existing
+   consumers retain the same import surface.
 2. `gasDataPolicy.ts` — pure update policy that protects a tagged,
    fee-bearing force-inclusion L1 receipt from later L2 enrichment writes.
 3. `assetTransferParser.ts` — pure ERC-20, ERC-721, and ERC-1155 Transfer-log

@@ -75,7 +75,14 @@ import {
   withStorageLock,
 } from "../../storageLock";
 import { performSecurityReset } from "../../txHandlers";
+import { deletePrivacyOperationsDatabase } from "../../privacy/operations/repository";
+import { clearPrivacyPublicEventCache } from "../../privacy/events/repository";
+import { deletePrivacyCommitmentsDatabase } from "../../privacy/commitments/repository";
+import { deletePrivacyWithdrawalsDatabase } from "../../privacy/withdrawals/repository";
+import { deletePrivacyRagequitsDatabase } from "../../privacy/ragequit/repository";
+import { deletePrivacyPortfolioDatabase } from "../../privacy/portfolioHistory/repository";
 import { resetWalletConnectForWalletReset } from "../../walletConnect/client";
+import { readPrivacyResetRisk } from "../../privacy/resetSafety";
 import { createBackgroundChatMessageRouter } from "../chatRouter";
 import { createBackgroundClearSigningMessageRouter } from "../clearSigningRouter";
 import { createBackgroundResetMessageRouter } from "../resetRouter";
@@ -147,6 +154,7 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
     handleUnlockWallet,
     hasUnresolvedSponsoredTransferIntent,
     hasUnresolvedSafeEffects,
+    readPrivacyResetRisk,
     invalidateAuthCeremonies,
     invalidateAvatarImageCacheForWalletReset,
     clearAllAuthState,
@@ -162,6 +170,12 @@ export function composeDataRoutes(pending: PendingResolutionComposition) {
     withWalletSecretLock: (work) =>
       withStorageLock(WALLET_SECRET_OPERATION_LOCK_KEY, work),
     performSecurityReset,
+    deletePrivacyOperationsDatabase,
+    deletePrivacyCommitmentsDatabase,
+    deletePrivacyWithdrawalsDatabase,
+    deletePrivacyRagequitsDatabase,
+    deletePrivacyPortfolioDatabase,
+    clearPrivacyPublicEventCache,
     getAllLocalStorage: () => chrome.storage.local.get(null),
     getWalletLocalStorageKeysToRemove,
     removeLocalStorage: (keys) => chrome.storage.local.remove(keys),

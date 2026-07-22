@@ -8,6 +8,10 @@ type RuntimeMessage = {
 
 export function useRuntimeMessaging() {
   const keepAlivePortRef = useRef<chrome.runtime.Port | null>(null);
+  const surfaceIdRef = useRef<string | null>(null);
+  if (surfaceIdRef.current === null) surfaceIdRef.current = crypto.randomUUID();
+  const registrationPromiseRef = useRef<Promise<boolean> | null>(null);
+  const registeredPortRef = useRef<chrome.runtime.Port | null>(null);
   const stopKeepaliveHeartbeatRef = useRef<(() => void) | null>(null);
   const reconnectingRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,14 +88,20 @@ export function useRuntimeMessaging() {
    * Establishes and maintains a keepalive port connection to the service worker.
    * Automatically reconnects if the port disconnects (e.g., service worker restarts).
    */
-  const establishKeepalivePort = useCallback(() => {
-    if (disposedRef.current || reconnectingRef.current) return;
+  const establishKeepalivePort = useCallback(async (): Promise<boolean> => {
+    if (disposedRef.current) return false;
+    if (registeredPortRef.current && registeredPortRef.current === keepAlivePortRef.current) {
+      return true;
+    }
+    if (registrationPromiseRef.current) return registrationPromiseRef.current;
+    if (reconnectingRef.current) return false;
 
     // Disconnect existing port if any
     const previousPort = keepAlivePortRef.current;
     stopKeepaliveHeartbeatRef.current?.();
     stopKeepaliveHeartbeatRef.current = null;
     keepAlivePortRef.current = null;
+    registeredPortRef.current = null;
     if (previousPort) {
       try {
         previousPort.disconnect();
@@ -103,12 +113,52 @@ export function useRuntimeMessaging() {
     try {
       const port = chrome.runtime.connect({ name: "ui-keepalive" });
       keepAlivePortRef.current = port;
+      const surfaceId = surfaceIdRef.current!;
+
+      let settleRegistration!: (registered: boolean) => void;
+      let registrationSettled = false;
+      let registrationTimeout: ReturnType<typeof setTimeout> | null = null;
+      const registrationPromise = new Promise<boolean>((resolve) => {
+        settleRegistration = (registered) => {
+          if (registrationSettled) return;
+          registrationSettled = true;
+          if (registrationTimeout !== null) clearTimeout(registrationTimeout);
+          registrationTimeout = null;
+          resolve(registered);
+        };
+      });
+      registrationTimeout = setTimeout(() => settleRegistration(false), 2_000);
+      registrationPromiseRef.current = registrationPromise;
+
+      port.onMessage.addListener((message: unknown) => {
+        if (
+          typeof message !== "object" || message === null ||
+          (message as { type?: unknown }).type !== "wallet-ui-registered" ||
+          (message as { surfaceId?: unknown }).surfaceId !== surfaceId ||
+          Object.keys(message).length !== 2
+        ) return;
+        registeredPortRef.current = port;
+        stopKeepaliveHeartbeatRef.current = startUiKeepaliveHeartbeat(
+          port,
+          surfaceId,
+          {
+            onError: () => {
+              if (keepAlivePortRef.current !== port) return;
+              try { port.disconnect(); } catch { /* onDisconnect reconnects. */ }
+            },
+          },
+        );
+        settleRegistration(true);
+      });
 
       port.onDisconnect.addListener(() => {
         if (keepAlivePortRef.current !== port) return;
+        settleRegistration(false);
         stopKeepaliveHeartbeatRef.current?.();
         stopKeepaliveHeartbeatRef.current = null;
         keepAlivePortRef.current = null;
+        registeredPortRef.current = null;
+        registrationPromiseRef.current = null;
         // Service worker may have restarted - reconnect after a short delay
         // Only reconnect if extension context is still valid
         if (!disposedRef.current && chrome.runtime?.id) {
@@ -116,23 +166,24 @@ export function useRuntimeMessaging() {
           reconnectTimerRef.current = setTimeout(() => {
             reconnectTimerRef.current = null;
             reconnectingRef.current = false;
-            establishKeepalivePort();
+            void establishKeepalivePort();
           }, 100);
         }
       });
-
-      stopKeepaliveHeartbeatRef.current = startUiKeepaliveHeartbeat(port, {
-        onError: () => {
-          if (keepAlivePortRef.current !== port) return;
-          try {
-            port.disconnect();
-          } catch {
-            // onDisconnect owns reconnection when the port is already closed.
-          }
-        },
-      });
+      port.postMessage({ type: "wallet-ui-register", surfaceId });
+      const registered = await registrationPromise;
+      if (registrationPromiseRef.current === registrationPromise) {
+        registrationPromiseRef.current = null;
+      }
+      if (!registered && keepAlivePortRef.current === port) {
+        try { port.disconnect(); } catch { /* Connection already closed. */ }
+      }
+      return registered;
     } catch {
       keepAlivePortRef.current = null;
+      registeredPortRef.current = null;
+      registrationPromiseRef.current = null;
+      return false;
     }
   }, []);
 
@@ -147,6 +198,8 @@ export function useRuntimeMessaging() {
       }
       stopKeepaliveHeartbeatRef.current?.();
       stopKeepaliveHeartbeatRef.current = null;
+      registrationPromiseRef.current = null;
+      registeredPortRef.current = null;
       const port = keepAlivePortRef.current;
       keepAlivePortRef.current = null;
       try {

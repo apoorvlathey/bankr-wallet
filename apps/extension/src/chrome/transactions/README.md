@@ -8,8 +8,9 @@ This directory owns the extracted, audit-sized transaction concerns:
 - `runtime.ts` owns result publication, pinned-account resolution, abort
   controllers, and duplicate-processing state. Signing prompts remain pending
   until explicitly resolved.
-- `localConfirmation.ts` owns non-expiring PK/seed confirmation preflight, EIP-7702 master
-  authorization capture, and master/agent/Never-session key recovery.
+- `localConfirmation.ts` owns non-expiring PK/seed confirmation preflight and
+  EIP-7702 master authorization capture; `localKeyRecovery.ts` owns the exact
+  master/agent/Never-session key recovery and legacy API-key cache hydration.
 - `localExecution.ts` owns nonce/gas preparation, sign-once execution, the
   final pre-RPC account/transport/authority check, signed-nonce history, and
   receipt publication.
@@ -30,9 +31,10 @@ This directory owns the extracted, audit-sized transaction concerns:
   signing methods.
 - `failure.ts`, `displayMetadata.ts`, and `notification.ts` isolate durable
   failure effects from best-effort enrichment and Chrome notifications.
-- `bankrPolicy.ts`, `bankrSession.ts`, `bankrConfirmation.ts`, and
-  `bankrProcessing.ts` separate pinned-request policy, credential recovery,
-  prompt consumption/effect leasing, and remote result publication.
+- `bankrPolicy.ts`, `bankrSession.ts`, `bankrConfirmation.ts`,
+  `bankrImmediateConfirmation.ts`, `bankrHistory.ts`, and `bankrProcessing.ts`
+  separate pinned-request policy, credential recovery, immediate/background
+  confirmation, history initialization, and remote result publication.
 - `requestActions.ts` owns rejection and cancellation terminalization.
 - `swaps/accountPolicy.ts` binds every prepared swap to an existing account,
   address, wallet type, and chain before credentials are resolved.

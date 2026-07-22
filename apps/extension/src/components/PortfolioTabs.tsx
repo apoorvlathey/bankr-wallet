@@ -63,11 +63,9 @@ interface PortfolioTabsProps {
   onSwapClick?: (token: PortfolioToken) => void;
   onRpcIssuesChange?: (report: RpcHealthReport) => void;
   onTransactionClick?: (tx: CompletedTransaction) => void;
+  modeToggle?: ReactNode;
   quickActions?: ReactNode;
-  activitySupplement?: (
-    filterChainId: number | null,
-    onVisibilityChange: (visible: boolean) => void,
-  ) => ReactNode;
+  activitySupplement?: (filterChainId: number | null, onVisibilityChange: (visible: boolean) => void) => ReactNode;
   onChainBalancesChange?: (
     totals: ReadonlyMap<number, number>,
     hidden: boolean,
@@ -100,7 +98,7 @@ const refreshRotation = keyframes`
   to { transform: rotate(360deg); }
 `;
 
-export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, quickActions, activitySupplement, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
+export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, modeToggle, quickActions, activitySupplement, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
   // increments when the user backs out of send/swap without submitting.
@@ -464,9 +462,12 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
     <>
       <VStack ref={portfolioRootRef} align="stretch" spacing={2}>
         <Box px={1}>
-          <Text fontSize="sm" color="fg.secondary" fontWeight="500">
-            Portfolio balance
-          </Text>
+          <HStack justify="space-between" align="center" spacing={3}>
+            <Text fontSize="sm" color="fg.secondary" fontWeight="500">
+              Portfolio balance
+            </Text>
+            {modeToggle}
+          </HStack>
           <HStack mt={0.5} spacing={2} align="center">
             {!holdingsState ||
             (holdingsState.loading && !holdingsState.totalValueUsd) ? (
@@ -686,6 +687,7 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
               onShowAllNetworks={() => selectPortfolioChain(null)}
               onSelectTx={onTransactionClick}
               isActive={tabIndex === 2}
+              scope="public"
             />
           </Box>
         </Box>

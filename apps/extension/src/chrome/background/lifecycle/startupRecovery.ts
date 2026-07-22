@@ -4,6 +4,9 @@ export type StartupRecoveryDependencies = {
   initSidePanel: () => unknown;
   cleanupStaleProcessingTxs: () => unknown;
   resumePendingPollers: () => unknown;
+  resumePrivacyShieldTracking: () => unknown;
+  resumePrivacyUnshieldTracking: () => unknown;
+  resumePrivacyRagequitTracking: () => unknown;
   prunePendingBridges: () => Promise<unknown>;
   resumePendingBridgePollers: () => unknown;
   recoverStuckForceInclusionTxs: () => unknown;
@@ -19,6 +22,9 @@ export function startRecoveryLifecycle(
   dependencies.initSidePanel();
   dependencies.cleanupStaleProcessingTxs();
   dependencies.resumePendingPollers();
+  dependencies.resumePrivacyShieldTracking();
+  dependencies.resumePrivacyUnshieldTracking();
+  dependencies.resumePrivacyRagequitTracking();
 
   void dependencies
     .prunePendingBridges()

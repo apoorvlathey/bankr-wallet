@@ -1,10 +1,14 @@
-/** Wallet-UI wake and keepalive port registration. */
+/** Wallet-UI wake, authenticated-surface, and onboarding keepalive ports. */
+import {
+  bindTrustedUiKeepalivePort,
+  exactPortMessage,
+  type TrustedUiPortProtocolDependencies,
+} from "./trustedUiPortProtocol";
 
-export type TrustedUiPortLifecycleDependencies = {
+export type TrustedUiPortLifecycleDependencies =
+  TrustedUiPortProtocolDependencies & {
   connectEvent: { addListener: (listener: (port: any) => void) => void };
   isTrustedWalletUiSender: (sender: chrome.runtime.MessageSender) => boolean;
-  incrementUIConnections: () => void;
-  decrementUIConnections: () => void;
   log: (message: string) => void;
 };
 
@@ -18,24 +22,17 @@ export function registerTrustedUiPortLifecycle(
     }
     if (port.name === "popup-wake") {
       dependencies.log("Service worker woken up by popup");
-    } else if (port.name === "ui-keepalive") {
-      dependencies.incrementUIConnections();
+      return;
+    }
+    if (port.name === "onboarding-keepalive") {
       port.onMessage.addListener((message: unknown) => {
-        // Receiving this exact secret-free pulse resets Chrome's MV3 worker
-        // idle timer. Authentication timestamps remain untouched, so the
-        // configured finite auto-lock duration is still authoritative.
-        if (
-          typeof message !== "object" ||
-          message === null ||
-          (message as { type?: unknown }).type !== "wallet-ui-keepalive" ||
-          Object.keys(message).length !== 1
-        ) {
+        if (!exactPortMessage(message, "wallet-worker-keepalive", ["type"])) {
           port.disconnect();
         }
       });
-      port.onDisconnect.addListener(() => {
-        dependencies.decrementUIConnections();
-      });
+      return;
     }
+    if (port.name !== "ui-keepalive") return;
+    bindTrustedUiKeepalivePort(port, dependencies);
   });
 }

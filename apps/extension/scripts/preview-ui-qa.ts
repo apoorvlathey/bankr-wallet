@@ -36,6 +36,7 @@ const FRAMES: Record<FrameMode, { width: number; height: number }> = {
   popup: { width: 360, height: 600 },
   window: { width: 480, height: 720 },
   sidepanel: { width: 420, height: 760 },
+  fullscreen: { width: 1280, height: 900 },
 };
 
 const EXPANDED_FRAME_ROUTES = new Set([
@@ -47,6 +48,7 @@ const EXPANDED_FRAME_ROUTES = new Set([
   "portfolio",
   "tx-detail",
   "swap",
+  "shield",
   "batch",
   "permission",
   "send",

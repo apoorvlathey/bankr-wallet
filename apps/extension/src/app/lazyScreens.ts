@@ -39,7 +39,7 @@ export const SwapView = lazy(() => import("@/components/Swap/SwapView"));
 export const StakingScreen = lazy(
   () => import("@/components/Staking/StakingScreen"),
 );
-// export const ShieldView = lazy(() => import("@/components/ShieldView"));
+export const ShieldView = lazy(() => import("@/components/ShieldView"));
 export const MoreActionsView = lazy(
   () => import("@/components/MoreActionsView"),
 );
@@ -58,6 +58,9 @@ export const WatchAssetConfirmation = lazy(
 export const AddChain = lazy(() => import("@/components/Settings/AddChain"));
 export const TxDetailScreen = lazy(
   () => import("@/components/TxDetailScreen"),
+);
+export const UnshieldDetailScreen = lazy(
+  () => import("@/components/Shield/UnshieldDetailScreen"),
 );
 
 /** Starts the exact approval chunk while its durable request is being prepared. */
@@ -103,7 +106,7 @@ if (typeof window !== "undefined") {
     void import("@/components/TokenTransfer");
     void import("@/components/Swap/SwapView");
     void import("@/components/Staking/StakingScreen");
-    // void import("@/components/ShieldView");
+    void import("@/components/ShieldView");
     void import("@/components/MoreActionsView");
     void import("@/components/HideTokensView");
     void import("@/components/HiddenPortfolioTokensView");
@@ -111,5 +114,6 @@ if (typeof window !== "undefined") {
     void import("@/components/WatchAssetConfirmation");
     void import("@/components/Settings/AddChain");
     void import("@/components/TxDetailScreen");
+    void import("@/components/Shield/UnshieldDetailScreen");
   });
 }

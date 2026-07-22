@@ -47,9 +47,14 @@ Receipt ownership:
   zero-cost derived L2 receipt from overwriting that paid fee. The history
   repository enforces the tagged L1 record against every later enrichment
   writer. Startup recovery backfills older completed rows.
-- `receiptSideEffects.ts` mirrors EIP-7702/ERC-7715 state, marks the exact
-  predecessor chain dropped after a replacement receipt, and advances split
-  or bridge flows only after receipt application.
+- `replacementReceiptMirror.ts` marks the exact predecessor chain dropped
+  after a replacement receipt. `receiptAuthorityMirrors.ts` isolates the
+  EIP-7702/ERC-7715 state reads and writes, while `privacyDropMirrors.ts`
+  contains best-effort Privacy Pools drop projection. `receiptSideEffects.ts`
+  mirrors Shield,
+  Public Exit, receiver-paid Unshield, EIP-7702, and ERC-7715 state from the
+  same canonical receipt. It advances
+  split or bridge flows only after receipt application.
 - `receiptRpc.ts` and `receiptNotification.ts` isolate RPC normalization and UI
   notifications from state transitions.
 

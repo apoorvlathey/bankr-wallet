@@ -1,8 +1,16 @@
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
+import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import { privacyShieldGrossAmountWei } from "@/lib/privacyShieldAmounts";
 import { PREVIEW_EPOCH_MS, PREVIEW_WALLETS } from "./fixtures";
 import { previewAssets } from "./previewAssets";
 
 const previewAavePool = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
+const previewShieldedAmountWei =
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
+const previewShieldGrossAmountWei = privacyShieldGrossAmountWei(
+  previewShieldedAmountWei,
+  PRIVACY_POOLS_DEPLOYMENT.assetConfig.vettingFeeBPS,
+);
 
 const supplyData =
   "0x617ba037" +
@@ -140,6 +148,34 @@ export function getPreviewActivityTransactions(): CompletedTransaction[] {
   } satisfies CompletedTransaction;
 
   return [
+    {
+      ...shared,
+      id: "preview-shield-awaiting-asp",
+      status: "success",
+      origin: "WalletChan Shield",
+      favicon: previewAssets.brand.walletChan,
+      chainName: PRIVACY_POOLS_DEPLOYMENT.chainName,
+      chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+      createdAt: PREVIEW_EPOCH_MS - 20 * 60_000,
+      completedAt: PREVIEW_EPOCH_MS - 19 * 60_000,
+      txHash:
+        "0x4d842ed9a61f8e49a1d5ab5f8c0db21e8a2be15be38d1dde7c47b9f1205b78a1",
+      tx: {
+        from: PREVIEW_WALLETS.privateKey.address,
+        to: PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address,
+        data: "0x",
+        value: `0x${previewShieldGrossAmountWei.toString(16)}`,
+        chainId: PRIVACY_POOLS_DEPLOYMENT.chainId,
+      },
+      privacyShieldMeta: {
+        version: 1,
+        operationId: "preview-shield-awaiting-asp",
+        state: "awaiting_asp",
+        updatedAt: PREVIEW_EPOCH_MS - 19 * 60_000,
+        amountWei: previewShieldGrossAmountWei.toString(),
+        shieldedAmountWei: previewShieldedAmountWei.toString(),
+      },
+    },
     {
       ...shared,
       id: "preview-activity-send",

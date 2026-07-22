@@ -30,7 +30,8 @@ authorization decision.
 | `sessionBinding.ts` | Stable SHA-256 fingerprint excluding mutable usage metadata | None |
 | `status.ts` | Status plus cached/explicit master setup preflight | None |
 | `setup.ts` | Atomic V1/V2 setup and mnemonic-vault conversion | `mnemonicVault` and `passkeyUnlock` together |
-| `hydration.ts` | Unwrap, verify, and hydrate a master session | Session cache only |
+| `mnemonicHydration.ts` | Verify the optional V2 mnemonic capability | None |
+| `hydration.ts` | Unwrap and hydrate a unified master session | Session cache only |
 | `removal.ts` | Prove master recovery before factor removal | Removes `passkeyUnlock` |
 
 ## Compatibility and security invariants

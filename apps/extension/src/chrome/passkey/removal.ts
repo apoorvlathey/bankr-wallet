@@ -14,13 +14,15 @@ import {
 import {
   clearInMemoryAuthCache,
   clearSessionStorage,
+  getCachedPrivacyKey,
   revokePersistedSessionRecoveryKey,
 } from "../sessionCache";
 import {
   WALLET_SECRET_OPERATION_LOCK_KEY,
   withStorageLock,
 } from "../storageLock";
-
+import { PRIVACY_VAULT_STORAGE_KEY } from "../privacy/record";
+import { preparePrivacyVaultForPasskeyRemoval } from "../privacy/vault";
 async function validateV2MnemonicProtectionBeforePasskeyRemoval(
   masterPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
@@ -60,6 +62,17 @@ export async function handleRemovePasskeyUnlock(
         validateV2MnemonicProtectionBeforePasskeyRemoval(masterPassword),
       );
       if (!mnemonicIntegrity.success) return mnemonicIntegrity;
+      const preparedPrivacy = await preparePrivacyVaultForPasskeyRemoval(
+        masterPassword,
+        getCachedPrivacyKey(),
+      );
+      if (preparedPrivacy === false) {
+        return {
+          success: false,
+          error:
+            "Shield recovery could not be verified. Biometric unlock was not removed.",
+        };
+      }
       if (!isCurrentAuthCeremonyEpoch(expectedAuthEpoch)) {
         return stalePasskeyCeremonyResult();
       }
@@ -67,7 +80,23 @@ export async function handleRemovePasskeyUnlock(
       // Revoke the durable Never-session recovery half before deleting this
       // factor. A failed revocation leaves biometric unlock fully intact.
       await revokePersistedSessionRecoveryKey();
-      await chrome.storage.local.remove(PASSKEY_UNLOCK_STORAGE_KEY);
+      const storageUpdate: Record<string, unknown> = {
+        [PASSKEY_UNLOCK_STORAGE_KEY]: null,
+      };
+      if (preparedPrivacy) {
+        storageUpdate[PRIVACY_VAULT_STORAGE_KEY] = preparedPrivacy;
+      }
+      await chrome.storage.local.set(storageUpdate);
+      await chrome.storage.local
+        .remove(PASSKEY_UNLOCK_STORAGE_KEY)
+        .catch((error) => {
+          // The logical factor is already null. Physical cleanup can retry on
+          // a later setup/removal without reviving biometric authority.
+          console.warn(
+            "[passkeyUnlock] Failed to remove disabled biometric record:",
+            error,
+          );
+        });
       invalidateAuthCeremonies();
       clearInMemoryAuthCache();
       await clearSessionStorage().catch((error) => {

@@ -5,6 +5,7 @@ import {
   useState,
   type MutableRefObject,
 } from "react";
+import { clearRendererMemoryCache } from "@/app/rendererMemoryCache";
 
 type LockWalletResponse = {
   success?: boolean;
@@ -107,6 +108,7 @@ export function useManualWalletLock({
   const lockInFlight = useRef(false);
 
   const clearRendererAuthState = useCallback(() => {
+    clearRendererMemoryCache();
     isWalletUnlockedRef.current = false;
     unlockRouteHandledRef.current = false;
     setShowUnlockMascotSuccess(false);

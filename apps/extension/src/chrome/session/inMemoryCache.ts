@@ -8,46 +8,41 @@
  */
 
 import type { DecryptedEntry, PasswordType } from "../types";
-
-export interface CachedMnemonicKey {
-  key: CryptoKey;
-  keyId: string;
-}
-
+import {
+  clearAuthSessionHardExpiry,
+  decrementUiConnectionLease,
+  isCacheEntryValid,
+  setAuthSessionHardExpiry,
+} from "./inMemoryExpiry";
+import type { CachedMnemonicKey, CachedPrivacyKey } from "./inMemoryTypes";
+export type { CachedMnemonicKey, CachedPrivacyKey } from "./inMemoryTypes";
+export { hasActiveUIConnections, incrementUIConnections, setAuthSessionHardExpiry } from "./inMemoryExpiry";
 let cachedApiKey: string | null = null;
 let cachedPassword: string | null = null;
 let cacheTimestamp = 0;
-
 let cachedVault: DecryptedEntry[] | null = null;
 let vaultCacheTimestamp = 0;
-
 let cachedPasswordType: PasswordType | null = null;
 let cachedVaultKey: CryptoKey | null = null;
 let cachedMnemonicKey: CachedMnemonicKey | null = null;
+let cachedPrivacyKey: CachedPrivacyKey | null = null;
 let authCacheTimestamp = 0;
-let authSessionHardExpiresAt: number | null = null;
 
 let currentSessionId: string | null = null;
-let activeUIConnections = 0;
-
-function isCacheEntryValid(timestamp: number, timeout: number): boolean {
-  return (
-    (authSessionHardExpiresAt === null || Date.now() < authSessionHardExpiresAt) &&
-    (timeout === 0 || (timestamp > 0 && Date.now() - timestamp < timeout))
-  );
-}
 
 export function clearInMemoryAuthCache(): void {
+  cachedPrivacyKey?.keyBytes.fill(0);
   cachedApiKey = null;
   cachedPassword = null;
   cachedVault = null;
   cachedPasswordType = null;
   cachedVaultKey = null;
   cachedMnemonicKey = null;
+  cachedPrivacyKey = null;
   cacheTimestamp = 0;
   vaultCacheTimestamp = 0;
   authCacheTimestamp = 0;
-  authSessionHardExpiresAt = null;
+  clearAuthSessionHardExpiry();
   currentSessionId = null;
 }
 
@@ -123,6 +118,25 @@ export function setCachedMnemonicKey(value: CachedMnemonicKey | null): void {
   if (value) authCacheTimestamp = Date.now();
 }
 
+export function getCachedPrivacyKey(
+  timeout: number,
+): CachedPrivacyKey | null {
+  if (cachedPrivacyKey && isCacheEntryValid(authCacheTimestamp, timeout)) {
+    return cachedPrivacyKey;
+  }
+  if (cachedPrivacyKey) clearInMemoryAuthCache();
+  return null;
+}
+
+export function setCachedPrivacyKey(value: CachedPrivacyKey | null): void {
+  const nextValue = value
+    ? { ...value, keyBytes: new Uint8Array(value.keyBytes) }
+    : null;
+  cachedPrivacyKey?.keyBytes.fill(0);
+  cachedPrivacyKey = nextValue;
+  if (value) authCacheTimestamp = Date.now();
+}
+
 export function getPasswordType(timeout: number): PasswordType | null {
   if (cachedPasswordType && isCacheEntryValid(authCacheTimestamp, timeout)) {
     return cachedPasswordType;
@@ -146,26 +160,20 @@ export function setCurrentSessionId(
 ): void {
   currentSessionId = id;
   if (hardExpiresAt !== undefined) {
-    authSessionHardExpiresAt = hardExpiresAt;
+    setAuthSessionHardExpiry(hardExpiresAt);
   }
 }
 
-export function setAuthSessionHardExpiry(expiresAt: number | null): void {
-  authSessionHardExpiresAt = expiresAt;
-}
-
-export function incrementUIConnections(): void {
-  activeUIConnections++;
-}
-
 export function decrementUIConnections(): void {
-  activeUIConnections--;
-  if (activeUIConnections > 0) return;
-
-  activeUIConnections = 0;
+  if (!decrementUiConnectionLease()) return;
   if (cachedApiKey) cacheTimestamp = Date.now();
   if (cachedVault) vaultCacheTimestamp = Date.now();
-  if (cachedVaultKey || cachedMnemonicKey || cachedPasswordType) {
+  if (
+    cachedVaultKey ||
+    cachedMnemonicKey ||
+    cachedPrivacyKey ||
+    cachedPasswordType
+  ) {
     authCacheTimestamp = Date.now();
   }
 }

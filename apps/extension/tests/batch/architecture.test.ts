@@ -314,26 +314,28 @@ test("every batch execution or move boundary rejects validating rows", async () 
 });
 
 test("Bankr batch execution preserves facade identity and credential boundary", async () => {
-  const [facade, bankr, source] = await Promise.all([
+  const [facade, bankr, source, processing] = await Promise.all([
     import("../../src/chrome/batchTxHandlers"),
     import("../../src/chrome/batch/batchBankrExecution"),
     readFile(new URL("../../src/chrome/batch/batchBankrExecution.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../src/chrome/batch/batchBankrProcessing.ts", import.meta.url), "utf8"),
   ]);
   assert.equal(facade.handleConfirmBatchTransaction, bankr.handleConfirmBatchTransaction);
-  assert.match(source, /authorizePendingBankrSubmit/);
+  assert.match(processing, /authorizePendingBankrSubmit/);
   assert.match(source, /enforcePendingRequestAuthorizationAtConfirmation/);
   assert.match(source, /beginPendingRequestEffectLease/);
   assert.doesNotMatch(source, /privateKey|mnemonic|signAndBroadcastTransaction/);
 });
 
 test("local batch confirmation isolates key restoration and path selection", async () => {
-  const [source, forcePolicy] = await Promise.all([
+  const [source, keyRecovery, forcePolicy] = await Promise.all([
     readFile(new URL("../../src/chrome/batch/batchLocalConfirmation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../src/chrome/batch/batchLocalKeyRecovery.ts", import.meta.url), "utf8"),
     readFile(new URL("../../src/chrome/batch/batchForceInclusionPolicy.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /getPrivateKeyFromCache/);
-  assert.match(source, /tryRestoreSession/);
-  assert.match(source, /decryptAllKeys/);
+  assert.match(keyRecovery, /getPrivateKeyFromCache/);
+  assert.match(keyRecovery, /tryRestoreSession/);
+  assert.match(keyRecovery, /decryptAllKeys/);
   assert.match(source, /resolveActiveDelegate/);
   assert.match(source, /executors\.processSingle/);
   assert.match(source, /executors\.processAtomic7702/);

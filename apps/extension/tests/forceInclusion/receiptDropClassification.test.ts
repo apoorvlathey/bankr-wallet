@@ -61,13 +61,18 @@ test("receipt reconciliation distinguishes dropped transactions from failures", 
               "./receiptNotification": "\0drop-notification",
               "./receiptRpc": "\0drop-receipt-rpc",
               "./receiptSideEffects": "\0drop-effects",
+              "./privacyDropMirrors": "\0drop-privacy",
             } as Record<string, string>)[source] ?? null;
           }
           if (file.endsWith("/forceInclusion/receiptSideEffects.ts")) {
             return ({
               "../transactions/rpcConfig": "\0drop-rpc-config",
               "../txHistoryStorage": "\0drop-history",
+              "./receiptAuthorityMirrors": "\0drop-authority",
             } as Record<string, string>)[source] ?? null;
+          }
+          if (file.endsWith("/forceInclusion/replacementReceiptMirror.ts")) {
+            return source === "../txHistoryStorage" ? "\0drop-history" : null;
           }
           return null;
         },
@@ -90,6 +95,12 @@ test("receipt reconciliation distinguishes dropped transactions from failures", 
           }
           if (id === "\0drop-notification") {
             return "export const showReceiptNotification = async (...args) => globalThis.__walletchanReceiptDrops.notifications.push(args);";
+          }
+          if (id === "\0drop-privacy") {
+            return "export const recordPrivacyTransactionDropped = async () => {};";
+          }
+          if (id === "\0drop-authority") {
+            return "export const syncDelegationMirrorFromChain = async () => {}; export const markErc7715PermissionRevokedFromReceipt = async () => {};";
           }
           if (id === "\0drop-receipt-rpc") return `
             export const fetchReceipt = async () => null;

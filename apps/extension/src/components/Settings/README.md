@@ -2,6 +2,11 @@
 
 - `index.tsx` is the Settings screen router/composition root.
 - `settingsRegistry.tsx` declares settings destinations and metadata.
+- `AccountsSettings.tsx` adapts the shared account picker into a manage-only
+  Settings destination; row activation opens account settings and never
+  changes the active account.
+- `ClearChatHistoryDialog.tsx` owns the root-level chat-history confirmation
+  dialog while the Settings router retains the action state and deletion effect.
 - `EditChain.tsx` composes the edit form and save/validation flow.
 - `NetworkIdentityFields.tsx` renders the editable/read-only network name and
   chain-ID controls.
@@ -41,3 +46,11 @@ Settings components call trusted renderer message routes but do not reproduce
 background authorization, storage, RPC, or cryptographic policy. New settings
 subfeatures should use a focused component or hook instead of growing the root
 router.
+
+`PrivacyRecoverySettings.tsx` is an export-only facade for the
+`PrivacyRecovery/` feature folder. Its root owns temporary form/display state,
+clipboard effects, and post-restore rescan orchestration; presentational leaves
+own the chooser, concealed backup, balance-at-risk, two-confirmation, and
+phrase-import layouts. The background owns password proof and vault mutation.
+`PrivacyRecoverySettingsRow.tsx` keeps its agent-disabled
+navigation presentation out of the Settings registry composition file.

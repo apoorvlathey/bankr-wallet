@@ -26,7 +26,7 @@ export function normalizeContactAddress(value: unknown): `0x${string}` {
   if (typeof value !== "string" || !isAddress(value, { strict: false })) {
     throw new Error("Enter a valid EVM address");
   }
-  return getAddress(value);
+  return getAddress(value) as `0x${string}`;
 }
 
 function decodeContacts(value: unknown): AddressContact[] {

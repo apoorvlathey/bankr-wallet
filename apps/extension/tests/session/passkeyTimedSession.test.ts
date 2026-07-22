@@ -105,25 +105,28 @@ test("15-minute passkey sessions survive a two-minute worker restart without ext
           success: true,
         });
         const envelope = chromeHarness.stores.session
-          .encryptedSessionVaultKey as {
+          .encryptedSessionCapabilities as {
           version: number;
-          startedAt: number;
+          lastActiveAt: number;
           autoLockTimeout: number;
-          expiresAt: number;
+          idleExpiresAt: number;
+          leaseState: string;
         };
         assert.deepEqual(
           {
             version: envelope.version,
-            startedAt: envelope.startedAt,
+            startedAt: envelope.lastActiveAt,
             autoLockTimeout: envelope.autoLockTimeout,
-            expiresAt: envelope.expiresAt,
+            expiresAt: envelope.idleExpiresAt,
+            leaseState: envelope.leaseState,
             autoLockNever: chromeHarness.stores.session.autoLockNever,
           },
           {
-            version: 2,
+            version: 1,
             startedAt: sessionStartedAt,
             autoLockTimeout: AUTO_LOCK_TIMEOUT,
             expiresAt: sessionStartedAt + AUTO_LOCK_TIMEOUT,
+            leaseState: "idle",
             autoLockNever: false,
           },
         );
@@ -142,10 +145,10 @@ test("15-minute passkey sessions survive a two-minute worker restart without ext
         assert.equal(session.isWalletUnlocked(), true);
         assert.equal(
           (
-            chromeHarness.stores.session.encryptedSessionVaultKey as {
-              expiresAt: number;
+            chromeHarness.stores.session.encryptedSessionCapabilities as {
+              idleExpiresAt: number;
             }
-          ).expiresAt,
+          ).idleExpiresAt,
           sessionStartedAt + AUTO_LOCK_TIMEOUT,
         );
 

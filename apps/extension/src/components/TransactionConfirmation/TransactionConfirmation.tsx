@@ -18,11 +18,7 @@ import { ForceInclusionScreen, TransactionSentScreen } from "./StateScreens";
 import { TransactionContext } from "./TransactionContext";
 import { TransactionDecisionSummary } from "./TransactionDecisionSummary";
 import { getDecodedActionFallback } from "./transactionPresentation";
-import {
-  TransactionEstimatedChangesTitle,
-  TransactionFinancialImpact,
-  TransactionOutcome,
-} from "./TransactionSummary";
+import { PrivacyShieldRequestContext, PrivacyShieldTransactionOutcome, TransactionEstimatedChangesTitle, TransactionFinancialImpact, TransactionOutcome } from "./TransactionSummary";
 import type { TransactionConfirmationProps } from "./types";
 import { useTransactionActions } from "./useTransactionActions";
 import { useTransactionBatchEligibility } from "./useTransactionBatchEligibility";
@@ -62,6 +58,8 @@ function TransactionConfirmation({
   const isErc7715PermissionRevoke =
     !!txRequest.erc7715PermissionRevokeMeta;
   const replacement = txRequest.replacement;
+  const isPrivacyShield = !!txRequest.privacyShieldMeta;
+  const isPrivacyDirectUnshield = !!txRequest.privacyUnshieldMeta;
   const [decodedFunctionName, setDecodedFunctionName] = useState<
     string | undefined
   >();
@@ -163,6 +161,10 @@ function TransactionConfirmation({
     ? replacement.kind === "cancel"
       ? "Cancel transaction"
       : "Speed up transaction"
+    : isPrivacyShield
+      ? "Review shield"
+      : isPrivacyDirectUnshield
+        ? "Review unshield"
     : is7702Revoke
     ? "Revoke smart account"
     : is7702SetDelegate
@@ -245,7 +247,9 @@ function TransactionConfirmation({
         ) : undefined
       }
       outcome={
-        <TransactionOutcome
+        isPrivacyShield ? (
+          <PrivacyShieldTransactionOutcome txRequest={txRequest} />
+        ) : <TransactionOutcome
           txRequest={txRequest}
           iconChipBg={iconChipBg}
           isInternalWalletChan={metadata.isInternalWalletChan}
@@ -273,7 +277,9 @@ function TransactionConfirmation({
         )
       }
       context={
-        <TransactionContext
+        isPrivacyShield ? (
+          <PrivacyShieldRequestContext />
+        ) : <TransactionContext
           txRequest={txRequest}
           actionLabel={decodedActionFallback}
           explorer={explorer}

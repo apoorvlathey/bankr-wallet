@@ -8,8 +8,11 @@ Focused boundaries in this directory are:
 - `batchRequestStatusHandlers.ts`: pending-call controls and origin-scoped status.
 - `bundleStatusStorage.ts`: locked released `bundleStatuses` repository,
   retention, and bounded history.
-- `batchBankrExecution.ts`: pinned Bankr confirmation and terminalization.
-- `batchLocalConfirmation.ts`: PK/seed key restoration and path selection.
+- `batchBankrExecution.ts`: pinned Bankr confirmation and path selection.
+- `batchBankrProcessing.ts`: Bankr submission, receipt projection, and
+  terminalization after the final authorization boundary.
+- `batchLocalConfirmation.ts`: PK/seed confirmation and path selection.
+- `batchLocalKeyRecovery.ts`: exact-account master/agent/Never key recovery.
 - `batchForceInclusionPolicy.ts`: OP Stack-only local batch eligibility and
   lazy processor selection; Arbitrum remains single-transaction-only.
 - `batchSequentialExecution.ts`: non-atomic nonce/broadcast state machine.

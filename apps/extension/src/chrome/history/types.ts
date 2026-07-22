@@ -5,6 +5,19 @@ import type {
 } from "../requests/pendingTxStorage";
 import type { ForceInclusionMeta } from "./forceInclusionTypes";
 export type { ForceInclusionMeta } from "./forceInclusionTypes";
+import type { ClearSignedMeta } from "./clearSignedTypes";
+import type {
+  PrivacyRagequitHistoryMeta,
+  PrivacyShieldHistoryMeta,
+  PrivacyUnshieldHistoryMeta,
+} from "./privacyTypes";
+export type { ClearSignedMeta } from "./clearSignedTypes";
+export type {
+  PrivacyRagequitHistoryMeta,
+  PrivacyShieldHistoryMeta,
+  PrivacyUnshieldHistoryMeta,
+} from "./privacyTypes";
+
 export type TxStatus = "processing" | "pending" | "success" | "failed" | "dropped";
 export interface SwapMeta {
   sellTokenSymbol: string;
@@ -17,33 +30,6 @@ export interface TransferMeta {
   amount: string;
   symbol: string;
   tokenLogo: string | null;
-}
-
-/** Submission-time clear-signing snapshot. Activity can render the reviewed
- * intent without re-running decoders or remote name lookups. Keeping the whole
- * snapshot optional preserves entries released before clear signing. */
-export interface ClearSignedMeta {
-  kind: "approve" | "transfer" | "nativeSend" | "erc7730";
-  /** Formatted decimal amount; omitted for descriptor-only ERC-7730 calls. */
-  amount?: string;
-  /** Token/native symbol captured by the confirmation surface. */
-  tokenSymbol?: string;
-  /** Decimal precision captured with the formatted amount. */
-  tokenDecimals?: number;
-  tokenLogo?: string | null;
-  /** ERC-20 contract for approve/transfer records. */
-  tokenAddress?: string;
-  /** Approve amount at or above 2^128. */
-  isInfinite?: boolean;
-  /** Zero-value allowance revoke. */
-  isRevoke?: boolean;
-  /** Spender, recipient, or called contract. */
-  counterparty?: string;
-  counterpartyLabel?: string;
-  counterpartyEns?: string;
-  /** ERC-7730 descriptor intent and contract label. */
-  intent?: string;
-  contractName?: string;
 }
 
 /** One ERC-20 transfer involving the observed account. Internal pool routing
@@ -185,4 +171,10 @@ export interface CompletedTransaction {
   replacement?: TransactionReplacementMeta;
   replacedByTxId?: string;
   accountId?: string;
+  /** No note, commitment, label, index, proof, or recovery material. */
+  privacyShieldMeta?: PrivacyShieldHistoryMeta;
+  /** No operation ID, commitment, label, proof, or recovery material. */
+  privacyRagequitMeta?: PrivacyRagequitHistoryMeta;
+  /** The encrypted Unshield operation owns its Private Activity presentation. */
+  privacyUnshieldMeta?: PrivacyUnshieldHistoryMeta;
 }

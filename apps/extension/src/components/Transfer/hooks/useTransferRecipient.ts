@@ -13,14 +13,16 @@ interface UseTransferRecipientOptions {
   accounts?: Account[];
   fromAddress: string;
   chainId: number;
+  initialRecipient?: string;
 }
 
 export function useTransferRecipient({
   accounts,
   fromAddress,
   chainId,
+  initialRecipient = "",
 }: UseTransferRecipientOptions) {
-  const [recipient, setRecipient] = useState("");
+  const [recipient, setRecipient] = useState(initialRecipient);
   const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
   const [recipientSearch, setRecipientSearch] = useState("");
   const [acknowledgeContract, setAcknowledgeContract] = useState(false);

@@ -9,6 +9,7 @@ import {
 import { withStorageLock } from "../storageLock";
 import { clearHistoryDatabase } from "../history/database";
 import { clearHistoryNftMetadataCache } from "../history/nftMetadataCache";
+import { deletePrivacyOperationsDatabase } from "../privacy/operations/repository";
 
 export const ONBOARDING_INITIALIZATION_KEY = "onboardingInitialization";
 export const ONBOARDING_LOCK_KEY = `local:${ONBOARDING_INITIALIZATION_KEY}`;
@@ -23,6 +24,7 @@ const AUTHORITATIVE_WALLET_LOCAL_STORAGE_KEYS = [
   "passkeyUnlock",
   "pkVault",
   "mnemonicVault",
+  "privacyVault",
   "accounts",
   "seedGroups",
 ] as const;
@@ -88,6 +90,7 @@ export async function clearNonAuthoritativeWalletResidue(
     clearHistoryNftMetadataCache(),
     chrome.storage.local.remove(localKeys),
     chrome.storage.sync.remove([...ONBOARDING_IDENTITY_SYNC_KEYS]),
+    deletePrivacyOperationsDatabase(),
   ]);
 }
 
@@ -182,6 +185,7 @@ export async function rollbackMarkedInitialization(
       clearHistoryNftMetadataCache(),
       chrome.storage.local.remove(getWalletLocalStorageKeysToRemove(allLocal)),
       chrome.storage.sync.remove([...WALLET_SYNC_STORAGE_KEYS]),
+      deletePrivacyOperationsDatabase(),
     ]);
     return true;
   });

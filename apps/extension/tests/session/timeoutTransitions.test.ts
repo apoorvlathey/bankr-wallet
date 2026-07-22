@@ -39,7 +39,7 @@ test("timeout initialization preserves explicit zero and destroys implicit Never
   }
 });
 
-test("timed to Never persistence preserves Bankr, private-key, and seed sessions", async (t) => {
+test("timed to Never revokes restoration without locking live Bankr, private-key, and seed sessions", async (t) => {
   const storage = installNativeSessionStorage({
     sync: { autoLockTimeout: 300_000 },
   });
@@ -94,10 +94,11 @@ test("timed to Never persistence preserves Bankr, private-key, and seed sessions
 
         assert.equal(await session.setAutoLockTimeout(0), true);
         assert.equal(storage.sync.autoLockTimeout, 0);
-        assert.equal(storage.session.autoLockNever, true);
-        assert.equal(storage.session.passwordType, entry.passwordType);
-        assert.equal(await session.getSessionPassword(), entry.password);
-        assert.equal(typeof session.getCurrentSessionId(), "string");
+        assert.deepEqual(storage.session, {});
+        assert.equal(storage.local.sessionEncKey, undefined);
+        assert.equal(session.getCachedPassword(), entry.password);
+        assert.equal(session.getPasswordType(), entry.passwordType);
+        assert.equal(session.getCurrentSessionId(), null);
 
         assert.equal(await session.setAutoLockTimeout(300_000), true);
         assert.deepEqual(storage.session, {});

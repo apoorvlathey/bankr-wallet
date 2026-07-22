@@ -18,11 +18,15 @@ import type { TransferRecipient } from "./hooks/useTransferRecipient";
 interface RecipientSectionProps {
   recipientState: TransferRecipient;
   explorerUrl: string;
+  label?: string;
+  chooserLabel?: string;
 }
 
 export function RecipientSection({
   recipientState,
   explorerUrl,
+  label = "Recipient",
+  chooserLabel = "My contacts",
 }: RecipientSectionProps) {
   const { tokens } = useTheme();
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -68,7 +72,7 @@ export function RecipientSection({
             fontWeight="600"
             color="fg.secondary"
           >
-            Recipient
+            {label}
           </Text>
           {hasRecipientChoices && (
             <Button
@@ -81,7 +85,7 @@ export function RecipientSection({
               rightIcon={<ChevronRightIcon />}
               onClick={openRecipientPicker}
             >
-              My contacts
+              {chooserLabel}
             </Button>
           )}
         </HStack>

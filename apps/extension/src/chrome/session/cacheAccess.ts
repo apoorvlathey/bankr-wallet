@@ -1,11 +1,9 @@
 /** Expiry-aware selectors over one in-memory authorization generation. */
 
 import type { DecryptedEntry, PasswordType } from "../types";
-import {
-  getEffectiveCachedAutoLockTimeout,
-} from "./autoLockPolicy";
+import { getEffectiveCachedAutoLockTimeout } from "./autoLockPolicy";
 import * as memoryCache from "./inMemoryCache";
-import type { CachedMnemonicKey } from "./inMemoryCache";
+import type { CachedMnemonicKey, CachedPrivacyKey } from "./inMemoryCache";
 
 function effectiveTimeout(): number {
   return getEffectiveCachedAutoLockTimeout();
@@ -29,6 +27,10 @@ export function getCachedVaultKey(): CryptoKey | null {
 
 export function getCachedMnemonicKey(): CachedMnemonicKey | null {
   return memoryCache.getCachedMnemonicKey(effectiveTimeout());
+}
+
+export function getCachedPrivacyKey(): CachedPrivacyKey | null {
+  return memoryCache.getCachedPrivacyKey(effectiveTimeout());
 }
 
 export function getPasswordType(): PasswordType | null {

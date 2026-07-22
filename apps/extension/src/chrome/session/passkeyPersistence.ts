@@ -1,4 +1,4 @@
-/** Native browser-session persistence for a passkey-unwrapped vault capability. */
+/** Native passkey session persistence with released V1/V2 migration compatibility. */
 import { arrayBufferToBase64, decodeBase64Exact } from "../cryptoUtils";
 import {
   decodePasskeySessionCredential,
@@ -6,7 +6,6 @@ import {
   PASSKEY_SESSION_CREDENTIAL_VERSION,
   PASSKEY_SESSION_IV_BYTES,
   PASSKEY_SESSION_VAULT_KEY_BYTES,
-  type DecodedPasskeySessionCredential,
   type EncryptedPasskeySessionCredentialV2,
 } from "./passkeyCredentialRecord";
 import {

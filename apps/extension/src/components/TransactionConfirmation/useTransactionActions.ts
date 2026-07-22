@@ -74,6 +74,12 @@ export function useTransactionActions({
     void playInteractionSound("transactionConfirm");
     setState("submitting");
     setError("");
+    const isPrivacyOperation = !!(
+      txRequest.privacyShieldMeta ||
+      txRequest.privacyRagequitMeta ||
+      txRequest.privacyUnshieldMeta
+    );
+    const shouldForceInclusion = forceInclusion && !isPrivacyOperation;
     const messageType =
       accountType === "impersonator" && canSendImpersonatedTransaction
         ? "confirmImpersonatedTransaction"
@@ -85,15 +91,21 @@ export function useTransactionActions({
     const functionName = txRequest.replacement?.kind === "cancel"
       ? "Cancel Transaction"
       : txRequest.replacement?.originalFunctionName ??
-        (isErc7715PermissionRevoke
-          ? "Revoke delegated permission"
-          : is7702Revoke
-            ? "Revoke smart-account delegation"
-            : is7702SetDelegate
-              ? "Set smart-account delegation"
-              : !tx.to
-                ? "Contract Deployment"
-                : decodedFunctionName || undefined);
+        (txRequest.privacyRagequitMeta
+          ? "Recover Shield balance"
+          : txRequest.privacyUnshieldMeta
+            ? "Receiver-paid Unshield"
+            : txRequest.privacyShieldMeta
+              ? "Shield ETH"
+              : isErc7715PermissionRevoke
+                ? "Revoke delegated permission"
+                : is7702Revoke
+                  ? "Revoke smart-account delegation"
+                  : is7702SetDelegate
+                    ? "Set smart-account delegation"
+                    : !tx.to
+                      ? "Contract Deployment"
+                      : decodedFunctionName || undefined);
 
     chrome.runtime.sendMessage(
       {
@@ -102,14 +114,17 @@ export function useTransactionActions({
         password: "",
         functionName,
         ...(gasOverrides ? { gasOverrides } : {}),
-        ...(forceInclusion ? { forceInclusion: true } : {}),
+        ...(shouldForceInclusion ? { forceInclusion: true } : {}),
         ...(nonce !== null ? { nonce } : {}),
-        feePaymentToken: feePaymentToken === "native" ? "native" : "token",
+        feePaymentToken:
+          isPrivacyOperation || feePaymentToken === "native"
+            ? "native"
+            : "token",
         ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
       },
       (result: { success: boolean; error?: string }) => {
         if (result.success) {
-          if (forceInclusion) setState("forceInclusion");
+          if (shouldForceInclusion) setState("forceInclusion");
           else if (isInSidePanel) onConfirmed();
           else {
             setState("sent");

@@ -79,3 +79,17 @@ test("back navigation restores the beneath layer before the exit settles", async
   assert.ok(preRevealRestore < exitSettlement);
   assert.doesNotMatch(source, /restoreDestinationFocus[\s\S]*restoreScroll/);
 });
+
+test("forward navigation releases focus before making the prior layer inert", async () => {
+  const source = await readFile(
+    new URL("../../src/components/ScreenTransition.tsx", import.meta.url),
+    "utf8",
+  );
+  const blur = source.indexOf("activeElement.blur()");
+  const inert = source.indexOf("const inertProps");
+
+  assert.ok(blur >= 0);
+  assert.ok(blur < inert);
+  assert.match(source, /const inertProps = isCovered/);
+  assert.doesNotMatch(source, /aria-hidden=\{isCovered/);
+});

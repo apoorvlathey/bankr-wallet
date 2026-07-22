@@ -182,7 +182,7 @@ export function buildAssetDisplayRows(
 
 export function getTokensFromRows(rows: AssetDisplayRow[]): PortfolioToken[] {
   return rows.flatMap((row) =>
-    row.kind === "token" ? [row.token] : row.tokens,
+    row.kind === "token" ? [row.token] : row.kind === "aggregate" ? row.tokens : [],
   );
 }
 

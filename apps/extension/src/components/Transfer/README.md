@@ -32,6 +32,8 @@ existing direct and lazy imports retain the same default-export contract.
 - `model/sendEntry.ts` keeps Send entry semantics explicit: the homepage
   shortcut starts on Ethereum ETH, while an Assets-row entry preserves the
   clicked token and chain.
+- The public Send token picker never receives Shielded ETH. Private Assets owns
+  that identity and exposes only Shield, Unshield, and Privacy Pools Activity.
 - `model/recipientSuggestions.ts` owns deterministic wallet/contact matching,
   cached-public-name matching, relevance ranking, and stored-order tie breaking
   for the recipient combobox. Focusing an empty recipient input exposes every
