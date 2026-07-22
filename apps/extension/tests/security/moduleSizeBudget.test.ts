@@ -208,6 +208,7 @@ const budgets: Record<string, number> = {
   "simulation/simulatorOverride.ts": 40,
   "simulation/erc7715Preview.ts": 280,
   "simulation/singleSimulation.ts": 300,
+  "simulation/batchCandidates.ts": 180,
   "simulation/batchSimulation.ts": 280,
   "simulation/ethSimulateBatch.ts": 220,
   "simulation/nonAtomicBatch.ts": 140,

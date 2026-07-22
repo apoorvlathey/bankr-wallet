@@ -42,13 +42,13 @@ export function mergeSafeSimulationResults(
 export async function simulateSafeAssetChanges(
   calls: { to?: string; data?: string; value?: string }[],
   safeAddress: string,
-  executionTx: SafeExecutionTx,
+  executionTx: SafeExecutionTx | undefined,
   chainId: number,
 ): Promise<SimulationResult> {
-  if (
+  if (executionTx && (
     executionTx.chainId !== chainId ||
     executionTx.to?.toLowerCase() !== safeAddress.toLowerCase()
-  ) {
+  )) {
     return {
       txSuccess: true,
       nativeChange: null,
@@ -59,8 +59,13 @@ export async function simulateSafeAssetChanges(
     };
   }
 
+  const assetPromise = simulateBatchAssetChanges(calls, safeAddress, chainId, {
+    candidateDiscovery: "directCalls",
+  });
+  if (!executionTx) return assetPromise;
+
   const [assetResult, executionResult] = await Promise.all([
-    simulateBatchAssetChanges(calls, safeAddress, chainId),
+    assetPromise,
     simulateAssetChanges(executionTx, executionTx.from),
   ]);
   return mergeSafeSimulationResults(assetResult, executionResult);

@@ -6360,6 +6360,17 @@ operation. Intermediate `authorizing`, `publishing`, and execution-claim
 storage writes therefore retain the Approve/Execute loader instead of briefly
 falling through to a Back action.
 
+Safe request asset simulation is selected explicitly for every proposal; it
+does not infer Safe identity from whether quorum has already made an outer
+execution request available. Candidate discovery traces each reviewed
+underlying call directly from the Safe and supplements the access lists with
+bounded calldata-derived token addresses. It never treats a Safe proxy's
+non-empty response to an unsupported ERC-7821 `execute` selector as proof that
+the underlying assets were visited. Before quorum, this Safe-address pass owns
+the estimated deltas. Once quorum exists, the same deltas are merged with an
+exact signed `execTransaction` simulation, whose outer-envelope result remains
+the authoritative revert verdict.
+
 Reject remains available beside the primary action through quorum. With no
 collected signature it terminalizes the unsigned request locally. Once any EOA
 or visible unsupported confirmation exists, `startSafeProposalRejection`

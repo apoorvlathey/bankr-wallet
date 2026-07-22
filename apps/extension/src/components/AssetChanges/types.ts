@@ -8,6 +8,8 @@ export interface BatchAssetChangeCall {
 
 export interface AssetChangesDisplayProps {
   txRequest: PendingTxRequest;
+  /** Explicit Safe identity; Safe routing must not depend on execution readiness. */
+  safeAddress?: string;
   /** Exact outer Safe execution request used to determine the revert verdict. */
   safeExecutionRequest?: PendingTxRequest;
   /** Remove the panel's duplicate disclosure header inside a titled parent section. */

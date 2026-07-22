@@ -2354,12 +2354,18 @@ Quick reference for which files to examine based on what area of security you're
    background recognizes only literal boolean `true` and still performs every
    account, auth-epoch, quorum, nonce, configuration, fee, serialization, and
    duplicate-submit check before broadcast.
-   Review-time asset simulation also treats the exact signed outer envelope as
-   the revert authority. A separate Safe-address bytecode pass may contribute
+   Every Safe proposal explicitly uses the trusted-UI-only Safe simulation
+   route, including unsigned proposals that do not yet have an outer execution
+   request. Its asset-delta pass discovers candidates by tracing the reviewed
+   underlying calls directly and by bounded calldata extraction; it never
+   accepts a Safe proxy's non-empty access list for an unsupported ERC-7821
+   `execute` selector as evidence that call assets were visited. Once quorum
+   exists, review-time simulation treats the exact signed outer envelope as
+   the revert authority. The separate Safe-address bytecode pass may contribute
    asset deltas, but cannot override that verdict because installing simulator
    code at the Safe necessarily replaces the proxy runtime and makes Safe
-   self-calls unrepresentative. The composite route is trusted-UI-only,
-   read-only, and carries no credential or signing capability.
+   self-calls unrepresentative. The composite route is read-only and carries
+   no credential or signing capability.
 
 8. **Signed rejection is onchain only.** Local cancellation rejects only a
    proposal with zero supported and zero unsupported collected confirmations.

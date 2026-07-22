@@ -63,6 +63,20 @@ test("simulation messages preserve single, atomic-batch, and non-atomic paths", 
     "simulateBatchAssetChangesNonAtomic",
   );
 
+  assert.deepEqual(
+    buildSimulationMessage({
+      txRequest,
+      batchCalls: calls,
+      safeAddress: "0xfrom",
+    }),
+    {
+      type: "simulateSafeAssetChanges",
+      calls,
+      safeAddress: "0xfrom",
+      chainId: 8453,
+    },
+  );
+
   const safeExecutionRequest = {
     id: "safe-execution:1",
     tx: {
@@ -74,7 +88,12 @@ test("simulation messages preserve single, atomic-batch, and non-atomic paths", 
     },
   } as Parameters<typeof buildSimulationMessage>[0]["txRequest"];
   assert.deepEqual(
-    buildSimulationMessage({ txRequest, batchCalls: calls, safeExecutionRequest }),
+    buildSimulationMessage({
+      txRequest,
+      batchCalls: calls,
+      safeAddress: "0xfrom",
+      safeExecutionRequest,
+    }),
     {
       type: "simulateSafeAssetChanges",
       calls,

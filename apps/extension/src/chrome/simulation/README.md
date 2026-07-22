@@ -29,16 +29,21 @@ simulation modules:
 - `erc7715Preview.ts` decodes the narrow safe ERC-7715 redemption preview.
 - `singleSimulation.ts` owns access-list discovery, retry overrides, and the
   single-call `eth_call` execution order.
+- `batchCandidates.ts` owns bounded batch candidate discovery. ERC-7821
+  accounts trace their sequential `execute` path; Safe proposals trace the
+  underlying calls directly and supplement them with calldata candidates so a
+  reverted-but-nonempty Safe fallback access list cannot hide token deltas.
 - `batchSimulation.ts` owns atomic batch access-list fallback and bytecode
   execution.
 - `ethSimulateBatch.ts` owns the bounded `eth_simulateV1` RPC path and support
   cache.
 - `nonAtomicBatch.ts` starts both non-atomic paths together and applies their
   established result precedence.
-- `safeSimulation.ts` combines Safe-address asset-delta capture with an exact
-  signed `execTransaction` simulation. The exact outer envelope owns the
-  revert verdict because simulator injection at a Safe address replaces its
-  proxy runtime and cannot faithfully execute Safe self-calls.
+- `safeSimulation.ts` always uses Safe-aware direct-call discovery for
+  Safe-address asset deltas. Once enough signatures exist, it also simulates
+  the exact signed `execTransaction`; that outer envelope owns the revert
+  verdict because simulator injection at a Safe address replaces its proxy
+  runtime and cannot faithfully execute Safe self-calls.
 
 Dependency direction is `types/constants/pure normalization -> metadata and
 state-override helpers -> execution paths -> txSimulation facade`. These

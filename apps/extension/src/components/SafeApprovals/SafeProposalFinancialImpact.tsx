@@ -45,6 +45,7 @@ export function SafeProposalFinancialImpact({
       <AssetChangesDisplay
         txRequest={reviewRequest}
         batchCalls={proposal.calls}
+        safeAddress={proposal.safeAddress}
         safeExecutionRequest={executionRequest ?? undefined}
         embedded
         onRevertedChange={onRevertedChange}

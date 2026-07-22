@@ -40,6 +40,7 @@ test("focused simulation modules do not depend on coordinator or authority domai
     "simulation/simulatorOverride.ts",
     "simulation/erc7715Preview.ts",
     "simulation/singleSimulation.ts",
+    "simulation/batchCandidates.ts",
     "simulation/batchSimulation.ts",
     "simulation/ethSimulateBatch.ts",
     "simulation/nonAtomicBatch.ts",

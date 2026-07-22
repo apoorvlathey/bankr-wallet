@@ -41,20 +41,22 @@ export function buildSimulationMessage({
   txRequest,
   batchCalls,
   isNonAtomic,
+  safeAddress,
   safeExecutionRequest,
 }: Pick<
   AssetChangesDisplayProps,
   | "txRequest"
   | "batchCalls"
   | "isNonAtomic"
+  | "safeAddress"
   | "safeExecutionRequest"
 >) {
-  if (batchCalls && safeExecutionRequest) {
+  if (batchCalls && safeAddress) {
     return {
       type: "simulateSafeAssetChanges",
       calls: batchCalls,
-      safeAddress: txRequest.tx.from,
-      executionTx: safeExecutionRequest.tx,
+      safeAddress,
+      ...(safeExecutionRequest ? { executionTx: safeExecutionRequest.tx } : {}),
       chainId: txRequest.tx.chainId,
     };
   }

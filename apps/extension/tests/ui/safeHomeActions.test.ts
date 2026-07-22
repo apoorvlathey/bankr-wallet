@@ -392,6 +392,7 @@ test("Safe request review uses the standard confirmation grammar without passwor
   assert.match(screen, /<EstimatedChangesHeading/);
   assert.match(screen, /<SafeProposalFinancialImpact/);
   assert.match(screen, /executionRequest=\{executionRequest\}/);
+  assert.match(financialImpact, /safeAddress=\{proposal\.safeAddress\}/);
   assert.match(financialImpact, /safeExecutionRequest=\{executionRequest \?\? undefined\}/);
   assert.match(actions, /type: "startSafeProposalRejection"/);
   assert.match(screen, /chainId: proposal\.chainId/);
