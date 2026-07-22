@@ -442,6 +442,10 @@ test("receiver-paid Unshield enters Private Activity and keeps the normal transa
   assert.match(activitySource, /addressLabels=\{addressLabels\}/);
   assert.match(itemSource, /getLiveActivityAddressLabel\(operation\.recipient, addressLabels\)/);
   assert.match(itemSource, /SHIELDED_ETH_EXPLORER_URL/);
+  assert.match(
+    itemSource,
+    /operation\.state === "submitted"[\s\S]*?<ActivityStatusLabel label="Pending" tone="info" isPending/,
+  );
   assert.equal(
     unshieldStatusCopy("awaiting_wallet_confirmation", "direct"),
     "Waiting for wallet confirmation",

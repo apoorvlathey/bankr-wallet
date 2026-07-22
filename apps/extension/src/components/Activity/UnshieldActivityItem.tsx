@@ -14,6 +14,7 @@ import {
   getLiveActivityAddressLabel,
 } from "./activityIdentityModel";
 import { formatTimeAgo } from "./activityModel";
+import { ActivityStatusLabel } from "./ActivityStatus";
 
 interface UnshieldActivityItemProps {
   operation: UnshieldOperation;
@@ -134,18 +135,22 @@ export default function UnshieldActivityItem({
             To {recipient} · {SHIELDED_ETH_NETWORK_NAME}
           </Text>
           <HStack flexShrink={0} spacing={1}>
-            <Text
-              fontSize="2xs"
-              fontWeight="600"
-              color={failed
-                ? "status.error.emphasis"
-                : complete
-                  ? "status.success.emphasis"
-                  : "status.warning.emphasis"}
-              noOfLines={1}
-            >
-              {unshieldStatusCopy(operation.state, operation.method, operation.errorCode)}
-            </Text>
+            {operation.state === "submitted" ? (
+              <ActivityStatusLabel label="Pending" tone="info" isPending />
+            ) : (
+              <Text
+                fontSize="2xs"
+                fontWeight="600"
+                color={failed
+                  ? "status.error.emphasis"
+                  : complete
+                    ? "status.success.emphasis"
+                    : "status.warning.emphasis"}
+                noOfLines={1}
+              >
+                {unshieldStatusCopy(operation.state, operation.method, operation.errorCode)}
+              </Text>
+            )}
             <Text fontSize="2xs" color="fg.muted">·</Text>
             <Text fontSize="2xs" color="fg.muted" flexShrink={0}>
               {formatTimeAgo(operation.createdAt, Date.now())}
