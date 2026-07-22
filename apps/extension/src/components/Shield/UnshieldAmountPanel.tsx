@@ -81,7 +81,7 @@ export default function UnshieldAmountPanel({
       : pendingWei > 0n
         ? `${formatShieldWei(pendingWei)} ETH is still awaiting its check`
         : confirmedWei > 0n
-          ? "No private balance is ready yet"
+          ? "Waiting for Unshield to confirm"
           : "No Shielded ETH yet";
 
   return (
