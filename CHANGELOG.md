@@ -12,34 +12,141 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ### Added
 
-- **Biometric/passkey unlock.** Users can wrap the existing vault key with a local WebAuthn PRF credential, set it up from Security settings or the unlock screen, and unlock Bankr API, Private Key, and Seed Phrase accounts without typing the master password each time.
+- **Biometric/passkey unlock.** A local WebAuthn PRF credential can unlock
+  WalletChan without storing the master password, including before Bankr API,
+  Private Key, Seed Phrase, and Ledger signing. Timed and Never sessions,
+  automatic unlock prompts, and passwordless local-account setup are included.
+- **Origin-bound dapp connections.** `eth_requestAccounts` now opens an explicit
+  approval where users choose the accounts shared with a site. A new home dapp
+  dock shows the active site, its assigned account and network, and disconnect
+  controls, while per-tab routing prevents one site's selection from leaking
+  into another.
+- **Interaction sounds.** Optional sound cues now cover navigation, sheets,
+  confirmations, portfolio interactions, and transaction outcomes, with a
+  Settings toggle and an audible preview when enabled.
+- **Address book.** Users can add, edit, delete, search, and reorder named
+  contacts with name-service identities and avatars, then reuse those contacts
+  directly from Send recipient discovery.
+- **Portfolio display controls.** New synced preferences can combine the same
+  asset across networks and automatically follow the connected dapp's network.
+- **Saved RPC endpoints.** Chain settings can keep multiple named RPC endpoints,
+  switch between them, edit provider labels, show provider favicons, and accept
+  local-development URL shorthand.
+- **Developer RPC impersonation.** A per-endpoint developer switch can forward
+  reviewed unsigned transactions and swaps from view-only accounts to an
+  explicitly enabled local custom RPC; the wallet never signs for the
+  impersonated address.
+- **Expanded built-in network catalog.** Abstract, Avalanche, Berachain, Blast,
+  HyperEVM, Ink, Linea, Mantle, Mode, Monad, Plasma, Scroll, Sonic, Tempo,
+  World Chain, and ZKsync Era are now built in, alongside 26 native
+  hidden-by-default testnet entries that inherit their mainnet identity. Chain
+  capabilities were refreshed across the catalog, including EIP-7702 support
+  on Robinhood Chain.
+- **Expanded dapp3 Browser.** The browser can search a dapp directory,
+  open ordinary HTTPS sites, manage connected dapps, save and reorder favorites,
+  promote recently resolved sites, and show when an ENS contenthash was last
+  updated.
+- **Arbitrum force inclusion.** Eligible Arbitrum transactions can use the
+  delayed inbox and track the L1 delivery through optional sequencer force
+  inclusion from the normal review and Activity surfaces.
+- **Token-funded network fees.** Eligible Bankr API, Private Key, and Seed Phrase
+  accounts can pay gas with supported ERC-20 tokens through reviewed Pimlico
+  quotes for transactions, batches, swaps, and Safe execution. Ledger remains
+  native-gas-only.
+- **Ledger hardware wallets.** Users can connect over Chrome WebHID, browse
+  derivation paths and addresses, import Ledger accounts, and approve
+  transactions or messages on-device without private keys entering the
+  extension.
+- **Pending transaction controls.** Activity can prepare reviewed Speed Up and
+  Cancel replacements for the oldest pending Private Key, Seed Phrase, and
+  Ledger transaction. These account types can also review or edit the address
+  nonce before signing.
+- **Safe multisig accounts.** WalletChan can discover and import verified Safe
+  accounts owned by Bankr API, Private Key, or Seed Phrase accounts, surface
+  pending proposals, collect owner approvals, execute at quorum, create
+  canonical rejection proposals, and use Safe-aware Send, Swap, Activity, and
+  security views across supported networks.
+- **In-wallet WCHAN staking.** Users can stake and unstake WCHAN on Base, claim
+  WETH rewards, review the live APY and seven-day fee window, and batch approval
+  plus deposit when supported. All four signing wallet types are supported;
+  view-only accounts can inspect balances without submitting actions.
+- **Private wallet powered by Privacy Pools.** Bankr API, Private Key, and Seed
+  Phrase accounts can Shield Ethereum ETH into a private portfolio and Unshield
+  through a private relayer, a recipient-paid transaction, or public recovery.
+  The flow includes proof and compliance progress, private Activity, partial
+  withdrawals, recipient account creation, and master-gated recovery backup and
+  restore; Ledger and view-only accounts cannot submit privacy mutations.
 
 ### Changed
 
+- The extension has an end-to-end Warm Midnight visual overhaul across Home,
+  assets, account controls, Settings, action sheets, request surfaces, and
+  fullscreen/sidepanel layouts, with a responsive animated mascot and shared
+  screen, picker, field, and action primitives.
+- Transaction, batch, signature, and ERC-7715 permission reviews now lead with
+  plain-language intent, dapp and signer identity, estimated asset changes, and
+  sticky decision controls, while technical payloads, calldata, nonce, gas,
+  force-inclusion, and Tenderly tools move into clearer advanced disclosures.
+- Send and Swap/Bridge use compact amount cards, percentage sliders, shared
+  searchable network and token pickers, improved recipient discovery, richer
+  contract-recipient warnings, and a dedicated final review with pinned signer
+  and fee controls.
+- Activity is now a dated, chain-aware ledger with clearer dapp, contact, Safe,
+  bridge, privacy, replacement, and status identities. History is paginated,
+  large datasets load progressively, and transaction details are resolved only
+  when opened.
+- Onboarding, Add Account, account selection, account settings, and chain/token
+  management now use dedicated full-screen flows with clearer security gates,
+  searchable Settings, and a streamlined Quick Actions hub.
+- Large portfolios now render and verify holdings progressively, keep active
+  balances and charts stable during refreshes, and prioritize funded networks
+  and relevant assets in selectors.
 - Security settings now place Auto-Lock immediately after Change Password and Agent Password at the bottom.
 - New and changed passwords now require at least 8 characters and reject a
   small set of obviously guessable values; existing legacy passwords remain
   unlockable.
 - Missing or invalid auto-lock settings now use a finite 15-minute default.
   An existing explicit Never selection remains unchanged.
+- Signature approvals no longer show a redundant success toast after the
+  request has already completed.
 
 ### Fixed
 
-- Passkey setup reuses the PRF output from credential creation when available, avoiding an unnecessary second biometric prompt.
-- Closing and reopening the popup after a manual lock once again auto-prompts for biometric unlock, while already-open wallet surfaces remain suppressed.
-- V2 biometric sessions can create, import, preview, and derive seed-phrase
-  accounts without caching the master password. Existing V1 passkeys and
-  password-encrypted phrase vaults remain compatible.
 - Ordered Bankr swap submissions stop after a failed, reverted, or
   outcome-unknown leg instead of continuing with later transactions.
+- Native-token MAX sends reserve a conservative network fee instead of trying
+  to transfer the account's entire balance.
+- Swap selectors now stay aligned with actual 0x support and immediately show
+  the selected sell asset while its catalog and onchain data refresh.
+- Dapp-requested network additions once again return through the injected
+  provider correctly, including when re-enabling an existing hidden chain.
+- Sidepanel request handling now works reliably in Brave, keeps short viewports
+  usable, opens fullscreen transaction and connection requests in the selected
+  sidepanel mode, and restores the popup when leaving sidepanel mode.
+- RPC issue notices wait for persistent failures and use a compact layout,
+  reducing warnings caused by brief rate limits or refresh races.
+- Long random SIWE nonces are no longer mislabeled as weak while short,
+  patterned, and low-entropy values still trigger a warning.
+- DeFi protocol artwork and chain-switch notification icons now render through
+  safe raster fallbacks instead of disappearing on unsupported image formats.
+- Rejecting a pending transaction returns Home to Activity instead of the wrong
+  tab, and account/settings back navigation preserves its intended destination.
 
 ### Security
 
 - Passkey payloads and stored wrappers now fail closed on malformed cryptographic sizes, stale WebAuthn ceremonies cannot overwrite newer auth state, and auth mutations/session restoration are serialized so lock, password rotation, reset, and factor changes win deterministically.
-- Passkey unlock hydrates the same vault-key-backed caches used by all three wallet types without storing the master password or exposing WebAuthn-derived material outside extension pages.
+- Passkey unlock hydrates the vault-key-backed Bankr API, Private Key, and Seed
+  Phrase credential caches without storing the master password or exposing
+  WebAuthn-derived material outside extension pages.
 - Key/phrase reveal and account/permission mutations now recheck the exact
   master session and pinned account at the final effect boundary; pending dapp
   and WalletConnect work is origin-, account-, chain-, and lifecycle-bound.
+- Dapp connection, provider, and WalletConnect requests now derive authority
+  from the browser sender, enforce exact origin/account/chain bindings, and keep
+  impersonator prompts reject-only unless the user explicitly enables a local
+  developer RPC endpoint.
+- Bankr batch and swap execution binds the exact account and credential
+  generation before validation, then rechecks that binding before submission.
 - WalletConnect reset rotates its SDK storage identity, browser fallbacks
   without native session storage no longer persist Never-session password
   recovery material, and stale fallback ciphertext/key halves are removed if a
@@ -49,6 +156,9 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
   trusted-UI result acknowledgment before another transfer is allowed.
 - Bankr/API/RPC responses, external navigation, and remote images now use
   stricter origin, redirect, size, timeout, and raster-only boundaries.
+- Removing the final account backed by a seed phrase now requires an explicit
+  warning, while agent-password sessions remain blocked from private-key,
+  mnemonic, passkey-recovery, and Privacy Pools recovery disclosure.
 
 ## [3.19.0] - 2026-07-08
 
