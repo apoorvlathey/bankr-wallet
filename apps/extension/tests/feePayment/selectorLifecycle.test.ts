@@ -24,6 +24,13 @@ const batchSummarySource = readFileSync(
   ),
   "utf8",
 );
+const safeSummarySource = readFileSync(
+  new URL(
+    "../../src/components/SafeApprovals/SafeProposalDecisionSummary.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const internalTransferSource = readFileSync(
   new URL("../../src/chrome/transactions/internalTransfer.ts", import.meta.url),
   "utf8",
@@ -77,10 +84,10 @@ test("fee-option discovery cannot spin forever", () => {
   assert.match(source, /setLoading\(false\)/u);
 });
 
-test("single, batch, and internal-send reviews share the fee-option boundary", () => {
+test("single, batch, Safe, and internal-send reviews share the fee-option boundary", () => {
   assert.equal(
     [...capabilitiesSource.matchAll(/return getOptionsForRequest\(/gu)].length,
-    2,
+    3,
   );
   assert.match(
     capabilitiesSource,
@@ -89,6 +96,9 @@ test("single, batch, and internal-send reviews share the fee-option boundary", (
   assert.match(transactionSummarySource, /<FeePaymentSelector/u);
   assert.match(batchSummarySource, /<FeePaymentSelector/u);
   assert.match(batchSummarySource, /requestKind="batch"/u);
+  assert.match(safeSummarySource, /<FeePaymentSelector/u);
+  assert.match(safeSummarySource, /requestKind="safe"/u);
+  assert.match(safeSummarySource, /accountId=\{selectedAccount\.id\}/u);
   assert.match(internalTransferSource, /pinnedTxRequest\(activeAccount,/u);
   assert.match(internalTransferSource, /savePendingTxRequest\(pendingRequest\)/u);
 });

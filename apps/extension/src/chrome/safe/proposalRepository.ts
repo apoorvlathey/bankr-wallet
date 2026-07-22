@@ -125,6 +125,9 @@ function executor(value: unknown): SafeExecutionExecutor {
     accountType: raw.accountType,
     address: address(raw.address, "execution account address"),
     preparedAt: integer(raw.preparedAt, "execution account preparation time", 1),
+    feePaymentToken: raw.feePaymentToken === undefined
+      ? undefined
+      : text(raw.feePaymentToken, "execution fee token", 32),
     gasOverrides: gasRaw
       ? {
           gasLimit: decimal(gasRaw.gasLimit, "execution gas limit"),
@@ -199,6 +202,9 @@ export function decodeSafeProposal(value: unknown): SafeProposalRecord {
       ? undefined
       : hex(raw.rejectedBySafeTxHash, "rejection transaction hash", 32),
     transactionHash: raw.transactionHash === undefined ? undefined : hex(raw.transactionHash, "execution hash", 32),
+    userOperationHash: raw.userOperationHash === undefined
+      ? undefined
+      : hex(raw.userOperationHash, "execution UserOperation hash", 32),
     serializedExecution,
     executionPreparedAt: raw.executionPreparedAt === undefined
       ? undefined
@@ -374,7 +380,7 @@ export async function claimSafeProposalEffect(id: string, input: { kind: "approv
     return { ...record, effectClaim: { ...input, claimId: crypto.randomUUID(), claimedAt: Date.now() }, updatedAt: Date.now() };
   });
 }
-export async function releaseSafeProposalEffect(id: string, claimId: string, update: Partial<Pick<SafeProposalRecord, "state" | "confirmations" | "transactionHash" | "serializedExecution" | "executionPreparedAt" | "error">> = {}) {
+export async function releaseSafeProposalEffect(id: string, claimId: string, update: Partial<Pick<SafeProposalRecord, "state" | "confirmations" | "transactionHash" | "userOperationHash" | "serializedExecution" | "executionPreparedAt" | "executor" | "error">> = {}) {
   return updateSafeProposal(id, (record) => {
     if (record.effectClaim?.claimId !== claimId) throw new Error("Safe proposal claim changed");
     return { ...record, ...update, effectClaim: undefined, updatedAt: Date.now() };

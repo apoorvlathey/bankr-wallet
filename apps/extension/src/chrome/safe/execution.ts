@@ -56,7 +56,7 @@ export {
   terminalizeReplacedSafeRoute,
 } from "./executionSettlement";
 
-async function liveExecutable(proposal: SafeProposalRecord) {
+export async function liveExecutable(proposal: SafeProposalRecord) {
   const live = await verifySafeOnchainState({ chainId: proposal.chainId, safeAddress: proposal.safeAddress });
   if (live.configEpoch !== proposal.safeConfigEpoch) throw new Error("Safe configuration changed; review again");
   if (BigInt(live.nonce) !== BigInt(proposal.transaction.nonce)) throw new Error("Safe proposal nonce is not executable");
@@ -66,7 +66,7 @@ async function liveExecutable(proposal: SafeProposalRecord) {
   return live;
 }
 
-async function executionContext(proposalId: string, executorAccountId: string) {
+export async function executionContext(proposalId: string, executorAccountId: string) {
   const [proposal, account] = await Promise.all([getSafeProposal(proposalId), getAccountById(executorAccountId)]);
   if (!proposal) throw new Error("Safe proposal not found");
   if (hasUnresolvedSafeExecution(proposal)) {
@@ -77,7 +77,7 @@ async function executionContext(proposalId: string, executorAccountId: string) {
   return { proposal, account };
 }
 
-async function simulateExecutionEnvelope(
+export async function simulateExecutionEnvelope(
   proposal: SafeProposalRecord,
   executorAddress: string,
   rpcUrl: string,
@@ -110,7 +110,13 @@ export async function executeSafeProposal(input: {
   executorAccountId: string;
   gasOverrides?: GasOverrides;
   allowSimulationFailure?: unknown;
+  feePaymentToken?: "native" | "token";
+  feePaymentQuoteId?: string;
 }) {
+  if (input.feePaymentToken === "token") {
+    const { executeSafeProposalWithFeeToken } = await import("./feePaymentExecution");
+    return executeSafeProposalWithFeeToken(input);
+  }
   const { proposal, account } = await executionContext(input.proposalId, input.executorAccountId);
   const claim = await claimSafeProposalEffect(proposal.id, { kind: "execute" });
   const claimId = claim.effectClaim!.claimId;
@@ -218,6 +224,10 @@ export { validateSafeGasOverrides } from "./executionGas";
 export async function reconcileSafeExecution(id: string): Promise<SafeProposalRecord> {
   let proposal = await getSafeProposal(id);
   if (!proposal) throw new Error("Safe proposal not found");
+  if (proposal.userOperationHash) {
+    const { reconcileSafeFeePaymentExecution } = await import("./feePaymentExecution");
+    return reconcileSafeFeePaymentExecution(id);
+  }
   if (!proposal.transactionHash) throw new Error("Safe execution has no transaction hash");
   await resumeSafeExecutorHistory(proposal).catch((error) => {
     console.warn("[safe] executor history resume failed", error);
@@ -327,7 +337,7 @@ export async function reconcileSafeExecution(id: string): Promise<SafeProposalRe
 }
 
 function isExecutionPending(proposal: SafeProposalRecord): boolean {
-  return !!proposal.transactionHash &&
+  return (!!proposal.transactionHash || !!proposal.userOperationHash) &&
     (proposal.state === "executing" || proposal.state === "ambiguous");
 }
 

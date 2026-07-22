@@ -8,7 +8,7 @@ const PENDING_USER_OPERATIONS_STORAGE_LOCK_KEY =
 
 export interface PendingUserOperation {
   version: 1;
-  family: "transaction" | "batchTransaction";
+  family: "transaction" | "batchTransaction" | "safeExecution";
   txId: string;
   userOperationHash: Hex;
   sender: Address;
@@ -29,7 +29,8 @@ export async function getPendingUserOperations(): Promise<
       (record): record is PendingUserOperation =>
         record?.version === 1 &&
         (record.family === "transaction" ||
-          record.family === "batchTransaction") &&
+          record.family === "batchTransaction" ||
+          record.family === "safeExecution") &&
         typeof record.txId === "string" &&
         /^0x[0-9a-fA-F]{64}$/.test(record.userOperationHash) &&
         /^0x[0-9a-fA-F]{40}$/.test(record.sender) &&

@@ -10,6 +10,7 @@ export function isLocallyCancelledUnsignedSafeProposal(
     (proposal.unsupportedConfirmations?.length ?? 0) === 0 &&
     !proposal.effectClaim &&
     !proposal.transactionHash &&
+    !proposal.userOperationHash &&
     !proposal.serializedExecution;
 }
 
@@ -37,7 +38,7 @@ export function recoverInterruptedSafeProposalRecords(input: {
         error: "Publication was interrupted; reconcile before retrying",
         updatedAt: input.now,
       };
-    } else if (claim.kind === "execute" && (record.serializedExecution || record.transactionHash)) {
+    } else if (claim.kind === "execute" && (record.serializedExecution || record.transactionHash || record.userOperationHash)) {
       updated = {
         ...record,
         state: "ambiguous",
@@ -96,6 +97,7 @@ export function assertSafeProposalEffectClaimable(
     (
       proposal.state !== "readyToExecute" ||
       !!proposal.transactionHash ||
+      !!proposal.userOperationHash ||
       !!proposal.serializedExecution
     )
   ) {

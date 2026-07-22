@@ -107,8 +107,17 @@ export async function resumePendingFeePaymentOperations(): Promise<void> {
       };
       if (record.family === "transaction") {
         await finalizeTransaction(record, verifiedReceipt);
-      } else {
+      } else if (record.family === "batchTransaction") {
         await finalizeBatch(record, verifiedReceipt);
+      } else {
+        const { finalizeSafeFeePaymentReceipt } = await import(
+          "../safe/feePaymentExecution"
+        );
+        await finalizeSafeFeePaymentReceipt({
+          proposalId: record.txId,
+          userOperationHash: record.userOperationHash,
+          verified,
+        });
       }
       await removePendingUserOperation(record.txId);
     }),

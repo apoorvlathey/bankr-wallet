@@ -30,10 +30,12 @@ export function buildSafeExecutionExecutor(
     maxPriorityFeePerGas: `${bigint}`;
   } | undefined,
   preparedAt: number,
+  feePaymentToken?: string,
 ): SafeExecutionExecutor {
   return {
     ...account,
     preparedAt,
+    feePaymentToken,
     gasOverrides: gas
       ? {
           gasLimit: gas.gas,
@@ -50,7 +52,7 @@ export function buildSafeExecutorHistoryEntry(
   broadcastUncertain = true,
 ): CompletedTransaction | null {
   const executor = proposal.executor;
-  if (!executor || !proposal.transactionHash) return null;
+  if (!executor || (!proposal.transactionHash && !proposal.userOperationHash)) return null;
 
   return {
     id: getSafeExecutorHistoryId(proposal.id),
@@ -72,6 +74,8 @@ export function buildSafeExecutorHistoryEntry(
     chainId: proposal.chainId,
     createdAt: executor.preparedAt,
     txHash: proposal.transactionHash,
+    userOperationHash: proposal.userOperationHash,
+    feePaymentToken: executor.feePaymentToken,
     broadcastUncertain,
     accountType: executor.accountType,
     accountId: executor.accountId,
@@ -139,12 +143,28 @@ export async function resumeSafeExecutorHistory(
     proposal,
     proposal.state === "ambiguous",
   );
-  if (!entry || !proposal.transactionHash) return;
+  if (!entry) return;
 
   const current = await getTxById(entry.id);
   if (!current || current.status === "success" || current.status === "failed") {
     return;
   }
+  if (proposal.userOperationHash && !proposal.transactionHash) {
+    if (
+      current.status !== "pending" ||
+      current.userOperationHash !== proposal.userOperationHash ||
+      current.broadcastUncertain !== (proposal.state === "ambiguous")
+    ) {
+      await updateTxInHistory(entry.id, {
+        status: "pending",
+        userOperationHash: proposal.userOperationHash,
+        feePaymentToken: proposal.executor?.feePaymentToken,
+        broadcastUncertain: proposal.state === "ambiguous",
+      });
+    }
+    return;
+  }
+  if (!proposal.transactionHash) return;
   if (
     current.status !== "pending" ||
     current.txHash !== proposal.transactionHash ||

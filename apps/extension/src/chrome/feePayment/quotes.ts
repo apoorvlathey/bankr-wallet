@@ -19,13 +19,16 @@ import {
 import type { Address, Hex } from "./pimlicoTypes";
 import { getPimlicoFeeToken, type PimlicoFeeToken } from "./tokens";
 import type { FeePaymentCall } from "./userOperation";
+import { getSafeProposal } from "../safe/proposalRepository";
+import { buildSafeExecutionData } from "../safe/executionData";
+import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
 
 const QUOTE_TTL_MS = 45_000;
 const MAX_QUOTES = 30;
 
 export interface PreparedFeePaymentQuote {
   id: string;
-  family: "transaction" | "batchTransaction";
+  family: "transaction" | "batchTransaction" | "safeExecution";
   requestId: string;
   accountId: string;
   accountAddress: Address;
@@ -60,6 +63,21 @@ function batchCalls(pending: PendingBatchTxRequest): FeePaymentCall[] {
       data: (call.data ?? "0x") as Hex,
     };
   });
+}
+
+export function feePaymentSafeExecutionCalls(input: {
+  safeAddress: string;
+  executionData: string;
+}): FeePaymentCall[] {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(input.safeAddress) ||
+      !/^0x(?:[0-9a-fA-F]{2})*$/.test(input.executionData)) {
+    throw new Error("Invalid Safe execution request");
+  }
+  return [{
+    to: input.safeAddress as Address,
+    value: 0n,
+    data: input.executionData as Hex,
+  }];
 }
 
 export function fingerprintFeePaymentCalls(
@@ -197,9 +215,10 @@ async function prepareQuote(input: {
 }
 
 export async function prepareFeePaymentQuote(
-  family: "transaction" | "batchTransaction",
+  family: "transaction" | "batchTransaction" | "safeExecution",
   requestId: string,
   tokenId: unknown,
+  accountId?: string,
 ) {
   if (family === "transaction") {
     const pending = await getPendingTxRequestById(requestId);
@@ -219,6 +238,29 @@ export async function prepareFeePaymentQuote(
       account,
       chainId: pending.tx.chainId,
       calls: singleCalls(pending),
+      tokenId,
+    });
+  }
+  if (family === "safeExecution") {
+    const [proposal, account] = await Promise.all([
+      getSafeProposal(requestId),
+      accountId ? getAccountById(accountId) : null,
+    ]);
+    if (!proposal || proposal.state !== "readyToExecute" || hasUnresolvedSafeExecution(proposal)) {
+      throw new Error("Safe proposal is not ready to execute");
+    }
+    if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) {
+      throw new Error("Safe execution account is no longer available");
+    }
+    return prepareQuote({
+      family,
+      requestId,
+      account,
+      chainId: proposal.chainId,
+      calls: feePaymentSafeExecutionCalls({
+        safeAddress: proposal.safeAddress,
+        executionData: buildSafeExecutionData(proposal),
+      }),
       tokenId,
     });
   }

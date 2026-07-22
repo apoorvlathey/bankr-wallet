@@ -34,6 +34,7 @@ export function isUnsignedSafeNonceEditable(proposal: SafeProposalRecord): boole
     (proposal.unsupportedConfirmations?.length ?? 0) === 0 &&
     !proposal.effectClaim &&
     !proposal.transactionHash &&
+    !proposal.userOperationHash &&
     !proposal.serializedExecution;
 }
 

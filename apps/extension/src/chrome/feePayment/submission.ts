@@ -86,7 +86,7 @@ export async function submitUserOperationRecoverably(input: {
   client: PimlicoClient;
   record: Omit<PendingUserOperation, "userOperationHash" | "createdAt">;
   userOperation: PackedUserOperationV07;
-  beforeBroadcast?: () => void;
+  beforeBroadcast?: () => void | Promise<void>;
 }): Promise<RecoverableSubmissionResult> {
   const userOperationHash = getPackedUserOperationHash(
     input.userOperation,
@@ -98,7 +98,12 @@ export async function submitUserOperationRecoverably(input: {
     createdAt: Date.now(),
   });
 
-  input.beforeBroadcast?.();
+  try {
+    await input.beforeBroadcast?.();
+  } catch (error) {
+    await removePendingUserOperation(input.record.txId);
+    throw error;
+  }
   try {
     const returnedHash = await input.client.sendUserOperation(input.userOperation);
     if (returnedHash.toLowerCase() !== userOperationHash.toLowerCase()) {

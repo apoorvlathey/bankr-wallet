@@ -28,7 +28,10 @@
   identity row, account dropdown, and shared transaction gas estimator.
   Execution choices that are also Safe owners carry an explicit `Owner` label;
   non-owner gas payers remain selectable without appearing to hold Safe signing
-  authority.
+  authority. At quorum it also reuses the standard fee-token selector. Its
+  option and quote messages bind the current Safe proposal, proposal chain, and
+  selected executor; changing executor restores native payment and discards the
+  prior quote.
 - `SafeProposalRequestDetails.tsx`: read-only shared call cards, a quiet
   section divider, and validated signer progress with an `n/m signed` summary
   plus explicit per-owner signed states. Canonical rejection proposals replace
@@ -86,6 +89,11 @@ already executed Activity record does not trigger that transition again, and
 Back returns directly to Activity rather than entering the pending-request
 inbox. Terminal records use the **Transaction details** title and the header
 Back action without a duplicate passive footer action.
+
+Safe execution locks the reviewed executor, fee asset, gas controls, and
+simulation while broadcast is in flight. Once the background accepts the
+submission, the review routes immediately to Public Activity so its pending
+executor-history row is visible without waiting for Safe finality.
 
 Reject is deliberately asymmetric: a proposal with no collected signatures
 can be cancelled locally, while a proposal with any supported or unsupported

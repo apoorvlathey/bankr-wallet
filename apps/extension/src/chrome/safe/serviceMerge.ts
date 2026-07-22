@@ -52,7 +52,7 @@ export function mergeSafeServiceProposal(
   const preserveOnchainRejection =
     !!current.rejectedBySafeTxHash && remote.state === "replaced";
   const hasLocalExecution =
-    (!!current.transactionHash || !!current.serializedExecution) &&
+    (!!current.transactionHash || !!current.userOperationHash || !!current.serializedExecution) &&
     !LOCAL_TERMINAL_STATES.has(current.state) &&
     current.state !== "cancelled";
   const preserveActiveEffect = !!current.effectClaim;
@@ -99,6 +99,9 @@ export function mergeSafeServiceProposal(
     rejectedBySafeTxHash: current.rejectedBySafeTxHash,
     state,
     transactionHash,
+    userOperationHash: preserveExecutionData && !remoteExecutionHash
+      ? current.userOperationHash
+      : undefined,
     serializedExecution: preserveExecutionData && !remoteExecutionHash
       ? current.serializedExecution
       : undefined,

@@ -10,7 +10,7 @@ import type { SafeProposalRecord } from "../../src/chrome/safe/types";
 function evidence(
   overrides: Partial<Pick<
     SafeProposalRecord,
-    "state" | "transactionHash" | "serializedExecution" | "effectClaim"
+    "state" | "transactionHash" | "userOperationHash" | "serializedExecution" | "effectClaim"
   >> = {},
 ) {
   return {
@@ -24,6 +24,9 @@ test("durable Safe execution evidence blocks every duplicate submit path", () =>
   assert.equal(hasUnresolvedSafeExecution(evidence({ state: "executing" })), true);
   assert.equal(hasUnresolvedSafeExecution(evidence({
     transactionHash: `0x${"11".repeat(32)}`,
+  })), true);
+  assert.equal(hasUnresolvedSafeExecution(evidence({
+    userOperationHash: `0x${"33".repeat(32)}`,
   })), true);
   assert.equal(hasUnresolvedSafeExecution(evidence({
     serializedExecution: `0x${"22".repeat(64)}`,

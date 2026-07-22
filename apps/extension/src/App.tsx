@@ -2466,7 +2466,7 @@ function App() {
       if (returnToActivity) setActivityTabTrigger((current) => current + 1);
       setView("main");
     };
-    return <SafeApprovalsSurface account={activeAccount} chainId={selectedChain?.chainId ?? 8453} accounts={accounts} proposalId={selectedSafeProposalId} fullscreen={isFullscreenTab} onBack={leaveSafeApprovals} onProposalBack={returnToActivity ? leaveSafeApprovals : undefined} onExecutionConfirmed={() => { setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} />;
+    return <SafeApprovalsSurface account={activeAccount} chainId={selectedChain?.chainId ?? 8453} accounts={accounts} proposalId={selectedSafeProposalId} fullscreen={isFullscreenTab} onBack={leaveSafeApprovals} onProposalBack={returnToActivity ? leaveSafeApprovals : undefined} onExecutionSubmitted={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} onExecutionConfirmed={() => { setWalletHomeMode("public"); setSelectedSafeProposalId(null); setSafeProposalEntryPoint("requests"); setActivityTabTrigger((current) => current + 1); setView("main"); }} />;
   }
 
   // Transfer view

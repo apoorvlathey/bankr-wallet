@@ -29,7 +29,8 @@ interface FeePaymentSelectorProps {
   value: FeePaymentTokenId;
   quote: FeePaymentQuoteSummary | null;
   disabled?: boolean;
-  requestKind?: "transaction" | "batch";
+  requestKind?: "transaction" | "batch" | "safe";
+  accountId?: string;
   nativeSummary?: NativeFeePaymentSummary | null;
   onChange: (value: FeePaymentTokenId) => void;
   onQuoteChange: (quote: FeePaymentQuoteSummary | null) => void;
@@ -60,6 +61,7 @@ export function FeePaymentSelector({
   quote,
   disabled,
   requestKind = "transaction",
+  accountId,
   nativeSummary,
   onChange,
   onQuoteChange,
@@ -70,7 +72,7 @@ export function FeePaymentSelector({
   const [quoteError, setQuoteError] = useState("");
   const quoteRequestSequence = useRef(0);
   const quoteRequestStarted = useRef(Boolean(quote));
-  const requestIdentity = `${requestKind}:${txId}`;
+  const requestIdentity = `${requestKind}:${txId}:${accountId ?? ""}`;
   const previousRequestIdentity = useRef(requestIdentity);
   const quoteTimeoutRef = useRef<number | null>(null);
   const sheet = useDisclosure();
@@ -111,6 +113,7 @@ export function FeePaymentSelector({
         type: "prepareFeePaymentQuote",
         requestId: txId,
         requestKind,
+        accountId,
         feePaymentToken: tokenId,
       },
       (result: Partial<FeePaymentQuoteSummary> & { success?: boolean; error?: string }) => {
@@ -165,7 +168,7 @@ export function FeePaymentSelector({
         setQuoteLoading(false);
       },
     );
-  }, [clearQuoteTimeout, onQuoteChange, options, requestKind, txId, value]);
+  }, [accountId, clearQuoteTimeout, onQuoteChange, options, requestKind, txId, value]);
 
   useEffect(() => {
     if (previousRequestIdentity.current === requestIdentity) return;
@@ -193,7 +196,7 @@ export function FeePaymentSelector({
       setLoading(false);
     }, OPTIONS_REQUEST_TIMEOUT_MS);
     chrome.runtime.sendMessage(
-      { type: "getFeePaymentOptions", txId, requestKind },
+      { type: "getFeePaymentOptions", txId, requestKind, accountId },
       (result: { success: boolean; options?: FeePaymentOption[] }) => {
         if (!active) return;
         window.clearTimeout(timeout);
@@ -205,7 +208,7 @@ export function FeePaymentSelector({
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [requestKind, txId]);
+  }, [accountId, requestKind, txId]);
 
   const isTokenPayment = value !== "native";
   useEffect(() => {
@@ -220,13 +223,13 @@ export function FeePaymentSelector({
   }, [isTokenPayment, options.length, quote, quoteError, quoteLoading, requestQuote]);
 
   useEffect(() => {
-    if (!isTokenPayment || !quote?.expiresAt) return;
+    if (disabled || !isTokenPayment || !quote?.expiresAt) return;
     const timeout = window.setTimeout(() => {
       setQuoteError(`${quote.tokenSymbol} gas quote expired`);
       onQuoteChange(null);
     }, Math.max(1, quote.expiresAt - Date.now() - 1_000));
     return () => window.clearTimeout(timeout);
-  }, [isTokenPayment, onQuoteChange, quote?.expiresAt, quote?.tokenSymbol]);
+  }, [disabled, isTokenPayment, onQuoteChange, quote?.expiresAt, quote?.tokenSymbol]);
 
   const selected = options.find((option) => option.id === value);
   const maximumTokenCost = quote?.maximumTokenCost ?? null;
@@ -364,7 +367,7 @@ export function FeePaymentSelector({
           <Text flex="1" color="status.error.fg" fontSize="xs" lineHeight="short">
             {displayedQuoteError}
           </Text>
-          <Button flexShrink={0} size="xs" variant="ghost" color="status.error.fg" onClick={() => requestQuote()}>
+          <Button flexShrink={0} size="xs" variant="ghost" color="status.error.fg" isDisabled={disabled} onClick={() => requestQuote()}>
             Retry
           </Button>
         </HStack>

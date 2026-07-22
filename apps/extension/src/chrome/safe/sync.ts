@@ -168,7 +168,9 @@ async function syncSafeRecords(
     minimumAgeMs: STALE_EFFECT_MS,
     safeAccountId: accountId,
   });
-  const executions = (await getSafeProposals()).filter((item) => (item.state === "executing" || item.state === "ambiguous") && !!item.transactionHash);
+  const executions = (await getSafeProposals()).filter((item) =>
+    (item.state === "executing" || item.state === "ambiguous") &&
+    (!!item.transactionHash || !!item.userOperationHash));
   executions
     .filter((item) => !accountId || item.safeAccountId === accountId)
     .forEach((item) => startSafeExecutionReconciliation(item.id));

@@ -12,6 +12,7 @@ import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation
 import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation/simulationFailure";
 import { ConfirmationScreen } from "@/components/ui";
 import { useIconChipBg } from "@/theme";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
 import { SafeProposalAdvancedDetails } from "./SafeProposalAdvancedDetails";
 import { SafeProposalDecisionSummary } from "./SafeProposalDecisionSummary";
 import { SafeProposalFinancialImpact } from "./SafeProposalFinancialImpact";
@@ -61,6 +62,7 @@ export function SafeProposalConfirmation({
   onBack,
   onOpenProposal,
   onReload,
+  onExecutionSubmitted,
 }: {
   safeAccount: SafeAccount;
   proposal: SafeProposalRecord;
@@ -72,16 +74,20 @@ export function SafeProposalConfirmation({
   onBack: () => void;
   onOpenProposal: (proposalId: string) => void;
   onReload: () => Promise<void>;
+  onExecutionSubmitted: () => void;
 }) {
   const iconChipBg = useIconChipBg();
   const [ownerAccountId, setOwnerAccountId] = useState<string | null>(null);
   const [executorAccountId, setExecutorAccountId] = useState<string | null>(null);
   const [gasOverrides, setGasOverrides] = useState<GasOverrides | null>(null);
   const [gasValid, setGasValid] = useState(false);
+  const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>("native");
+  const [feePaymentQuote, setFeePaymentQuote] = useState<FeePaymentQuoteSummary | null>(null);
   const [simulationReverted, setSimulationReverted] = useState(false);
   const [simulationUnavailable, setSimulationUnavailable] = useState(false);
   const [reviewFresh, setReviewFresh] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [submissionLocked, setSubmissionLocked] = useState(false);
 
   const ownerAccounts = useMemo(
     () => getSafeOwnerAccounts(accounts, snapshot),
@@ -100,7 +106,8 @@ export function SafeProposalConfirmation({
   const isRequestView = isPendingSafeProposal(proposal);
   const isRejection = proposal.purpose === "rejection";
   const requiresOnchainRejection = hasSafeProposalSignatures(proposal);
-  const executionPending = ["ambiguous", "executing"].includes(proposal.state) && !!proposal.transactionHash;
+  const executionPending = ["ambiguous", "executing"].includes(proposal.state) &&
+    (!!proposal.transactionHash || !!proposal.userOperationHash);
   useSafeExecutionRefresh({ pending: executionPending, proposalId: proposal.id, onReload });
 
   useEffect(() => {
@@ -116,11 +123,15 @@ export function SafeProposalConfirmation({
   }, [executorAccountId, executors, snapshot]);
 
   useEffect(() => {
+    if (submissionLocked) return;
     setGasOverrides(null);
     setGasValid(actionKind !== "execute");
-  }, [actionKind, executorAccountId, proposal.id]);
+    setFeePaymentToken("native");
+    setFeePaymentQuote(null);
+  }, [actionKind, executorAccountId, proposal.id, submissionLocked]);
 
   useEffect(() => {
+    if (submissionLocked) return;
     if (!isRequestView) {
       setReviewFresh(true);
       setReviewError(null);
@@ -172,7 +183,7 @@ export function SafeProposalConfirmation({
     // boundary. Reconciliation writes within one pending state must not
     // restart the authority refresh loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRequestView, proposal.id]);
+  }, [isRequestView, proposal.id, submissionLocked]);
 
   const reviewRequest = useMemo(
     () => makeSafeReviewTxRequest(proposal, chainName),
@@ -196,11 +207,14 @@ export function SafeProposalConfirmation({
     selectedOwner,
     selectedExecutor,
     gasOverrides,
+    feePaymentToken,
+    feePaymentQuote,
     onBack,
     onOpenProposal,
     onReload,
   });
   const error = actionError ?? reviewError;
+  const displayRequestView = isRequestView || submissionLocked;
   const selectedAccount = primaryActionKind === "execute"
     ? selectedExecutor
     : operation === "approve"
@@ -223,10 +237,12 @@ export function SafeProposalConfirmation({
     ? "Refreshing Safe authority"
     : !selectedAccount
         ? primaryActionKind === "execute" ? "No local execution account is available" : "No available Safe owner is linked"
-      : primaryActionKind === "execute" && (!gasValid || !gasOverrides)
+      : primaryActionKind === "execute" && feePaymentToken === "native" && (!gasValid || !gasOverrides)
           ? "Set a valid network fee"
+        : primaryActionKind === "execute" && feePaymentToken !== "native" && !feePaymentQuote?.quoteId
+          ? "Choose a current fee-token quote"
           : null;
-  const primaryAction = !isRequestView ? undefined : primaryActionKind ? (
+  const primaryAction = !displayRequestView ? undefined : primaryActionKind ? (
     <SimulationFailureConfirmButton
       disabledReason={disabledReason}
       isDisabled={!!disabledReason}
@@ -234,9 +250,13 @@ export function SafeProposalConfirmation({
       label={isRejection
         ? primaryActionKind === "execute" ? "Execute rejection" : "Sign rejection"
         : primaryActionKind === "execute" ? "Execute" : "Sign offchain"}
-      onConfirm={() => void handleConfirm({
-        allowSimulationFailure: simulationReverted,
-      })}
+      onConfirm={() => void (async () => {
+        const executing = primaryActionKind === "execute";
+        if (executing) setSubmissionLocked(true);
+        const submitted = await handleConfirm({ allowSimulationFailure: simulationReverted });
+        if (executing && submitted) onExecutionSubmitted();
+        else if (executing) setSubmissionLocked(false);
+      })()}
       requestKind={proposal.calls.length > 1 ? "batch" : "transaction"}
       simulationFailed={shouldConfirmSimulationFailure({
         simulationReverted,
@@ -266,7 +286,7 @@ export function SafeProposalConfirmation({
 
   return (
     <ConfirmationScreen
-      title={isRequestView
+      title={displayRequestView
         ? isRejection ? "Reject transaction" : "Transaction request"
         : "Transaction details"}
       onBack={onBack}
@@ -290,7 +310,7 @@ export function SafeProposalConfirmation({
           originInitials="SAFE"
         />
       )}
-      financialImpact={isRequestView ? (
+      financialImpact={displayRequestView ? (
         <SafeProposalFinancialImpact
           proposal={proposal}
           reviewRequest={reviewRequest}
@@ -299,7 +319,7 @@ export function SafeProposalConfirmation({
           onUnavailableChange={setSimulationUnavailable}
         />
       ) : undefined}
-      financialImpactTitle={isRequestView ? (
+      financialImpactTitle={displayRequestView ? (
         <EstimatedChangesHeading chainId={proposal.chainId} chainName={chainName} />
       ) : undefined}
       context={(
@@ -310,45 +330,59 @@ export function SafeProposalConfirmation({
           error={error}
           notice={notice}
           simulationReverted={simulationReverted}
-          showRequestLifecycle={isRequestView}
+          showRequestLifecycle={displayRequestView}
         />
       )}
-      contextTitle={isRequestView ? "Request details" : "Safe transaction"}
+      contextTitle={displayRequestView ? "Request details" : "Safe transaction"}
       contextHeaderAction={<SafeProposalStatusPill proposal={proposal} />}
       advancedDetails={(
         <SafeProposalAdvancedDetails
           proposal={proposal}
           explorer={explorer}
           busy={busy}
-          readOnly={!isRequestView}
+          readOnly={!displayRequestView}
           minimumNonce={snapshot.nonce}
           onNonceChange={handleNonceChange}
           onAction={(message, successNotice) => void runAction(message, successNotice)}
         />
       )}
-      actionSummary={isRequestView ? (
+      actionSummary={displayRequestView ? (
         <SafeProposalDecisionSummary
           actionKind={primaryActionKind}
           accounts={actionAccounts}
           selectedAccount={selectedAccount}
           safeOwnerAccountIds={safeOwnerAccountIds}
           executionRequest={executionRequest}
+          proposalId={proposal.id}
           onSelect={(accountId) => {
             if (primaryActionKind === "execute") setExecutorAccountId(accountId);
             else setOwnerAccountId(accountId);
           }}
           onGasOverrides={setGasOverrides}
           onGasValidityChange={setGasValid}
+          feePaymentToken={feePaymentToken}
+          feePaymentQuote={feePaymentQuote}
+          onFeePaymentTokenChange={(token) => {
+            setFeePaymentToken(token);
+            setFeePaymentQuote(null);
+            if (token !== "native") {
+              setGasOverrides(null);
+              setGasValid(true);
+            }
+          }}
+          onFeePaymentQuoteChange={setFeePaymentQuote}
+          disabled={submissionLocked}
         />
       ) : undefined}
-      actionNotice={isRequestView && simulationUnavailable
+      actionNotice={displayRequestView && simulationUnavailable
         ? "Simulation is unavailable. Review the call details carefully."
         : undefined}
       confirmAction={primaryAction}
-      rejectAction={isRequestView && canReject ? (
+      rejectAction={displayRequestView && canReject ? (
         <Button
           variant={requiresOnchainRejection ? "danger" : "secondary"}
           isLoading={operation === "reject"}
+          isDisabled={submissionLocked}
           onClick={() => void handleReject()}
         >
           {requiresOnchainRejection ? "Reject onchain" : "Reject"}

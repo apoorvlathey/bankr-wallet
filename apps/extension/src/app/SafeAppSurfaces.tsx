@@ -13,8 +13,8 @@ export function SafeFeatureUnavailable({ title, onBack }: { title: string; onBac
   </Box>;
 }
 
-export function SafeApprovalsSurface({ account, chainId, accounts, proposalId, fullscreen, onBack, onProposalBack, onExecutionConfirmed }: { account: SafeAccount; chainId: number; accounts: Account[]; proposalId: string | null; fullscreen: boolean; onBack: () => void; onProposalBack?: () => void; onExecutionConfirmed: () => void }) {
-  return <Box bg="bg.base" h="100%" display="flex" flexDirection="column"><Box maxW={fullscreen ? "480px" : "100%"} mx="auto" w="100%" h="100%"><SafeApprovalsScreen safeAccount={account} chainId={chainId} accounts={accounts} initialProposalId={proposalId} onBack={onBack} onProposalBack={onProposalBack} onExecutionConfirmed={onExecutionConfirmed} /></Box></Box>;
+export function SafeApprovalsSurface({ account, chainId, accounts, proposalId, fullscreen, onBack, onProposalBack, onExecutionSubmitted, onExecutionConfirmed }: { account: SafeAccount; chainId: number; accounts: Account[]; proposalId: string | null; fullscreen: boolean; onBack: () => void; onProposalBack?: () => void; onExecutionSubmitted: () => void; onExecutionConfirmed: () => void }) {
+  return <Box bg="bg.base" h="100%" display="flex" flexDirection="column"><Box maxW={fullscreen ? "480px" : "100%"} mx="auto" w="100%" h="100%"><SafeApprovalsScreen safeAccount={account} chainId={chainId} accounts={accounts} initialProposalId={proposalId} onBack={onBack} onProposalBack={onProposalBack} onExecutionSubmitted={onExecutionSubmitted} onExecutionConfirmed={onExecutionConfirmed} /></Box></Box>;
 }
 
 export function SafeHomeApprovalRail({ accountId, onOpen }: { accountId: string; onOpen: () => void }) {

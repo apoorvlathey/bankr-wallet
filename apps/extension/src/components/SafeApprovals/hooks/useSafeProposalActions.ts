@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { SafeProposalRecord } from "@/chrome/safe/types";
 import type { GasOverrides } from "@/chrome/txHandlers";
+import type { FeePaymentQuoteSummary } from "@/components/FeePaymentSelector";
 import type {
   SafeExecutorAccount,
   SafeOwnerAccount,
@@ -26,6 +27,8 @@ export function useSafeProposalActions({
   selectedOwner,
   selectedExecutor,
   gasOverrides,
+  feePaymentToken,
+  feePaymentQuote,
   onBack,
   onOpenProposal,
   onReload,
@@ -35,6 +38,8 @@ export function useSafeProposalActions({
   selectedOwner: SafeOwnerAccount | null;
   selectedExecutor: SafeExecutorAccount | null;
   gasOverrides: GasOverrides | null;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuote: FeePaymentQuoteSummary | null;
   onBack: () => void;
   onOpenProposal: (proposalId: string) => void;
   onReload: () => Promise<void>;
@@ -74,7 +79,7 @@ export function useSafeProposalActions({
         throw new Error(response.error || "Safe operation failed");
       }
       if (successNotice) setNotice(successNotice);
-      await onReload();
+      await onReload().catch(() => undefined);
       return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Safe operation failed");
@@ -107,27 +112,40 @@ export function useSafeProposalActions({
         }
         setNotice("Signed offchain.");
         await onReload();
+        return true;
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Safe approval failed");
+        return false;
       } finally {
         endOperation();
       }
-      return;
     }
-    if (actionKind === "execute" && selectedExecutor && gasOverrides) {
-      await runAction({
+    const nativePayment = feePaymentToken === "native";
+    if (
+      actionKind === "execute" &&
+      selectedExecutor &&
+      ((nativePayment && gasOverrides) || (!nativePayment && feePaymentQuote?.quoteId))
+    ) {
+      return runAction({
         type: "executeSafeProposal",
         proposalId: proposal.id,
         executorAccountId: selectedExecutor.id,
-        gasOverrides,
+        ...(nativePayment ? { gasOverrides } : {}),
+        feePaymentToken: nativePayment ? "native" : "token",
+        ...(!nativePayment && feePaymentQuote?.quoteId
+          ? { feePaymentQuoteId: feePaymentQuote.quoteId }
+          : {}),
         allowSimulationFailure: options?.allowSimulationFailure === true,
       }, undefined, "execute");
     }
+    return false;
   }, [
     actionKind,
     beginOperation,
     endOperation,
     gasOverrides,
+    feePaymentQuote,
+    feePaymentToken,
     onReload,
     proposal.id,
     runAction,

@@ -7,11 +7,12 @@ import type { SafeProposalRecord } from "./types";
 export function hasUnresolvedSafeExecution(
   proposal: Pick<
     SafeProposalRecord,
-    "state" | "transactionHash" | "serializedExecution" | "effectClaim"
+    "state" | "transactionHash" | "userOperationHash" | "serializedExecution" | "effectClaim"
   >,
 ): boolean {
   return proposal.state === "executing" ||
     !!proposal.transactionHash ||
+    !!proposal.userOperationHash ||
     !!proposal.serializedExecution ||
     proposal.effectClaim?.kind === "execute";
 }

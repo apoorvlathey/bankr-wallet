@@ -32,20 +32,22 @@ export function createBackgroundTransactionExecutionMessageRouter(
         const txId = typeof message.txId === "string" ? message.txId : "";
         const query = message.requestKind === "batch"
           ? dependencies.getBatchFeePaymentOptions(txId)
-          : dependencies.getFeePaymentOptions(txId);
+          : message.requestKind === "safe"
+            ? dependencies.getSafeExecutionFeePaymentOptions(txId,
+                typeof message.accountId === "string" ? message.accountId : "")
+            : dependencies.getFeePaymentOptions(txId);
         return respondToTransactionExecution(query, sendResponse,
           "Failed to load gas-payment options");
       }
 
       case "prepareFeePaymentQuote": {
         const requestId = typeof message.requestId === "string" ? message.requestId : "";
-        const family = message.requestKind === "batch"
-          ? "batchTransaction"
-          : "transaction";
+        const family = message.requestKind === "batch" ? "batchTransaction"
+          : message.requestKind === "safe" ? "safeExecution" : "transaction";
         return respondToTransactionExecution(
-          dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken),
-          sendResponse,
-          "Failed to prepare fee-token quote",
+          dependencies.prepareFeePaymentQuote(family, requestId, message.feePaymentToken,
+            typeof message.accountId === "string" ? message.accountId : undefined),
+          sendResponse, "Failed to prepare fee-token quote",
         );
       }
       case "confirmTransaction": {
@@ -181,7 +183,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           );
         return HANDLED_ASYNC;
       }
-
       case "confirmImpersonatedTransaction": {
         const txId = typeof message.txId === "string" ? message.txId : "";
         dependencies
@@ -206,7 +207,6 @@ export function createBackgroundTransactionExecutionMessageRouter(
           );
         return HANDLED_ASYNC;
       }
-
       case "initiateTransfer": {
         dependencies.handleInitiateTransfer(message).then(sendResponse);
         return HANDLED_ASYNC;

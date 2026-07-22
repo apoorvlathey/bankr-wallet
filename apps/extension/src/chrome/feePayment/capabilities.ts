@@ -8,6 +8,8 @@ import type { Account } from "../types";
 import { getPendingTxRequestById } from "../requests/pendingTxStorage";
 import { getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage";
 import { resolvePinnedAccount } from "../transactions/runtime";
+import { getSafeProposal } from "../safe/proposalRepository";
+import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
 import { WALLETCHAN_OFFICIAL_DELEGATE } from "./constants";
 import { getFeeTokenBalanceAtRpc } from "./chainState";
 import {
@@ -185,5 +187,26 @@ export async function getBatchFeePaymentOptions(bundleId: string) {
     chainId: pending.chainId,
     account,
     hasDeployment: pending.params.calls.some((call) => !call.to),
+  });
+}
+
+export async function getSafeExecutionFeePaymentOptions(
+  proposalId: string,
+  executorAccountId: string,
+) {
+  const [proposal, account] = await Promise.all([
+    getSafeProposal(proposalId),
+    getAccountById(executorAccountId),
+  ]);
+  if (!proposal || proposal.state !== "readyToExecute" || hasUnresolvedSafeExecution(proposal)) {
+    return { success: false as const, error: "Safe proposal is not ready to execute" };
+  }
+  if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) {
+    return { success: false as const, error: "Safe execution account is no longer available" };
+  }
+  return getOptionsForRequest({
+    chainId: proposal.chainId,
+    account,
+    hasDeployment: false,
   });
 }

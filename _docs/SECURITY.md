@@ -666,10 +666,13 @@ Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any termina
 
 Token fee payment is an extension-only confirmation capability, never a new
 provider signing method. `getFeePaymentOptions` and `prepareFeePaymentQuote`
-are wallet-UI messages, and the existing transaction/batch confirmation claim
+are wallet-UI messages, and the existing transaction/batch/Safe execution claim
 remains the sole terminal decision. Quotes live only in service-worker memory
 for 45 seconds and bind request family/id, exact calls, account identity,
-chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum.
+chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum. Safe
+quotes bind the proposal ID, selected private-key/seed executor, proposal chain,
+and exact outer `execTransaction` call. Switching executors clears the renderer
+quote, and the background independently resolves the submitted executor ID.
 They are consumed once before pending request removal; a missing/restarted
 worker, edited call, account switch, nonce race, allowance change, or delegate
 change leaves the review retryable and requires a fresh quote.
@@ -727,7 +730,10 @@ rejection removes the record; a transport/5xx/malformed or hash-mismatched
 response remains outcome-unknown and is never blindly retried. Finality
 requires an independently fetched chain receipt containing the matching
 EntryPoint `UserOperationEvent` for the exact hash and sender; a bundler receipt
-alone cannot terminalize Activity or ERC-5792 status. Calldata, signatures,
+alone cannot terminalize Activity, a Safe provider result, or ERC-5792 status.
+For Safe execution, the UserOperation hash is durable duplicate-submit evidence
+but is never returned as the dapp's transaction hash; only the independently
+verified outer onchain hash is released. Calldata, signatures,
 authorizations, quotes, paymaster data, and credentials are never written to
 `pendingUserOperations`.
 
@@ -1379,7 +1385,8 @@ accessible resources.
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
 | `pendingBatchTxRequests`   | No               | Pending ERC-5792 queue. A newly pinned row may briefly carry non-actionable `intakeStatus: "validating"`; signing and call mutation fail closed until intake removes it, while terminal rejection may remove it safely. |
-| `pendingUserOperations`    | No               | Bounded ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, and timestamp. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
+| `pendingUserOperations`    | No               | Bounded transaction/batch/Safe ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, and timestamp. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
+| `safeProposals`            | No               | Bounded validated Safe proposals, confirmations, public routes, and execution evidence. Token-funded pending execution may add only the deterministic UserOperation hash plus public executor/fee-token metadata; it never stores the UserOperation signature, authorization, quote, paymaster data, private key, or password. |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
 | `dappPermissions`         | No               | Exact-origin grants allowing injected sites to read the current WalletChan account. Chrome-attested origin is authoritative; title/favicon are untrusted display metadata. |
@@ -2324,14 +2331,17 @@ Quick reference for which files to examine based on what area of security you're
 
 6. **Ambiguity is durable.** First-action claims own approval, publication,
    and execution effects. Exact signed outer execution bytes and their
-   deterministic hash are persisted before broadcast. Lost RPC responses are
+   deterministic hash are persisted before native broadcast. Token-funded
+   execution instead persists the deterministic EntryPoint UserOperation hash
+   before Pimlico broadcast; no UserOperation signature, authorization, quote,
+   paymaster data, or calldata is stored. Lost RPC responses are
    reconciled immediately by a bounded poller and resumed by a dedicated
    30-second MV3 alarm plus startup recovery. Read-only reconciliation tries
    the configured RPC before pinned built-in/canonical endpoints. It
    distinguishes a valid null receipt from transport/RPC failure; only the
    former is evidence that a healthy endpoint has not indexed the transaction.
    Receipt and Safe nonce are authoritative, and only identical signed bytes
-   may be resent. Any durable execute claim, hash, or serialized envelope
+   may be resent. Any durable execute claim, transaction/UserOperation hash, or serialized envelope
    rejects a second prepare/send path even when display state is stale. Reset
    and Safe removal fail while effects are unresolved. `safeTxHash` is proposal
    identity only and is never returned as an onchain transaction result.
@@ -2354,6 +2364,14 @@ Quick reference for which files to examine based on what area of security you're
    background recognizes only literal boolean `true` and still performs every
    account, auth-epoch, quorum, nonce, configuration, fee, serialization, and
    duplicate-submit check before broadcast.
+   At quorum, eligible private-key/seed executors may select an address-pinned
+   catalog ERC-20 through the shared fee selector. Option discovery and quote
+   preparation use that exact executor on the Safe's chain. Confirmation
+   consumes the single-use quote only for the same proposal, executor account,
+   address, and outer call, then repeats live Safe quorum/configuration,
+   auth-epoch, delegation, nonce, allowance, balance, and exact-envelope
+   simulation checks. Bankr, Ledger, impersonator, and Safe records do not enter
+   this Safe fee-payment path.
    Every Safe proposal explicitly uses the trusted-UI-only Safe simulation
    route, including unsigned proposals that do not yet have an outer execution
    request. Its asset-delta pass discovers candidates by tracing the reviewed

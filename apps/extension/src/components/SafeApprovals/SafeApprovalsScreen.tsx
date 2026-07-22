@@ -43,7 +43,7 @@ function SafeRequestsTitle() {
   );
 }
 
-export default function SafeApprovalsScreen({ safeAccount, chainId, accounts, initialProposalId, onBack, onProposalBack, onExecutionConfirmed }: { safeAccount: SafeAccount; chainId: number; accounts: Account[]; initialProposalId?: string | null; onBack: () => void; onProposalBack?: () => void; onExecutionConfirmed: () => void }) {
+export default function SafeApprovalsScreen({ safeAccount, chainId, accounts, initialProposalId, onBack, onProposalBack, onExecutionSubmitted, onExecutionConfirmed }: { safeAccount: SafeAccount; chainId: number; accounts: Account[]; initialProposalId?: string | null; onBack: () => void; onProposalBack?: () => void; onExecutionSubmitted: () => void; onExecutionConfirmed: () => void }) {
   const [record, setRecord] = useState<SafeAccountRecord | null>(null);
   const [proposals, setProposals] = useState<SafeProposalRecord[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -157,6 +157,7 @@ export default function SafeApprovalsScreen({ safeAccount, chainId, accounts, in
         onBack={onProposalBack ?? (() => setSelected(null))}
         onOpenProposal={setSelected}
         onReload={load}
+        onExecutionSubmitted={onExecutionSubmitted}
       />
     );
   }

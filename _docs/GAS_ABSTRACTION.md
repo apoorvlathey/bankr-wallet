@@ -18,8 +18,8 @@ follow `.agents/skills/walletchan-chain-research/SKILL.md`.
 
 ## Product behavior
 
-The transaction and atomic-batch confirmation screens show **Pay network fee
-with** when the active request is eligible. The picker:
+The transaction, atomic-batch, and executable Safe confirmation screens show
+**Pay network fee with** when the active request is eligible. The picker:
 
 - always preserves the existing native-fee path;
 - shows each available token with its logo and current nonzero balance before a
@@ -113,9 +113,14 @@ no hardware-signing implementation:
 
 View-only impersonator accounts are never eligible.
 
+Safe proposals retain their existing executor boundary: private-key and seed-
+phrase accounts can execute, while Bankr and Ledger are not offered as Safe gas
+payers. For those local executors, the normal delegation row above applies.
+
 Eligibility also requires:
 
-- the request to be a supported transaction or atomic ERC-5792 batch;
+- the request to be a supported transaction, atomic ERC-5792 batch, or a Safe
+  proposal at execution quorum;
 - a chain with a deployed and verified WalletChan official delegate;
 - an exact token entry in the built-in catalog;
 - a live token balance read;
@@ -150,7 +155,9 @@ For an eligible token selection, WalletChan performs the following sequence:
    authorization for WalletChan's official delegate.
 9. Sign the exact EntryPoint v0.7 UserOperation typed data.
 10. Persist the locally computed UserOperation hash and public recovery routing
-    before broadcast.
+    before broadcast. For Safe execution, the exact call is the outer
+    `execTransaction` envelope and the request additionally pins the proposal
+    ID and selected executor.
 11. Submit through the policy-constrained proxy and wait for independently
     verified onchain finality.
 
@@ -164,7 +171,7 @@ contains the precise approval needed for that operation.
 Prepared quotes live only in service-worker memory for 45 seconds. A quote is
 single-use and binds:
 
-- transaction or batch family and request ID;
+- transaction, batch, or Safe-execution family and request ID;
 - account ID, address, and signing type;
 - chain ID and exact calls;
 - selected token address, symbol, and decimals;
@@ -175,6 +182,10 @@ single-use and binds:
 Any edited call, account switch, chain switch, nonce race, delegate change,
 allowance change, token substitution, expiration, or service-worker restart
 invalidates the quote and requires explicit retry.
+
+For a Safe proposal, selecting another executor immediately restores native
+payment and clears the prior quote. Option discovery and quote preparation read
+the new executor's delegation and token balances on the Safe's chain.
 
 The renderer bounds fee-option discovery to 10 seconds and quote preparation
 to 30 seconds. Late callbacks are ignored. A failed or expired request never
@@ -252,7 +263,9 @@ A definite provider rejection removes the record. A timeout, transport error,
 5xx response, malformed response, or returned-hash mismatch is outcome
 unknown: WalletChan retains the record and never blindly resubmits it. Startup
 recovery checks the exact onchain EntryPoint event and sender before updating
-transaction history or ERC-5792 status.
+transaction history, Safe proposal/provider results, or ERC-5792 status. A
+waiting Safe caller never receives the UserOperation hash; it receives the real
+onchain transaction hash only after independently verified finality.
 
 Completed history stores the selected fee-token symbol. Receipt enrichment
 uses that marker to avoid attributing the bundler's native gas transfer to the

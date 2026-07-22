@@ -15,6 +15,12 @@ import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { GasOverrides } from "@/chrome/txHandlers";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import GasEstimateDisplay from "@/components/GasEstimateDisplay";
+import {
+  FeePaymentSelector,
+  type FeePaymentQuoteSummary,
+} from "@/components/FeePaymentSelector";
+import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
+import { useEffect, useState } from "react";
 import type {
   SafeExecutorAccount,
   SafeOwnerAccount,
@@ -29,19 +35,36 @@ export function SafeProposalDecisionSummary({
   selectedAccount,
   safeOwnerAccountIds,
   executionRequest,
+  proposalId,
   onSelect,
   onGasOverrides,
   onGasValidityChange,
+  feePaymentToken,
+  feePaymentQuote,
+  onFeePaymentTokenChange,
+  onFeePaymentQuoteChange,
+  disabled = false,
 }: {
   actionKind: SafeProposalActionKind;
   accounts: readonly DecisionAccount[];
   selectedAccount: DecisionAccount | null;
   safeOwnerAccountIds: ReadonlySet<string>;
   executionRequest: PendingTxRequest | null;
+  proposalId: string;
   onSelect: (accountId: string) => void;
   onGasOverrides: (overrides: GasOverrides | null) => void;
   onGasValidityChange: (valid: boolean) => void;
+  feePaymentToken: "native" | `0x${string}`;
+  feePaymentQuote: FeePaymentQuoteSummary | null;
+  onFeePaymentTokenChange: (token: "native" | `0x${string}`) => void;
+  onFeePaymentQuoteChange: (quote: FeePaymentQuoteSummary | null) => void;
+  disabled?: boolean;
 }) {
+  const [nativeFeeSummary, setNativeFeeSummary] =
+    useState<NativeFeePaymentSummary | null>(null);
+  useEffect(() => {
+    setNativeFeeSummary(null);
+  }, [executionRequest?.id]);
   if (!actionKind || !selectedAccount) return null;
 
   const identity = accounts.length > 1 ? (
@@ -55,6 +78,7 @@ export function SafeProposalDecisionSummary({
         maxW="230px"
         px={2}
         rightIcon={<ChevronDownIcon boxSize={4} />}
+        isDisabled={disabled}
         aria-label={actionKind === "execute" ? "Choose execution account" : "Choose signing account"}
       >
         <FromAccountDisplay address={selectedAccount.address} />
@@ -97,12 +121,30 @@ export function SafeProposalDecisionSummary({
       </HStack>
 
       {actionKind === "execute" && executionRequest && (
-        <GasEstimateDisplay
-          txRequest={executionRequest}
-          accountType={selectedAccount.type as "privateKey" | "seedPhrase"}
-          onGasOverrides={onGasOverrides}
-          onValidityChange={onGasValidityChange}
-        />
+        <>
+          <FeePaymentSelector
+            txId={proposalId}
+            chainId={executionRequest.tx.chainId}
+            requestKind="safe"
+            accountId={selectedAccount.id}
+            value={feePaymentToken}
+            quote={feePaymentQuote}
+            nativeSummary={nativeFeeSummary}
+            onChange={onFeePaymentTokenChange}
+            onQuoteChange={onFeePaymentQuoteChange}
+            disabled={disabled}
+          />
+          {feePaymentToken === "native" && (
+            <GasEstimateDisplay
+              txRequest={executionRequest}
+              accountType={selectedAccount.type as "privateKey" | "seedPhrase"}
+              onGasOverrides={onGasOverrides}
+              onValidityChange={onGasValidityChange}
+              onFeeSummaryChange={setNativeFeeSummary}
+              isReadOnly={disabled}
+            />
+          )}
+        </>
       )}
     </VStack>
   );

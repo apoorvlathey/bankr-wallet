@@ -7,10 +7,7 @@ import {
   resolveHistoryNftMetadata,
 } from "../../history/detailResolution";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
-import {
-  getBatchFeePaymentOptions,
-  getTransactionFeePaymentOptions,
-} from "../../feePayment/capabilities";
+import { getBatchFeePaymentOptions, getSafeExecutionFeePaymentOptions, getTransactionFeePaymentOptions } from "../../feePayment/capabilities";
 import { prepareFeePaymentQuote } from "../../feePayment/quotes";
 import { handleCheckPremiumStatus } from "../../sponsoredTransfers/premiumStatus";
 import {
@@ -70,6 +67,7 @@ export function composeExecutionRoutes(
       readLocalStorage: (key) => chrome.storage.local.get(key),
       getFeePaymentOptions: getTransactionFeePaymentOptions,
       getBatchFeePaymentOptions,
+      getSafeExecutionFeePaymentOptions,
       prepareFeePaymentQuote,
     });
   const runInternalIrreversibleOperation =

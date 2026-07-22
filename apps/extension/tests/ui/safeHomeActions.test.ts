@@ -452,12 +452,12 @@ test("terminal Safe Activity details cannot inherit live request behavior", asyn
 
   assert.match(screen, /const isRequestView = isPendingSafeProposal\(proposal\)/);
   assert.match(screen, /: "Transaction details"/);
-  assert.match(screen, /financialImpact=\{isRequestView \?/);
-  assert.match(screen, /financialImpactTitle=\{isRequestView \?/);
-  assert.match(screen, /contextTitle=\{isRequestView \? "Request details" : "Safe transaction"\}/);
-  assert.match(screen, /actionSummary=\{isRequestView \?/);
-  assert.match(screen, /rejectAction=\{isRequestView && canReject \?/);
-  assert.match(screen, /readOnly=\{!isRequestView\}/);
+  assert.match(screen, /financialImpact=\{displayRequestView \?/);
+  assert.match(screen, /financialImpactTitle=\{displayRequestView \?/);
+  assert.match(screen, /contextTitle=\{displayRequestView \? "Request details" : "Safe transaction"\}/);
+  assert.match(screen, /actionSummary=\{displayRequestView \?/);
+  assert.match(screen, /rejectAction=\{displayRequestView && canReject \?/);
+  assert.match(screen, /readOnly=\{!displayRequestView\}/);
 
   assert.match(details, /showRequestLifecycle &&\s*\(proposal\.route\.kind/);
   assert.match(details, /showRequestLifecycle && simulationReverted/);
@@ -520,6 +520,25 @@ test("Safe request completion routes only on a same-proposal executed transition
   assert.match(appSurfaces, /onProposalBack=\{onProposalBack\}/);
   assert.match(requestsScreen, /onBack=\{onProposalBack \?\? \(\(\) => setSelected\(null\)\)\}/);
   assert.match(requestsScreen, /backLabel=\{onProposalBack \? "Back to Activity" : undefined\}/);
+});
+
+test("Safe execution freezes review state and opens public Activity after submission", async () => {
+  const [confirmation, actions, requestsScreen, appSurfaces, app] = await Promise.all([
+    readFile(safeConfirmationUrl, "utf8"),
+    readFile(safeActionsHookUrl, "utf8"),
+    readFile(safeRequestsUrl, "utf8"),
+    readFile(safeAppSurfacesUrl, "utf8"),
+    readFile(appUrl, "utf8"),
+  ]);
+
+  assert.match(actions, /return runAction\(\{/);
+  assert.match(confirmation, /if \(submissionLocked\) return;/);
+  assert.match(confirmation, /displayRequestView = isRequestView \|\| submissionLocked/);
+  assert.match(confirmation, /if \(executing && submitted\) onExecutionSubmitted\(\)/);
+  assert.match(confirmation, /disabled=\{submissionLocked\}/);
+  assert.match(requestsScreen, /onExecutionSubmitted=\{onExecutionSubmitted\}/);
+  assert.match(appSurfaces, /onExecutionSubmitted=\{onExecutionSubmitted\}/);
+  assert.match(app, /onExecutionSubmitted=.*setWalletHomeMode\("public"\).*setActivityTabTrigger/);
 });
 
 test("Safe execution defaults to a local owner and permits another local account", () => {

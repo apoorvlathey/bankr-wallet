@@ -198,7 +198,7 @@ export async function cancelSafeProposal(id: string): Promise<SafeProposalRecord
       if (record.confirmations.length > 0 || (record.unsupportedConfirmations?.length ?? 0) > 0) {
         throw new Error("Signed Safe proposals require an onchain rejection transaction");
       }
-      if (record.effectClaim || record.transactionHash || record.serializedExecution) {
+      if (record.effectClaim || record.transactionHash || record.userOperationHash || record.serializedExecution) {
         throw new Error("Safe proposal operation is already in progress");
       }
       if (!["draft", "approvedLocally", "awaitingApprovals", "readyToExecute", "blocked"].includes(record.state)) {

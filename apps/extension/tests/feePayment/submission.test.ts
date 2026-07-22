@@ -114,6 +114,30 @@ test("removes recovery state after a definite JSON-RPC rejection", async () => {
   assert.deepEqual(values.pendingUserOperations, []);
 });
 
+test("removes recovery state when the durable pre-broadcast hook fails", async () => {
+  const values = installChromeStorage();
+  let sent = false;
+  const client = {
+    sendUserOperation: async () => {
+      sent = true;
+      return getPackedUserOperationHash(operation, 8453);
+    },
+  } as PimlicoClient;
+  await assert.rejects(
+    submitUserOperationRecoverably({
+      client,
+      record: record(),
+      userOperation: operation,
+      beforeBroadcast: async () => {
+        throw new Error("durable preparation failed");
+      },
+    }),
+    /durable preparation failed/,
+  );
+  assert.equal(sent, false);
+  assert.deepEqual(values.pendingUserOperations, []);
+});
+
 test("treats a mismatched provider hash as outcome unknown", async () => {
   installChromeStorage();
   const client = {

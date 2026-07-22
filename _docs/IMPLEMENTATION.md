@@ -2835,7 +2835,8 @@ rejects unrequested token quotes, and rejects a paymaster address that changes
 after quote selection. A Pimlico API key must never be compiled into the
 extension.
 
-`FeePaymentSelector.tsx` is shared by normal and ERC-5792 confirmation. Normal
+`FeePaymentSelector.tsx` is shared by normal, ERC-5792, and executable Safe
+confirmation. Normal
 confirmation includes injected and WalletConnect transactions, extension-
 initiated Send requests, replacements, and other requests persisted through
 the pinned single-transaction queue. It uses
@@ -2848,6 +2849,17 @@ the selector derives its displayed maximum and balance from that same object
 instead of keeping a second copy. Native and force-inclusion paths remain
 unchanged; there is no silent fallback from a failed token operation to native
 payment.
+
+At Safe quorum, the selector is keyed by the proposal ID and currently selected
+private-key/seed-phrase executor. Option discovery reads that executor's token
+balances and delegation on the proposal chain. A quote binds the exact outer
+`execTransaction` call, Safe proposal, chain, executor account/address, and
+EntryPoint/delegation snapshot. Switching executors restores native payment and
+invalidates the old quote. Token-funded Safe execution persists only the
+deterministic UserOperation hash plus public executor/fee-token routing data;
+startup and alarm reconciliation require the matching onchain EntryPoint event
+before applying the Safe result or returning the real transaction hash to the
+connected app.
 
 The options request reads every catalog-token balance independently of Pimlico quote
 preparation. An exact zero balance omits that catalog token before the options
@@ -6351,7 +6363,10 @@ available linked owner. At `readyToExecute` it changes to **Execute with**,
 defaults to a locally controlled Safe owner, and exposes the other supported
 private-key/seed accounts through the identity dropdown. The exact outer
 `execTransaction` request is passed through the normal local-account gas tier
-and custom-fee component. Safe approval and execution never render an inline
+and custom-fee component plus the shared fee-token selector. Fee-token
+availability and quotes are recomputed for the selected executor and proposal
+chain; a quote for one executor cannot authorize another. Safe approval and
+execution never render an inline
 password field: like ordinary transaction/signature confirmation, they consume
 the current expiry-checked master/agent/passkey session and fail closed with an
 unlock instruction if no coherent signing capability can be restored. The

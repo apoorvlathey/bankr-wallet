@@ -21,7 +21,8 @@ export type BackgroundTransactionExecutionDependencies = {
   readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
   getFeePaymentOptions: (txId: string) => Promise<any>;
   getBatchFeePaymentOptions: (bundleId: string) => Promise<any>;
-  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction", requestId: string, tokenId: unknown) => Promise<any>;
+  getSafeExecutionFeePaymentOptions: (proposalId: string, executorAccountId: string) => Promise<any>;
+  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction" | "safeExecution", requestId: string, tokenId: unknown, accountId?: string) => Promise<any>;
 };
 
 export const HANDLED_TRANSACTION_EXECUTION_ASYNC: BackgroundTransactionExecutionRouteResult = {

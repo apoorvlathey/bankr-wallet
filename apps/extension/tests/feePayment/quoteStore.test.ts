@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   FeePaymentQuoteStore,
+  feePaymentSafeExecutionCalls,
   fingerprintFeePaymentCalls,
   type PreparedFeePaymentQuote,
 } from "../../src/chrome/feePayment/quotes";
@@ -74,4 +75,29 @@ test("expired quotes fail closed", () => {
   const store = new FeePaymentQuoteStore(30, () => 2_000);
   store.put(quote());
   assert.throws(() => consume(store), /expired or no longer matches/);
+});
+
+test("Safe execution quotes remain pinned to their request family and executor", () => {
+  const store = new FeePaymentQuoteStore(30, () => 1_000);
+  store.put(quote({ family: "safeExecution", requestId: "safe-proposal" }));
+  assert.equal(consume(store, {
+    family: "safeExecution",
+    requestId: "safe-proposal",
+  }).family, "safeExecution");
+});
+
+test("Safe fee quotes fingerprint only the exact outer execTransaction call", () => {
+  const safe = "0x3333333333333333333333333333333333333333";
+  assert.deepEqual(feePaymentSafeExecutionCalls({
+    safeAddress: safe,
+    executionData: "0x6a761202",
+  }), [{
+    to: safe,
+    value: 0n,
+    data: "0x6a761202",
+  }]);
+  assert.throws(() => feePaymentSafeExecutionCalls({
+    safeAddress: "0x1234",
+    executionData: "0x6a761202",
+  }), /Invalid Safe execution request/);
 });

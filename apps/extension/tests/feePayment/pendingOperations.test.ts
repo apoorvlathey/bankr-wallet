@@ -60,3 +60,11 @@ test("filters malformed rows and retains only the newest fifty records", async (
   assert.equal(records[0]?.txId, "tx-6");
   assert.equal(records[49]?.txId, "tx-55");
 });
+
+test("retains recoverable Safe execution UserOperations", async () => {
+  installStorage([{ ...record(1), family: "safeExecution", txId: "safe-proposal" }]);
+  const records = await getPendingUserOperations();
+  assert.equal(records.length, 1);
+  assert.equal(records[0]?.family, "safeExecution");
+  assert.equal(records[0]?.txId, "safe-proposal");
+});

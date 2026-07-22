@@ -17,7 +17,7 @@ Implemented modules:
 - `paymaster.ts` computes the token bound and exact approval.
 - `prepareUserOperation.ts` assembles the final unsigned provider envelope.
 - `chainState.ts` owns delegation, nonce, balance, and allowance reads.
-- `capabilities.ts` gates pinned single/batch requests and account types.
+- `capabilities.ts` gates pinned single/batch/Safe-execution requests and account types.
 - `quotes.ts` owns short-lived exact-call quote pinning and one-time consume.
 - `quoteValidation.ts` rechecks live nonce and delegation bindings at confirm.
 - `signing.ts` chooses local or recovered-signer-verified Bankr EIP-712 signing.
@@ -25,7 +25,8 @@ Implemented modules:
   rejection versus an outcome-unknown transport response.
 - `receiptValidation.ts` requires a matching onchain EntryPoint event before
   accepting a bundler receipt.
-- `execution.ts` and `batchExecution.ts` recheck, sign, submit, and reconcile.
+- `execution.ts`, `batchExecution.ts`, and `safe/feePaymentExecution.ts`
+  recheck, sign, submit, and reconcile their request families.
 - `pendingOperations.ts` and `recovery.ts` own bounded MV3 receipt recovery.
 
 Keep provider data separate from locally constructed executable calldata and
@@ -34,6 +35,13 @@ UserOperation signature must never be persisted. Recovery stores the
 deterministic UserOperation hash and public routing fields immediately before
 broadcast; a definite provider rejection removes it, while an ambiguous
 response retains it for receipt reconciliation without retrying.
+
+Safe execution uses the same exact-call pipeline for the reviewed outer
+`execTransaction` call. Its quote additionally binds the Safe proposal ID and
+currently selected private-key/seed executor. Changing executor invalidates the
+renderer quote. The Safe proposal stores only the deterministic UserOperation
+hash and public executor/fee-token metadata while pending; verified EntryPoint
+finality supplies the real onchain transaction hash returned to a waiting dapp.
 
 Ledger and impersonator accounts fail closed at capability discovery. Ledger
 remains native-gas-only even when its address already has WalletChan's official

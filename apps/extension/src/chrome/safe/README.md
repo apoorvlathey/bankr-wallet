@@ -46,6 +46,11 @@ Safe private key or treats a Safe as an EOA.
   for the private-key or seed-phrase EOA that pays Safe execution gas. It
   reuses the ordinary receipt poller and details surface rather than adding a
   second Safe-specific executor activity model.
+- `feePaymentExecution.ts`: executor- and proposal-pinned ERC-20 fee quotes,
+  EIP-7702 UserOperation submission, deterministic-hash recovery, independently
+  verified EntryPoint finality, and delayed publication of the real onchain
+  hash to provider/ERC-5792 callers. Only the already-supported private-key and
+  seed-phrase Safe executors enter this path.
 - `executionPolicy.ts`, `executionStatus.ts`, `executionReceipt.ts`,
   `executionSettlement.ts`, `execution.ts`: durable duplicate-submit guards,
   exact-envelope simulation, session-restoring local executor signing,

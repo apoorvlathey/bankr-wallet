@@ -29,10 +29,42 @@ function dependencies(
     readLocalStorage: async () => ({}),
     getFeePaymentOptions: async () => ({ success: true, options: [] }),
     getBatchFeePaymentOptions: async () => ({ success: true, options: [] }),
+    getSafeExecutionFeePaymentOptions: async () => ({ success: true, options: [] }),
     prepareFeePaymentQuote: async () => ({ success: true, quoteId: "quote" }),
     ...overrides,
   };
 }
+
+test("Safe fee discovery and quotes are pinned to the selected executor", async () => {
+  const calls: unknown[][] = [];
+  const deps = dependencies({
+    getSafeExecutionFeePaymentOptions: async (...args) => {
+      calls.push(["options", ...args]);
+      return { success: true, options: [] };
+    },
+    prepareFeePaymentQuote: async (...args) => {
+      calls.push(["quote", ...args]);
+      return { success: true, quoteId: "safe-quote" };
+    },
+  });
+  await dispatch(deps, {
+    type: "getFeePaymentOptions",
+    requestKind: "safe",
+    txId: "safe-proposal",
+    accountId: "executor-1",
+  });
+  await dispatch(deps, {
+    type: "prepareFeePaymentQuote",
+    requestKind: "safe",
+    requestId: "safe-proposal",
+    accountId: "executor-1",
+    feePaymentToken: `0x${"1".repeat(40)}`,
+  });
+  assert.deepEqual(calls, [
+    ["options", "safe-proposal", "executor-1"],
+    ["quote", "safeExecution", "safe-proposal", `0x${"1".repeat(40)}`, "executor-1"],
+  ]);
+});
 
 function dispatch(
   deps: BackgroundTransactionExecutionDependencies,

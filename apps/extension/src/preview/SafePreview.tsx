@@ -214,6 +214,7 @@ export default function SafePreview({ scenario }: { scenario: string }) {
       onBack={() => undefined}
       onOpenProposal={() => undefined}
       onReload={async () => undefined}
+      onExecutionSubmitted={() => undefined}
     />
   );
 }

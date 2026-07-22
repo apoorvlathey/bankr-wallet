@@ -14,6 +14,7 @@ import type {
 const SAFE = `0x${"1".repeat(40)}` as const;
 const OWNER = `0x${"2".repeat(40)}` as const;
 const TX_HASH = `0x${"3".repeat(64)}` as const;
+const USER_OPERATION_HASH = `0x${"6".repeat(64)}` as const;
 
 function proposal(
   accountType: SafeExecutionExecutor["accountType"],
@@ -98,6 +99,21 @@ test("Safe executor history is absent until exact signed outer-tx evidence exist
   const missingExecutor = proposal("seedPhrase");
   missingExecutor.executor = undefined;
   assert.equal(buildSafeExecutorHistoryEntry(missingExecutor, "Base"), null);
+});
+
+test("token-funded Safe execution records its pending UserOperation and fee token", () => {
+  const safeProposal = proposal("privateKey");
+  safeProposal.transactionHash = undefined;
+  safeProposal.userOperationHash = USER_OPERATION_HASH;
+  safeProposal.executor!.feePaymentToken = "USDC";
+  const entry = buildSafeExecutorHistoryEntry(safeProposal, "Base", false);
+  assert.ok(entry);
+  assert.equal(entry.txHash, undefined);
+  assert.equal(entry.userOperationHash, USER_OPERATION_HASH);
+  assert.equal(entry.feePaymentToken, "USDC");
+  const decoded = decodeSafeProposal(safeProposal);
+  assert.equal(decoded.userOperationHash, USER_OPERATION_HASH);
+  assert.equal(decoded.executor?.feePaymentToken, "USDC");
 });
 
 test("Safe execution persistence rejects Bankr, impersonator, and Safe executors", () => {

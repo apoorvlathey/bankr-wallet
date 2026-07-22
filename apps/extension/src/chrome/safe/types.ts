@@ -102,6 +102,8 @@ export interface SafeExecutionExecutor {
   accountType: "privateKey" | "seedPhrase";
   address: SafeAddress;
   preparedAt: number;
+  /** ERC-20 symbol when the executor submitted through the fee-token route. */
+  feePaymentToken?: string;
   gasOverrides?: {
     gasLimit: SafeDecimalString;
     maxFeePerGas: SafeDecimalString;
@@ -144,6 +146,8 @@ export interface SafeProposalRecord {
   /** Safe transaction hash of the confirmed rejection that consumed this nonce. */
   rejectedBySafeTxHash?: `0x${string}`;
   transactionHash?: `0x${string}`;
+  /** Deterministic ERC-4337 hash while a token-funded execution is pending. */
+  userOperationHash?: `0x${string}`;
   /** Exact signed outer tx bytes retained until terminal reconciliation. */
   serializedExecution?: `0x${string}`;
   executionPreparedAt?: number;

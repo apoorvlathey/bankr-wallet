@@ -71,6 +71,10 @@ export function routeBackgroundSafeProposalMessage(
       executorAccountId: message.executorAccountId,
       gasOverrides: message.gasOverrides,
       allowSimulationFailure: message.allowSimulationFailure,
+      feePaymentToken: message.feePaymentToken === "token" ? "token" : "native",
+      feePaymentQuoteId: typeof message.feePaymentQuoteId === "string"
+        ? message.feePaymentQuoteId
+        : undefined,
     })); break;
     case "reconcileSafeExecution": work = gated("executeProposal", () => reconcileSafeExecution(message.proposalId)); break;
     default: return { handled: false };
