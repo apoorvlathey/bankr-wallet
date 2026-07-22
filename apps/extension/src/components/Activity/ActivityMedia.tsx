@@ -77,9 +77,8 @@ function ActivityIcon({
 
 function ChainBadge({
   tx,
-  iconChipBg,
   zIndex,
-}: Pick<ActivityMediaProps, "tx" | "iconChipBg"> & { zIndex?: number }) {
+}: Pick<ActivityMediaProps, "tx"> & { zIndex?: number }) {
   return (
     <Box
       position="absolute"
@@ -88,15 +87,21 @@ function ChainBadge({
       w="14px"
       h="14px"
       borderRadius="full"
-      bg={iconChipBg}
+      bg="surface.raised"
       border="1px solid"
       borderColor="surface.raised"
+      overflow="hidden"
       display="flex"
       alignItems="center"
       justifyContent="center"
       zIndex={zIndex}
     >
-      <ChainIcon chainId={tx.chainId} chainName={tx.chainName} size="10px" />
+      <ChainIcon
+        chainId={tx.chainId}
+        chainName={tx.chainName}
+        size="10px"
+        withChip
+      />
     </Box>
   );
 }
@@ -161,7 +166,7 @@ export default function ActivityMedia({
         >
           <PrivacyShieldIcon boxSize="20px" />
         </Box>
-        <ChainBadge tx={tx} iconChipBg={iconChipBg} />
+        <ChainBadge tx={tx} />
       </Box>
     );
   }
@@ -183,7 +188,7 @@ export default function ActivityMedia({
         >
           <SafeIcon boxSize="20px" />
         </Box>
-        <ChainBadge tx={tx} iconChipBg={iconChipBg} />
+        <ChainBadge tx={tx} />
       </Box>
     );
   }
@@ -258,7 +263,7 @@ export default function ActivityMedia({
           {renderTokenLogo(buyLogo, buySymbol, "22px")}
         </Box>
         {!tx.bridge && (
-          <ChainBadge tx={tx} iconChipBg={iconChipBg} zIndex={3} />
+          <ChainBadge tx={tx} zIndex={3} />
         )}
       </Box>
     );
@@ -288,7 +293,7 @@ export default function ActivityMedia({
           originFaviconFallbackSrc={originFaviconFallbackSrc}
         />
       </Box>
-      <ChainBadge tx={tx} iconChipBg={iconChipBg} />
+      <ChainBadge tx={tx} />
     </Box>
   );
 }
