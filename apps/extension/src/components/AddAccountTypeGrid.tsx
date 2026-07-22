@@ -29,14 +29,6 @@ interface AddAccountTypeGridProps {
 
 const accountTypes = [
   {
-    type: "privateKey" as const,
-    title: "Private key",
-    description: "Import a local signer",
-    icon: KeyIcon,
-    iconBg: "status.warning.bg",
-    iconColor: "status.warning.fg",
-  },
-  {
     type: "seedPhrase" as const,
     title: "Seed phrase",
     description: "Import or create",
@@ -45,20 +37,12 @@ const accountTypes = [
     iconColor: "status.info.fg",
   },
   {
-    type: "bankr" as const,
-    title: "Bankr API",
-    description: "Connect your account",
-    icon: null,
-    iconBg: "transparent",
-    iconColor: "fg.primary",
-  },
-  {
-    type: "safe" as const,
-    title: "Safe",
-    description: "Use an existing multisig",
-    icon: SafeIcon,
-    iconBg: "status.success.bg",
-    iconColor: "status.success.fg",
+    type: "privateKey" as const,
+    title: "Private key",
+    description: "Import a local signer",
+    icon: KeyIcon,
+    iconBg: "status.warning.bg",
+    iconColor: "status.warning.fg",
   },
   {
     type: "impersonator" as const,
@@ -74,6 +58,22 @@ const accountTypes = [
     description: "Connect a hardware wallet",
     icon: null,
     iconBg: "surface.sunken",
+    iconColor: "fg.primary",
+  },
+  {
+    type: "safe" as const,
+    title: "Safe",
+    description: "Use an existing multisig",
+    icon: SafeIcon,
+    iconBg: "status.success.bg",
+    iconColor: "status.success.fg",
+  },
+  {
+    type: "bankr" as const,
+    title: "Bankr API",
+    description: "Connect your account",
+    icon: null,
+    iconBg: "transparent",
     iconColor: "fg.primary",
   },
 ];

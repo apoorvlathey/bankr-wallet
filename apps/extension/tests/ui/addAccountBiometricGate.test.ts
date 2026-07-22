@@ -1,10 +1,29 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   getMnemonicAccessRequirement,
   needsLocalAccountBiometricUpgrade,
 } from "../../src/components/AddAccount/model/biometricGateModel";
 import { ensureMnemonicAccessFromStatus } from "../../src/components/AddAccount/model/mnemonicAccessCoordinator";
+
+test("Add account presents wallet types in the intended setup order", async () => {
+  const source = await readFile(
+    new URL("../../src/components/AddAccountTypeGrid.tsx", import.meta.url),
+    "utf8",
+  );
+  const positions = [
+    'type: "seedPhrase"',
+    'type: "privateKey"',
+    'type: "impersonator"',
+    'type: "ledger"',
+    'type: "safe"',
+    'type: "bankr"',
+  ].map((entry) => source.indexOf(entry));
+
+  assert.ok(positions.every((position) => position >= 0));
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+});
 
 test("local account setup is blocked for signing-only legacy biometrics", () => {
   assert.equal(
