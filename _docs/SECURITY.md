@@ -207,10 +207,10 @@ The agent password model restricts what operations are available when the wallet
 | Quote an active-chain Shield amount | Yes | Yes | Read-only exact-account public balance/fee/gas simulation; impersonators rejected and no intent, note, signer, or submission exists |
 | Prepare an active-chain Shield review | Yes | **BLOCKED** | Decrypts recovery only under the wallet-secret lock and a live master epoch; exact-shape validation pins the accepted public gross quote to the entered net amount and produces a non-persisted, non-submittable background intent with no calldata or commitment material returned |
 | Persist an active-chain Shield operation | Yes | **BLOCKED** | `privacy/operations/prepare.ts` repeats deployment/quote/account/master checks, verifies the accepted public gross quote pin against the entered net amount, requires the authenticated dedicated privacy capability from a password or fresh matching biometric master session, atomically reserves a distinct index, and encrypts sensitive operation details before the trusted confirmation request exists; phrase reveal remains explicit-main-password-only |
-| Confirm/submit active-chain Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, account, and master epoch are rechecked at confirmation and the final effect boundary. Sepolia blocks Bankr; mainnet supports Bankr/private-key/seed-phrase. Impersonators never submit. |
+| Confirm/submit active-chain Shield | Yes | **BLOCKED** | Trusted account-pinned pending request; encrypted intent, deployment, account, and master epoch are rechecked at confirmation and the final effect boundary. Sepolia supports private-key/seed-phrase/Ledger but blocks Bankr; mainnet also supports Bankr. Ledger keeps the prompt pending through device approval and begins the privacy effect only at the final pre-broadcast boundary. Impersonators never submit. |
 | Prepare/submit private Unshield | Yes | **BLOCKED** | Wallet-wide privacy authority: no active public account is accepted in the request or consulted during quote/proof work. `privacy/withdrawals/` validates the dedicated master capability, signed relayer economics, roots, membership, proof signals, auth epoch, and nullifier immediately before POST. |
 | Preview public Shield recovery | Yes | **BLOCKED** | `privacyPreviewRagequit` requires live master authorization and returns every locally verified ragequittable deposit as only a bounded opaque commitment-record ID, timestamp, account metadata, source-operation binding, and current whole-commitment amount; a valid lookup with none returns an empty collection. Preview does not start the disposable global-event backfill; preparation still fail-closes by checking the selected current nullifier onchain before proof generation and again inside the final claim. Preview may materialize already-indexed encrypted commitment state but creates no proof, recovery intent, claim, pending request, or external effect. |
-| Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, repeats every selected opaque commitment ID plus optional transaction-detail source binding, and rejects duplicates, mixed accounts, stale status, or account/source/amount drift. A single exit uses the normal pinned request; 2–8 same-account exits use one immutable EIP-7702/ERC-7821/Bankr atomic batch whose operation-ID/call order and encrypted claims are rechecked at the final effect boundary. Impersonators never submit. |
+| Prepare/confirm public Shield recovery | Yes | **BLOCKED** | `privacy/ragequit/` requires the original depositor, repeats every selected opaque commitment ID plus optional transaction-detail source binding, and rejects duplicates, mixed accounts, stale status, or account/source/amount drift. A single exit uses the normal pinned request for all four signing account types; 2–8 same-account exits use one immutable EIP-7702/ERC-7821/Bankr atomic batch whose operation-ID/call order and encrypted claims are rechecked at the final effect boundary. Ledger batches fail closed and exit one commitment per device-signed transaction. Impersonators never submit. |
 | Reveal/restore/rescan Privacy Pools recovery | Yes | **BLOCKED** | `background/privacyRecoveryRouter.ts` requires the exact trusted UI plus explicit main-password proof or a live master epoch; plaintext reveal is confined to the Settings leaf and restore resets only rebuildable privacy state |
 | Initiate token transfer          | Yes    | Yes         | `txHandlers.ts` - creates PendingTxRequest                                     |
 | Reset extension                  | Yes    | **BLOCKED** | `background/resetRouter.ts` requires an explicit boolean Shield-loss acknowledgement when Shield data exists, then uses the exact `storage/resetManifest.ts` |
@@ -918,7 +918,7 @@ exact calldata,
 and a random throwaway public precommitment, and can correlate those with IP
 and timing. That precommitment is never returned, stored, or accepted by a
 later preparation path. The handler resolves the submitted account ID,
-address, and type against storage; Bankr/private-key/seed-phrase addresses may
+address, and type against storage; Bankr/private-key/seed-phrase/Ledger addresses may
 quote and impersonators fail before RPC. The response is exact decimal strings
 for balance, minimum, gross deposit, protocol fee, exact Shield credit, gas
 reserve, total, net Max, and affordability. Max selects and re-simulates the
@@ -977,8 +977,8 @@ account-pinned through broadcast.
 
 Receiver-paid Unshield is the explicit signer-bound exception. Its exact
 wallet-UI request includes the receiving account snapshot and requires that
-snapshot to resolve to a Bankr, private-key, or seed-phrase account whose
-address is exactly the recipient. Impersonators fail request validation. The
+snapshot to resolve to a Bankr, private-key, seed-phrase, or Ledger account
+whose address is exactly the recipient. Impersonators fail request validation. The
 background proves with that recipient as `processooor`, validates all eight
 public signals, simulates the exact encrypted calldata from the same address,
 and checks its native gas balance before creating a trusted pending request.
@@ -1880,10 +1880,12 @@ These must always hold true. Violations indicate a security bug.
     one-to-one exact event match before each source activity becomes terminal.
     Agent and impersonator accounts fail before
     relayer quote/proof publication or signing. Sepolia Bankr accounts also
-    fail before mutation. Production Bankr, private-key, and seed-phrase
-    accounts may act only for an exact pinned original depositor; local
-    accounts share one bounded raw-RPC path and Bankr uses its separately
-    authorized submission path.
+    fail before mutation. Production Bankr, private-key, seed-phrase, and Ledger
+    accounts may act only for an exact pinned original depositor.
+    Private-key/seed accounts share one bounded raw-RPC path, Bankr uses its
+    separately authorized submission path, and Ledger uses its guarded
+    single-transaction hardware path. Ledger cannot enter the atomic
+    multi-commitment batch path.
     Local note records are canonicalized by immutable deposit lineage and the
     greatest withdrawal index. Same-index commitment forks fail closed;
     materialization cannot recreate a superseded index-zero note for an already

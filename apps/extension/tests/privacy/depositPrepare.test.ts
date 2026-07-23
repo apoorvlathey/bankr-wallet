@@ -21,7 +21,13 @@ function account(type: AccountType): Account {
     createdAt: 1,
     ...(type === "seedPhrase"
       ? { seedGroupId: "seed-review", derivationIndex: 0 }
-      : {}),
+      : type === "ledger"
+        ? {
+            deviceId: ADDRESS.toLowerCase(),
+            hdPath: "m/44'/60'/0'/0/0",
+            hdIndex: 0,
+          }
+        : {}),
   } as Account;
 }
 
@@ -65,7 +71,7 @@ async function establishMasterSession() {
 test("review preparation supports every custody wallet without persistence", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
 
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const source = account(type);
     const harness = createChromeStorageHarness({
       local: { accounts: [source] },

@@ -57,6 +57,7 @@ export function usePublicRecovery(
       !account ||
       !selectedPreview ||
       selectedPreviews.length > 8 ||
+      (account.type === "ledger" && selectedPreviews.length > 1) ||
       !isPrivacyPoolsMutationAccountType(account.type) ||
       selectedPreviews.some((preview) =>
         account.id !== preview.accountId ||
@@ -76,7 +77,7 @@ export function usePublicRecovery(
     const selections = selectedPreviews.map((preview) => ({
       accountId: account.id,
       accountAddress: account.address,
-      accountType: account.type as "bankr" | "privateKey" | "seedPhrase",
+      accountType: account.type,
       commitmentId: preview.commitmentId,
       sourceOperationId: preview.sourceOperationId,
       expectedAmountWei: preview.amountWei.toString(),

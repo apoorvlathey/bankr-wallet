@@ -26,6 +26,24 @@ import type { LedgerAccount } from "../types";
 import { lookupFunctionName } from "../transactions/displayMetadata";
 import { handleTransactionFailure } from "../transactions/failure";
 import {
+  authorizePrivacyConfirmation,
+} from "../transactions/privacyConfirmation";
+import {
+  beginPrivacyShieldSubmission,
+  recordPrivacyShieldSubmitted,
+} from "../privacy/operations/lifecycle";
+import type { PrivacyShieldConfirmationAuthorization } from "../privacy/operations/submission";
+import {
+  beginPrivacyRagequitSubmission,
+  recordPrivacyRagequitSubmitted,
+} from "../privacy/ragequit/lifecycle";
+import type { PrivacyRagequitAuthorization } from "../privacy/ragequit/submission";
+import {
+  beginPrivacyDirectUnshieldSubmission,
+  recordPrivacyDirectUnshieldSubmitted,
+} from "../privacy/withdrawals/lifecycle";
+import type { PrivacyDirectUnshieldAuthorization } from "../privacy/withdrawals/directConfirmation";
+import {
   activeAbortControllers,
   processingTxIds,
   resolvePinnedAccount,
@@ -89,6 +107,9 @@ export async function handleConfirmTransactionAsyncLedger(
   );
   if (replacementGasError) return fail(replacementGasError);
 
+  const privacyAuthorization = await authorizePrivacyConfirmation(pending);
+  if (!privacyAuthorization.ok) return fail(privacyAuthorization.error);
+
   try {
     await ensureLedgerSigningSession(password);
   } catch (error) {
@@ -111,6 +132,9 @@ export async function handleConfirmTransactionAsyncLedger(
     gasOverrides,
     nonce: nonceSelection.nonce,
     effectLease,
+    privacyShieldAuthorization: privacyAuthorization.shield,
+    privacyRagequitAuthorization: privacyAuthorization.ragequit,
+    privacyDirectUnshieldAuthorization: privacyAuthorization.directUnshield,
   });
 }
 
@@ -122,6 +146,9 @@ async function processLedgerTransaction(input: {
   gasOverrides?: GasOverrides;
   nonce?: number;
   effectLease: PendingRequestEffectLease;
+  privacyShieldAuthorization: PrivacyShieldConfirmationAuthorization | null;
+  privacyRagequitAuthorization: PrivacyRagequitAuthorization | null;
+  privacyDirectUnshieldAuthorization: PrivacyDirectUnshieldAuthorization | null;
 }): Promise<ConfirmationResult> {
   const {
     txId,
@@ -131,6 +158,9 @@ async function processLedgerTransaction(input: {
     gasOverrides,
     nonce: nonceOverride,
     effectLease,
+    privacyShieldAuthorization,
+    privacyRagequitAuthorization,
+    privacyDirectUnshieldAuthorization,
   } = input;
   const abortController = new AbortController();
   activeAbortControllers.set(txId, abortController);
@@ -141,6 +171,7 @@ async function processLedgerTransaction(input: {
   );
   const effectGuard = guardPendingRequestEffectLease(effectLease);
   let requestCommitted = false;
+  let publishedTxHash: string | null = null;
 
   try {
     const txForHistory = gasOverrides
@@ -209,6 +240,12 @@ async function processLedgerTransaction(input: {
             bundleIndex: pending.bundleIndex,
             replacement: pending.replacement,
             accountId: pending.accountId,
+            privacyRagequitMeta: pending.privacyRagequitMeta
+              ? { version: 1 }
+              : undefined,
+            privacyUnshieldMeta: pending.privacyUnshieldMeta
+              ? { version: 1 }
+              : undefined,
           });
           if (!functionName && pending.tx.data && pending.tx.data !== "0x") {
             void lookupFunctionName(pending.tx.data).then((name) => {
@@ -219,6 +256,18 @@ async function processLedgerTransaction(input: {
             txId,
             { ...pending.tx, to: pending.tx.to ?? undefined },
             pending.tx.chainId,
+          );
+          await beginPrivacyShieldSubmission(
+            pending,
+            privacyShieldAuthorization,
+          );
+          await beginPrivacyRagequitSubmission(
+            pending,
+            privacyRagequitAuthorization,
+          );
+          await beginPrivacyDirectUnshieldSubmission(
+            pending,
+            privacyDirectUnshieldAuthorization,
           );
           effectGuard.beginEffect();
         },
@@ -231,6 +280,18 @@ async function processLedgerTransaction(input: {
       throw error;
     }
 
+    publishedTxHash = result.txHash;
+    if (result.txHash) {
+      await recordPrivacyShieldSubmitted(pending, result.txHash).catch((error) =>
+        console.warn("[privacy-shield] failed to persist submitted hash", error),
+      );
+      await recordPrivacyRagequitSubmitted(pending, result.txHash).catch((error) =>
+        console.warn("[privacy-ragequit] failed to persist submitted hash", error),
+      );
+      await recordPrivacyDirectUnshieldSubmitted(pending, result.txHash).catch((error) =>
+        console.warn("[privacy-unshield] failed to persist submitted hash", error),
+      );
+    }
     if (result.txHash && result.receipt) {
       if (pending.replacement) {
         await updateTxInHistory(
@@ -269,6 +330,14 @@ async function processLedgerTransaction(input: {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Ledger transaction failed";
+    if (publishedTxHash) {
+      console.error("[ledger-transaction] Post-broadcast history update failed", error);
+      await writeResultToStorage(`txResult:${txId}`, {
+        success: true,
+        txHash: publishedTxHash,
+      });
+      return { success: true };
+    }
     resetNonce(account.address, pending.tx.chainId);
     if (requestCommitted) {
       await handleTransactionFailure(txId, pending, errorMessage);

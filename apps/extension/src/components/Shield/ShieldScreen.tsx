@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
-import { isPrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
+import {
+  isPrivacyPoolsMutationAccountType,
+  type PrivacyPoolsMutationAccount,
+} from "@/chrome/privacy/deployment/accountPolicy";
 import ShieldAmountPanel from "./ShieldAmountPanel";
 import ShieldDashboard from "./ShieldDashboard";
 import { useShieldInitialization } from "./hooks/useShieldInitialization";
@@ -21,7 +24,7 @@ interface ShieldScreenProps {
 
 function isShieldSourceAccount(
   account: Account,
-): account is Extract<Account, { type: "bankr" | "privateKey" | "seedPhrase" }> {
+): account is PrivacyPoolsMutationAccount {
   return isPrivacyPoolsMutationAccountType(account.type);
 }
 

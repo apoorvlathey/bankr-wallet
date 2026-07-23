@@ -26,7 +26,10 @@ import {
 } from "../commitments/types";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { verifyPrivacyPoolsDeployment } from "../deployment/health";
-import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
+import {
+  isPrivacyPoolsMutationAccountType,
+  type PrivacyPoolsMutationAccountType,
+} from "../deployment/accountPolicy";
 import { derivePrivacyPoolCommitment } from "../protocol/primitives";
 import { listAllPrivacyShieldOperations } from "../operations/repository";
 import {
@@ -103,7 +106,7 @@ export class PrivacyRagequitPrepareError extends Error {
 export interface PrivacyRagequitAccountRequest {
   accountId: string;
   accountAddress: string;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
   commitmentId: string;
   sourceOperationId: string | null;
 }
@@ -557,6 +560,9 @@ export function validatePrivacyRagequitBatchSelections(
     selections.length > MAX_PRIVACY_RAGEQUIT_BATCH_SIZE
   ) throw new PrivacyRagequitPrepareError("invalid-request");
   const [first] = selections;
+  if (first.accountType === "ledger") {
+    throw new PrivacyRagequitPrepareError("invalid-request");
+  }
   const commitmentIds = new Set<string>();
   for (const selection of selections) {
     validateRagequitAccountRequest(selection);

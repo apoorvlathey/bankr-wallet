@@ -4,7 +4,7 @@ import type { PrivacyPoolsReleasePolicy } from "./types";
 
 export type PrivacyPoolsMutationAccountType = Extract<
   AccountType,
-  "bankr" | "privateKey" | "seedPhrase"
+  "bankr" | "privateKey" | "seedPhrase" | "ledger"
 >;
 
 export type PrivacyPoolsMutationAccount = Extract<
@@ -18,7 +18,8 @@ export function isPrivacyPoolsCustodyAccountType(
   return (
     accountType === "bankr" ||
     accountType === "privateKey" ||
-    accountType === "seedPhrase"
+    accountType === "seedPhrase" ||
+    accountType === "ledger"
   );
 }
 

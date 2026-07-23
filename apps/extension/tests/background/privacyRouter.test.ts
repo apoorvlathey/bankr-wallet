@@ -446,7 +446,7 @@ test("an over-cap relay quote returns a bounded warning instead of a generic err
 test("receiver-paid Unshield queues every signing account type and rejects view-only accounts", async () => {
   const address = "0x2222222222222222222222222222222222222222";
   const requestId = "00000000-0000-4000-8000-000000000013";
-  for (const accountType of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const accountType of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const capture = responseCapture();
     let preparedInput: unknown;
     let queuedId: string | null = null;
@@ -584,9 +584,9 @@ test("public recovery route queues only a bounded public operation", async () =>
       requestId: "00000000-0000-4000-8000-000000000022",
       createdAt: 1,
       chainId: 11_155_111,
-      accountId: "pk-1",
+      accountId: "ledger-1",
       accountAddress: "0x1111111111111111111111111111111111111111",
-      accountType: "privateKey",
+      accountType: "ledger",
       amountWei: "1000",
       poolAddress: "0x644d5A2554d36e27509254F32ccfeBe8cd58861f",
     },
@@ -725,6 +725,22 @@ test("public recovery batch preserves one exact same-account selection array", a
     selections: [{ ...selections[0], extra: true }, selections[1]],
   }, malformed.sendResponse);
   assert.deepEqual(await malformed.response, {
+    success: false,
+    code: "invalid-request",
+    error: "Invalid request",
+  });
+
+  const ledgerBatch = responseCapture();
+  route({
+    type: "privacyPrepareRagequitBatch",
+    requestId,
+    selections: selections.map((selection) => ({
+      ...selection,
+      accountId: "ledger-1",
+      accountType: "ledger",
+    })),
+  }, ledgerBatch.sendResponse);
+  assert.deepEqual(await ledgerBatch.response, {
     success: false,
     code: "invalid-request",
     error: "Invalid request",

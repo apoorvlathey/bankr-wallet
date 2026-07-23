@@ -80,9 +80,10 @@ precommitment. Its exact call is independently decoded, fixed as
 `operations/` path repeats deployment/account/quote/auth checks, derives
 a distinct real deposit index, and atomically stores its encrypted calldata,
 precommitment, and index beside a sanitized public summary. Only the background
-can convert it into a trusted, account-pinned normal transaction request. Local
-private-key and seed-phrase accounts recheck the encrypted intent and master
-epoch at the raw-RPC boundary. Bankr is blocked in the Sepolia development
+can convert it into a trusted, account-pinned normal transaction request.
+Private-key, seed-phrase, and Ledger accounts recheck the encrypted intent and
+master epoch at the raw-RPC boundary; Ledger begins the privacy lifecycle only
+after device approval and final authorization. Bankr is blocked in the Sepolia development
 profile; the production mainnet profile uses Bankr's normal pinned confirmation
 and submission coordinator with the same final privacy authorization boundary.
 Receipt and bounded pool-event sync recover the commitment. Sync refreshes
@@ -141,7 +142,9 @@ pending, Proof-of-Association-required, declined, removed, or locally-derived
 ASP-unavailable commitments
 expose one compact public-withdrawal action; its
 proof calls the ETH pool only from the exact original depositor through the same
-local confirmation path. A rejected prompt restores the prior ASP state, while
+account-pinned confirmation path. Ledger uses this single-transaction path one
+commitment at a time and is rejected from the atomic batch path. A rejected
+prompt restores the prior ASP state, while
 success requires the exact Ragequit event before the source activity becomes
 terminal. The user-rejected recovery record is kept for safe internal claim
 cleanup but omitted from the Activity projection. SDK contract/submission helpers remain intentionally

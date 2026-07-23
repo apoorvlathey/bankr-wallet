@@ -152,7 +152,7 @@ async function loadBatchOperations(
     loaded.push({ operation, details: await releaseDetails(operation) });
   }
   const first = loaded[0].operation.summary;
-  if (loaded.some(({ operation }) =>
+  if (first.accountType === "ledger" || loaded.some(({ operation }) =>
     operation.summary.accountId !== first.accountId ||
     operation.summary.accountType !== first.accountType ||
     operation.summary.accountAddress.toLowerCase() !== first.accountAddress.toLowerCase() ||

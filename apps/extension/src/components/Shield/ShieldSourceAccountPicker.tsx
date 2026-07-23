@@ -12,8 +12,11 @@ import {
 import { CheckIcon, ChevronDownIcon } from "@chakra-ui/icons";
 import type { Account } from "@/chrome/types";
 import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manifest";
+import {
+  isPrivacyPoolsMutationAccount,
+} from "@/chrome/privacy/deployment/accountPolicy";
 import { AccountAvatar } from "@/components/AccountIdentity";
-import { truncateAddress } from "@/lib/addressUtils";
+import { useAccountIdentityLabels } from "@/hooks/useAccountIdentityLabels";
 import type { ShieldSourceAccount } from "./model/shieldQuote";
 
 interface ShieldSourceAccountPickerProps {
@@ -30,8 +33,8 @@ function accountTypeCopy(account: Account): string {
       ? "Bankr"
       : "Bankr · Shielding unavailable";
   }
+  if (account.type === "ledger") return "Ledger";
   if (account.type === "safe") return "Safe accounts cannot shield";
-  if (account.type === "ledger") return "Ledger accounts cannot shield";
   return "View-only accounts cannot shield";
 }
 
@@ -40,6 +43,7 @@ export default function ShieldSourceAccountPicker({
   account,
   onChange,
 }: ShieldSourceAccountPickerProps) {
+  const { getDisplayName, getEnsAvatar } = useAccountIdentityLabels(accounts);
   const selected = account
     ? accounts.find((candidate) => candidate.id === account.id) ?? null
     : null;
@@ -64,10 +68,14 @@ export default function ShieldSourceAccountPicker({
         >
           {selected ? (
             <HStack spacing={2} minW={0}>
-              <AccountAvatar account={selected} ensAvatar={null} size={26} />
+              <AccountAvatar
+                account={selected}
+                ensAvatar={getEnsAvatar(selected)}
+                size={26}
+              />
               <Box minW={0} textAlign="left">
                 <Text fontSize="xs" fontWeight="700" noOfLines={1}>
-                  {selected.displayName || truncateAddress(selected.address)}
+                  {getDisplayName(selected)}
                 </Text>
                 <Text fontSize="2xs" color="fg.secondary" noOfLines={1}>
                   {accountTypeCopy(selected)}
@@ -80,10 +88,10 @@ export default function ShieldSourceAccountPicker({
         </MenuButton>
         <MenuList minW="300px" maxW="calc(100vw - 32px)" maxH="320px" overflowY="auto" py={1}>
           {accounts.map((candidate) => {
-            const eligible = candidate.type === "privateKey" ||
-              candidate.type === "seedPhrase" ||
-              (candidate.type === "bankr" &&
-                PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled");
+            const eligibleAccount = isPrivacyPoolsMutationAccount(candidate)
+              ? candidate
+              : null;
+            const eligible = eligibleAccount !== null;
             const isSelected = candidate.id === account?.id;
             return (
               <MenuItem
@@ -91,13 +99,17 @@ export default function ShieldSourceAccountPicker({
                 minH="62px"
                 px={3}
                 isDisabled={!eligible}
-                onClick={() => eligible && onChange(candidate)}
+                onClick={() => eligibleAccount && onChange(eligibleAccount)}
               >
                 <HStack w="full" spacing={3}>
-                  <AccountAvatar account={candidate} ensAvatar={null} size={32} />
+                  <AccountAvatar
+                    account={candidate}
+                    ensAvatar={getEnsAvatar(candidate)}
+                    size={32}
+                  />
                   <VStack flex={1} minW={0} align="start" spacing={0}>
                     <Text fontSize="sm" fontWeight="700" noOfLines={1}>
-                      {candidate.displayName || truncateAddress(candidate.address)}
+                      {getDisplayName(candidate)}
                     </Text>
                     <Text fontSize="xs" color={eligible ? "fg.secondary" : "fg.muted"} noOfLines={1}>
                       {accountTypeCopy(candidate)}

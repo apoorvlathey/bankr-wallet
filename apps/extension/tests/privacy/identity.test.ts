@@ -15,6 +15,14 @@ function account(type: Account["type"]): Account {
   };
   return type === "seedPhrase"
     ? { ...base, type, seedGroupId: "seed-group", derivationIndex: 0 }
+    : type === "ledger"
+      ? {
+          ...base,
+          type,
+          deviceId: base.address.toLowerCase(),
+          hdPath: "m/44'/60'/0'/0/0",
+          hdIndex: 0,
+        }
     : base as Account;
 }
 
@@ -35,7 +43,7 @@ test("first Private-mode initialization creates one encrypted identity for every
   const privacyCrypto = await import("../../src/chrome/privacy/crypto");
   const privacyVault = await import("../../src/chrome/privacy/vault");
 
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const selected = account(type);
     const harness = createChromeStorageHarness({
       local: { accounts: [selected] },

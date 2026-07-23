@@ -8,7 +8,7 @@ import { findPendingShieldConfirmation } from "../../src/components/Shield/model
 
 function pending(
   id: string,
-  accountType: "bankr" | "privateKey" | "seedPhrase" | "impersonator",
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "ledger" | "impersonator",
   privacy = true,
 ): PendingTxRequest {
   return {
@@ -35,7 +35,11 @@ function pending(
 }
 
 test("Shield entry resumes the newest exact pending confirmation for every signing wallet type", () => {
-  for (const [index, type] of (["bankr", "privateKey", "seedPhrase"] as const).entries()) {
+  for (
+    const [index, type] of (
+      ["bankr", "privateKey", "seedPhrase", "ledger"] as const
+    ).entries()
+  ) {
     const suffix = (index + 1).toString().padStart(12, "0");
     const older = pending(`00000000-0000-4000-8000-${suffix}`, type);
     const newer = pending(`10000000-0000-4000-8000-${suffix}`, type);

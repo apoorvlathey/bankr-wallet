@@ -22,7 +22,13 @@ function account(type: AccountType): Account {
     createdAt: 1,
     ...(type === "seedPhrase"
       ? { seedGroupId: "seed-operation", derivationIndex: 0 }
-      : {}),
+      : type === "ledger"
+        ? {
+            deviceId: ADDRESS.toLowerCase(),
+            hdPath: "m/44'/60'/0'/0/0",
+            hdIndex: 0,
+          }
+        : {}),
   } as Account;
 }
 
@@ -54,10 +60,10 @@ async function establishMasterSession() {
   return session;
 }
 
-test("operation preparation reserves one encrypted index for both Sepolia-capable local wallets", async () => {
+test("operation preparation reserves one encrypted index for every Sepolia signing wallet", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
 
-  for (const [position, type] of ["privateKey", "seedPhrase"].entries()) {
+  for (const [position, type] of ["privateKey", "seedPhrase", "ledger"].entries()) {
     const source = account(type as AccountType);
     const harness = createChromeStorageHarness({
       local: { accounts: [source] },

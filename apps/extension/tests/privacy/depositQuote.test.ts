@@ -20,7 +20,13 @@ function account(type: AccountType): Account {
     createdAt: 1,
     ...(type === "seedPhrase"
       ? { seedGroupId: "seed-1", derivationIndex: 0 }
-      : {}),
+      : type === "ledger"
+        ? {
+            deviceId: ADDRESS.toLowerCase(),
+            hdPath: "m/44'/60'/0'/0/0",
+            hdIndex: 0,
+          }
+        : {}),
   } as Account;
 }
 
@@ -33,8 +39,8 @@ function requestFor(source: Account) {
   };
 }
 
-test("quote supports Bankr, private-key, and seed-phrase source accounts", async () => {
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+test("quote supports every signing custody source account", async () => {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const source = account(type);
     let observedAddress = "";
     const quote = await quotePrivacyShield(requestFor(source), {

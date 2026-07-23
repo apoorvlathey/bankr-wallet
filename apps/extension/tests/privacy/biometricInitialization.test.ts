@@ -14,6 +14,14 @@ function account(type: Account["type"]): Account {
   };
   return type === "seedPhrase"
     ? { ...base, type, seedGroupId: "seed-group", derivationIndex: 0 }
+    : type === "ledger"
+      ? {
+          ...base,
+          type,
+          deviceId: base.address.toLowerCase(),
+          hdPath: "m/44'/60'/0'/0/0",
+          hdIndex: 0,
+        }
     : base as Account;
 }
 
@@ -29,7 +37,7 @@ test("an existing biometric factor initializes Shield for every custody wallet t
   const privacyVault = await import("../../src/chrome/privacy/vault");
   const session = await import("../../src/chrome/sessionCache");
 
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const selected = account(type);
     const harness = createChromeStorageHarness({
       local: { accounts: [selected] },

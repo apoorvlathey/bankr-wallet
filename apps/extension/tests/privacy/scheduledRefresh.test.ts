@@ -16,7 +16,7 @@ import {
 import { registerPrivacyAspRefreshLifecycle } from "../../src/chrome/background/lifecycle/privacyAspRefresh";
 
 function operation(
-  accountType: "bankr" | "privateKey" | "seedPhrase",
+  accountType: "bankr" | "privateKey" | "seedPhrase" | "ledger",
   state: "awaiting_asp" | "asp_approved" | "private_ready",
 ): any {
   return {
@@ -49,7 +49,7 @@ test("Shield-approval notification is one-time and lock-screen generic", () => {
 });
 
 test("closed-popup ASP refresh supports every custody wallet type", async () => {
-  for (const accountType of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const accountType of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     let operations = [operation(accountType, "awaiting_asp")];
     const calls: string[] = [];
     const dependencies: PrivacyAspScheduledRefreshDependencies = {

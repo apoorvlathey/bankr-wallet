@@ -21,6 +21,7 @@ read [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md) first.
 | Withdraw publicly | One real transaction succeeded after the signal-binding fix |
 | User-rejected public withdrawal hidden from Activity | Maintainer-confirmed browser QA complete |
 | Complete private-key and seed-phrase matrix | Maintainer-confirmed complete |
+| Ledger Shield/receiver-paid Unshield/public exit | Real-device QA required after Ledger enablement |
 | ASP-approved partial/full private Unshield | Maintainer-confirmed complete |
 | Reveal/clean restore/full rescan | Maintainer-confirmed complete |
 | Account-removal/reset safeguards | Maintainer-confirmed complete |
@@ -192,6 +193,17 @@ must use the selected derived address and local signing path. Switching accounts
 during review/confirmation must fail closed rather than silently signing from a
 different account.
 
+## Core flow: Ledger account
+
+Repeat Shield with a Ledger account selected as the source. Reject the device
+prompt once and verify the pending request remains retryable with no failed
+Activity row, then approve it and verify the normal Shield receipt/ASP
+lifecycle. Repeat receiver-paid Unshield with the Ledger address as recipient
+and signer. For public recovery, select and approve one Ledger commitment;
+multiple Ledger commitments must remain one-at-a-time in the UI and a crafted
+batch request must fail before device signing. Switching accounts during
+review/hardware approval must fail closed.
+
 ## Negative wallet paths
 
 - Bankr: quote/review preparation may load, but Review shield must fail before
@@ -245,12 +257,13 @@ ASP-unavailable:
 
 1. Verify the dashboard offers **Withdraw publicly** and clearly says it
    returns to the original deposit address and creates a public link.
-2. From the original private-key or seed account, reject once, then approve.
+2. From the original private-key, seed, or Ledger account, reject once, then approve.
    The user-rejected attempt must not appear as a failed Activity row. The
    approved attempt must resume across UI/service-worker restart and accept
    only the exact Ragequit event before removing the private balance.
+   Ledger deposits must exit one commitment per hardware-signed transaction.
 3. Verify another account, Bankr, impersonator, and agent sessions cannot use
-   the recovery path.
+   a commitment they do not own.
 4. While an account has an unresolved Shield operation, in-flight recovery, or
    unspent commitment, try to remove it. Removal must stop before dapp grants or
    account metadata change.

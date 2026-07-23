@@ -2,6 +2,7 @@ import type { Address, Hex } from "viem";
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
+import type { PrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
 
 export const PRIVACY_WITHDRAWALS_DATABASES = Object.freeze([
   "walletchan-privacy-withdrawals-v1",
@@ -59,7 +60,7 @@ export interface PrivacyDirectUnshieldSummaryV1 extends Omit<
   method: "direct";
   accountId: string;
   accountAddress: Address;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
   gasLimit: string;
   maxFeePerGas: string;
   gasFeeEstimateWei: string;
@@ -232,7 +233,8 @@ export function isValidPrivacyUnshieldSummary(value: unknown): value is PrivacyA
     (isDirect
       ? typeof value.accountId === "string" && value.accountId.length > 0 && value.accountId.length <= 128 &&
         address(value.accountAddress) && value.accountAddress.toLowerCase() === value.recipient.toLowerCase() &&
-        (value.accountType === "bankr" || value.accountType === "privateKey" || value.accountType === "seedPhrase") &&
+        (value.accountType === "bankr" || value.accountType === "privateKey" ||
+          value.accountType === "seedPhrase" || value.accountType === "ledger") &&
         uint(value.gasLimit) !== null && uint(value.gasLimit)! > 0n &&
         uint(value.maxFeePerGas) !== null && uint(value.maxFeePerGas)! > 0n &&
         uint(value.gasFeeEstimateWei) === uint(value.gasLimit)! * uint(value.maxFeePerGas)! &&

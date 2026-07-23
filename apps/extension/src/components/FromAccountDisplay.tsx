@@ -6,6 +6,7 @@ import { useEnsIdentities } from "@/hooks/useEnsIdentities";
 import { useCachedAvatarSrc } from "@/hooks/useCachedAvatarSrc";
 import { truncateAddress } from "@/lib/addressUtils";
 import { useAddressContact } from "@/hooks/useAddressContacts";
+import { LedgerAvatar } from "@/components/Ledger/LedgerAvatar";
 
 interface FromAccountDisplayProps {
   address: string;
@@ -62,6 +63,8 @@ export function FromAccountDisplay({ address }: FromAccountDisplayProps) {
           border="2px solid"
           borderColor="border.default"
         />
+      ) : fromAccount?.type === "ledger" ? (
+        <LedgerAvatar size={20} />
       ) : (
         <Image
           src={blo(address as `0x${string}`)}

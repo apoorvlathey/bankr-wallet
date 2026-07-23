@@ -38,7 +38,10 @@ import {
   resolvePrivacyPoolsRpcUrl,
   verifyPrivacyPoolsDeployment,
 } from "../deployment/health";
-import { isPrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
+import {
+  isPrivacyPoolsMutationAccountType,
+  type PrivacyPoolsMutationAccountType,
+} from "../deployment/accountPolicy";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import { provePrivacyWithdrawal } from "../prover/coordinator";
 import type { PrivacyGroth16Proof } from "../prover/messages";
@@ -153,7 +156,7 @@ function encodeDirectWithdrawalCall(input: {
 export async function resolveDirectAccount(input: {
   accountId: string;
   accountAddress: string;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
 }) {
   const account = await getAccountById(input.accountId);
   if (
@@ -204,7 +207,7 @@ export async function preparePrivacyDirectUnshield(input: {
   recipient: string;
   accountId: string;
   accountAddress: string;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
 }): Promise<StoredPrivacyUnshieldV1> {
   if (
     !UUID.test(input.requestId) || !UINT.test(input.amountWei) ||

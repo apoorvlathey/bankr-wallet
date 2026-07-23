@@ -3,11 +3,14 @@ import { getPreviewWallet, toAccount } from "./fixtures";
 import type { PreviewWalletType } from "./types";
 import type { PrivacyActionMode } from "@/components/ShieldView";
 import type { Account } from "@/chrome/types";
-import { isPrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
+import {
+  isPrivacyPoolsMutationAccountType,
+  type PrivacyPoolsMutationAccount,
+} from "@/chrome/privacy/deployment/accountPolicy";
 
 function isPrivacyPreviewAccount(
   account: Account,
-): account is Extract<Account, { type: "bankr" | "privateKey" | "seedPhrase" }> {
+): account is PrivacyPoolsMutationAccount {
   return isPrivacyPoolsMutationAccountType(account.type);
 }
 

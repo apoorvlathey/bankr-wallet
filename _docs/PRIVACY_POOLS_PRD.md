@@ -71,7 +71,7 @@ The privacy benefit is breaking the direct protocol-level link between them.
   destination.
 - Support Ethereum ETH shielding, balance recovery, partial/full relayed
   withdrawals, and ragequit.
-- Give Bankr, private-key, and seed-phrase users one consistent privacy
+- Give Bankr, private-key, seed-phrase, and Ledger users one consistent privacy
   recovery model.
 - Keep every privacy secret out of React, content scripts, dapps, logs,
   analytics, support bundles, and synchronized storage.
@@ -279,9 +279,9 @@ reserve. The official website's app-only `1 ETH` preference is not a contract
 rule and is not adopted by WalletChan. Input remains bounded to an exact
 `uint256`. Continue prepares and independently decodes a non-submittable review;
 Confirm details then reserves a distinct encrypted index and queues the normal
-WalletChan confirmation. Private-key and seed-phrase accounts can submit on
-Sepolia. Bankr fails before a prompt because its raw transaction API does not
-support Sepolia; impersonator and agent paths fail closed.
+WalletChan confirmation. Private-key, seed-phrase, and Ledger accounts can
+submit on Sepolia. Bankr fails before a prompt because its raw transaction API
+does not support Sepolia; impersonator and agent paths fail closed.
 
 ### 7.5 Withdrawal flow
 
@@ -363,6 +363,8 @@ only the acknowledged final action may prepare and queue the transaction. One
 selection uses a normal transaction; two through eight selections from the same
 account use one immutable atomic EIP-7702/ERC-7821 or Bankr batch. Selecting a
 commitment disables other account groups until the current group is cleared.
+Ledger uses the normal transaction path one commitment at a time because its
+atomic batch path is deliberately unsupported.
 It is the always-available
 custody exit for an indexed commitment owned by the original depositor,
 including while ASP review is pending. The product should not force the user to
@@ -474,7 +476,16 @@ submission.
 - The ordinary seed phrase is not the Privacy Pools recovery phrase.
 - The Privacy Pools adapter never receives the ordinary mnemonic.
 
-### 9.4 Impersonator accounts
+### 9.4 Ledger accounts
+
+- Public Shield, receiver-paid Unshield, and ragequit use the normal
+  device-signed transaction path.
+- The Privacy Pools adapter receives no Ledger private key; the encrypted intent
+  and final authority checks remain in the service worker.
+- Public ragequit exits one commitment per transaction because Ledger does not
+  support WalletChan's atomic batch flow.
+
+### 9.5 Impersonator accounts
 
 - May view the wallet-wide privacy overview after normal wallet unlock.
 - Cannot be selected as a deposit source.
@@ -482,7 +493,7 @@ submission.
 - If active, operation CTAs require switching to a custody-capable account.
 - Reject-only pending transaction/signature behavior remains unchanged.
 
-### 9.5 Agent-password sessions
+### 9.6 Agent-password sessions
 
 V1 blocks all privacy mutations. Agent sessions and an automatically expired
 auth session may view only the bounded aggregate balance/chart snapshot already
@@ -862,7 +873,7 @@ Normal dev and production commands select `mainnet-production`; dedicated
 Sepolia commands select `sepolia-local-beta`. There is no runtime/remote override, and bundle probes
 require each emitted profile to exclude the other profile's contract and ASP
 pins. Encrypted/rebuildable IndexedDB state is profile-isolated. Production
-Bankr/private-key/seed-phrase mutations are enabled, impersonators remain
+Bankr/private-key/seed-phrase/Ledger mutations are enabled, impersonators remain
 reject-only, and agent-password mutations remain blocked.
 
 The trusted diagnostic readiness route sends the selected profile's fixed
@@ -942,10 +953,11 @@ Both build profiles keep review and execution separate. Review uses a
 disposable reserved derivation and cannot be submitted. Confirming the review
 repeats every deployment, account, quote, and authorization check; reserves a
 distinct durable derivation; encrypts the exact operation; and creates a normal
-account-pinned WalletChan confirmation. Only private-key and seed-phrase
-accounts can reach raw-RPC publication on Sepolia. Production also permits
-Bankr through its separate confirmation/submission path after the exact privacy
-authorization and effect claim run at the final irreversible boundary. Receipt and pool-event
+account-pinned WalletChan confirmation. Only private-key, seed-phrase, and
+Ledger accounts can reach raw-RPC publication on Sepolia. Production also
+permits Bankr through its separate confirmation/submission path after the exact
+privacy authorization and effect claim run at the final irreversible boundary.
+Receipt and pool-event
 reconciliation recover the exact commitment after restart or cache loss.
 
 ## 17. ASP sync and verification

@@ -3,6 +3,7 @@ import type { Address, Hex } from "viem";
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
 import type { PrivacyCommitmentStatus } from "../commitments/types";
+import type { PrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
 
 export const PRIVACY_RAGEQUITS_DATABASES = Object.freeze([
   "walletchan-privacy-ragequits-v1",
@@ -47,7 +48,7 @@ export interface PrivacyRagequitSummaryV1 {
   chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   accountId: string;
   accountAddress: Address;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
   amountWei: string;
   poolAddress: Address;
 }
@@ -154,7 +155,7 @@ export function isValidPrivacyRagequitSummary(value: unknown): value is PrivacyR
     typeof value.accountId === "string" && value.accountId.length > 0 && value.accountId.length <= 128 &&
     address(value.accountAddress) &&
     (value.accountType === "bankr" || value.accountType === "privateKey" ||
-      value.accountType === "seedPhrase") &&
+      value.accountType === "seedPhrase" || value.accountType === "ledger") &&
     amount !== null && amount > 0n &&
     address(value.poolAddress) &&
     value.poolAddress.toLowerCase() ===

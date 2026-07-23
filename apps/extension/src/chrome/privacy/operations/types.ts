@@ -3,6 +3,7 @@ import type { PrivacyShieldLifecycleState } from "../../../lib/privacyShieldLife
 
 import { decodeBase64Bounded, decodeBase64Exact } from "../../cryptography/base64";
 import { PRIVACY_POOLS_DEPLOYMENT } from "../deployment/manifest";
+import type { PrivacyPoolsMutationAccountType } from "../deployment/accountPolicy";
 
 export const PRIVACY_OPERATIONS_DATABASES = Object.freeze([
   "walletchan-privacy-v1",
@@ -78,7 +79,7 @@ export interface PrivacyShieldOperationSummaryV1 {
   chainId: typeof PRIVACY_POOLS_DEPLOYMENT.chainId;
   accountId: string;
   accountAddress: Address;
-  accountType: "bankr" | "privateKey" | "seedPhrase";
+  accountType: PrivacyPoolsMutationAccountType;
   amountWei: string;
   protocolFeeWei: string;
   shieldedAmountWei: string;
@@ -222,7 +223,8 @@ export function isValidPrivacyShieldOperationSummary(
     !isAddress(summary.accountAddress) ||
     (summary.accountType !== "bankr" &&
       summary.accountType !== "privateKey" &&
-      summary.accountType !== "seedPhrase") ||
+      summary.accountType !== "seedPhrase" &&
+      summary.accountType !== "ledger") ||
     !isAddress(summary.destinationAddress) ||
     summary.destinationAddress.toLowerCase() !==
       PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address.toLowerCase() ||

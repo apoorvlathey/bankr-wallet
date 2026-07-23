@@ -11,7 +11,7 @@ import {
 const sourceRoot = new URL("../../src/chrome/", import.meta.url);
 
 test("mainnet mutations support all custody wallet types and never impersonators", () => {
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     assert.equal(
       isPrivacyPoolsMutationAccountType(
         type,
@@ -36,17 +36,17 @@ test("mainnet mutations support all custody wallet types and never impersonators
   );
   assert.equal(
     isPrivacyPoolsMutationAccountType(
-      "ledger",
-      PRIVACY_POOLS_MAINNET_RELEASE_POLICY,
+      "bankr",
+      PRIVACY_POOLS_SEPOLIA_RELEASE_POLICY,
     ),
     false,
   );
   assert.equal(
     isPrivacyPoolsMutationAccountType(
-      "bankr",
+      "ledger",
       PRIVACY_POOLS_SEPOLIA_RELEASE_POLICY,
     ),
-    false,
+    true,
   );
 });
 
@@ -102,6 +102,35 @@ test("local Privacy Pools confirmation still covers private-key and seed wallets
   assert.match(
     execution,
     /recordPrivacyDirectUnshieldSubmissionFailure\(pending, \{[\s\S]*?outcomeUncertain: publishedTxHash !== null/,
+  );
+});
+
+test("Ledger Privacy Pools confirmation retains the encrypted-intent effect boundary", async () => {
+  const source = await readFile(
+    new URL("ledger/transactionExecution.ts", sourceRoot),
+    "utf8",
+  );
+  assert.ok(
+    source.indexOf("authorizePrivacyConfirmation(pending)") <
+      source.indexOf("result = await signAndBroadcastLedgerTransaction"),
+  );
+  assert.ok(
+    source.indexOf("await removePendingTxRequest(txId)") <
+      source.indexOf("await beginPrivacyShieldSubmission"),
+  );
+  assert.match(source, /beginPrivacyShieldSubmission/);
+  assert.match(source, /beginPrivacyRagequitSubmission/);
+  assert.match(source, /beginPrivacyDirectUnshieldSubmission/);
+  assert.match(source, /recordPrivacyShieldSubmitted/);
+  assert.match(source, /recordPrivacyRagequitSubmitted/);
+  assert.match(source, /recordPrivacyDirectUnshieldSubmitted/);
+  assert.match(
+    source,
+    /privacyRagequitMeta:\s*pending\.privacyRagequitMeta/,
+  );
+  assert.match(
+    source,
+    /privacyUnshieldMeta:\s*pending\.privacyUnshieldMeta/,
   );
 });
 

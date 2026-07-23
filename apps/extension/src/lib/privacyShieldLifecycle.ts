@@ -70,6 +70,28 @@ export function isPrivacyShieldPublicRecoveryAvailable(
 }
 
 /**
+ * Return the private balance credit only after the deposit passed compliance.
+ * Earlier and recovery states must not imply that Shielded ETH was received.
+ */
+export function getShieldedReceiveAmountWei(
+  state: PrivacyShieldLifecycleState,
+  shieldedAmountWei: unknown,
+): string | null {
+  if (state !== "asp_approved" && state !== "private_ready") return null;
+  if (
+    typeof shieldedAmountWei !== "string" ||
+    !/^(0|[1-9]\d*)$/.test(shieldedAmountWei)
+  ) {
+    return null;
+  }
+  try {
+    return BigInt(shieldedAmountWei) > 0n ? shieldedAmountWei : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Convert elapsed time since the public receipt into an intentionally bounded
  * compliance indicator. Pending checks never imply completion, even after the
  * one-hour estimate has elapsed.

@@ -245,7 +245,7 @@ test("restore preserves the current phrase until replacement is fully confirmed"
 });
 
 test("restore accepts every custody wallet type", async () => {
-  for (const type of ["bankr", "privateKey", "seedPhrase"] as const) {
+  for (const type of ["bankr", "privateKey", "seedPhrase", "ledger"] as const) {
     const selected = account(type);
     const harness = createChromeStorageHarness({
       local: { accounts: [selected] },
@@ -259,7 +259,9 @@ test("restore accepts every custody wallet type", async () => {
         verifyMasterPassword: async () => true,
       };
       assert.deepEqual(await recovery.restorePrivacyRecovery({
-        requestId: `00000000-0000-4000-8000-00000000020${type === "bankr" ? 1 : type === "privateKey" ? 2 : 3}`,
+        requestId: `00000000-0000-4000-8000-00000000020${
+          type === "bankr" ? 1 : type === "privateKey" ? 2 : type === "seedPhrase" ? 3 : 4
+        }`,
         phrase: PHRASE,
         password: PASSWORD,
         replaceExisting: false,

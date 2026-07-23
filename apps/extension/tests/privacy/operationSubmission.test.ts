@@ -7,7 +7,7 @@ import { createChromeStorageHarness } from "../helpers/chromeStorageHarness";
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 const REQUEST_ID = "00000000-0000-4000-8000-000000000002";
 
-function account(type: "privateKey" | "seedPhrase"): Account {
+function account(type: "privateKey" | "seedPhrase" | "ledger"): Account {
   return {
     id: `${type}-shield-submit`,
     type,
@@ -15,7 +15,13 @@ function account(type: "privateKey" | "seedPhrase"): Account {
     createdAt: 1,
     ...(type === "seedPhrase"
       ? { seedGroupId: "seed-shield-submit", derivationIndex: 0 }
-      : {}),
+      : type === "ledger"
+        ? {
+            deviceId: ADDRESS.toLowerCase(),
+            hdPath: "m/44'/60'/0'/0/0",
+            hdIndex: 0,
+          }
+        : {}),
   } as Account;
 }
 
@@ -47,12 +53,16 @@ async function establishMasterSession() {
   return session;
 }
 
-test("durable Shield operations queue one exact normal confirmation for both local wallet types", async () => {
+test("durable Shield operations queue one exact normal confirmation for every local signer", async () => {
   const identity = await import("../../src/chrome/privacy/identity");
   const operationModule = await import("../../src/chrome/privacy/operations/prepare");
   const submission = await import("../../src/chrome/privacy/operations/submission");
 
-  for (const [index, type] of (["privateKey", "seedPhrase"] as const).entries()) {
+  for (
+    const [index, type] of (
+      ["privateKey", "seedPhrase", "ledger"] as const
+    ).entries()
+  ) {
     const selected = account(type);
     const harness = createChromeStorageHarness({
       local: { accounts: [selected] },

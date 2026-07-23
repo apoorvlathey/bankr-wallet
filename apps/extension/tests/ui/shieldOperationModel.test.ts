@@ -89,6 +89,31 @@ test("Shield operation response accepts only the pinned account and amount", () 
   );
 });
 
+test("Shield operation response accepts a pinned Ledger account", () => {
+  const ledger = {
+    id: "ledger-1",
+    type: "ledger" as const,
+    address: account.address,
+  };
+  const response = {
+    success: true,
+    status: "awaiting_wallet_confirmation",
+    operation: {
+      ...operation(),
+      accountId: ledger.id,
+      accountType: ledger.type,
+    },
+  };
+  assert.equal(
+    parseShieldOperationResponse(
+      response,
+      ledger,
+      99_000_000_000_000_000n,
+    )?.accountType,
+    "ledger",
+  );
+});
+
 test("Shield activity accepts only aggregate private balance and public operations", () => {
   const recovery = {
     id: "00000000-0000-4000-8000-000000000004",
@@ -334,6 +359,33 @@ test("public withdrawal amounts stay scoped to one depositing account", () => {
   });
 });
 
+test("Ledger deposits remain eligible for a single public exit", () => {
+  const ledgerAccount = {
+    id: "ledger-1",
+    type: "ledger" as const,
+    address: account.address,
+  };
+  const ledgerOperation = {
+    ...operation(),
+    accountId: ledgerAccount.id,
+    accountType: ledgerAccount.type,
+    state: "awaiting_asp",
+    shieldedAmountWei: 3n,
+  };
+  assert.deepEqual(getPublicWithdrawalOffer({
+    account: ledgerAccount,
+    recoverableBalanceWei: 3n,
+    operations: [ledgerOperation],
+  }), {
+    amountWei: 3n,
+    accountId: ledgerAccount.id,
+    accountAddress: ledgerAccount.address,
+    accountType: "ledger",
+    activeAccountMatches: true,
+    sourceOperationId: ledgerOperation.id,
+  });
+});
+
 test("public exit offers one whole deposit instead of aggregating an account", () => {
   const first = {
     ...operation(),
@@ -420,4 +472,12 @@ test("public recovery preview accepts every bounded whole-commitment projection"
     success: true,
     previews: [],
   }), []);
+  assert.equal(parsePublicRecoveryPreviewsResponse({
+    success: true,
+    previews: [{
+      ...response.previews[0],
+      accountId: "ledger-1",
+      accountType: "ledger",
+    }],
+  })?.[0]?.accountType, "ledger");
 });

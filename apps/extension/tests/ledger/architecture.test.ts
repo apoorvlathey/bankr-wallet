@@ -27,6 +27,12 @@ test("Ledger transport is Chrome-only and isolated in an offscreen document", as
   assert.match(authorization, /sender\.id !== extensionId \|\| sender\.tab/);
 });
 
+test("Ledger approval allows ten minutes without relaxing device discovery", async () => {
+  const signer = await source("src/offscreen/ledgerSigner.ts");
+  assert.match(signer, /const DISCOVERY_TIMEOUT_MS = 8_000/);
+  assert.match(signer, /const ACTION_TIMEOUT_MS = 10 \* 60_000/);
+});
+
 test("Ledger setup launches in a dedicated extension tab", async () => {
   const [addAccount, app, route, screen] = await Promise.all([
     source("src/components/AddAccount.tsx"),
@@ -103,6 +109,10 @@ test("Ledger transaction and signature effects retain final account and authoriz
   assert.match(transaction, /getAccountById\(account\.id\)/);
   assert.match(transaction, /enforcePendingRequestAuthorizationAtConfirmation/);
   assert.match(transaction, /guardPendingRequestEffectLease/);
+  assert.match(transaction, /authorizePrivacyConfirmation\(pending\)/);
+  assert.match(transaction, /beginPrivacyShieldSubmission/);
+  assert.match(transaction, /beginPrivacyRagequitSubmission/);
+  assert.match(transaction, /beginPrivacyDirectUnshieldSubmission/);
   assert.match(signature, /prepareSignatureConfirmation/);
   assert.match(signature, /revalidatePendingSignatureBeforeRelease/);
   assert.match(signature, /guardPendingRequestEffectLease/);

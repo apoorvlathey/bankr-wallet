@@ -15,7 +15,7 @@ const previewPendingGasReserveWei = 120_000_000_000_000n;
 interface PreviewShieldAccount {
   id: string;
   address: string;
-  type: "bankr" | "privateKey" | "seedPhrase";
+  type: "bankr" | "privateKey" | "seedPhrase" | "ledger";
 }
 
 export function previewShieldPortfolioResponse(

@@ -53,8 +53,8 @@ privacy key and never enter React. Records are capped at 100 and activity reads
 at the newest 20. Manual reset and disposable fresh-onboarding cleanup delete
 the complete database.
 
-Operation preparation supports Bankr, private-key, and seed-phrase custody
-accounts after exact storage pinning. Impersonators and agent sessions fail
+Operation preparation supports Bankr, private-key, seed-phrase, and Ledger
+custody accounts after exact storage pinning. Impersonators and agent sessions fail
 closed. A fresh biometric master session may prepare an operation directly from
 its matching purpose-separated privacy capability; explicit recovery-phrase
 reveal remains main-password-only. No module in this directory imports a

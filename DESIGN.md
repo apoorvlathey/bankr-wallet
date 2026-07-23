@@ -242,6 +242,15 @@
 
 ## Slop audit
 
+- 2026-07-23 Shield source-identity audit: the compact `Deposit from` trigger
+  and its account menu now reuse WalletChan's shared contact, saved-name, ENS,
+  and fallback-address identity precedence. Resolved ENS avatars use the same
+  cached raster path as Public account selection and Send; no parallel lookup,
+  extra decoration, layout change, or new interaction state was introduced.
+  Existing 44px trigger geometry, keyboard menu behavior, truncation, wallet
+  type context, disabled states, and selection mark remain intact. Result:
+  pass.
+
 - 2026-07-22 Token-picker network navigation audit: Send and Swap/Bridge now
   share one compact, semantic `on <network> v` trigger with a full accessible
   label. Its 24px geometry and subtle default border preserve the original
@@ -930,6 +939,10 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-23: aligned Shield's source-account trigger and menu with the shared
+  wallet identity projection, so resolved ENS names and avatars appear
+  consistently with Public account selection and Send.
 
 - 2026-07-22: unified Send and Swap/Bridge token-picker network context with a
   compact clickable pill. Selecting a network now updates the owning field and

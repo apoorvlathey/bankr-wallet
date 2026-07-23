@@ -22,7 +22,7 @@ type Signature = { r: `0x${string}`; s: `0x${string}`; v: number };
 
 const CANONICAL_PATH = "m/44'/60'/0'/0/0";
 const DISCOVERY_TIMEOUT_MS = 8_000;
-const ACTION_TIMEOUT_MS = 120_000;
+const ACTION_TIMEOUT_MS = 10 * 60_000;
 let activeCancel: (() => void) | null = null;
 
 export async function connectLedger(preferredProductName: string | undefined, dispatch: DispatchStatus): Promise<{

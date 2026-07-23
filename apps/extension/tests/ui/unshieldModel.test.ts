@@ -121,6 +121,22 @@ test("renderer accepts the bounded receiver-paid Unshield projection", () => {
   assert.equal(parsed?.gasFeeEstimateWei, 300_000_000_000_000n);
   assert.equal(parseUnshieldResponse({
     success: true,
+    operation: {
+      ...direct,
+      accountId: "ledger-1",
+      accountType: "ledger",
+    },
+  })?.accountType, "ledger");
+  assert.equal(parseUnshieldResponse({
+    success: true,
+    operation: {
+      ...direct,
+      accountId: "watch-1",
+      accountType: "impersonator",
+    },
+  }), null);
+  assert.equal(parseUnshieldResponse({
+    success: true,
     operation: { ...direct, callData: "must-not-render" },
   }), null);
 });

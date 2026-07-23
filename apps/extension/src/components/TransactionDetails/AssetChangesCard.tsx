@@ -1,5 +1,6 @@
 import { Box, Flex, HStack, Text, VStack } from "@chakra-ui/react";
 import { ArrowDownIcon, ArrowUpIcon } from "@chakra-ui/icons";
+import type { ReactNode } from "react";
 import type { AssetChangeRecord } from "@/chrome/txHistoryStorage";
 import type { AssetChange } from "@/chrome/txSimulation";
 import { AssetRow } from "@/components/AssetChanges/AssetRow";
@@ -49,16 +50,18 @@ export default function AssetChangesCard({
   nativeSym,
   label,
   formatUsd,
+  additionalReceive,
 }: {
-  record: AssetChangeRecord;
+  record: AssetChangeRecord | undefined;
   chainId: number;
   nativeSym: string;
   label?: string;
   formatUsd: FormatUsd;
+  additionalReceive?: ReactNode;
 }) {
   const explorer = getChainConfig(chainId).explorer;
   const nativeData = (() => {
-    if (!record.nativeDelta) return null;
+    if (!record?.nativeDelta) return null;
     let value: bigint;
     try {
       value = BigInt(record.nativeDelta);
@@ -134,10 +137,10 @@ export default function AssetChangesCard({
       metadataLoading: transfer.metadataLoading ?? false,
     },
   });
-  const outNfts = (record.nftTransfers ?? [])
+  const outNfts = (record?.nftTransfers ?? [])
     .filter((transfer) => transfer.direction === "out")
     .map(toAssetChange);
-  const inNfts = (record.nftTransfers ?? [])
+  const inNfts = (record?.nftTransfers ?? [])
     .filter((transfer) => transfer.direction === "in")
     .map(toAssetChange);
   const nativeIsOut = !!nativeData?.isNegative;
@@ -145,7 +148,10 @@ export default function AssetChangesCard({
     (nativeRow && nativeIsOut) || outGroups.length || outNfts.length,
   );
   const hasInflows = Boolean(
-    (nativeRow && !nativeIsOut) || inGroups.length || inNfts.length,
+    (nativeRow && !nativeIsOut) ||
+      inGroups.length ||
+      inNfts.length ||
+      additionalReceive,
   );
   if (!hasOutflows && !hasInflows) return null;
 
@@ -201,6 +207,7 @@ export default function AssetChangesCard({
                 explorerUrl={explorer}
               />
             ))}
+            {additionalReceive}
           </Box>
         )}
       </VStack>

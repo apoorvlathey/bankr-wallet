@@ -280,6 +280,8 @@ test("Unshield separates amount and destination entry from quote review", async 
   );
   assert.match(publicReviewSource, /Select whole deposits from one account/);
   assert.match(publicReviewSource, /They’ll exit in one public transaction/);
+  assert.match(publicReviewSource, /Ledger deposits exit one at a time/);
+  assert.match(publicReviewSource, /preview\.accountType === "ledger" \? 1 : 8/);
   assert.match(publicReviewSource, /Clear the other account to select/);
   assert.match(publicReviewSource, /I understand this exit is public/);
   assert.match(publicReviewSource, /Withdraw selected deposit/);
@@ -595,7 +597,14 @@ test("Shield deposit form stays concise and does not repeat the private balance"
   assert.doesNotMatch(pickerSource, />\s*Pay with\s*</);
   assert.doesNotMatch(pickerSource, /SHIELDED_ETH_NETWORK_NAME|Ethereum|Sepolia/);
   assert.match(pickerSource, /Safe accounts cannot shield/);
-  assert.match(pickerSource, /Ledger accounts cannot shield/);
+  assert.match(pickerSource, /account\.type === "ledger"\) return "Ledger"/);
+  assert.match(pickerSource, /useAccountIdentityLabels\(accounts\)/);
+  assert.match(pickerSource, /getDisplayName\(selected\)/);
+  assert.match(pickerSource, /getEnsAvatar\(selected\)/);
+  assert.match(pickerSource, /getDisplayName\(candidate\)/);
+  assert.match(pickerSource, /getEnsAvatar\(candidate\)/);
+  assert.doesNotMatch(pickerSource, /ensAvatar=\{null\}/);
+  assert.match(pickerSource, /isPrivacyPoolsMutationAccount\(candidate\)/);
   assert.match(pickerSource, /View-only accounts cannot shield/);
   assert.doesNotMatch(amountSource, /Available after the network-fee reserve/);
   assert.doesNotMatch(amountSource, /Net of the/);

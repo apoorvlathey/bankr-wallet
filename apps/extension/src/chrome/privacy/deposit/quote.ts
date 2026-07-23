@@ -5,6 +5,7 @@ import {
   normalizeEvmAccountAddress,
 } from "../../accounts/repository";
 import type { Account, AccountType } from "../../types";
+import { isPrivacyPoolsCustodyAccountType } from "../deployment/accountPolicy";
 import { resolvePrivacyPoolsRpcUrl } from "../deployment/health";
 import { readPrivacyShieldRpcQuote } from "./quoteClient";
 import {
@@ -17,12 +18,6 @@ import {
 } from "./quotePolicy";
 
 const MAX_ACCOUNT_ID_LENGTH = 128;
-const SUPPORTED_SOURCE_TYPES = new Set<AccountType>([
-  "bankr",
-  "privateKey",
-  "seedPhrase",
-]);
-
 export interface PrivacyShieldQuoteRequest {
   readonly accountId: string;
   readonly accountAddress: string;
@@ -52,7 +47,7 @@ function assertQuoteRequest(request: PrivacyShieldQuoteRequest): void {
     typeof request.accountAddress !== "string" ||
     request.accountAddress.length !== 42 ||
     typeof request.accountType !== "string" ||
-    (!SUPPORTED_SOURCE_TYPES.has(request.accountType) &&
+    (!isPrivacyPoolsCustodyAccountType(request.accountType) &&
       request.accountType !== "impersonator") ||
     typeof request.amount !== "string" ||
     (request.grossAmountWei !== undefined &&
@@ -76,7 +71,7 @@ export function assertPinnedSourceAccount(
   if (account.type === "impersonator") {
     throw new PrivacyShieldQuoteError("view-only-account");
   }
-  if (!SUPPORTED_SOURCE_TYPES.has(account.type)) {
+  if (!isPrivacyPoolsCustodyAccountType(account.type)) {
     throw new PrivacyShieldQuoteError("account-unavailable");
   }
 

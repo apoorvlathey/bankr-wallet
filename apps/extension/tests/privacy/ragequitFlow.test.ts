@@ -265,6 +265,10 @@ test("public recovery batch accepts only distinct commitments from one account",
       { ...second, accountType },
     ]));
   }
+  assert.throws(() => validatePrivacyRagequitBatchSelections(batchId, [
+    { ...first, accountType: "ledger" },
+    { ...second, accountType: "ledger" },
+  ]));
   assert.throws(() =>
     validatePrivacyRagequitBatchSelections(batchId, [first, { ...second, accountId: "pk-2" }])
   );

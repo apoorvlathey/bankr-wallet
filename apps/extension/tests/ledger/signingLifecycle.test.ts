@@ -143,6 +143,10 @@ test("Ledger pending requests cross the terminal boundary only after device appr
                   "../txHistoryStorage": "\0ledger-history",
                   "../transactions/displayMetadata": "\0ledger-display",
                   "../transactions/failure": "\0ledger-failure",
+                  "../transactions/privacyConfirmation": "\0ledger-privacy-confirmation",
+                  "../privacy/operations/lifecycle": "\0ledger-privacy-shield",
+                  "../privacy/ragequit/lifecycle": "\0ledger-privacy-ragequit",
+                  "../privacy/withdrawals/lifecycle": "\0ledger-privacy-unshield",
                   "../transactions/runtime": "\0ledger-runtime",
                   "./offscreenBridge": "\0ledger-offscreen",
                   "./session": "\0ledger-session",
@@ -225,6 +229,61 @@ test("Ledger pending requests cross the terminal boundary only after device appr
             }
             if (id === "\0ledger-failure") {
               return "export const handleTransactionFailure = async () => globalThis.__walletchanLedgerLifecycle.events.push('failure');";
+            }
+            if (id === "\0ledger-privacy-confirmation") {
+              return `
+                export const authorizePrivacyConfirmation = async (pending) => {
+                  const hooks = globalThis.__walletchanLedgerLifecycle;
+                  const isPrivacy = pending.privacyShieldMeta ||
+                    pending.privacyRagequitMeta ||
+                    pending.privacyUnshieldMeta;
+                  if (isPrivacy) hooks.events.push("privacy-authorize");
+                  return {
+                    ok: true,
+                    shield: pending.privacyShieldMeta ? { operationId: pending.id } : null,
+                    ragequit: pending.privacyRagequitMeta ? { operationId: pending.id } : null,
+                    directUnshield: pending.privacyUnshieldMeta ? { operationId: pending.id } : null,
+                  };
+                };`;
+            }
+            if (id === "\0ledger-privacy-shield") {
+              return `
+                export const beginPrivacyShieldSubmission = async (pending) => {
+                  if (pending.privacyShieldMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-begin-shield");
+                  }
+                };
+                export const recordPrivacyShieldSubmitted = async (pending) => {
+                  if (pending.privacyShieldMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-record-shield");
+                  }
+                };`;
+            }
+            if (id === "\0ledger-privacy-ragequit") {
+              return `
+                export const beginPrivacyRagequitSubmission = async (pending) => {
+                  if (pending.privacyRagequitMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-begin-ragequit");
+                  }
+                };
+                export const recordPrivacyRagequitSubmitted = async (pending) => {
+                  if (pending.privacyRagequitMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-record-ragequit");
+                  }
+                };`;
+            }
+            if (id === "\0ledger-privacy-unshield") {
+              return `
+                export const beginPrivacyDirectUnshieldSubmission = async (pending) => {
+                  if (pending.privacyUnshieldMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-begin-unshield");
+                  }
+                };
+                export const recordPrivacyDirectUnshieldSubmitted = async (pending) => {
+                  if (pending.privacyUnshieldMeta) {
+                    globalThis.__walletchanLedgerLifecycle.events.push("privacy-record-unshield");
+                  }
+                };`;
             }
             if (id === "\0ledger-runtime") {
               return `
@@ -421,6 +480,40 @@ test("Ledger pending requests cross the terminal boundary only after device appr
         "nonce",
         "device-tx",
       ]);
+    });
+
+    await t.test("a Ledger Shield stays retryable before approval and crosses the privacy effect gate before broadcast", async () => {
+      reset();
+      hooks.pendingTx!.privacyShieldMeta = {
+        version: 1,
+        operationId: hooks.pendingTx!.id,
+      };
+      const resultPromise = transaction.handleConfirmTransactionAsyncLedger(
+        "ledger-tx",
+        "",
+      );
+      await waitForEvent(hooks, "device-tx");
+      assert.ok(hooks.pendingTx);
+      assert.deepEqual(hooks.events, [
+        "privacy-authorize",
+        "session",
+        "authorization",
+        "chains",
+        "nonce",
+        "device-tx",
+      ]);
+
+      hooks.deviceGate.resolve();
+      assert.deepEqual(await resultPromise, { success: true });
+      assert.equal(hooks.pendingTx, null);
+      assert.ok(
+        hooks.events.indexOf("privacy-begin-shield") <
+          hooks.events.indexOf("broadcast"),
+      );
+      assert.ok(
+        hooks.events.indexOf("privacy-record-shield") >
+          hooks.events.indexOf("broadcast"),
+      );
     });
 
     await t.test("signature stays pending until final release", async () => {

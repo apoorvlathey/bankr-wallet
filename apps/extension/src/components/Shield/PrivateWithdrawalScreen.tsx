@@ -1,7 +1,11 @@
 import { useCallback, useState } from "react";
 import { Button } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
-import { PRIVACY_POOLS_RELEASE_POLICY } from "@/chrome/privacy/deployment/manifest";
+import {
+  isPrivacyPoolsMutationAccount,
+  isPrivacyPoolsMutationAccountType,
+  type PrivacyPoolsMutationAccount,
+} from "@/chrome/privacy/deployment/accountPolicy";
 import { useAccountIdentityLabels } from "@/hooks/useAccountIdentityLabels";
 import { RecipientPicker } from "@/components/Transfer/RecipientPicker";
 import AddAccount from "@/components/AddAccount";
@@ -39,15 +43,12 @@ interface PrivateWithdrawalScreenProps {
   onUnshieldSubmitted?: (operation: UnshieldOperation) => void;
 }
 
-type PrivacySigningAccount = Extract<
-  Account,
-  { type: "bankr" | "privateKey" | "seedPhrase" }
->;
+type PrivacySigningAccount = PrivacyPoolsMutationAccount;
 
-function isRecoveryCapableAccount(account: Pick<Account, "type">): boolean {
-  return account.type === "privateKey" || account.type === "seedPhrase" ||
-    (account.type === "bankr" &&
-      PRIVACY_POOLS_RELEASE_POLICY.bankrMutations === "enabled");
+function isRecoveryCapableAccount(
+  account: Account,
+): account is PrivacySigningAccount {
+  return isPrivacyPoolsMutationAccount(account);
 }
 
 function isSigningAccount(
@@ -136,7 +137,8 @@ export default function PrivateWithdrawalScreen({
     recipientPublicWithdrawalOffer.accountAddress.toLowerCase() ===
       recipientState.resolvedAddress.toLowerCase(),
   );
-  const preferredRecoveryAccount = account && isRecoveryCapableAccount(account)
+  const preferredRecoveryAccount = account &&
+      isPrivacyPoolsMutationAccountType(account.type)
     ? account
     : accounts.find(isRecoveryCapableAccount) ?? null;
   const publicWithdrawalOffer = getPublicWithdrawalOffer({

@@ -7,6 +7,7 @@ import {
   privacyShieldProtocolFeeWei,
 } from "@/lib/privacyShieldAmounts";
 import { PRIVACY_POOLS_DEPLOYMENT } from "@/chrome/privacy/deployment/manifest";
+import type { PrivacyPoolsMutationAccountType } from "@/chrome/privacy/deployment/accountPolicy";
 
 export const SHIELD_MINIMUM_WEI =
   PRIVACY_POOLS_DEPLOYMENT.assetConfig.minimumDepositAmount;
@@ -27,9 +28,7 @@ function trimDecimal(value: string): string {
 }
 
 export type ShieldSourceAccountType =
-  | "bankr"
-  | "privateKey"
-  | "seedPhrase"
+  | PrivacyPoolsMutationAccountType
   | "impersonator";
 
 export interface ShieldSourceAccount {

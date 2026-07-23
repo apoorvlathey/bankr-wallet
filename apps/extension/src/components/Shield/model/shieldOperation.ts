@@ -162,7 +162,8 @@ function parseOperation(value: unknown): ShieldPendingOperation | null {
     !EVM_ADDRESS.test(raw.accountAddress) ||
     (raw.accountType !== "bankr" &&
       raw.accountType !== "privateKey" &&
-      raw.accountType !== "seedPhrase") ||
+      raw.accountType !== "seedPhrase" &&
+      raw.accountType !== "ledger") ||
     typeof raw.destinationAddress !== "string" ||
     !EVM_ADDRESS.test(raw.destinationAddress) ||
     typeof raw.poolAddress !== "string" ||

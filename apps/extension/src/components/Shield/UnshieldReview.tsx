@@ -10,7 +10,7 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { ConfirmationScreen, ListSurface } from "@/components/ui";
-import type { Account } from "@/chrome/types";
+import type { PrivacyPoolsMutationAccount } from "@/chrome/privacy/deployment/accountPolicy";
 import LoadingDots from "@/components/LoadingDots";
 import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover";
 import type { ReturnTypeUseUnshield } from "./hooks/useUnshield.types";
@@ -39,7 +39,7 @@ interface UnshieldReviewProps {
   recoveryPanel?: ReactNode;
   publicWithdrawAvailable?: boolean;
   onPublicWithdraw?: () => void;
-  directAccount?: Extract<Account, { type: "bankr" | "privateKey" | "seedPhrase" }> | null;
+  directAccount?: PrivacyPoolsMutationAccount | null;
   directController: ReturnTypeUseDirectUnshield;
   onBack: () => void;
 }

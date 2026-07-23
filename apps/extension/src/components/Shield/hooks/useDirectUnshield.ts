@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { Account } from "@/chrome/types";
+import type { PrivacyPoolsMutationAccount } from "@/chrome/privacy/deployment/accountPolicy";
 import {
   parseUnshieldError,
   parseUnshieldResponse,
@@ -7,7 +7,7 @@ import {
 } from "../model/unshield";
 import { isPrivacyAuthRequiredResponse } from "../model/shieldQuote";
 
-type SigningAccount = Extract<Account, { type: "bankr" | "privateKey" | "seedPhrase" }>;
+type SigningAccount = PrivacyPoolsMutationAccount;
 
 export type DirectUnshieldState =
   | { status: "idle"; operation: null; error: null }

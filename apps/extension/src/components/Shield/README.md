@@ -12,6 +12,10 @@ effects remain background responsibilities.
   and deposit-status screens.
 - `ShieldScreen.tsx`: public deposit composition, source account, quote, and
   transaction-review routing only.
+- `ShieldSourceAccountPicker.tsx`: compact source trigger and account menu. It
+  reuses the shared account identity projection and cached ENS avatar path, so
+  contact labels, saved names, ENS names, and address fallbacks stay consistent
+  with Public account selection and Send.
 - `PrivateWithdrawalScreen.tsx`: relayed and receiver-paid Unshield controllers,
   including recipient-owned signer resolution, review routing, and contextual
   public recovery.
@@ -76,7 +80,9 @@ effects remain background responsibilities.
 - `PublicRecoveryReviewScreen.tsx`: account-grouped checkbox list of every
   authoritative ragequittable commitment, with exact amount/date rows,
   same-account selection locking, a total, public-link acknowledgement, and a
-  one-transaction atomic exit for 2–8 selected whole commitments.
+  one-transaction atomic exit for 2–8 selected whole commitments. Ledger groups
+  are limited to one selected commitment and exit through normal hardware
+  confirmation because Ledger atomic batches remain unsupported.
 - `PublicRecoveryStatusScreen.tsx`: direct Private Home adapter that loads the
   existing read-only public-exit selector without first entering Unshield.
 - `hooks/useShieldInitialization.ts`: one status-only entry request plus retry.

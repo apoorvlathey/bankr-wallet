@@ -32,7 +32,7 @@ export type { PreviewChromeLogger } from "./previewChromeSupport";
 
 type PreviewPrivacyAccount = Extract<
   Account,
-  { type: "bankr" | "privateKey" | "seedPhrase" }
+  { type: "bankr" | "privateKey" | "seedPhrase" | "ledger" }
 >;
 
 function isPreviewPrivacyAccount(account: Account): account is PreviewPrivacyAccount {

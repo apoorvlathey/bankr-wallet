@@ -36,6 +36,11 @@ The account/device write is the durable commit boundary. Updating the active-acc
 - Transactions: standard legacy and EIP-1559 transactions are prepared with viem, serialized unsigned, approved on Ledger, reconstructed with the returned `r/s/v`, and recovered locally. Advanced details previews the pinned address's pending nonce without reserving it and allows a decimal edit; confirmation validates, reserves, signs, and broadcasts that exact reviewed nonce. Pending Activity rows can prepare Speed Up and Cancel reviews that pin the original nonce and enforce replacement fee floors before the device prompt. Broadcast is blocked unless the recovered signer exactly matches the pinned Ledger account.
 - Messages: `personal_sign` bytes are approved on device.
 - Typed data: EIP-712 v3/v4 is validated by the existing request path and approved on device. A domain chain ID that differs from the pinned request chain is rejected.
+- Privacy Pools: Shield deposits, receiver-paid Unshield, and public exits use
+  the same normal single-transaction hardware path. The background revalidates
+  the encrypted privacy intent before device signing, starts the privacy
+  lifecycle only after the recovered signature and final account/origin gate,
+  and records the submitted hash after broadcast.
 - Raw `eth_sign` remains blocked.
 
 Ledger uses the same pending-request pinning, SIWE checks, agent-password signing access, gas editor, result storage, history, receipt polling, effect leases, final origin/session authorization, and WalletConnect request bridge as Private Key/Seed Phrase accounts. Pending requests do not expire by age.
@@ -63,11 +68,14 @@ the request pending and creates no Activity entry, allowing an explicit retry.
 
 Adding accounts requires a live master session. Transaction/message signing accepts either a live master or agent session; an agent still cannot add/remove accounts or reveal any locally stored secret.
 
-The offscreen document receives only public device/path metadata and the exact unsigned payload being approved. It never receives a password, API key, vault key, private key, seed phrase, or mnemonic capability. Device actions time out after two minutes and the document is closed after 30 seconds idle.
+The offscreen document receives only public device/path metadata and the exact unsigned payload being approved. It never receives a password, API key, vault key, private key, seed phrase, or mnemonic capability. Device actions time out after ten minutes so users can review long Ledger prompts without leaving a stuck WebHID operation unbounded; device discovery remains limited to eight seconds, and the document is closed after 30 seconds idle.
 
 ## Deliberate Initial Boundaries
 
 - ERC-5792/cross-dapp atomic batches are not advertised or accepted for Ledger.
+- Multi-commitment Privacy Pools public exits therefore run one deposit per
+  Ledger transaction; the UI limits the selection and the background rejects a
+  Ledger batch independently.
 - EIP-7702 authorization/delegation and force inclusion are rejected for Ledger.
 - WalletChan's direct swap shortcut is rejected; swaps initiated by dapps work through the normal single-transaction confirmation flow.
 - A real Ledger is required for final hardware validation; automated builds can validate bundling, storage and routing but cannot approve device prompts.

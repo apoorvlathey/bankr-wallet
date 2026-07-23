@@ -247,7 +247,7 @@ on Sepolia, `0.01 ETH` on mainnet) and sends wallet-UI-only
 `privacyQuoteShield` with the current
 `{ accountId, accountAddress, accountType }` snapshot. `privacy/deposit/quote.ts`
 resolves that exact stored account, rejects impersonators, and supports Bankr,
-private-key, and seed-phrase public addresses. `quoteClient.ts` uses the same
+private-key, seed-phrase, and Ledger public addresses. `quoteClient.ts` uses the same
 bounded active-chain transport to read the public balance, estimate the standard fee
 tier, and simulate the pinned Entrypoint `deposit(uint256)` call with the
 canonical gross value that produces the entered shielded amount after fees,
@@ -323,10 +323,12 @@ gate verifies it again before signing or submission. The pending-request
 runtime event immediately updates the open renderer's in-memory queue, while
 the subsequent `chrome.storage.local` change remains authoritative. This
 prevents a fast Review → Back → Shield sequence from missing the saved request
-and starting preparation again. Local
-private-key and seed-phrase accounts repeat the encrypted intent, account,
-deployment, and master-epoch checks at confirmation and immediately before raw
-RPC publication. Sepolia development builds reject Bankr before a prompt.
+and starting preparation again. Private-key, seed-phrase, and Ledger accounts
+repeat the encrypted intent, account, deployment, and master-epoch checks at
+confirmation and immediately before raw RPC publication. Ledger retains the
+pending request throughout hardware approval and crosses the privacy effect
+boundary only after the recovered device signature and final account/origin
+authorization pass. Sepolia development builds reject Bankr before a prompt.
 Production mainnet builds admit Bankr through the ordinary account-pinned
 Bankr confirmation path, perform the same privacy authorization before pending
 request removal, and begin the encrypted privacy effect before Bankr's
@@ -390,8 +392,9 @@ estimate. The encrypted intent claims the commitment before it queues a normal
 account-pinned transaction confirmation; queue failure compensates by releasing
 the claim. Confirmation and the irreversible submit boundary recheck the exact
 account, calldata, roots, privacy authorization epoch, and deployment. Bankr,
-private-key, and seed-phrase accounts then reuse their existing signing paths;
-impersonators are rejected, and explicit Sepolia builds reject Bankr mutation.
+private-key, seed-phrase, and Ledger accounts then reuse their existing signing
+paths; impersonators are rejected, and explicit Sepolia builds reject Bankr
+mutation.
 ASP refresh decisions are revision-and-status compare-and-set writes. A refresh
 that began from an older `private_ready` snapshot cannot overwrite a newer
 `withdrawal_pending` Unshield claim while the normal confirmation is open.
@@ -425,8 +428,12 @@ eight selections call `privacyPrepareRagequitBatch`; the background rejects
 empty, duplicate, mixed-account, stale, or amount-drifted selections and queues
 one immutable atomic batch confirmation. Local private-key and seed-phrase
 accounts use the existing EIP-7702/ERC-7821 sign-once path; production Bankr
-uses its existing atomic batch submission path. Only the acknowledged final
-action has proof, claim, persistence, or transaction side effects.
+uses its existing atomic batch submission path. Ledger uses the normal
+single-transaction path and the review limits a Ledger selection to one
+commitment because Ledger does not support WalletChan's EIP-7702/ERC-5792
+atomic batch path; the background independently rejects a Ledger batch. Only
+the acknowledged final action has proof, claim, persistence, or transaction
+side effects.
 There is deliberately no fee override because `Entrypoint.relay` reverts above
 the onchain maximum. `privacyExecuteUnshield`
 rechecks the quote economics, recipient, roots, state and ASP membership,
@@ -890,6 +897,7 @@ The extension supports five distinct account types that can be used simultaneous
 | --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | -------------------------------------- | ----------------------- |
 | Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | Device signing + RPC broadcast         | Fork RPC only, per-endpoint opt-in |
 | Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ✅ Personal sign + EIP-712             | ❌ Disabled (view-only) |
+| Privacy Pools         | ✅ Mainnet mutations        | ✅ Shield/Unshield/public exit       | ✅ Shield/Unshield/public exit         | ✅ Device-signed single transactions   | ❌ Disabled (view-only) |
 | Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | Keys remain on device; public metadata only | No secrets stored       |
 | Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only            |
 | Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps |
@@ -959,6 +967,12 @@ Activity/Holdings triggers by whichever counter is newer.
 - **Authority:** adding Ledger accounts requires a live master session. Signing
   works under master or agent sessions and retains the normal pinned-account,
   origin/WalletConnect, reset lease, signer-recovery, history, and receipt gates.
+- **Privacy Pools:** Ledger is an eligible Shield source and receiver-paid
+  Unshield/public-exit signer. Its single-transaction confirmation additionally
+  revalidates the encrypted privacy intent before the hardware prompt, begins
+  the privacy lifecycle only at the final pre-broadcast boundary, and records
+  the submitted hash after broadcast. Public exit is one Ledger transaction per
+  commitment because the atomic batch path remains excluded.
 - **Hardware-wait boundary:** transaction and signature rows remain pending
   while the Ledger device is waiting for approval, so the request review stays
   mounted. The UI shows a Ledger action banner with the branded black logo tile
@@ -971,8 +985,11 @@ Activity/Holdings triggers by whichever counter is newer.
   after the recovered hardware signature reaches the final pre-broadcast
   callback; a message request is removed only after final authorization passes.
   Safe device/preparation failures therefore leave the request available for a
-  deliberate retry instead of creating a failed Activity row.
-- **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches,
+  deliberate retry instead of creating a failed Activity row. Device approval
+  is bounded to ten minutes while the separate device-discovery deadline
+  remains eight seconds.
+- **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches
+  (including multi-commitment Privacy Pools public exits),
   EIP-7702/ERC-7715 authority, ERC-4337 token-funded gas (including addresses
   already delegated to WalletChan), force inclusion, sponsored transfers, and
   the direct in-extension swap shortcut. A dapp swap that submits one normal
