@@ -40,3 +40,19 @@ test("public home selects accounts while Settings reuses the picker for manageme
   assert.match(appSource, /openAccountSettingsView\(account, "settingsAccounts"\)/);
   assert.match(appSource, /setSettingsInitialTab\("accounts"\)/);
 });
+
+test("account picker only auto-scrolls to the active account on mount", async () => {
+  const pickerSource = await readFile(
+    new URL("../../src/components/AccountPicker/AccountPickerScreen.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    pickerSource,
+    /useEffect\(\(\) => \{\s*const focusFrame = requestAnimationFrame\(\(\) => \{[\s\S]*?activeAccountRowRef\.current\?\.scrollIntoView\([\s\S]*?cancelAnimationFrame\(focusFrame\);[\s\S]*?\}, \[\]\);/,
+  );
+  assert.match(
+    pickerSource,
+    /useEffect\(\(\) => \{\s*const handleKeyDown[\s\S]*?document\.addEventListener\("keydown", handleKeyDown\);[\s\S]*?document\.removeEventListener\("keydown", handleKeyDown\);[\s\S]*?\}, \[onBack\]\);/,
+  );
+});

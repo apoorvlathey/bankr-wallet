@@ -87,6 +87,13 @@ export default function AccountPickerScreen({
         inline: "nearest",
       });
     });
+
+    return () => {
+      cancelAnimationFrame(focusFrame);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -96,7 +103,6 @@ export default function AccountPickerScreen({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onBack]);
