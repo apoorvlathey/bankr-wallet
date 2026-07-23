@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildSafeSwapProposalCalls } from "../../src/components/Swap/safeSwapProposal";
 import { getSwapSubmissionKind } from "../../src/components/Swap/swapSubmissionModel";
-import type { PreparedSwapTxEntry } from "../../src/components/Swap/SwapConfirmation";
+import type { PreparedSwapTxEntry } from "../../src/components/Swap/swapViewTypes";
 
 const appUrl = new URL("../../src/App.tsx", import.meta.url);
 const preparedSwapUrl = new URL(

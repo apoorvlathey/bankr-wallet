@@ -14,6 +14,11 @@ test("web-accessible resources expose only the provider and navigable ENS pages"
   };
 
   assert.ok(manifest.permissions?.includes("favicon"));
+  assert.equal(
+    new Set(manifest.permissions).size,
+    manifest.permissions?.length,
+    "manifest permissions must not contain duplicates",
+  );
 
   const exposed = new Set(
     (manifest.web_accessible_resources ?? []).flatMap(

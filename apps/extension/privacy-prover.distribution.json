@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "snarkjsVersion": "0.7.5",
   "license": "GPL-3.0",
-  "status": "blocked-pending-legal-review",
-  "allowedTargets": ["unpacked-sepolia-test"]
+  "status": "approved-gpl-v4",
+  "effectiveRelease": "4.0.0",
+  "allowedTargets": [
+    "unpacked-sepolia-test",
+    "github-release",
+    "chrome-web-store",
+    "firefox-addons"
+  ],
+  "packagedNotices": [
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.txt",
+    "SOURCE_CODE.txt"
+  ]
 }

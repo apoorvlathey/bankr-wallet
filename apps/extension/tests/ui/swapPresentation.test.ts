@@ -190,7 +190,8 @@ test("Swap initializes a generic entry from the cached top portfolio token", asy
   assert.match(view, /pickDefaultSwapSellToken\(holdingsAllChains\)/u);
   assert.match(view, /setSellChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /setBuyChainId\(cachedTopToken\.chainId\)/u);
-  assert.match(view, /initialSellToken && SWAP_SUPPORTED_CHAIN_IDS\.has\(initialSellToken\.chainId\)/u);
+  assert.match(view, /resolveInitialSwapChainId\(initialChainId, initialSellToken\)/u);
+  assert.match(utils, /initialSellToken &&[\s\S]*?SWAP_SUPPORTED_CHAIN_IDS\.has\(initialSellToken\.chainId\)/u);
   assert.doesNotMatch(view, /if \(!buyToken\.buyTokenInfo \|\| !buyToken\.buyTokenAddress\) return/u);
   assert.match(view, /buildFlippedSellToken\(\{/u);
   assert.match(utils, /if \(!args\.buyTokenInfo \|\| !address\) return null/u);

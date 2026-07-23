@@ -46,6 +46,12 @@ export const WALLETCHAN_ICON_URL = `${WALLETCHAN_SITE_URL}/images/walletchan-ico
 export const WALLETCHAN_STAKE_URL = `${WALLETCHAN_SITE_URL}/stake`;
 export const WALLETCHAN_OS_URL = `${WALLETCHAN_SITE_URL}/os`;
 export const WALLETCHAN_MIGRATE_URL = `${WALLETCHAN_SITE_URL}/migrate`;
+export const WALLETCHAN_SOURCE_URL =
+  "https://github.com/apoorvlathey/walletchan";
+export const WALLETCHAN_EXTENSION_LICENSE_URL =
+  `${WALLETCHAN_SOURCE_URL}/blob/master/apps/extension/LICENSE.md`;
+export const WALLETCHAN_THIRD_PARTY_NOTICES_URL =
+  `${WALLETCHAN_SOURCE_URL}/blob/master/apps/extension/THIRD_PARTY_NOTICES.md`;
 export const REVOKE_CASH_URL = "https://revoke.cash";
 export const revokeCashAddressUrl = (address: string) =>
   `${REVOKE_CASH_URL}/address/${encodeURIComponent(address)}`;

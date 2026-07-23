@@ -1747,9 +1747,11 @@ These must always hold true. Violations indicate a security bug.
     caps the clean package, raw artifacts, prover worker, background bundle,
     first/restart self-test duration, Chromium process-tree peak RSS delta, and
     proof concurrency. The packaged Chromium rehearsal enforces both duration
-    and memory across a closed/reopened extension page. The GPL-3.0
-    distribution review remains a release gate: store/release zip commands
-    fail closed while only the unpacked Sepolia test target is permitted.
+    and memory across a closed/reopened extension page. The v4 licensing
+    decision covers the extension under GPL-3.0-only and preserves
+    `snarkjs@0.7.5` attribution. Every build packages the full GPL text,
+    third-party notices, and exact-version source directions. Release/store zip
+    commands require extension version 4.0.0 or later.
 
 12f. **Privacy deployment support is an exact fail-closed allowlist** - The
     official Privacy Pools app commit, Sepolia/mainnet chains, ETH pools, scopes,

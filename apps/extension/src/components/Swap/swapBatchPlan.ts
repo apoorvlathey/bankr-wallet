@@ -1,7 +1,7 @@
 import type { ERC5792Call } from "@/chrome/erc5792Types";
 import { encodeBatchCalls } from "@/chrome/batchTxHandlers";
 import { BANKR_SUPPORTED_CHAIN_IDS } from "@/constants/chainRegistry";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 import type { PreparedDelegation, SwapAccountType } from "./swapViewTypes";
 import { resolveSwapDelegate } from "./swapViewUtils";
 

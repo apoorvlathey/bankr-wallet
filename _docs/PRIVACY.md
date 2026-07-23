@@ -1,7 +1,7 @@
 # Native privacy and shielded assets exploration
 
 > Research status: exploration, not an implementation specification  
-> Last verified: 2026-07-20
+> Last verified: 2026-07-23
 > Scope: Railgun, Privacy Pools v1, Veil Cash, Kohaku, WalletChan UX,
 > key recovery, extension architecture, and security gates
 
@@ -12,7 +12,7 @@
 > The fresh-session implementation handoff is
 > [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md).
 
-> **Current implementation slice (2026-07-20):** First eligible Private-mode entry
+> **Current implementation slice (2026-07-23):** First eligible Private-mode entry
 > creates a separate encrypted Privacy Pools recovery phrase in the background.
 > Password login and fresh biometric login both support this; a biometric
 > factor that predates Shield receives an empty purpose-separated scaffold on
@@ -35,9 +35,9 @@
 > spent-nullifier hash. Normal production builds now select the pinned Ethereum
 > mainnet profile and support Bankr/private-key/seed-phrase mutations; Sepolia
 > development continues to block Bankr. Impersonator signing, agent-password
-> mutations, value-bearing mainnet rollout, and store distribution remain
-> blocked by their respective gates. The automated dual-profile implementation
-> is complete, but the complete written browser rehearsals are not. See
+> mutations remain blocked by policy. The automated dual-profile implementation
+> and maintainer-confirmed Sepolia/mainnet browser matrices are complete; final
+> Chrome Web Store submission remains a separate release step. See
 > [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md).
 
 [privacy.eth.sh](https://privacy.eth.sh/) was used as the discovery directory

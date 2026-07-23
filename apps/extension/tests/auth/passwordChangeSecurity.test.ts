@@ -91,10 +91,10 @@ test("password rotation preserves every wallet type and fails closed", async (t)
       sessionModule.clearInMemoryAuthCache();
     };
 
-    async function installV2SeedRecoveryState(
+    const installV2SeedRecoveryState = async (
       masterPassword: string,
       mismatchedMasterWrapper: boolean,
-    ) {
+    ) => {
       const mnemonic =
         "test test test test test test test test test test test junk";
       const seedGroupId = "v2-seed-group";
@@ -176,7 +176,7 @@ test("password rotation preserves every wallet type and fails closed", async (t)
       local.passkeyUnlock = passkey.record;
 
       return { mnemonic, seedGroupId, vaultKeyBytes };
-    }
+    };
 
     await t.test(
       "a biometric session atomically rotates Bankr, mixed PK, and seed data",

@@ -756,9 +756,10 @@ route returns aggregate self-test timings without proof or inputs.
 
 `privacy-prover.budgets.json` freezes one concurrent proof, package and bundle
 ceilings, a 60-second first/restart self-test ceiling, and a 512 MiB Chromium
-process-tree RSS-delta ceiling. Store packaging remains blocked by
-`privacy-prover.distribution.json` pending GPL-3.0 legal review; the permitted
-target is the unpacked Sepolia test build.
+process-tree RSS-delta ceiling. `privacy-prover.distribution.json` records the
+GPL-3.0-only v4 decision. Every build packages the complete GPL,
+`snarkjs@0.7.5` attribution, and exact-version source directions. Release/store
+targets require extension version 4.0.0 or later.
 
 Account deletion invokes `privacy/accountSafety.ts` twice: before dapp
 revocation and again inside the final account/secret mutation lock. It rejects
@@ -3706,6 +3707,19 @@ Important constraints:
   Scroll-driven cache persistence is coalesced for 750ms and chart snapshot
   recording for one second so rapid page advances do not serialize the complete
   catalog or touch extension storage once per page.
+- Collapsed low-value rows are excluded from routine RPC verification.
+  Expanding them verifies only the rendered 24-row page. Receipt-derived token
+  keys remain the narrow exception and are prioritized after confirmation so a
+  newly received token updates even while its low-value group is collapsed. A
+  failed visible-token RPC read is attempted once per refresh cycle; it remains
+  eligible for the next manual, full, or receipt-driven refresh instead of
+  immediately rescheduling itself and continuously replacing portfolio state.
+- Public chart hover/NumberFlow state is isolated in
+  `Portfolio/PortfolioBalanceChart.tsx`, so pointer movement cannot rerender
+  Holdings or Activity. A same-address snapshot refresh retains the existing
+  chart, and a deduplicated hourly snapshot write does not trigger a chart read.
+  The first unresolved load for a new address remains the only public-chart
+  skeleton path.
 - Refresh icon beside the portfolio privacy control, loading skeletons, empty state
 - Click token → opens TokenTransfer view
 

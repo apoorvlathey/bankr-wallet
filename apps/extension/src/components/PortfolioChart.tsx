@@ -1,6 +1,17 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import {
+  memo,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { Box, HStack, Skeleton, Text } from "@chakra-ui/react";
-import { getSnapshots } from "@/chrome/portfolio/snapshotStorage";
+import {
+  usePortfolioChartSnapshots,
+  type PortfolioChartSnapshot,
+} from "@/components/Portfolio/usePortfolioChartSnapshots";
+import { usePortfolioChartHoverMetrics } from "@/components/Portfolio/usePortfolioChartHoverMetrics";
 import { isDarkThemeId, useTheme } from "@/theme";
 import { formatAbsoluteTimestamp } from "@/lib/timeFormatUtils";
 import PortfolioChartDither from "@/components/PortfolioChartDither";
@@ -9,25 +20,19 @@ import { playInteractionSound } from "@/sounds/soundManager";
 
 interface PortfolioChartProps {
   address: string;
-  snapshots?: ReadonlyArray<Snapshot>;
+  snapshots?: ReadonlyArray<PortfolioChartSnapshot>;
   hideValue?: boolean;
   refreshTrigger?: number;
   onHoverValueChange?: (value: number | null) => void;
 }
 
-interface Snapshot {
-  timestamp: number;
-  totalValueUsd: number;
-}
-
 const CHART_HEIGHT = 60;
 const CHART_PADDING_TOP = 4;
 const CHART_PADDING_BOTTOM = 4;
-const EMPTY_SNAPSHOTS: Snapshot[] = [];
 
 const formatTimestamp = (ts: number): string => formatAbsoluteTimestamp(ts);
 
-export default function PortfolioChart({
+function PortfolioChart({
   address,
   snapshots: suppliedSnapshots,
   hideValue,
@@ -36,48 +41,21 @@ export default function PortfolioChart({
 }: PortfolioChartProps) {
   const { themeId, tokens } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
-  const [loadedSnapshots, setLoadedSnapshots] = useState<Snapshot[]>(() =>
-    suppliedSnapshots ? [...suppliedSnapshots] : [],
-  );
-  const [snapshotAddress, setSnapshotAddress] = useState(address);
-  const [loading, setLoading] = useState(suppliedSnapshots === undefined);
+  const { snapshots, loading } = usePortfolioChartSnapshots({
+    address,
+    suppliedSnapshots,
+    refreshTrigger,
+  });
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const containerRectRef = useRef<DOMRect | null>(null);
   const hoverIndexRef = useRef<number | null>(null);
   const isPointerDraggingRef = useRef(false);
-
-  useEffect(() => {
-    if (suppliedSnapshots) {
-      setLoadedSnapshots([...suppliedSnapshots]);
-      setSnapshotAddress(address);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void getSnapshots(address)
-      .then((snapshots) => {
-        if (!cancelled) {
-          setLoadedSnapshots(snapshots);
-          setSnapshotAddress(address);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        // Snapshot history is optional. Preserve an already-rendered chart on
-        // refresh failure and keep a different/new account chart-free.
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [address, refreshTrigger, suppliedSnapshots]);
-
-  // A same-account refresh keeps the last chart mounted until its replacement
-  // data is ready. On account changes, never show snapshots from the previous
-  // address while the new account's history is being resolved.
-  const snapshots =
-    snapshotAddress === address ? loadedSnapshots : EMPTY_SNAPSHOTS;
+  const {
+    recordPointerEvent,
+    recordIndexUpdate,
+    finishHoverSession,
+  } = usePortfolioChartHoverMetrics(snapshots.length);
 
   const { path, areaPath, change, changePercent, points, dayTicks } = useMemo(() => {
     if (snapshots.length < 2)
@@ -134,7 +112,11 @@ export default function PortfolioChart({
   const handleMouseMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!containerRef.current || points.length === 0) return;
-      const rect = containerRef.current.getBoundingClientRect();
+      recordPointerEvent();
+      const rect =
+        containerRectRef.current ??
+        containerRef.current.getBoundingClientRect();
+      containerRectRef.current = rect;
       const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
       // Find the closest point by x position
       let closest = 0;
@@ -149,6 +131,7 @@ export default function PortfolioChart({
       const previousIndex = hoverIndexRef.current;
       if (closest === previousIndex) return;
       hoverIndexRef.current = closest;
+      recordIndexUpdate();
       setHoverIndex(closest);
       onHoverValueChange?.(snapshots[closest].totalValueUsd);
       const displayedValueChanged =
@@ -159,15 +142,24 @@ export default function PortfolioChart({
         void playInteractionSound("chartValueChange");
       }
     },
-    [hideValue, onHoverValueChange, points, snapshots]
+    [
+      hideValue,
+      onHoverValueChange,
+      points,
+      recordIndexUpdate,
+      recordPointerEvent,
+      snapshots,
+    ],
   );
 
   const handleMouseLeave = useCallback(() => {
+    finishHoverSession();
+    containerRectRef.current = null;
     hoverIndexRef.current = null;
     isPointerDraggingRef.current = false;
     setHoverIndex(null);
     onHoverValueChange?.(null);
-  }, [onHoverValueChange]);
+  }, [finishHoverSession, onHoverValueChange]);
 
   useEffect(
     () => () => {
@@ -297,6 +289,10 @@ export default function PortfolioChart({
         overflow="hidden"
         bg={isDarkTheme ? "surface.sunken" : "transparent"}
         cursor="crosshair"
+        onPointerEnter={() => {
+          containerRectRef.current =
+            containerRef.current?.getBoundingClientRect() ?? null;
+        }}
         onPointerDown={() => {
           isPointerDraggingRef.current = true;
         }}
@@ -377,3 +373,5 @@ export default function PortfolioChart({
     </Box>
   );
 }
+
+export default memo(PortfolioChart);

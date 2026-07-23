@@ -123,7 +123,7 @@ async function readBoundedKuboResponse(response: Response): Promise<string> {
   const decoder = new TextDecoder();
   let totalBytes = 0;
   let text = "";
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     totalBytes += value.byteLength;

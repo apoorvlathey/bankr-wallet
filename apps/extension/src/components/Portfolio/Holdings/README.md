@@ -10,6 +10,7 @@ changing its public `TokenHoldings` contract.
 | `cache.ts` | Four-entry renderer LRU, persistent snapshot adapter, and coalesced progressive writes. |
 | `transforms.ts` | Pure token enrichment, filtering, aggregation, and totals. |
 | `progressiveRowsModel.ts` | Pure bounded page projection across ordered holdings sections. |
+| `progressiveRefreshModel.ts` | Pure one-attempt-per-refresh selection for visible balance RPC reads. |
 | `useHoldingsState.ts` | Local state, verified-balance refs, and snapshot application. |
 | `usePortfolioLoader.ts` | Catalog paint, detached RPC refresh, enrichment, and snapshot recording. |
 | `useHoldingsLifecycle.ts` | Address/network hydration and transaction-history refresh effects. |
@@ -47,3 +48,12 @@ storage, and transaction-refresh effects. `useHoldingsState.ts` owns only React
 state/refs; rows and modals own callback-driven interaction state. Pure
 transform coverage lives in `tests/ui/portfolioHoldingsModel.test.ts`; cache,
 privacy, and navigation coverage lives under `tests/portfolio/`.
+
+Collapsed low-value rows do not enter the visible-token RPC projection.
+Expanding the disclosure verifies only the currently rendered 24-row page, and
+later pages remain dormant until requested. Transaction receipt enrichment is
+the exception: its exact token keys are prioritized in the next bounded RPC
+pass so a newly received low-value token updates even while collapsed.
+An RPC read that fails is not immediately retried by the progressive effect;
+it becomes eligible again when a full, manual, or receipt-driven portfolio
+refresh starts.

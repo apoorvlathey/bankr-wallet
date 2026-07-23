@@ -18,8 +18,9 @@ inputs and proof-shaped responses, bind the offscreen request to a fresh nonce,
 and cover single-flight, timeout cleanup, and successful retry behavior. The
 budget verifier freezes package/artifact/worker/background ceilings; packaged
 Chromium QA enforces first/restart duration and process-tree RSS delta. The
-distribution gate allows only unpacked Sepolia testing pending GPL review and
-Firefox is explicitly offscreen-feature-gated.
+distribution gate records the GPL-3.0-only v4 decision, requires packaged
+GPL, attribution, and source notices, and requires version 4.0.0 or later for
+release targets. Firefox remains explicitly offscreen-feature-gated.
 Deployment tests pin both official ETH manifests, prove the compile-time
 development/Sepolia and production/mainnet selection, enforce the
 three-request JSON-RPC batch ceiling, and reject

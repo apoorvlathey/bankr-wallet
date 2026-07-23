@@ -1,6 +1,6 @@
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { useThemedToast } from "@/hooks/useThemedToast";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 import type {
   PreparedAccountLock,
   PreparedDelegation,

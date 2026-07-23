@@ -1,6 +1,21 @@
-MIT License
+# WalletChan licensing
 
-Copyright (c) 2021-2025 Apoorv Lathey
+This repository is licensed by component:
+
+- Browser-extension source under `apps/extension` is licensed under the GNU
+  General Public License version 3 only (`GPL-3.0-only`) for WalletChan v4.0.0
+  and later releases. See `apps/extension/LICENSE.md`.
+- WalletChan browser-extension releases through v3.19.0 remain available under
+  the license that accompanied those releases. Rights already granted for
+  those copies are not withdrawn.
+- Unless a component contains its own license, all other source in this
+  repository remains licensed under the MIT License below.
+
+Third-party components remain subject to their respective licenses.
+
+## MIT License
+
+Copyright (c) 2021-2026 Apoorv Lathey
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

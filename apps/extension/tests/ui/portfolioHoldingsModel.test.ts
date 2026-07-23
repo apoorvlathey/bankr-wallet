@@ -4,6 +4,7 @@ import type {
   DefiPosition,
   PortfolioToken,
 } from "../../src/chrome/portfolio/api";
+import { getPortfolioTokenKey } from "../../src/chrome/portfolio/hiddenTokens";
 import {
   buildAssetDisplayRows,
   filterPortfolioTokens,
@@ -15,6 +16,7 @@ import {
   resolveUnifyPortfolioBalances,
 } from "../../src/components/Portfolio/portfolioPreferences";
 import { getProgressiveHoldingsRows } from "../../src/components/Portfolio/Holdings/progressiveRowsModel";
+import { selectPendingVisibleBalanceRefreshTokens } from "../../src/components/Portfolio/Holdings/progressiveRefreshModel";
 
 const token = (
   symbol: string,
@@ -163,4 +165,31 @@ test("collapsed low-value rows do not block progressively visible positions", ()
   assert.equal(projection.visibleLowValueRows.length, 0);
   assert.equal(projection.visiblePositions.length, 1);
   assert.equal(projection.hasMore, false);
+});
+
+test("failed visible balance reads wait for an explicit refresh before retrying", () => {
+  const failed = token("FAILED", 1);
+  const verified = token("VERIFIED", 8453);
+  const hidden = token("HIDDEN", 137);
+  const key = (item: PortfolioToken) =>
+    getPortfolioTokenKey(item.chainId, item.contractAddress);
+
+  assert.deepEqual(
+    selectPendingVisibleBalanceRefreshTokens({
+      visibleTokens: [failed, verified, hidden],
+      hiddenTokenKeys: new Set([key(hidden)]),
+      onchainFetchedTokenKeys: new Set([key(verified)]),
+      attemptedTokenKeys: new Set([key(failed)]),
+    }),
+    [],
+  );
+  assert.deepEqual(
+    selectPendingVisibleBalanceRefreshTokens({
+      visibleTokens: [failed],
+      hiddenTokenKeys: new Set(),
+      onchainFetchedTokenKeys: new Set(),
+      attemptedTokenKeys: new Set(),
+    }),
+    [failed],
+  );
 });

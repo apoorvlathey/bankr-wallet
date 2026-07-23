@@ -1,9 +1,9 @@
 # Privacy Pools Integration PRD
 
-> **Status:** Dual-profile implementation complete; mainnet value-bearing and
-> distribution gates remain
+> **Status:** Dual-profile implementation and maintainer-confirmed
+> Sepolia/mainnet manual QA complete; v4/store distribution steps remain
 > **Owner:** WalletChan extension
-> **Last updated:** 2026-07-20
+> **Last updated:** 2026-07-23
 > **Source research:** [`PRIVACY.md`](./PRIVACY.md)
 > **Implementation checklist:** [`PRIVACY_POOLS_TASKS.md`](./PRIVACY_POOLS_TASKS.md)
 > **Session handoff:** [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md)
@@ -17,7 +17,8 @@ withdrawals, deterministic recovery, and public ragequit.
 The first deliverable was a packaged Manifest V3 testnet spike. The extension
 now compiles Sepolia for `dev:extension` and Ethereum mainnet for normal/
 production builds. Compiled mainnet support does not approve store distribution
-or a value-bearing rollout; those remain subject to the go/no requirements.
+by itself. The controlled value-bearing QA matrix was confirmed complete on
+2026-07-23; final store submission remains subject to the release requirements.
 
 ---
 
@@ -112,7 +113,7 @@ The privacy benefit is breaking the direct protocol-level link between them.
 | Private authorization | Live master or biometric-master capability |
 | Agent password | Cannot set up, shield, withdraw, rescan from phrase, export, delete, or ragequit in v1 |
 | Impersonator | Read-only overview only; never an operation source or submitter |
-| Mainnet Bankr deposits | Implemented through the pinned Bankr confirmation/effect boundary; live value-bearing ragequit rehearsal required before rollout approval |
+| Mainnet Bankr deposits | Implemented through the pinned Bankr confirmation/effect boundary; controlled Shield/Unshield/ragequit QA completed |
 | Proof generation | Local, packaged extension artifacts only |
 | Browser rollout | Chrome first; Firefox remains disabled until its prover host passes equivalent QA |
 | Deposit bounds | No arbitrary application cap; enforce the contract minimum, valid `uint256` input, source balance after gas, and any separately approved future release limit |
@@ -456,8 +457,9 @@ submission.
   created because the Bankr raw-transaction API does not support Sepolia.
 - Quote and read-only portfolio behavior still exercise exact Bankr account
   pinning without creating a signing or submission path.
-- Mainnet shielding remains disabled until the team verifies that the exact
-  original depositor remains recoverable and can sign a future ragequit.
+- Mainnet shielding is enabled through the pinned Bankr confirmation boundary;
+  controlled QA confirmed that the exact original depositor remains recoverable
+  and can sign a future ragequit.
 - A surviving privacy phrase does not replace control of the Bankr depositor
   for public emergency recovery.
 
@@ -534,8 +536,9 @@ WalletChan must not use:
 - Run fixed recovery vectors and proof fixtures before accepting an upgrade.
 - Independently patch or avoid known upstream correctness issues involving
   state-root selection, nullifier hashes, or fee-commitment validation.
-- Obtain legal review of the SDK's transitive `snarkjs` GPL-3.0 dependency
-  before store distribution.
+- Distribute WalletChan extension v4 and later under GPL-3.0-only, retain the
+  exact `snarkjs@0.7.5` attribution, and ship the complete license and
+  corresponding-source directions with every store/release build.
 
 Current packaged-spike pin (2026-07-19):
 
@@ -555,9 +558,9 @@ Current packaged-spike pin (2026-07-19):
   and vector review;
 - `snarkjs@0.7.5` is an exact direct pin for the packaged fixed-proof worker and
   reports GPL-3.0. Fixed and real commitment/withdrawal proving run locally in
-  the packaged one-shot worker. `privacy-prover.distribution.json` permits only
-  unpacked Sepolia testing and blocks release/store zip commands until legal
-  review changes the checked-in policy.
+  the packaged one-shot worker. `privacy-prover.distribution.json` records the
+  GPL-3.0-only policy for extension v4 and later, requires the packaged license,
+  attribution, and source directions, and rejects release targets below v4.0.0.
 
 The official SDK proof service does not expose `snarkjs` prover options and its
 pinned `ffjavascript` dependency defaults to a Blob-created nested worker,
@@ -1248,8 +1251,9 @@ bytes, including 23,690,342 artifact bytes, a 336,397-byte prover worker, and a
 
 ## 26. Rollout
 
-Current status is summarized below. A completed implementation phase does not
-replace its matching manual gate in `PRIVACY_POOLS_SEPOLIA_TEST.md`.
+Current status is summarized below. The maintainer confirmed the written
+Sepolia and controlled mainnet matrices on 2026-07-23; those documents remain
+the regression procedures for future changes.
 
 ### Phase 0: fixture UI
 
@@ -1262,8 +1266,8 @@ replace its matching manual gate in `PRIVACY_POOLS_SEPOLIA_TEST.md`.
 
 ### Phase 1: privacy recovery lifecycle
 
-**Implementation:** Complete. **Manual status:** First-use password/passkey
-behavior observed; full reveal/restore/rescan rehearsal remains pending.
+**Implementation:** Complete. **Manual status:** Reveal, restore, rescan,
+password, and passkey lifecycle matrix complete.
 
 - Generate and encrypt the independent privacy phrase only on first eligible Private-mode
   access, with status-only UI messaging.
@@ -1273,21 +1277,22 @@ behavior observed; full reveal/restore/rescan rehearsal remains pending.
 
 ### Phase 2: packaged prover spike
 
-**Implementation:** Complete except the GPL distribution decision. Packaged
-Chromium proof/restart/budget QA passes; store packaging remains blocked.
+**Implementation:** Complete. Packaged Chromium proof/restart/budget QA passes,
+and the GPL-3.0-only v4 policy includes license, attribution, and
+corresponding-source notices.
 
 - Pin the official SDK and artifacts.
 - Implement the offscreen/prover bridge.
 - Prove and verify fixed commitment and withdrawal fixtures.
 - Benchmark packaged Chrome builds under the final CSP.
-- Decide the exact patch/fork strategy and resolve GPL distribution review.
+- Keep the exact unmodified `snarkjs@0.7.5` pin and packaged GPL/source notices
+  intact unless a separately reviewed dependency strategy replaces it.
 
 ### Phase 3: Sepolia end to end
 
-**Implementation:** Complete. **Manual status:** Quote, deposit, confirmed
-balance, ASP-pending presentation, and one public withdrawal were observed.
-Both local wallet types, private partial/full Unshield, clean recovery, every
-negative path, and destructive safeguards still need the written rehearsal.
+**Implementation:** Complete. **Manual status:** Complete for both local wallet
+types, quote/deposit/ASP transitions, partial/full Unshield, clean recovery,
+public withdrawal, negative paths, and destructive safeguards.
 
 - Implement vault, deterministic recovery, event sync, ASP client, and relayer
   validation.
@@ -1300,9 +1305,9 @@ negative path, and destructive safeguards still need the written rehearsal.
 - **Implementation/read-only verification:** Complete on 2026-07-20. The exact
   production deployment, active proxy implementation, bytecode, services, and
   build isolation are pinned and live-read verified.
-- Restore known test commitments from phrase on production-equivalent data.
-- Exercise emergency procedures without enabling public deposits.
-- Complete security, legal/compliance, licensing, and store-policy review.
+- **Manual status:** Production-equivalent rescan and recovery-only/emergency
+  procedures confirmed complete on 2026-07-23.
+- Final Chrome Web Store submission/policy review remains a release step.
 
 ### Phase 5: mainnet implementation and controlled Chrome beta
 
@@ -1313,8 +1318,8 @@ negative path, and destructive safeguards still need the written rehearsal.
   release-policy state. Impersonators and agent-password mutations stay blocked.
 - Keep amounts governed by the contract minimum, valid `uint256` input, and
   available balance after gas.
-- Require a capped live Shield/Unshield/ragequit and clean-recovery rehearsal
-  for each supported wallet type before rollout approval.
+- The capped live Shield/Unshield/ragequit and clean-recovery rehearsal passed
+  for each supported wallet type on 2026-07-23.
 - Monitor only privacy-safe operational health.
 
 ### Phase 6: broader availability
@@ -1325,8 +1330,9 @@ negative path, and destructive safeguards still need the written rehearsal.
 
 ## 27. Mainnet go/no-go
 
-The mainnet build profile is implemented. Value-bearing rollout and release
-distribution remain unapproved until all are true:
+The mainnet build profile and controlled value-bearing QA are complete.
+Release distribution still requires the final artifact/store review, and the
+following invariants remain mandatory:
 
 - officially documented deployment and implementation are pinned;
 - audit-to-contract, circuit, SDK, artifact, and adapter mapping is complete;
@@ -1339,8 +1345,8 @@ distribution remain unapproved until all are true:
 - ambiguous submission retry is nullifier-aware;
 - packaged MV3 proving meets performance and CSP gates;
 - privacy endpoint inventory and user disclosure are complete;
-- GPL, legal/compliance, Chrome Web Store, and jurisdiction reviews are
-  complete;
+- GPL-3.0-only licensing and attribution are complete, and legal/compliance,
+  Chrome Web Store, and jurisdiction reviews are complete;
 - contract/input/affordability bounds, kill switch, and recovery-only mode are
   tested;
 - security documentation and storage schemas match the implementation;

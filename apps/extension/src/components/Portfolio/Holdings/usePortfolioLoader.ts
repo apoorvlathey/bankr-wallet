@@ -5,6 +5,10 @@ import { loadPortfolioTokenCatalog } from "@/chrome/portfolio/tokenCatalog";
 import { recordSnapshot } from "@/chrome/portfolio/snapshotStorage";
 import { enrichPortfolioTokenPage } from "@/chrome/portfolio/tokenPageEnrichment";
 import {
+  logPortfolioPerformance,
+  portfolioPerformanceNow,
+} from "@/components/Portfolio/performanceDebug";
+import {
   getDefiTotal,
   getTokenKeySet,
   getWalletTokenTotal,
@@ -60,7 +64,6 @@ export function usePortfolioLoader({
     setTokens,
     setTotalValueUsd,
   } = state;
-
   return useCallback(
     async (force = false, options: LoadPortfolioOptions = {}) => {
       if (!address) return;
@@ -68,6 +71,15 @@ export function usePortfolioLoader({
       if (!force && Date.now() - lastFetched < 60_000 && tokens.length > 0) {
         return;
       }
+      const loadStartedAt = portfolioPerformanceNow();
+      const elapsedLoadMs = () =>
+        Number((portfolioPerformanceNow() - loadStartedAt).toFixed(2));
+      logPortfolioPerformance("portfolio-load-start", {
+        force,
+        existingTokenCount: tokens.length,
+        forcedTokenCount: options.forceRefreshTokenKeys?.size ?? 0,
+        suppressSkeleton: options.suppressSkeleton ?? false,
+      });
 
       const loadVersion = loadVersionRef.current + 1;
       loadVersionRef.current = loadVersion;
@@ -85,6 +97,12 @@ export function usePortfolioLoader({
           signal: abortController.signal,
         });
         if (!isCurrentLoad()) return;
+        logPortfolioPerformance("portfolio-catalog-loaded", {
+          catalogTokenCount: catalog.tokens.length,
+          omittedTokenCount: catalog.omittedTokenCount,
+          positionCount: catalog.defiPositions?.length ?? 0,
+          durationMs: elapsedLoadMs(),
+        });
 
         const catalogTokenKeys = getTokenKeySet(catalog.tokens);
         const receiptTokenStubs = (options.forceRefreshTokens ?? []).filter(
@@ -190,10 +208,10 @@ export function usePortfolioLoader({
         const recordLoadedSnapshot = (total: number) => {
           schedulePortfolioBackgroundTask(async () => {
             try {
-              await recordSnapshot(address, total, {
+              const snapshotChanged = await recordSnapshot(address, total, {
                 force: options.forceSnapshot,
               });
-              onSnapshotsChanged?.();
+              if (snapshotChanged) onSnapshotsChanged?.();
             } catch {
               // Snapshot failures should not block holdings rendering.
             }
@@ -205,6 +223,12 @@ export function usePortfolioLoader({
           forcedRefreshTokenKeys,
           false,
         );
+        logPortfolioPerformance("initial-balance-refresh-selected", {
+          catalogTokenCount: mergedTokens.length,
+          refreshTokenCount: tokensToRefresh.length,
+          priorityTokenCount: forcedRefreshTokenKeys.size,
+          collapsedLowValueIncluded: false,
+        });
         const enrichmentTokenKeys = getTokenKeySet(tokensToRefresh);
         if (tokensToRefresh.length === 0) {
           setLoading(false);
@@ -286,6 +310,12 @@ export function usePortfolioLoader({
               timestamp: fetchedAt,
             });
             recordLoadedSnapshot(total);
+            logPortfolioPerformance("initial-balance-refresh-complete", {
+              catalogTokenCount: mergedTokens.length,
+              refreshTokenCount: tokensToRefresh.length,
+              verifiedTokenCount: onchain.verifiedTokenKeys.size,
+              durationMs: elapsedLoadMs(),
+            });
             void applyEnrichedCatalog(
               displayTokens,
               verifiedKeys,
@@ -294,6 +324,11 @@ export function usePortfolioLoader({
             );
           } catch {
             if (!isCurrentLoad()) return;
+            logPortfolioPerformance("initial-balance-refresh-failed", {
+              catalogTokenCount: mergedTokens.length,
+              refreshTokenCount: tokensToRefresh.length,
+              durationMs: elapsedLoadMs(),
+            });
             setLoading(false);
             const verifiedKeys = new Set(verifiedBalanceKeysRef.current);
             setOnchainFetchedTokenKeys(verifiedKeys);

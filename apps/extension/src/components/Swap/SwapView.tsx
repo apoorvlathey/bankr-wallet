@@ -11,7 +11,7 @@ import SwapConfirmation from "./SwapConfirmation";
 import { SwapFormScreen } from "./SwapFormScreen";
 import { getExecutableBridgeRoute } from "./bridgeRouteUtils";
 import type { SwapViewProps } from "./swapViewTypes";
-import { buildFlippedSellToken, pickDefaultSwapSellToken, to0xToken } from "./swapViewUtils";
+import { buildFlippedSellToken, findNativeTokenForChain, pickDefaultSwapSellToken, resolveInitialSwapChainId, to0xToken } from "./swapViewUtils";
 import { useBuyTokenData } from "./useBuyTokenData";
 import { useImpersonatedSwapPolicy } from "./useImpersonatedSwapPolicy";
 import { usePreparedSwap } from "./usePreparedSwap";
@@ -36,12 +36,7 @@ function SwapView({
   initialBuyToken,
   initialSellToken,
 }: SwapViewProps) {
-  const initialSwapChainId =
-    initialSellToken && SWAP_SUPPORTED_CHAIN_IDS.has(initialSellToken.chainId)
-      ? initialSellToken.chainId
-      : SWAP_SUPPORTED_CHAIN_IDS.has(initialChainId)
-        ? initialChainId
-        : 1;
+  const initialSwapChainId = resolveInitialSwapChainId(initialChainId, initialSellToken);
   const [sellChainId, setSellChainId] = useState(initialSwapChainId);
   const [buyChainId, setBuyChainId] = useState(initialSwapChainId);
   const [picker, setPicker] = useState<{
@@ -325,10 +320,7 @@ function SwapView({
       />
     );
   }
-  const sourceNative = holdingsAllChains.find(
-    (token) =>
-      token.chainId === sellChainId && token.contractAddress === "native",
-  );
+  const sourceNative = findNativeTokenForChain(holdingsAllChains, sellChainId);
   return (
     <SwapFormScreen
       fromAddress={fromAddress}
@@ -365,18 +357,10 @@ function SwapView({
       isSubmitting={prepared.isSubmitting}
       canSwap={canSwap && !prepared.isSubmitting}
       onBack={onBack}
-      onOpenSellChainPicker={() =>
-        setPicker({ side: "sell", panel: "chains" })
-      }
-      onOpenSellTokenPicker={() =>
-        setPicker({ side: "sell", panel: "tokens" })
-      }
-      onOpenBuyChainPicker={() =>
-        setPicker({ side: "buy", panel: "chains" })
-      }
-      onOpenBuyTokenPicker={() =>
-        setPicker({ side: "buy", panel: "tokens" })
-      }
+      onOpenSellChainPicker={() => setPicker({ side: "sell", panel: "chains" })}
+      onOpenSellTokenPicker={() => setPicker({ side: "sell", panel: "tokens" })}
+      onOpenBuyChainPicker={() => setPicker({ side: "buy", panel: "chains" })}
+      onOpenBuyTokenPicker={() => setPicker({ side: "buy", panel: "tokens" })}
       onFlip={handleFlip}
       onToggleMode={amount.toggleMode}
       onAmountChange={(value) => {

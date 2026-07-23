@@ -85,6 +85,6 @@ test("Bankr API transport errors distinguish uncertain broadcast outcomes", asyn
   assert.match(
     source,
     /submission outcome is unknown[\s\S]*true/i,
-    "timeout\/disconnect errors after an attempted submit must be ambiguous",
+    "timeout/disconnect errors after an attempted submit must be ambiguous",
   );
 });

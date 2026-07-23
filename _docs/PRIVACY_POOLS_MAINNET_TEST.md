@@ -2,8 +2,9 @@
 
 This is the production-profile verification and manual rollout record for
 WalletChan Shield. Normal dev and production extension builds select Ethereum
-mainnet; dedicated Sepolia commands select Sepolia. Compiled support is not store or
-value-bearing rollout approval.
+mainnet; dedicated Sepolia commands select Sepolia. Maintainer-confirmed
+controlled mainnet QA was completed on 2026-07-23. Chrome Web Store submission
+review remains a separate release-process step.
 
 ## Verified production pins (2026-07-20)
 
@@ -97,16 +98,17 @@ pnpm --filter @walletchan/extension qa:extension:privacy-prover
 ```
 
 Store/release packaging remains governed by
-`privacy-prover.distribution.json`. The current GPL-3.0/legal decision still
-permits only the unpacked Sepolia test target and blocks GitHub release, Chrome
-Web Store, and Firefox artifacts. Do not change that file merely because the
-normal build now compiles mainnet.
+`privacy-prover.distribution.json`. The GPL-specific decision is complete:
+WalletChan extension v4 and later are GPL-3.0-only, with the full license,
+`snarkjs@0.7.5` attribution, and exact-version source directions included in
+every build. GitHub release, Chrome Web Store, and Firefox artifacts require
+`apps/extension/package.json` to be at least 4.0.0. The completed manual record
+below does not replace the final store-artifact review.
 
-## Manual production gate
+## Completed manual production QA
 
-No value-bearing mainnet transaction was sent during this port. Before a
-controlled rollout, use disposable, explicitly funded accounts and pre-agreed
-spend/fee caps:
+On 2026-07-23 the maintainer confirmed completion of this controlled matrix
+with disposable, explicitly funded accounts and pre-agreed spend/fee caps:
 
 1. Inspect the normal production UI: Ethereum labels, Etherscan links,
    `0.01 ETH` minimum shielded amount, `0.5%` fee added on top, ETH/USD amount
@@ -144,3 +146,5 @@ spend/fee caps:
 Record public transaction hashes in an access-controlled test log only when
 needed. Never record the Privacy Pools phrase, commitments, nullifiers, proofs,
 private withdrawal recipient mapping, or raw relayer payloads in shared logs.
+No transaction hashes or privacy-sensitive evidence are stored in this
+repository.

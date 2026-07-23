@@ -11,7 +11,7 @@ import {
 const TEST_ENVIRONMENT = {
   resetWalletConnectForWalletReset: async () => {},
   invalidateAvatarImageCacheForWalletReset: () => {},
-  sendRuntimeMessage: async (_message: Record<string, unknown>) => {},
+  sendRuntimeMessage: async () => {},
 };
 
 function responseCapture(events?: string[]) {

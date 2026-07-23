@@ -48,7 +48,7 @@ test("saved-state commitments use the amber brand button variant", async () => {
       assert.equal(
         matches.length,
         label.count,
-        `${surface.path}: ${label.text} must use variant=\"brand\"`,
+        `${surface.path}: ${label.text} must use variant="brand"`,
       );
     }
   }

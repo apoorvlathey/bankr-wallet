@@ -34,8 +34,8 @@ export async function recordSnapshot(
   address: string,
   totalValueUsd: number,
   options: { force?: boolean } = {},
-): Promise<void> {
-  if (!Number.isFinite(totalValueUsd) || totalValueUsd < 0) return;
+): Promise<boolean> {
+  if (!Number.isFinite(totalValueUsd) || totalValueUsd < 0) return false;
   // V1 totals may contain Tempo's eth_getBalance sentinel. They cannot be
   // repaired because snapshots do not retain a per-chain/token breakdown.
   await purgeLegacySnapshots();
@@ -49,7 +49,7 @@ export async function recordSnapshot(
   // Skip if last snapshot is too recent
   if (!options.force && snapshots.length > 0) {
     const last = snapshots[snapshots.length - 1];
-    if (now - last.timestamp < MIN_INTERVAL_MS) return;
+    if (now - last.timestamp < MIN_INTERVAL_MS) return false;
   }
 
   // Prune entries older than 8 days
@@ -59,6 +59,7 @@ export async function recordSnapshot(
 
   store[key] = pruned;
   await chrome.storage.local.set({ [STORAGE_KEY]: store });
+  return true;
 }
 
 /**

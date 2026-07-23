@@ -3,7 +3,7 @@ import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { SwapQuoteResponse, TokenInfo } from "@/chrome/swapApi";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 import { executePreparedSwap } from "./executePreparedSwap";
 import { prepareBridgeSwap } from "./prepareBridgeSwap";
 import { prepareSameChainSwap } from "./prepareSameChainSwap";

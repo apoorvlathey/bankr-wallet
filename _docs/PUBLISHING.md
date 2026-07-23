@@ -18,6 +18,24 @@ CWS **rejects** uploads containing a `key` field in `manifest.json` (it assigns 
 
 Both `zip` and `zip:cws` run `pnpm build` automatically — no need to build separately first.
 
+### Extension license and corresponding source
+
+WalletChan browser-extension releases beginning with v4.0.0 are
+GPL-3.0-only. The repository's other components remain under their own
+licenses. Every Chrome and Firefox build automatically contains:
+
+- `LICENSE.txt`: the complete GNU GPL version 3 text;
+- `THIRD_PARTY_NOTICES.txt`: the exact `snarkjs@0.7.5` attribution and source;
+- `SOURCE_CODE.txt`: the matching WalletChan release tag, build instructions,
+  and exact `snarkjs` source location.
+
+The GPL/`snarkjs` distribution decision is complete. Release packaging requires
+the extension to be at least v4.0.0 and its matching `vX.Y.Z` source tag to be
+public before distribution.
+
+Releases through v3.19.0 keep the license that accompanied those copies; the v4
+license does not revoke earlier grants.
+
 ## Release Process
 
 ### 1. Bump version and push tag

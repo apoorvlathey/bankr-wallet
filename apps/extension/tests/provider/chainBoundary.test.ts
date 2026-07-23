@@ -94,7 +94,8 @@ test("state-changing provider messages require an exact content-script chain pin
       validateExternalProviderMessage({ ...message, providerChainId: 1 }).valid,
       false,
     );
-    const { providerChainId: _omitted, ...withoutPin } = message;
+    const { providerChainId, ...withoutPin } = message;
+    assert.equal(providerChainId, 8453);
     assert.equal(validateExternalProviderMessage(withoutPin).valid, false);
   }
 });

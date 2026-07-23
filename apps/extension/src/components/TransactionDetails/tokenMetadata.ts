@@ -8,6 +8,36 @@ export type TokenDisplayMetadata = Pick<
   "symbol" | "decimals" | "logoUrl"
 >;
 
+export interface NftDisplayMetadata {
+  name?: string;
+  collectionName?: string;
+  symbol?: string;
+  image?: string;
+}
+
+export function applyNftDisplayMetadata(
+  record: AssetChangeRecord | undefined,
+  leg: "source" | "destination",
+  metadata: Record<string, NftDisplayMetadata | null>,
+): AssetChangeRecord | undefined {
+  if (!record?.nftTransfers?.length) return record;
+  return {
+    ...record,
+    nftTransfers: record.nftTransfers.map((transfer, index) => {
+      const resolved = metadata[`${leg}:${index}`];
+      return resolved
+        ? {
+            ...transfer,
+            collectionName: resolved.collectionName,
+            symbol: resolved.symbol,
+            metadata: { name: resolved.name, image: resolved.image },
+            metadataLoading: false,
+          }
+        : { ...transfer, metadataLoading: metadata[`${leg}:${index}`] === undefined };
+    }),
+  };
+}
+
 export function tokenDisplayMetadataKey(
   chainId: number,
   token: string,

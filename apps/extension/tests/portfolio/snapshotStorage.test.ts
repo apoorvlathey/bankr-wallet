@@ -40,7 +40,8 @@ test("portfolio snapshot V2 ignores and removes sentinel-era history", async (t)
   assert.deepEqual(await getSnapshots(address), []);
   assert.equal(values.portfolioSnapshots, undefined);
 
-  await recordSnapshot(address, 42, { force: true });
+  assert.equal(await recordSnapshot(address, 42, { force: true }), true);
+  assert.equal(await recordSnapshot(address, 43), false);
   const snapshots = await getSnapshots(address);
   assert.equal(snapshots.length, 1);
   assert.equal(snapshots[0].totalValueUsd, 42);

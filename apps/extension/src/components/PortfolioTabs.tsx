@@ -1,4 +1,11 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import {
+  Profiler,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import {
   Box,
   HStack,
@@ -9,28 +16,22 @@ import {
   InputRightElement,
   Text,
   IconButton,
-  Skeleton,
   useDisclosure,
-  usePrefersReducedMotion,
   Button,
   VStack,
   type IconProps,
 } from "@chakra-ui/react";
-import { ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, ViewIcon, ViewOffIcon, WarningTwoIcon } from "@chakra-ui/icons";
-import { keyframes } from "@emotion/react";
+import { ChevronDownIcon, CloseIcon, RepeatIcon, SearchIcon, WarningTwoIcon } from "@chakra-ui/icons";
 import TxStatusList from "@/components/TxStatusList";
 import type { PortfolioToken } from "@/chrome/portfolio/api";
 import type { CompletedTransaction } from "@/chrome/txHistoryStorage";
 import AddTokenModal from "@/components/AddTokenModal";
-import PortfolioChart from "@/components/PortfolioChart";
 import TokenHoldings, { type TokenHoldingsStateSnapshot } from "@/components/TokenHoldings";
 import ChainIcon from "@/components/ChainIcon";
 import { useNetworks } from "@/contexts/NetworksContext";
-import { formatUsd as formatUsdShared } from "@/lib/currencyFormatUtils";
 import { getVisibleChains } from "@/lib/chains";
 import { NetworkSelectorScreen } from "@/components/shared/NetworkSelector";
 import { FullScreenPickerLayer } from "@/components/FullScreenPickerLayer";
-import NumberFlow, { type Format } from "@number-flow/react";
 import {
   createPortfolioChainFilterState,
   manuallySelectPortfolioChain,
@@ -39,7 +40,14 @@ import {
   syncLinkedPortfolioChain,
   type PortfolioChainRelinkRequest,
 } from "@/components/portfolioChainFilterState";
+import PortfolioBalanceChart from "@/components/Portfolio/PortfolioBalanceChart";
 import { PortfolioOptionsSheet } from "@/components/Portfolio/PortfolioOptionsSheet";
+import {
+  isPortfolioPerformanceDebugEnabled,
+  logPortfolioPerformance,
+  logPortfolioProfiler,
+  portfolioPerformanceNow,
+} from "@/components/Portfolio/performanceDebug";
 import { useUnifyPortfolioBalances } from "@/components/Portfolio/useUnifyPortfolioBalances";
 import { useFollowDappNetwork } from "@/components/Portfolio/useFollowDappNetwork";
 import { playInteractionSound } from "@/sounds/soundManager";
@@ -83,21 +91,6 @@ const PortfolioMenuIcon = (props: IconProps) => (
 /** Delay before refreshing balances after onchain tx confirmation (ms) */
 const POST_CONFIRM_REFRESH_DELAY = 3000;
 
-const PORTFOLIO_VALUE_FORMAT: Format = {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-};
-
-const PORTFOLIO_VALUE_TIMING = {
-  duration: 220,
-  easing: "cubic-bezier(0.23, 1, 0.32, 1)",
-};
-
-const refreshRotation = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
-
 export default function PortfolioTabs({ address, accounts = [], connectedDappChainId = null, connectedDappTabId = null, chainRelinkRequest = null, activityTabTrigger = 0, holdingsTabTrigger = 0, refreshTrigger = 0, onTokenClick, onSwapClick, onRpcIssuesChange, onTransactionClick, modeToggle, quickActions, activitySupplement, onChainBalancesChange, onHideTokens }: PortfolioTabsProps) {
   // On (re)mount, default to whichever tab was most recently requested by the parent.
   // activityTabTrigger increments after a tx is initiated; holdingsTabTrigger
@@ -111,15 +104,9 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const holdingsStateRef = useRef<TokenHoldingsStateSnapshot | null>(null);
   holdingsStateRef.current = holdingsState;
   const [chartRefreshNonce, setChartRefreshNonce] = useState(0);
-  const [refreshPressNonce, setRefreshPressNonce] = useState(0);
-  const [isRefreshAnimating, setIsRefreshAnimating] = useState(false);
-  const [hoveredChartValue, setHoveredChartValue] = useState<number | null>(null);
-  const [balanceMotionDirection, setBalanceMotionDirection] = useState<
-    "up" | "down" | null
-  >(null);
-  const displayedBalanceRef = useRef<number | null>(null);
-  const balanceTintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [holdingsView, setHoldingsView] = useState<"assets" | "positions">(
+    "assets",
+  );
   const addTokenModal = useDisclosure();
   const portfolioActions = useDisclosure();
   const portfolioActionsButtonRef = useRef<HTMLButtonElement>(null);
@@ -137,7 +124,6 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const assetSearchInputRef = useRef<HTMLInputElement>(null);
   const { unifyBalances, setUnifyBalances } = useUnifyPortfolioBalances();
   const { followDappNetwork, setFollowDappNetwork } = useFollowDappNetwork();
-  const prefersReducedMotion = usePrefersReducedMotion();
   const connectedDappChainIdRef = useRef(connectedDappChainId);
   connectedDappChainIdRef.current = connectedDappChainId;
 
@@ -167,12 +153,32 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
       tabScrollPositionsRef.current.set(currentIndex, currentScrollTop);
       const nextScrollTop =
         tabScrollPositionsRef.current.get(nextIndex) ?? currentScrollTop;
+      const debugEnabled = isPortfolioPerformanceDebugEnabled();
+      const switchStartedAt = debugEnabled
+        ? portfolioPerformanceNow()
+        : 0;
 
       tabIndexRef.current = nextIndex;
+      if (nextIndex < 2) {
+        setHoldingsView(nextIndex === 1 ? "positions" : "assets");
+      }
       setTabIndex(nextIndex);
       if (scrollOwner) {
         window.requestAnimationFrame(() => {
           scrollOwner.scrollTop = nextScrollTop;
+        });
+      }
+      if (debugEnabled) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            logPortfolioPerformance("tab-switch-painted", {
+              from: currentIndex,
+              to: nextIndex,
+              durationMs: Number(
+                (portfolioPerformanceNow() - switchStartedAt).toFixed(2),
+              ),
+            });
+          });
         });
       }
     },
@@ -210,6 +216,10 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
       manuallySelectPortfolioChain(state, chainId),
     );
   }, []);
+  const showAllNetworks = useCallback(
+    () => selectPortfolioChain(null),
+    [selectPortfolioChain],
+  );
 
   // The greater trigger is the parent's most recent explicit tab request.
   useEffect(() => {
@@ -295,42 +305,6 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   const handleSnapshotsChanged = useCallback(() => {
     setChartRefreshNonce((n) => n + 1);
   }, []);
-
-  const portfolioDisplayValue =
-    hoveredChartValue ?? holdingsState?.totalValueUsd ?? 0;
-  const isBelowDisplayThreshold =
-    portfolioDisplayValue > 0 && portfolioDisplayValue < 0.01;
-
-  const handleChartHoverValueChange = useCallback((value: number | null) => {
-    const nextValue = value ?? holdingsStateRef.current?.totalValueUsd ?? 0;
-    const previousValue =
-      displayedBalanceRef.current ?? holdingsStateRef.current?.totalValueUsd ?? 0;
-
-    setHoveredChartValue(value);
-    displayedBalanceRef.current = nextValue;
-
-    if (nextValue === previousValue) return;
-    setBalanceMotionDirection(nextValue > previousValue ? "up" : "down");
-    if (balanceTintTimerRef.current) {
-      clearTimeout(balanceTintTimerRef.current);
-    }
-    balanceTintTimerRef.current = setTimeout(() => {
-      balanceTintTimerRef.current = null;
-      setBalanceMotionDirection(null);
-    }, PORTFOLIO_VALUE_TIMING.duration + 80);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (balanceTintTimerRef.current) {
-        clearTimeout(balanceTintTimerRef.current);
-      }
-      if (refreshAnimationTimerRef.current) {
-        clearTimeout(refreshAnimationTimerRef.current);
-      }
-    },
-    [],
-  );
 
   const portfolioControls = (
     <VStack align="stretch" spacing={2} mt={tabIndex === 0 ? 1 : 0} mb={2}>
@@ -461,107 +435,18 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
   return (
     <>
       <VStack ref={portfolioRootRef} align="stretch" spacing={2}>
-        <Box px={1}>
-          <HStack justify="space-between" align="center" spacing={3}>
-            <Text fontSize="sm" color="fg.secondary" fontWeight="500">
-              Portfolio balance
-            </Text>
-            {modeToggle}
-          </HStack>
-          <HStack mt={0.5} spacing={2} align="center">
-            {!holdingsState ||
-            (holdingsState.loading && !holdingsState.totalValueUsd) ? (
-              <Skeleton h="34px" w="150px" />
-            ) : (
-              <Text
-                data-testid="portfolio-balance"
-                fontSize="3xl"
-                lineHeight="1.15"
-                fontWeight="700"
-                letterSpacing="-0.03em"
-                color={
-                  balanceMotionDirection === "up"
-                    ? "status.success.emphasis"
-                    : balanceMotionDirection === "down"
-                      ? "status.error.emphasis"
-                      : "fg.primary"
-                }
-                transition="color 160ms cubic-bezier(0.23, 1, 0.32, 1)"
-                sx={{ fontVariantNumeric: "tabular-nums" }}
-              >
-                {holdingsState.hideValue ? (
-                  formatUsdShared(portfolioDisplayValue, { hide: true })
-                ) : (
-                  <NumberFlow
-                    value={isBelowDisplayThreshold ? 0.01 : portfolioDisplayValue}
-                    locales="en-US"
-                    format={PORTFOLIO_VALUE_FORMAT}
-                    prefix={isBelowDisplayThreshold ? "<$" : "$"}
-                    transformTiming={PORTFOLIO_VALUE_TIMING}
-                    spinTiming={PORTFOLIO_VALUE_TIMING}
-                    opacityTiming={{ duration: 120, easing: "ease-out" }}
-                    willChange
-                  />
-                )}
-              </Text>
-            )}
-            {holdingsState && (
-              <HStack spacing={0} align="center">
-                <IconButton
-                  aria-label={holdingsState.hideValue ? "Show portfolio values" : "Hide portfolio values"}
-                  icon={holdingsState.hideValue ? <ViewOffIcon /> : <ViewIcon />}
-                  variant="ghost"
-                  size="sm"
-                  minW="32px"
-                  minH="32px"
-                  color="fg.secondary"
-                  onClick={holdingsState.toggleHideValue}
-                />
-                <IconButton
-                  aria-label="Refresh portfolio"
-                  icon={
-                    <RepeatIcon
-                      key={refreshPressNonce}
-                      animation={
-                        isRefreshAnimating
-                          ? `${refreshRotation} 520ms cubic-bezier(0.23, 1, 0.32, 1)`
-                          : undefined
-                      }
-                      color={isRefreshAnimating ? "accent.highlight" : "inherit"}
-                    />
-                  }
-                  variant="ghost"
-                  size="sm"
-                  minW="32px"
-                  minH="32px"
-                  color="fg.secondary"
-                  isDisabled={holdingsState.loading}
-                  onClick={() => {
-                    setRefreshPressNonce((nonce) => nonce + 1);
-                    if (!prefersReducedMotion) {
-                      if (refreshAnimationTimerRef.current) {
-                        clearTimeout(refreshAnimationTimerRef.current);
-                      }
-                      setIsRefreshAnimating(true);
-                      refreshAnimationTimerRef.current = setTimeout(() => {
-                        refreshAnimationTimerRef.current = null;
-                        setIsRefreshAnimating(false);
-                      }, 520);
-                    }
-                    void holdingsState.refresh();
-                  }}
-                />
-              </HStack>
-            )}
-          </HStack>
-        </Box>
-
-        <PortfolioChart
-          address={address}
-          hideValue={holdingsState?.hideValue}
-          refreshTrigger={refreshTrigger + chartRefreshNonce}
-          onHoverValueChange={handleChartHoverValueChange}
-        />
+        <Profiler id="portfolio-balance-chart" onRender={logPortfolioProfiler}>
+          <PortfolioBalanceChart
+            address={address}
+            totalValueUsd={holdingsState?.totalValueUsd ?? 0}
+            loading={!holdingsState || holdingsState.loading}
+            hideValue={holdingsState?.hideValue ?? false}
+            onToggleHideValue={holdingsState?.toggleHideValue}
+            onRefresh={holdingsState?.refresh}
+            modeToggle={modeToggle}
+            refreshTrigger={refreshTrigger + chartRefreshNonce}
+          />
+        </Profiler>
 
         {quickActions}
 
@@ -648,22 +533,24 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
             onto Activity.
           */}
           <Box display={tabIndex < 2 ? "block" : "none"} aria-hidden={tabIndex >= 2}>
-            <TokenHoldings
-              key={`${address}:${refreshTrigger}`}
-              address={address}
-              view={tabIndex === 1 ? "positions" : "assets"}
-              onTokenClick={onTokenClick}
-              onSwapClick={onSwapClick}
-              onRpcIssuesChange={onRpcIssuesChange}
-              hideHeader
-              hideCard
-              onStateChange={handleStateChange}
-              filterChainId={filterChainId}
-              onShowAllNetworks={() => selectPortfolioChain(null)}
-              searchQuery={tabIndex === 0 ? assetSearchQuery : ""}
-              onSnapshotsChanged={handleSnapshotsChanged}
-              unifyBalances={unifyBalances}
-            />
+            <Profiler id="portfolio-holdings" onRender={logPortfolioProfiler}>
+              <TokenHoldings
+                key={`${address}:${refreshTrigger}`}
+                address={address}
+                view={holdingsView}
+                onTokenClick={onTokenClick}
+                onSwapClick={onSwapClick}
+                onRpcIssuesChange={onRpcIssuesChange}
+                hideHeader
+                hideCard
+                onStateChange={handleStateChange}
+                filterChainId={filterChainId}
+                onShowAllNetworks={showAllNetworks}
+                searchQuery={holdingsView === "assets" ? assetSearchQuery : ""}
+                onSnapshotsChanged={handleSnapshotsChanged}
+                unifyBalances={unifyBalances}
+              />
+            </Profiler>
           </Box>
           {/*
             Activity stays mounted for the same reason TokenHoldings does: its
@@ -676,19 +563,21 @@ export default function PortfolioTabs({ address, accounts = [], connectedDappCha
             aria-hidden={tabIndex !== 2}
           >
             {activitySupplement?.(filterChainId, setHasSupplementalActivity)}
-            <TxStatusList
-              maxItems={10}
-              address={address}
-              accounts={accounts}
-              hideHeader
-              hideCard
-              hideEmptyState={hasSupplementalActivity}
-              filterChainId={filterChainId}
-              onShowAllNetworks={() => selectPortfolioChain(null)}
-              onSelectTx={onTransactionClick}
-              isActive={tabIndex === 2}
-              scope="public"
-            />
+            <Profiler id="portfolio-activity" onRender={logPortfolioProfiler}>
+              <TxStatusList
+                maxItems={10}
+                address={address}
+                accounts={accounts}
+                hideHeader
+                hideCard
+                hideEmptyState={hasSupplementalActivity}
+                filterChainId={filterChainId}
+                onShowAllNetworks={showAllNetworks}
+                onSelectTx={onTransactionClick}
+                isActive={tabIndex === 2}
+                scope="public"
+              />
+            </Profiler>
           </Box>
         </Box>
       </VStack>

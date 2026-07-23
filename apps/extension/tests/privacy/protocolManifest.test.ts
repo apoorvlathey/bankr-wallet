@@ -167,12 +167,24 @@ test("artifact verification fails closed on size and integrity changes", async (
 });
 
 test("numeric prover budgets and distribution gates are explicit", async () => {
-  const [budgets, packageJson] = await Promise.all([
+  const [
+    budgets,
+    packageJson,
+    copying,
+    thirdPartyNotices,
+    licensePackager,
+  ] = await Promise.all([
     readFile(
       new URL("privacy-prover.budgets.json", extensionRoot),
       "utf8",
     ).then(JSON.parse),
     readFile(new URL("package.json", extensionRoot), "utf8").then(JSON.parse),
+    readFile(new URL("COPYING", extensionRoot), "utf8"),
+    readFile(new URL("THIRD_PARTY_NOTICES.md", extensionRoot), "utf8"),
+    readFile(
+      new URL("scripts/package-license-files.mjs", extensionRoot),
+      "utf8",
+    ),
   ]);
   assert.deepEqual(budgets, {
     schemaVersion: 1,
@@ -189,8 +201,46 @@ test("numeric prover budgets and distribution gates are explicit", async () => {
     new URL("privacy-prover.distribution.json", extensionRoot),
     "utf8",
   ));
-  assert.equal(distribution.status, "blocked-pending-legal-review");
-  assert.deepEqual(distribution.allowedTargets, ["unpacked-sepolia-test"]);
+  assert.equal(packageJson.license, "GPL-3.0-only");
+  assert.equal(distribution.status, "approved-gpl-v4");
+  assert.equal(distribution.effectiveRelease, "4.0.0");
+  assert.deepEqual(distribution.allowedTargets, [
+    "unpacked-sepolia-test",
+    "github-release",
+    "chrome-web-store",
+    "firefox-addons",
+  ]);
+  assert.deepEqual(distribution.packagedNotices, [
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.txt",
+    "SOURCE_CODE.txt",
+  ]);
+  assert.match(
+    copying,
+    /GNU GENERAL PUBLIC LICENSE[\s\S]*Version 3, 29 June 2007/,
+  );
+  assert.match(
+    thirdPartyNotices,
+    /snarkjs[\s\S]*0\.7\.5[\s\S]*0KIMS Association/,
+  );
+  for (const dependency of [
+    "@iden3/bigarray",
+    "@iden3/binfileutils",
+    "fastfile",
+    "ffjavascript",
+    "r1csfile",
+    "wasmbuilder",
+    "wasmcurves",
+  ]) {
+    assert.match(thirdPartyNotices, new RegExp(dependency.replace("/", "\\/")));
+  }
+  assert.match(
+    packageJson.scripts.build,
+    /privacy:budgets:verify && pnpm license:package/,
+  );
+  for (const notice of distribution.packagedNotices) {
+    assert.match(licensePackager, new RegExp(notice.replace(".", "\\.")));
+  }
   for (const [script, target] of [
     ["zip", "github-release"],
     ["zip:cws", "chrome-web-store"],

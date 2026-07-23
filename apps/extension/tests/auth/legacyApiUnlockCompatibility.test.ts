@@ -106,7 +106,7 @@ test("partial vault-key upgrades preserve legacy Bankr access", async (t) => {
       prfKeyMaterial: Buffer.alloc(32, 0x53).toString("base64url"),
     };
 
-    async function installPartialUpgrade() {
+    const installPartialUpgrade = async () => {
       for (const key of Object.keys(local)) delete local[key];
       for (const key of Object.keys(session)) delete session[key];
       sessionModule.clearInMemoryAuthCache();
@@ -149,7 +149,7 @@ test("partial vault-key upgrades preserve legacy Bankr access", async (t) => {
       assert.ok(passkeyRecord.record);
       local.passkeyUnlock = passkeyRecord.record;
       return { passkeyPayload, vaultKeyBytes };
-    }
+    };
 
     await t.test(
       "passkey fails clearly until one master unlock migrates the credential",

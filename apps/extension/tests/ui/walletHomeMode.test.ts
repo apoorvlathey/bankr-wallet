@@ -13,16 +13,18 @@ test("wallet home mode persists only the two released presentation states", () =
 });
 
 test("wallet mode control stays compact, tooltip-free, and balance-aligned", async () => {
-  const [toggleSource, portfolioSource, privateHomeSource] = await Promise.all([
+  const [toggleSource, portfolioSource, balanceSource, privateHomeSource] = await Promise.all([
     readFile(new URL("../../src/components/WalletModeToggle.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../src/components/PortfolioTabs.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/components/Portfolio/PortfolioBalanceChart.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../src/app/home/PrivatePortfolioHome.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(toggleSource, /Tooltip/);
   assert.match(toggleSource, /minH="28px"/);
   assert.match(portfolioSource, /modeToggle\?: ReactNode/);
-  assert.match(portfolioSource, /Portfolio balance[\s\S]*?\{modeToggle\}/);
+  assert.match(portfolioSource, /<PortfolioBalanceChart[\s\S]*?modeToggle=\{modeToggle\}/);
+  assert.match(balanceSource, /Portfolio balance[\s\S]*?\{modeToggle\}/);
   assert.match(privateHomeSource, /Private Balance[\s\S]*?\{modeToggle\}/);
   assert.doesNotMatch(privateHomeSource, /Your Total/);
   assert.match(
@@ -57,10 +59,11 @@ test("Private balance hides an empty processing row", async () => {
 });
 
 test("Private home retains its verified balance and chart while background refreshes run", async () => {
-  const [privateHomeSource, operationsSource, chartSource, lockSource] = await Promise.all([
+  const [privateHomeSource, operationsSource, chartSource, chartSnapshotsSource, lockSource] = await Promise.all([
     readFile(new URL("../../src/app/home/PrivatePortfolioHome.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../src/components/Shield/hooks/useShieldOperations.ts", import.meta.url), "utf8"),
     readFile(new URL("../../src/components/PortfolioChart.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/components/Portfolio/usePortfolioChartSnapshots.ts", import.meta.url), "utf8"),
     readFile(new URL("../../src/app/hooks/useManualWalletLock.ts", import.meta.url), "utf8"),
   ]);
 
@@ -83,13 +86,14 @@ test("Private home retains its verified balance and chart while background refre
     /const clearRendererAuthState = useCallback\(\(\) => \{[\s\S]*?clearRendererMemoryCache\(\)/,
   );
   assert.match(
-    chartSource,
-    /useState<Snapshot\[\]>\(\(\) =>[\s\S]*?suppliedSnapshots \? \[\.\.\.suppliedSnapshots\] : \[\]/,
+    chartSnapshotsSource,
+    /useState<[\s\S]*PortfolioChartSnapshot\[\][\s\S]*>\(\(\) => \(suppliedSnapshots \? \[\.\.\.suppliedSnapshots\] : \[\]\)\)/,
   );
   assert.match(
-    chartSource,
+    chartSnapshotsSource,
     /useState\(suppliedSnapshots === undefined\)/,
   );
+  assert.match(chartSource, /usePortfolioChartSnapshots/);
 });
 
 test("Private chart hover hides the current shielded amount without collapsing its row", async () => {

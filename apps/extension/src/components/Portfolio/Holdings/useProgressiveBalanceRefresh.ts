@@ -5,6 +5,10 @@ import { getPortfolioTokenKey } from "@/chrome/portfolio/hiddenTokens";
 import { recordSnapshot } from "@/chrome/portfolio/snapshotStorage";
 import { enrichPortfolioTokenPage } from "@/chrome/portfolio/tokenPageEnrichment";
 import {
+  logPortfolioPerformance,
+  portfolioPerformanceNow,
+} from "@/components/Portfolio/performanceDebug";
+import {
   getDefiTotal,
   getWalletTokenTotal,
   mergeVerifiedTokenBalances,
@@ -13,6 +17,7 @@ import {
   holdingsCacheKey,
   writeProgressiveHoldingsSnapshot,
 } from "./cache";
+import { selectPendingVisibleBalanceRefreshTokens } from "./progressiveRefreshModel";
 import { mergeTokenEnrichment } from "./transforms";
 import type { HoldingsState } from "./useHoldingsState";
 import type { RpcHealthReport } from "@/types";
@@ -38,6 +43,8 @@ export function useProgressiveBalanceRefresh({
 }: ProgressiveBalanceRefreshOptions): boolean {
   const requestVersionRef = useRef(0);
   const snapshotTimerRef = useRef<number | null>(null);
+  const attemptedTokenKeysRef = useRef(new Set<string>());
+  const attemptedLoadVersionRef = useRef(state.loadVersionRef.current);
   const [refreshing, setRefreshing] = useState(false);
   const [lowValueRefreshing, setLowValueRefreshing] = useState(false);
   const visibleTokenKeys = useMemo(
@@ -66,15 +73,23 @@ export function useProgressiveBalanceRefresh({
     ) {
       return;
     }
+    if (attemptedLoadVersionRef.current !== state.loadVersionRef.current) {
+      attemptedLoadVersionRef.current = state.loadVersionRef.current;
+      attemptedTokenKeysRef.current.clear();
+    }
 
-    const tokensToRefresh = visibleTokens.filter((token) => {
-      const key = getPortfolioTokenKey(token.chainId, token.contractAddress);
-      return (
-        !state.hiddenTokenKeys.has(key) &&
-        !state.onchainFetchedTokenKeys.has(key)
-      );
+    const tokensToRefresh = selectPendingVisibleBalanceRefreshTokens({
+      visibleTokens,
+      hiddenTokenKeys: state.hiddenTokenKeys,
+      onchainFetchedTokenKeys: state.onchainFetchedTokenKeys,
+      attemptedTokenKeys: attemptedTokenKeysRef.current,
     });
     if (tokensToRefresh.length === 0) return;
+    for (const token of tokensToRefresh) {
+      attemptedTokenKeysRef.current.add(
+        getPortfolioTokenKey(token.chainId, token.contractAddress),
+      );
+    }
 
     const requestVersion = requestVersionRef.current + 1;
     requestVersionRef.current = requestVersion;
@@ -83,6 +98,13 @@ export function useProgressiveBalanceRefresh({
         getPortfolioTokenKey(token.chainId, token.contractAddress),
       ),
     );
+    const startedAt = portfolioPerformanceNow();
+    logPortfolioPerformance("visible-balance-refresh-start", {
+      visibleTokenCount: visibleTokens.length,
+      visibleLowValueTokenCount: visibleLowValueTokens.length,
+      refreshTokenCount: tokensToRefresh.length,
+      includesLowValueRows,
+    });
     setRefreshing(true);
     setLowValueRefreshing(includesLowValueRows);
     try {
@@ -121,6 +143,18 @@ export function useProgressiveBalanceRefresh({
       state.setOnchainFetchedTokenKeys(nextFetchedKeys);
       state.setTotalValueUsd(total);
       state.setLastFetched(fetchedAt);
+      logPortfolioPerformance("visible-balance-refresh-complete", {
+        visibleTokenCount: visibleTokens.length,
+        visibleLowValueTokenCount: visibleLowValueTokens.length,
+        refreshTokenCount: tokensToRefresh.length,
+        verifiedTokenCount: onchain.verifiedTokenKeys.size,
+        failedTokenCount:
+          tokensToRefresh.length - onchain.verifiedTokenKeys.size,
+        portfolioTokenCount: nextTokens.length,
+        durationMs: Number(
+          (portfolioPerformanceNow() - startedAt).toFixed(2),
+        ),
+      });
       writeProgressiveHoldingsSnapshot(holdingsCacheKey(address, chainReloadKey), {
         tokens: nextTokens,
         defiPositions: state.defiPositions,
@@ -143,11 +177,21 @@ export function useProgressiveBalanceRefresh({
       snapshotTimerRef.current = window.setTimeout(() => {
         snapshotTimerRef.current = null;
         void recordSnapshot(address, total)
-          .then(() => onSnapshotsChanged?.())
+          .then((snapshotChanged) => {
+            if (snapshotChanged) onSnapshotsChanged?.();
+          })
           .catch(() => undefined);
       }, 1_000);
     } catch {
       // Keep the provider/API value when a visible token cannot be verified.
+      logPortfolioPerformance("visible-balance-refresh-failed", {
+        visibleTokenCount: visibleTokens.length,
+        visibleLowValueTokenCount: visibleLowValueTokens.length,
+        refreshTokenCount: tokensToRefresh.length,
+        durationMs: Number(
+          (portfolioPerformanceNow() - startedAt).toFixed(2),
+        ),
+      });
     } finally {
       if (requestVersionRef.current === requestVersion) {
         setRefreshing(false);
@@ -162,11 +206,14 @@ export function useProgressiveBalanceRefresh({
     state,
     refreshing,
     visibleLowValueTokenKeys,
+    visibleLowValueTokens.length,
     visibleTokens,
   ]);
 
   useEffect(() => {
     requestVersionRef.current += 1;
+    attemptedLoadVersionRef.current = state.loadVersionRef.current;
+    attemptedTokenKeysRef.current.clear();
     setRefreshing(false);
     setLowValueRefreshing(false);
     return () => {
@@ -175,7 +222,7 @@ export function useProgressiveBalanceRefresh({
         snapshotTimerRef.current = null;
       }
     };
-  }, [address]);
+  }, [address, chainReloadKey, state.loadVersionRef]);
 
   useEffect(() => {
     if (state.portfolioBalanceRefreshing) return;

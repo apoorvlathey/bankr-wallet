@@ -97,7 +97,11 @@ For detailed implementation documentation, see [IMPLEMENTATION.md](_docs/IMPLEME
 
 ## License
 
-MIT
+This is a multi-license repository. The browser extension is GPL-3.0-only
+beginning with v4.0.0; releases through v3.19.0 retain their existing license.
+Other components remain MIT unless their directory contains a separate
+license. See [LICENSE.md](LICENSE.md) and
+[apps/extension/LICENSE.md](apps/extension/LICENSE.md).
 
 ## Author
 

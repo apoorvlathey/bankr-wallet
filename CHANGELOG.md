@@ -79,6 +79,9 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ### Changed
 
+- WalletChan browser-extension releases beginning with v4 are licensed under
+  GPL-3.0-only. Packaged builds include the full license, exact corresponding
+  source directions, and attribution for the bundled `snarkjs@0.7.5` prover.
 - The extension has an end-to-end Warm Midnight visual overhaul across Home,
   assets, account controls, Settings, action sheets, request surfaces, and
   fullscreen/sidepanel layouts, with a responsive animated mascot and shared

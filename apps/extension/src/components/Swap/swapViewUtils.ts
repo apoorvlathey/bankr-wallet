@@ -35,6 +35,28 @@ export function pickDefaultSwapSellToken(
   );
 }
 
+export function resolveInitialSwapChainId(
+  initialChainId: number,
+  initialSellToken?: PortfolioToken,
+): number {
+  if (
+    initialSellToken &&
+    SWAP_SUPPORTED_CHAIN_IDS.has(initialSellToken.chainId)
+  ) {
+    return initialSellToken.chainId;
+  }
+  return SWAP_SUPPORTED_CHAIN_IDS.has(initialChainId) ? initialChainId : 1;
+}
+
+export function findNativeTokenForChain(
+  tokens: readonly PortfolioToken[],
+  chainId: number,
+): PortfolioToken | undefined {
+  return tokens.find(
+    (token) => token.chainId === chainId && token.contractAddress === "native",
+  );
+}
+
 export function to0xToken(token: PortfolioToken): string {
   return token.contractAddress === "native"
     ? NATIVE_TOKEN_ADDRESS

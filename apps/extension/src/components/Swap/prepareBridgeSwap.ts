@@ -8,7 +8,7 @@ import {
 } from "@/chrome/swapApi";
 import type { useThemedToast } from "@/hooks/useThemedToast";
 import { BUNGEE_NATIVE_TOKEN, type BungeeQuoteResponse } from "@walletchan/shared/bungee";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 import { getExecutableBridgeRouteSelection } from "./bridgeRouteUtils";
 import { buildSwapBatchPlan } from "./swapBatchPlan";
 import type {

@@ -1,7 +1,7 @@
 # Privacy Pools implementation checklist
 
-> **Status:** Dual Sepolia-development/mainnet-production implementation complete;
-> value-bearing mainnet rehearsal pending
+> **Status:** Dual Sepolia-development/mainnet-production implementation and
+> maintainer-confirmed manual QA complete as of 2026-07-23
 > **Target:** normal dev/production commands on Ethereum mainnet; dedicated Sepolia commands on Sepolia
 > **Product source:** [`PRIVACY_POOLS_PRD.md`](./PRIVACY_POOLS_PRD.md)
 > **Fresh-session handoff:** [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md)
@@ -9,28 +9,29 @@
 This checklist turns the Privacy Pools PRD into review-sized checkpoints. Each
 checkpoint ends in a build the team can inspect manually before the next one
 starts. A checked implementation item means the code and automated checks are
-complete; the matching manual gate remains the product owner's approval point.
+complete. The product owner confirmed the written Sepolia and mainnet manual
+matrices on 2026-07-23.
 
-## Manual progress snapshot (2026-07-21)
+## Manual progress snapshot (2026-07-23)
 
-| Area | Current evidence | Remaining manual gate |
+| Area | Current evidence | Manual status |
 | --- | --- | --- |
-| Public/private home | Dual-mode home, private balance/chart/assets/activity, signer-owned transaction mirroring into Public Activity, explicit Shield signer, and relayed Unshield are implemented | Recheck both themes and final popup/sidepanel transitions in the unpacked extension |
-| Shield/Unshield UI | Four private-home actions, separate fixed-asset screens, private-only Shielded ETH asset, and privacy-ledger Activity are implemented; duplicate Private Send was removed because v1 has no in-pool transfer | Recheck both themes and final popup/sidepanel layouts in the unpacked extension |
-| Password/passkey initialization | Fresh biometric login was confirmed working after capability parity fixes | Complete reveal, restore, rotation, factor-removal, and clean-install recovery rehearsal |
-| Quote/review | Real quotes work with three-request RPC batches; arbitrary 1 ETH cap removed | Repeat with Bankr, private-key, seed-phrase, impersonator, and agent sessions |
-| Sepolia Shield | Real deposits reached confirmation/indexing and appeared in the confirmed balance while ASP-pending | Complete and record one full private-key and one full seed-phrase run, including rejection/restart/account-switch cases |
-| Live status | Confirmed/available/pending balance, permanent private asset row, and Private Activity projections are implemented | Reconfirm every transition from the asset row and Private Activity |
-| Private Unshield | Automated full/partial, quote, proof, relayer, lineage, and retry coverage passes | No complete manual partial/full ASP-approved withdrawal has been recorded |
-| Withdraw publicly | One real Sepolia public withdrawal succeeded after the proof-signal fix | Repeat for both local wallet types after clean recovery; recheck that a user-rejected prompt creates no Activity card |
-| Recovery and destructive safety | Automated phrase, rescan, account-removal, and reset coverage passes | Complete the written disposable-wallet rehearsal |
-| Production profile | Mainnet pins, onchain relationships, endpoint/relayer signatures, compile-time bundle isolation, and all wallet-type code paths are automated | Value-bearing Bankr/private-key/seed-phrase smoke matrix and incident/recovery procedure |
-| Distribution | Unpacked Chrome Sepolia target passes automated gates; production compilation does not grant distribution approval | GPL/legal/compliance/store review remains required before release packaging |
+| Public/private home | Dual-mode home, private balance/chart/assets/activity, signer-owned transaction mirroring into Public Activity, explicit Shield signer, and relayed Unshield are implemented | Complete |
+| Shield/Unshield UI | Separate fixed-asset screens, private-only Shielded ETH, and privacy-ledger Activity are implemented | Complete |
+| Password/passkey initialization | Biometric login plus reveal/restore/rotation/factor-removal/clean-install paths exercised | Complete |
+| Quote/review | Real quotes, bounded RPC batches, fee arithmetic, and wallet/session matrix exercised | Complete |
+| Sepolia Shield | Confirmation/indexing/ASP plus local-wallet/rejection/restart paths exercised | Complete |
+| Live status | Confirmed/available/pending balance and Private Activity transitions exercised | Complete |
+| Private Unshield | Automated coverage plus maintainer-confirmed partial/full ASP-approved withdrawal QA | Complete |
+| Withdraw publicly | Real withdrawal, local-wallet clean-recovery, and rejected-prompt visibility paths exercised | Complete |
+| Recovery and destructive safety | Phrase, rescan, account-removal, reset, and recovery-only matrix exercised | Complete |
+| Production profile | Bundle isolation, Bankr/private-key/seed-phrase smoke matrix, and incident/recovery procedures exercised | Complete |
+| Distribution | GPL-3.0-only v4 policy, `snarkjs` family attribution, and packaged source directions are complete | Bump to v4.0.0, then complete remaining legal/compliance/store review |
 
 ## Checkpoint 1: Sepolia product shell
 
-**Implementation:** Complete. **Manual:** Core simplified layout accepted; final
-cross-theme/layout recheck remains.
+**Implementation:** Complete. **Manual:** Complete (maintainer-confirmed
+2026-07-23).
 
 - [x] Show ASP-cleared Shielded ETH as the main private value and
   compliance-pending processing ETH as compact amber subcopy.
@@ -53,7 +54,7 @@ cross-theme/layout recheck remains.
 - [x] Pass Shield model tests, UI-scoped typecheck/lint, axe checks, and
   the packaged extension build.
 
-Manual gate:
+Manual gate completed on 2026-07-23; recorded matrix:
 
 1. Reload the extension and open **Shield** from the home quick actions.
 2. Confirm Shield opens directly to `Deposit from` and compact fixed Sepolia
@@ -95,7 +96,7 @@ Manual gate:
 - [x] Cover lock, restart, password rotation, passkey removal, reset, and fixed
   recovery vectors.
 
-Manual gate for this slice: first access initializes once without showing a
+Manual gate completed on 2026-07-23: first access initializes once without showing a
 phrase; password login and a fresh biometric login both work for Bankr,
 private-key, and seed-phrase accounts, while impersonators remain blocked.
 Repeated access preserves the same local record without any pool or transaction
@@ -116,10 +117,11 @@ records only a key-ID/timestamp backup marker, never the phrase.
   same one-shot offscreen worker.
 - [x] Exercise packaged proof timing, CSP, and worker restart in Chromium.
 - [x] Measure peak memory and freeze package/performance budgets.
-- [ ] Complete the `snarkjs` distribution/license decision before store use.
+- [x] License extension v4+ under GPL-3.0-only and package the full license,
+  `snarkjs@0.7.5` attribution, and corresponding-source directions.
 
-Manual gate: run fixed proofs from the packaged Chrome extension while closing
-and reopening the wallet UI.
+Manual gate completed on 2026-07-23: fixed proofs ran from the packaged Chrome
+extension across wallet UI close/reopen.
 
 Automated packaged-Chromium measurement (2026-07-20): both proofs verified in
 9.027 s on the first run and 9.981 s after closing/reopening the extension page.
@@ -144,8 +146,8 @@ packaged Chromium QA enforce them.
 - [x] Render ready, pending, attention, last-sync, and recovery aggregates
   from the real repository facade.
 
-Manual gate: recover the same empty and funded Sepolia state after cache
-deletion and service-worker restart.
+Manual gate completed on 2026-07-23: empty and funded Sepolia state recovered
+after cache deletion and service-worker restart.
 
 Deployment slice gate: with the normal Sepolia RPC online, pressing Shield
 must open the compact amount quote after both the onchain identity and packaged
@@ -167,9 +169,9 @@ mutations remain unavailable.
 - [x] Mirror public Shield stages into the normal wallet Activity row with
   live bounded sync and unchanged Sepolia transaction-detail navigation.
 
-Manual gate: shield Sepolia ETH with private-key and seed-phrase accounts and
-verify that the public transaction becomes the expected private commitment.
-Bankr must fail before a prompt because it cannot submit Sepolia transactions.
+Manual gate completed on 2026-07-23: private-key and seed-phrase Shield paths
+produced the expected private commitment, and Bankr failed before a Sepolia
+prompt as designed.
 
 Quote slice gate: on Bankr, private-key, and seed-phrase accounts, Shield opens
 one fixed-asset amount form with a `0.001 ETH` minimum showing the public Sepolia balance, 1%
@@ -206,8 +208,8 @@ lineage remain encrypted and never enter the renderer.
   indexed, before ASP approval.
 - [x] Preserve public withdrawal while ASP review is pending or unavailable.
 
-Manual gate: observe every ASP lifecycle state without leaking account
-inventory or private wallet metadata to the endpoint.
+Manual gate completed on 2026-07-23: ASP lifecycle states were exercised
+without exposing account inventory or private wallet metadata to the endpoint.
 
 ## Checkpoint 7: Relayed private withdrawal
 
@@ -219,13 +221,14 @@ inventory or private wallet metadata to the endpoint.
 - [x] Track nullifier and replacement commitment through confirmation.
 - [x] Make ambiguous retry receipt/nullifier-aware.
 
-Manual gate: perform full and partial Sepolia withdrawals to fresh recipients,
-including quote expiry, relayer substitution, lock, restart, and timeout tests.
+Manual gate completed on 2026-07-23 for full and partial Sepolia withdrawals,
+including quote expiry, relayer substitution, lock, restart, and timeout paths.
 
 ## Checkpoint 8: Public withdrawal
 
-**Implementation:** Complete. **Manual:** One real Sepolia withdrawal succeeded;
-both local wallet types and clean-recovery repetition remain.
+**Implementation:** Complete. **Manual:** Complete for both local wallet types,
+rejection visibility, and clean-recovery repetition (maintainer-confirmed
+2026-07-23).
 
 - [x] Detect declined/removed ragequit eligibility without hiding normal private state.
 - [x] Let a user publicly withdraw a confirmed, indexed commitment instead of
@@ -245,8 +248,8 @@ both local wallet types and clean-recovery repetition remain.
 - [x] Keep a user-rejected public-withdrawal record internally for safe claim
   cleanup but omit it from Shield Activity.
 
-Manual gate: complete Sepolia ragequit for private-key and seed-phrase test
-accounts after a clean-install phrase rescan. Bankr must fail before a prompt.
+Manual gate completed on 2026-07-23 for private-key and seed-phrase ragequit
+after clean-install phrase rescan; Sepolia Bankr rejection was also confirmed.
 
 ## Checkpoint 9: Sepolia hardening and release rehearsal
 
@@ -258,8 +261,7 @@ accounts after a clean-install phrase rescan. Bankr must fail before a prompt.
 - [x] Reconcile implementation, storage, privacy, and security documentation.
 - [x] Keep Firefox feature-disabled until its equivalent prover gate passes.
 
-Manual gate: complete the written Sepolia release rehearsal from fresh install
-through recovery with no unsupported or unexplained state.
+Manual gate completed on 2026-07-23 from fresh install through recovery.
 
 ## Checkpoint 10: Mainnet read-only rehearsal
 
@@ -270,14 +272,13 @@ through recovery with no unsupported or unexplained state.
   verify development bundles contain Sepolia pins and exclude mainnet pins.
 - [x] Isolate mainnet and Sepolia operations, commitment, withdrawal, ragequit,
   portfolio, and event databases while deleting both secret profiles on reset.
-- [ ] Rescan production-equivalent known fixtures without sending value.
-- [ ] Complete security, legal/compliance, licensing, endpoint, and store-policy
-  reviews.
-- [ ] Exercise the kill switch and recovery-only procedures.
+- [x] Rescan production-equivalent known fixtures without sending value.
+- [x] Complete technical security, licensing, and endpoint review.
+- [x] Exercise the kill switch and recovery-only procedures.
+- [ ] Complete the final Chrome Web Store submission/policy review.
 
-Manual gate: approve the remaining PRD go/no-go items before a distribution or
-value-bearing rollout. Mainnet code is compiled for normal builds, but no live
-transaction was sent during the read-only verification.
+Manual technical and controlled value-bearing gates were confirmed complete on
+2026-07-23. Final store submission review remains part of release packaging.
 
 ## Checkpoint 11: Mainnet implementation and controlled beta
 
@@ -289,11 +290,10 @@ transaction was sent during the read-only verification.
   and available balance after gas.
 - [x] Reuse the exact final authorization/effect boundary for Bankr Shield and
   public-recovery submissions before pending request removal or remote submit.
-- [ ] Complete a capped, explicitly authorized Shield/Unshield/recovery smoke
+- [x] Complete a capped, explicitly authorized Shield/Unshield/recovery smoke
   run for Bankr, private-key, and seed-phrase accounts.
-- [ ] Monitor only privacy-safe operational health and exercise recovery-only
+- [x] Monitor only privacy-safe operational health and exercise recovery-only
   response before wider availability.
 
-Manual gate: perform the first mainnet shield, private withdrawal,
-clean-install recovery, and emergency procedure only after every earlier gate
-has been signed off.
+Manual gate completed on 2026-07-23: controlled mainnet Shield, private
+withdrawal, clean-install recovery, and recovery-only procedure.

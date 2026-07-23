@@ -7,7 +7,7 @@ import {
   type TokenInfo,
 } from "@/chrome/swapApi";
 import type { useThemedToast } from "@/hooks/useThemedToast";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 import { buildSwapBatchPlan } from "./swapBatchPlan";
 import type { PreparedSwapPlan, SwapAccountType } from "./swapViewTypes";
 import { to0xToken } from "./swapViewUtils";

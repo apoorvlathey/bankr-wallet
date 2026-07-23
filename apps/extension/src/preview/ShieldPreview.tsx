@@ -32,6 +32,7 @@ export function ShieldPreview({
       mode={mode}
       onBack={() => {}}
       onUnlockRequired={() => {}}
+      onOpenBiometricSettings={() => {}}
       account={privacyAccount}
       accounts={privacyAccount ? [privacyAccount] : []}
     />

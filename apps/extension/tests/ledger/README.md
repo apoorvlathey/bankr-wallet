@@ -8,6 +8,7 @@ pending-request terminalization across both transaction and message signing.
 The no-device transaction lifecycle also freezes exact reviewed-nonce use,
 including the nonce reservation boundary used by pending replacements.
 
-Real-device QA is still required for WebHID discovery, Ethereum-app prompts,
-address scans, transaction signatures, personal signatures, and EIP-712
-signatures.
+Maintainer-confirmed real-device QA was completed on 2026-07-23 for WebHID
+discovery, Ethereum-app prompts, address scans, transaction signatures,
+personal signatures, and EIP-712 signatures. Repeat this matrix when Ledger
+transport/signing policy or supported device/app behavior changes.

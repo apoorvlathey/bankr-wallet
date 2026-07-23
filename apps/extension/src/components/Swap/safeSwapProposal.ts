@@ -1,5 +1,5 @@
 import type { SafeCall } from "@/chrome/safe/types";
-import type { PreparedSwapTxEntry } from "./SwapConfirmation";
+import type { PreparedSwapTxEntry } from "./swapViewTypes";
 
 interface CreateSafeSwapProposalOptions {
   safeAccountId: string;

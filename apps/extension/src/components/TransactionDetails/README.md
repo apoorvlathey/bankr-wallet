@@ -48,7 +48,7 @@ here and should stay organized by one user-facing responsibility per file.
 | `ArbitrumForceInclusionAction.tsx` | Show the delayed Arbitrum recovery action only after on-chain force eligibility | Reads force status and requests the guarded L1 force transaction |
 | `formatting.ts` | Pure amount, grouping, swap-selection, and timestamp helpers | None |
 | `forceInclusionState.ts` | Pure L1/L2 progress derivation | None |
-| `tokenMetadata.ts` | Pure token-metadata request collection and record enrichment | None |
+| `tokenMetadata.ts` | Pure ERC-20/NFT metadata request collection and record enrichment | None |
 | `useAssetChangeData.ts` | Enrich token metadata, backfill asset changes, and fetch native/token prices | Runtime messages only |
 | `useResolvedCalldata.ts` | Resolve settled calldata by trusted history ID only when details need it | Runtime messages only |
 | `useGasData.ts` | Read persisted receipt gas data, fetch missing ordinary receipt gas, and derive display values; force-inclusion history supplies its fee-bearing L1 gas record | Bounded RPC reads only |

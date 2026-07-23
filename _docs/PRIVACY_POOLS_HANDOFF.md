@@ -1,20 +1,21 @@
 # Privacy Pools implementation handoff
 
-> **Handoff date:** 2026-07-21
+> **Handoff date:** 2026-07-23
 > **Build targets:** normal dev/production commands use Ethereum mainnet;
 > `dev-sepolia:extension` and `build-sepolia:extension` use Sepolia
-> **Implementation status:** Dual-profile code and automated profile/wallet
-> coverage are complete; value-bearing mainnet browser smoke tests remain
-> **Distribution status:** Store/release packaging remains blocked pending the
-> existing GPL/legal/compliance gate
-> **Resume with:** [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md)
+> **Implementation status:** Dual-profile code, automated coverage, and the
+> written Sepolia/mainnet browser QA matrices are complete
+> **Distribution status:** The GPL/`snarkjs` v4 decision is resolved;
+> release/store packaging requires v4.0.0 or later; final store submission
+> review remains a separate release-process step
+> **QA record:** [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md)
 
 This is the starting document for the next implementation session. It records
 what is built, what the product owner has observed manually, the important
 security and protocol decisions, the latest fixed defects, and the remaining
-gates. A production build now contains only the mainnet deployment, but that
-does not by itself approve store distribution or authorize a value-bearing
-mainnet rehearsal.
+release-process gate. A production build contains only the mainnet deployment;
+the controlled value-bearing matrix is recorded as complete below, while the
+build alone does not approve Chrome Web Store distribution.
 
 ## Product behavior now
 
@@ -174,11 +175,12 @@ The product owner has directly confirmed during the current iteration that:
 - the public withdrawal proof and wallet transaction now work after the
   commitment-signal correction described below.
 
-The latest cancellation-visibility change is implemented and automated, but
-still needs one browser reload/rejection check. The session did not establish
-a complete manual pass for both local wallet types, private Unshield,
-clean-install phrase recovery, every negative wallet path, or destructive
-safeguards. Treat those as pending even when automated coverage exists.
+On 2026-07-23 the maintainer confirmed the complete written browser matrix:
+Bankr/private-key/seed-phrase paths, rejection and restart behavior, partial
+and full private Unshield, clean-install phrase recovery/rescan, public
+withdrawal, negative wallet/session paths, and account-removal/reset/recovery
+safeguards. This is maintainer-provided manual evidence; transaction hashes and
+privacy-sensitive artifacts remain intentionally outside the repository.
 
 ## Custody and cryptography decisions
 
@@ -198,10 +200,10 @@ safeguards. Treat those as pending even when automated coverage exists.
 - The service-worker build imports the SDK's pure crypto source and a pinned
   three-width `poseidon-lite` adapter. This keeps the SDK root barrel's
   `snarkjs`/Blob-worker initialization out of `background.js`.
-- Store/release packaging is deliberately blocked by
-  `privacy-prover.distribution.json` while the transitive/direct
-  `snarkjs@0.7.5` GPL-3.0 distribution decision is unresolved. Only
-  `unpacked-sepolia-test` is allowed.
+- `privacy-prover.distribution.json` records the GPL-3.0-only decision for
+  extension v4 and later. Every build carries the full license,
+  `snarkjs@0.7.5` attribution, and source directions. Release/store targets
+  require version 4.0.0 or later.
 
 ## Important proof-signal correction
 
@@ -412,34 +414,26 @@ They intentionally contain only a stage, proof action, attempt number, and
 bounded failure code. Do not add addresses, amounts, commitments, labels,
 proofs, public signals, calldata, or secret material to logs.
 
-## Resume order
+## Completed manual QA record
 
-1. Use [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md) to
-   inspect a normal production build and confirm Ethereum/mainnet labels,
-   `0.01 ETH` minimum, 0.5% protocol fee, mainnet explorer links, and Bankr plus
-   both local source-account options. Confirm no Sepolia endpoint/address is in
-   the emitted privacy bundles.
-2. Reload a `dev-sepolia:extension` build and complete the remaining written Sepolia
-   rehearsal for private-key and seed-phrase accounts, including recovery,
-   rejection, restart, private Unshield, and destructive safeguards. Confirm
-   Bankr remains blocked in this profile.
-3. On an unfunded or otherwise non-submitting production wallet, exercise
-   mainnet quote/review validation and the negative matrix: impersonator,
-   agent session, insufficient funds, below-minimum input, deployment drift,
-   ASP/root failure, and relayer substitution.
-4. Obtain explicit value-bearing test authorization and caps before sending
-   mainnet funds. Then perform the ordered mainnet smoke matrix with Bankr,
-   private-key, and seed-phrase accounts: Shield, confirmation/indexing/ASP,
-   partial and full Unshield, clean phrase restore/rescan, and exact-original-
-   depositor public recovery. Record hashes and outcomes without recording
-   privacy secrets or linkable private-withdrawal details in shared logs.
-5. Exercise account-removal, reset, recovery-only, and incident/kill procedures
-   against disposable mainnet state. Verify cross-profile reset removes both
-   Sepolia and mainnet encrypted databases.
-6. Resolve the `snarkjs` license/distribution decision and complete
-   security/legal/compliance/store-policy review before using GitHub release,
-   Chrome Web Store, or Firefox packaging. The mainnet build profile does not
-   bypass those gates.
+The maintainer confirmed on 2026-07-23 that the written Sepolia and controlled
+mainnet matrices were completed:
+
+1. Production UI, pins, fee arithmetic, explorer links, and compile-time
+   mainnet/Sepolia bundle isolation.
+2. Bankr, private-key, and seed-phrase Shield flows plus impersonator and agent
+   rejection paths.
+3. Confirmation/indexing/ASP transitions, partial and full private Unshield,
+   expiry/restart handling, and exact-original-depositor public withdrawal.
+4. Separate phrase reveal, clean restore/rescan, account removal, full reset,
+   recovery-only behavior, and cross-profile encrypted-database deletion.
+5. Rejection, insufficient-funds, below-minimum, deployment/ASP/root, and
+   relayer-substitution negative paths.
+
+Future changes to Privacy Pools signing, proving, recovery, relayer policy, or
+deployment profiles should repeat the affected rows. Preserve the resolved
+GPL-3.0-only license, `snarkjs` attribution, and source-package checks during
+the v4 release process.
 
 ## Documents to keep synchronized
 
@@ -451,7 +445,7 @@ proofs, public signals, calldata, or secret material to logs.
   browser rehearsal.
 - [`PRIVACY_POOLS_MAINNET_TEST.md`](./PRIVACY_POOLS_MAINNET_TEST.md): exact
   mainnet pins, read-only verification, production bundle checks, and manual
-  value-bearing gates.
+  value-bearing QA record.
 - [`IMPLEMENTATION.md`](./IMPLEMENTATION.md): message flow and background/UI
   architecture.
 - [`SECURITY.md`](./SECURITY.md): authorization, cryptographic, message, and

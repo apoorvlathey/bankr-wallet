@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PortfolioToken } from "../../src/chrome/portfolio/api";
-import { pickDefaultSwapSellToken } from "../../src/components/Swap/swapViewUtils";
+import {
+  findNativeTokenForChain,
+  pickDefaultSwapSellToken,
+  resolveInitialSwapChainId,
+} from "../../src/components/Swap/swapViewUtils";
 
 const token = (
   symbol: string,
@@ -39,4 +43,17 @@ test("cached swap default can be constrained to a newly selected network", () =>
   );
 
   assert.equal(selected?.symbol, "ETH");
+});
+
+test("swap initialization keeps supported explicit assets and chain fallbacks", () => {
+  const ethereum = token("ETH", 1, 20);
+  assert.equal(resolveInitialSwapChainId(8453, ethereum), 1);
+  assert.equal(resolveInitialSwapChainId(8453), 8453);
+  assert.equal(resolveInitialSwapChainId(999_999), 1);
+});
+
+test("source native lookup stays pinned to the selected chain", () => {
+  const ethereum = token("ETH", 1, 20);
+  const base = { ...token("ETH", 8453, 30), name: "Base ETH" };
+  assert.equal(findNativeTokenForChain([ethereum, base], 8453), base);
 });

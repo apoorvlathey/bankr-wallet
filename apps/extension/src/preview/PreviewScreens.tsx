@@ -282,6 +282,7 @@ function SwapPickerPreview({
         selectedTokenAddress="native"
         selectedTokenChainId={8453}
         onSelect={() => {}}
+        onSelectChain={() => {}}
         fromAddress={account.address}
         holdingsAllChains={getPreviewPortfolioResponse(scenario).tokens}
         initialTokenSearch={

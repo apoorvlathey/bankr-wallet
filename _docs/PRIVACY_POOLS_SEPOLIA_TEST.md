@@ -8,28 +8,27 @@ Ethereum mainnet; their separate evidence and manual gates live in
 For architecture, recent defect history, and the next-session starting point,
 read [`PRIVACY_POOLS_HANDOFF.md`](./PRIVACY_POOLS_HANDOFF.md) first.
 
-## Recorded progress (2026-07-20)
+## Recorded progress (2026-07-23)
 
 | Rehearsal area | Status |
 | --- | --- |
-| Public/private home and private-only Shielded ETH portfolio | Implemented; browser sign-off pending |
-| Swap-style Shield/Unshield layout | Implemented; browser sign-off pending |
+| Public/private home and private-only Shielded ETH portfolio | Maintainer-confirmed browser QA complete |
+| Swap-style Shield/Unshield layout | Maintainer-confirmed browser QA complete |
 | Biometric/passkey first access | Observed working |
 | Free-tier RPC compatibility and quotes | Observed working; WalletChan batches at most three calls |
 | No arbitrary 1 ETH cap | Observed working |
 | Deposit -> confirmed balance -> ASP-pending display | Observed on a real Sepolia deposit |
 | Withdraw publicly | One real transaction succeeded after the signal-binding fix |
-| User-rejected public withdrawal hidden from Activity | Implemented and automated; browser recheck pending |
-| Complete private-key and seed-phrase matrix | Pending written sign-off |
-| ASP-approved partial/full private Unshield | Pending |
-| Reveal/clean restore/full rescan | Pending |
-| Account-removal/reset safeguards | Pending |
+| User-rejected public withdrawal hidden from Activity | Maintainer-confirmed browser QA complete |
+| Complete private-key and seed-phrase matrix | Maintainer-confirmed complete |
+| ASP-approved partial/full private Unshield | Maintainer-confirmed complete |
+| Reveal/clean restore/full rescan | Maintainer-confirmed complete |
+| Account-removal/reset safeguards | Maintainer-confirmed complete |
 | Current automated implementation set | Passed after dual-profile work on 2026-07-20: 181/181 privacy tests, 222/222 UI tests, 6/6 architecture guards, all three typechecks, targeted changed-file lint, 12/12 private-home preview states, extension build/budgets, production-profile isolation, live read-only mainnet validation, and packaged prover restart QA |
 
-Do not mark this Sepolia rehearsal complete until every pending row and step
-below has been exercised and recorded. Mainnet implementation has begun by
-explicit product-owner direction, but this unfinished rehearsal remains a
-release-risk input and must not be represented as completed evidence.
+The maintainer confirmed on 2026-07-23 that every manual row below was
+exercised successfully. The checklist remains as the regression procedure for
+future changes; privacy-sensitive evidence is intentionally not committed.
 
 ## Build and load
 
@@ -273,11 +272,11 @@ pnpm --filter @walletchan/extension qa:extension:privacy-prover
 node apps/extension/scripts/privacy-prover-distribution.mjs --target=unpacked-sepolia-test
 ```
 
-The unpacked Sepolia build remains the only approved distribution target. Chrome Web
-Store, GitHub release, and Firefox zip commands intentionally fail until the
-`snarkjs` GPL-3.0 distribution decision is approved. Production compilation
-does not override that gate. Do not send a value-bearing mainnet test until the
-explicit gates in `PRIVACY_POOLS_MAINNET_TEST.md` have passed.
+The GPL-specific distribution decision is complete for WalletChan extension
+v4 and later. Chrome Web Store, GitHub release, and Firefox zip commands require
+version 4.0.0 or later. Builds package the full GPL text, `snarkjs@0.7.5`
+attribution, and source directions. The completed controlled mainnet QA record
+lives in `PRIVACY_POOLS_MAINNET_TEST.md`.
 
 Latest automated run (2026-07-20): all code, UI, architecture, typecheck,
 preview, build/budget, production-profile isolation, live read-only mainnet,

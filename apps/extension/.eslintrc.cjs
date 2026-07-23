@@ -4,15 +4,24 @@ module.exports = {
   globals: {
     AddEventListenerOptions: "readonly",
     BlobPart: "readonly",
+    BodyInit: "readonly",
     BufferSource: "readonly",
+    HeadersInit: "readonly",
     JSX: "readonly",
     React: "readonly",
     RequestInfo: "readonly",
     RequestInit: "readonly",
+    ScrollLogicalPosition: "readonly",
     __dirname: "readonly",
     chrome: "readonly",
     process: "readonly",
   },
+  overrides: [
+    {
+      files: ["tests/**/*.ts", "tests/**/*.tsx"],
+      env: { node: true },
+    },
+  ],
   extends: [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
