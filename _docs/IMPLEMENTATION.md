@@ -2667,7 +2667,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
   malformed namespace fails closed rather than silently selecting that legacy
   identity.
 
-**Environment:** WalletConnect uses `VITE_WALLETCONNECT_PROJECT_ID` (or `VITE_WC_PROJECT_ID`) when provided, and otherwise falls back to WalletChan's default public WalletConnect project ID.
+**Environment:** WalletConnect uses `VITE_WALLETCONNECT_PROJECT_ID` (or `VITE_WC_PROJECT_ID`) when provided, and otherwise falls back to WalletChan's default public WalletConnect project ID. Every extension-owned WalletConnect Core instance explicitly sets `telemetryEnabled: false`; relay traffic required for pairing and active sessions remains functional network activity.
 
 **Supported request behavior:**
 

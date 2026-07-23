@@ -68,6 +68,7 @@ async function getWalletConnectStorageNamespace(): Promise<
 function createWalletConnectCore(storageNamespace?: string) {
   return new Core({
     projectId: PROJECT_ID,
+    telemetryEnabled: false,
     ...(storageNamespace ? { customStoragePrefix: storageNamespace } : {}),
   });
 }

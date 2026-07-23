@@ -61,6 +61,16 @@ test("WalletConnect composition keeps storage, protocol, request, and SDK direct
   assert.match(bridge, /from ["'].\/client["']/);
 });
 
+test("WalletConnect Core explicitly disables SDK telemetry", async () => {
+  const client = await readWalletConnectModule("client.ts");
+  const coreOptions = client.match(
+    /new Core\(\{(?<options>[\s\S]*?)\n\s*\}\)/,
+  )?.groups?.options;
+
+  assert.ok(coreOptions, "WalletConnect Core options were not found");
+  assert.match(coreOptions, /\btelemetryEnabled:\s*false\b/);
+});
+
 test("background composes WalletConnect client and commands without a root shim", async () => {
   const background = (
     await Promise.all([

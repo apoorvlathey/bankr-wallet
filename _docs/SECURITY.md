@@ -604,6 +604,12 @@ Chainless `eip155` proposal namespaces are filled with that same visible chain s
 
 `walletConnect/keepalive.ts` runs only while approved WalletConnect sessions exist. It sends periodic `*_batchFetchMessages` requests to the WalletConnect relay so the MV3 service worker stays awake and can receive relay requests without an open popup/sidepanel. The keepalive uses session topics and relay routing metadata only; it does not read cached passwords, API keys, private keys, seed phrases, or transaction payload secrets.
 
+`walletConnect/client.ts` constructs every WalletConnect Core with
+`telemetryEnabled: false`. WalletConnect SDK diagnostic telemetry and its
+persistent telemetry client identifier must not be enabled in the extension;
+pairing, session relay, and active-session keepalive requests are functional
+transport traffic rather than product analytics.
+
 For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign; their only send path is the separately reviewed per-RPC developer opt-in described under Network Metadata Handlers.
 
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The pending request and bundle status pin exact `{ topic, requestId, method }` transport metadata, and the bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query, confirm, or open a bundle it did not create.
