@@ -12,6 +12,39 @@ test("wallet home mode persists only the two released presentation states", () =
   assert.equal(resolveWalletHomeMode(undefined), "public");
 });
 
+test("Firefox's public-only home rejects persisted and requested Private mode", () => {
+  assert.equal(resolveWalletHomeMode("public", false), "public");
+  assert.equal(resolveWalletHomeMode("private", false), "public");
+});
+
+test("Firefox hides Private home entry points while Chrome keeps them", async () => {
+  const [viteSource, appSource, modeHookSource] = await Promise.all([
+    readFile(new URL("../../vite.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../src/App.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../../src/app/home/useWalletHomeMode.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    viteSource,
+    /__WALLETCHAN_FIREFOX_BUILD__[\s\S]*?process\.env\.BROWSER === "firefox"/,
+  );
+  assert.match(
+    appSource,
+    /walletModeToggle = privateHomeEnabled \? <WalletModeToggle/,
+  );
+  assert.match(
+    appSource,
+    /onShield=\{privateHomeEnabled && activeAccount/,
+  );
+  assert.match(
+    modeHookSource,
+    /!privateHomeEnabled && value !== "public"[\s\S]*?WALLET_HOME_MODE_STORAGE_KEY\]: "public"/,
+  );
+});
+
 test("wallet mode control stays compact, tooltip-free, and balance-aligned", async () => {
   const [toggleSource, portfolioSource, balanceSource, privateHomeSource] = await Promise.all([
     readFile(new URL("../../src/components/WalletModeToggle.tsx", import.meta.url), "utf8"),
@@ -43,7 +76,7 @@ test("entering Private mode starts idempotent privacy initialization", async () 
   );
   assert.match(
     modeHookSource,
-    /next === "private"[\s\S]*?privacyEnsureInitialized/,
+    /resolvedMode === "private"[\s\S]*?privacyEnsureInitialized/,
   );
 });
 

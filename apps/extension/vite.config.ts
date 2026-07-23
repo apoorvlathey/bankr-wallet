@@ -6,6 +6,9 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export const sharedConfig = {
   define: {
+    __WALLETCHAN_FIREFOX_BUILD__: JSON.stringify(
+      process.env.BROWSER === "firefox",
+    ),
     __WALLETCHAN_PRIVACY_POOLS_PROFILE__: JSON.stringify(
       process.env.VITE_PRIVACY_POOLS_PROFILE === "sepolia"
         ? "sepolia"

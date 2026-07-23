@@ -107,6 +107,10 @@ removes those account-scoped surfaces and replaces them with
 balance, its encrypted chart, separate `Shield` and `Unshield` actions, one
 Shielded ETH asset row, and privacy-only Activity. Dapps and provider account routing
 remain public-account scoped regardless of the visible mode.
+The Firefox build currently exposes Public mode only: the home-mode hook
+coerces persisted or requested Private mode back to `public`, while the renderer
+hides both the mode toggle and the public-home Shield quick action. Chromium
+builds retain the complete Public/Private switch and Shield entry point.
 Private Assets deliberately omits native ETH and every other public-account
 holding; the mode has no selected-account balance concept and does not receive
 the active public address.

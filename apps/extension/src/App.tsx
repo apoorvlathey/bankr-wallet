@@ -142,7 +142,7 @@ function App() {
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
   const { networksInfo, reloadRequired, setReloadRequired } = useNetworks();
-  const { mode: walletHomeMode, setMode: setWalletHomeMode } = useWalletHomeMode();
+  const { mode: walletHomeMode, setMode: setWalletHomeMode, privateHomeEnabled } = useWalletHomeMode();
   const [view, setView] = useState<AppView>("main");
   const ledgerSetupRequestedRef = useRef(
     isLedgerSetupRoute(window.location.search),
@@ -3333,7 +3333,7 @@ function App() {
     });
     setView("swap");
   };
-  const walletModeToggle = <WalletModeToggle mode={walletHomeMode} publicDappConnected={Boolean(activeDappContext?.connected)} onChange={setWalletHomeMode} />;
+  const walletModeToggle = privateHomeEnabled ? <WalletModeToggle mode={walletHomeMode} publicDappConnected={Boolean(activeDappContext?.connected)} onChange={setWalletHomeMode} /> : undefined;
   return (
     <Box bg="surface.base" h="100%" minH={0} display="flex" flexDirection="column">
       <Box
@@ -3508,7 +3508,7 @@ function App() {
                       hasConnectedApps={walletConnectSessionCount > 0}
                       onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
                       onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
-                      onShield={activeAccount && isPrivacyPoolsMutationAccount(activeAccount) ? () => openPrivacyAction("shield") : undefined}
+                      onShield={privateHomeEnabled && activeAccount && isPrivacyPoolsMutationAccount(activeAccount) ? () => openPrivacyAction("shield") : undefined}
                       onMore={() => setView("more")}
                     />
                   ) : activeAccount?.type === "safe" ? (
