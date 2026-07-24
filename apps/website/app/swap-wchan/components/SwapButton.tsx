@@ -78,6 +78,7 @@ import {
   buildPermitSingle,
   getPermitTypedData,
 } from "../../../lib/wchan-swap";
+import { palette } from "../../home-v2/design";
 
 type SwapStep =
   | "idle"
@@ -92,6 +93,7 @@ interface SellFlowStep {
 }
 
 interface SwapButtonProps {
+  appearance?: "bauhaus" | "midnight";
   direction: SwapDirection;
   quote: WchanQuote | null;
   chainId: number;
@@ -103,6 +105,7 @@ interface SwapButtonProps {
 }
 
 export function SwapButton({
+  appearance = "bauhaus",
   direction,
   quote,
   chainId,
@@ -112,6 +115,7 @@ export function SwapButton({
   insufficientBalance,
   onTxConfirmed,
 }: SwapButtonProps) {
+  const isMidnight = appearance === "midnight";
   const { address, isConnected } = useAccount();
   const currentChainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -577,7 +581,7 @@ export function SwapButton({
                         isExternal
                         fontSize="xs"
                         fontWeight="bold"
-                        color="bauhaus.blue"
+                        color={isMidnight ? palette.yellow : "bauhaus.blue"}
                         textDecoration="underline"
                         textTransform="uppercase"
                       >
@@ -587,7 +591,7 @@ export function SwapButton({
                   </HStack>
                   <StepDescription
                     fontSize="xs"
-                    color="gray.500"
+                    color={isMidnight ? palette.faint : "gray.500"}
                     fontWeight="medium"
                   >
                     {s.description}
@@ -601,11 +605,30 @@ export function SwapButton({
       )}
 
       <Button
-        variant={direction === "buy" ? "green" : "primary"}
+        variant={
+          isMidnight ? undefined : direction === "buy" ? "green" : "primary"
+        }
         size="lg"
         w="full"
         onClick={handleSwap}
         isDisabled={isDisabled}
+        bg={isMidnight ? palette.yellow : undefined}
+        color={isMidnight ? palette.ink : undefined}
+        borderRadius={isMidnight ? "9px" : undefined}
+        fontWeight={isMidnight ? "700" : undefined}
+        textTransform={isMidnight ? "none" : undefined}
+        letterSpacing={isMidnight ? "0" : undefined}
+        _hover={isMidnight ? { bg: palette.amberSoft } : undefined}
+        _disabled={
+          isMidnight
+            ? {
+                bg: palette.ink3,
+                color: palette.faint,
+                opacity: 1,
+                cursor: "not-allowed",
+              }
+            : undefined
+        }
         fontSize="md"
         py={6}
       >
@@ -622,7 +645,7 @@ export function SwapButton({
       {error && (
         <Text
           fontSize="sm"
-          color="bauhaus.red"
+          color={isMidnight ? palette.red : "bauhaus.red"}
           fontWeight="bold"
           textAlign="center"
         >
@@ -636,7 +659,7 @@ export function SwapButton({
           <Link
             href={`${explorerBase}/tx/${batchTxHash || txHash}`}
             isExternal
-            color="bauhaus.blue"
+            color={isMidnight ? palette.yellow : "bauhaus.blue"}
             textDecoration="underline"
           >
             View on BaseScan

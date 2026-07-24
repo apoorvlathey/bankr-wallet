@@ -1,12 +1,29 @@
 "use client";
 
-import { Box, Flex, HStack, Icon as ChakraIcon, IconButton, Image, Spacer, Text, VStack } from "@chakra-ui/react";
-import { ExternalLinkIcon, LockIcon, SearchIcon, SettingsIcon } from "@chakra-ui/icons";
+import {
+  Box,
+  Flex,
+  HStack,
+  Icon as ChakraIcon,
+  IconButton,
+  Image,
+  Spacer,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
+import {
+  ExternalLinkIcon,
+  LockIcon,
+  SearchIcon,
+  SettingsIcon,
+} from "@chakra-ui/icons";
 import { keyframes } from "@emotion/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { AccountTypesPreview } from "./AccountTypesPreview";
 import { BatchTransactionPreview } from "./BatchTransactionPreview";
 import { palette, warmMockup } from "./design";
 import { Mockup3DStage } from "./Mockup3DStage";
+import { PrivacyPoolsPreview } from "./PrivacyPoolsPreview";
 import { HomeWalletSurface, storyPanels, type StoryId } from "./StoryPanels";
 import { SwapBridgePreview } from "./SwapBridgePreview";
 
@@ -25,7 +42,11 @@ const ui = {
   yellow: warmMockup.amber,
 };
 const preserve3d = { transformStyle: "preserve-3d" } as const;
-const depths = { shell: "translateZ(8px)", card: "translateZ(46px)", pop: "translateZ(76px)" } as const;
+const depths = {
+  shell: "translateZ(8px)",
+  card: "translateZ(46px)",
+  pop: "translateZ(76px)",
+} as const;
 const drawCalloutStroke = keyframes`
   from { stroke-dashoffset: 180; opacity: 0.35; }
   to { stroke-dashoffset: 0; opacity: 1; }
@@ -94,11 +115,23 @@ const orbitChains = [
 
 export function StoryMockup({ active }: { active: StoryId }) {
   const isBatching = active === "batching";
+  const isAccounts = active === "accounts";
+  const isPrivacy = active === "privacy";
   const isSigning = active === "signing";
   const isSwap = active === "swap";
   const isBrowser = active === "browser";
   const isChains = active === "chains";
-  const panel = active === "home" || isBatching || isSigning || isSwap || isBrowser || isChains ? null : storyPanels[active];
+  const panel =
+    active === "home" ||
+    isBatching ||
+    isAccounts ||
+    isPrivacy ||
+    isSigning ||
+    isSwap ||
+    isBrowser ||
+    isChains
+      ? null
+      : storyPanels[active];
 
   if (isChains) {
     return (
@@ -120,35 +153,89 @@ export function StoryMockup({ active }: { active: StoryId }) {
     <Box
       position="relative"
       w="100%"
-      maxW={isBrowser ? { base: "390px", sm: "620px", lg: "680px", xl: "720px" } : { base: "390px", sm: "420px", lg: "430px" }}
-      ml={isBrowser ? { base: "auto", lg: "-70px", xl: "-92px" } : { base: "auto", lg: 0 }}
+      maxW={
+        isBrowser
+          ? { base: "390px", sm: "620px", lg: "680px", xl: "720px" }
+          : isSwap
+            ? { base: "350px", sm: "420px", lg: "430px" }
+            : isPrivacy
+              ? { base: "390px", sm: "520px", lg: "600px" }
+              : { base: "390px", sm: "420px", lg: "430px" }
+      }
+      ml={
+        isBrowser
+          ? { base: "auto", lg: "-70px", xl: "-92px" }
+          : isPrivacy
+            ? { base: "auto", lg: "-82px", xl: "-96px" }
+            : { base: "auto", lg: 0 }
+      }
       mr={{ base: "auto", lg: 0 }}
-      minH={isBrowser ? { base: "540px", lg: "600px" } : { base: "620px", lg: "680px" }}
-      transform={isBrowser ? { base: "none", lg: "translate3d(38px, 58px, 0)", xl: "translate3d(54px, 68px, 0)" } : "none"}
+      minH={
+        isBrowser
+          ? { base: "540px", lg: "600px" }
+          : { base: "620px", lg: "680px" }
+      }
+      transform={
+        isBrowser
+          ? {
+              base: "none",
+              lg: "translate3d(38px, 58px, 0)",
+              xl: "translate3d(54px, 68px, 0)",
+            }
+          : "none"
+      }
       transition="max-width 0.48s cubic-bezier(0.22, 1, 0.36, 1), margin-left 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
     >
       <Mockup3DStage>
-        <Box position="absolute" inset="18px -5px 0 18px" borderRadius="22px" bg="rgba(245,158,11,0.035)" border="1px solid rgba(255,255,255,0.06)" transform="translateZ(-34px)" />
-        <Box position="relative" bg={ui.bg} color={ui.text} border="1px solid" borderColor={ui.borderStrong} borderRadius="22px" boxShadow="0 34px 120px rgba(0,0,0,0.48)" overflow="visible" transform={depths.shell} sx={preserve3d}>
-          {isBatching || isSigning ? (
-            <BatchTransactionPreview depthFocus={isSigning ? "signing" : "batching"} />
-          ) : isSwap ? (
-            <SwapBridgePreview />
-          ) : isBrowser ? (
-            <BrowserWindowPreview />
-          ) : (
-            <>
-              <PreviewHeader />
-              {active === "home" ? (
-                <HomeWalletSurface />
+        {isPrivacy ? (
+          <PrivacyPoolsPreview />
+        ) : (
+          <>
+            <Box
+              position="absolute"
+              inset="18px -5px 0 18px"
+              borderRadius="22px"
+              bg="rgba(245,158,11,0.035)"
+              border="1px solid rgba(255,255,255,0.06)"
+              transform="translateZ(-34px)"
+            />
+            <Box
+              position="relative"
+              bg={ui.bg}
+              color={ui.text}
+              border="1px solid"
+              borderColor={ui.borderStrong}
+              borderRadius="22px"
+              boxShadow="0 34px 120px rgba(0,0,0,0.48)"
+              overflow="visible"
+              transform={depths.shell}
+              sx={preserve3d}
+            >
+              {isAccounts ? (
+                <AccountTypesPreview />
+              ) : isBatching || isSigning ? (
+                <BatchTransactionPreview
+                  depthFocus={isSigning ? "signing" : "batching"}
+                />
+              ) : isSwap ? (
+                <SwapBridgePreview />
+              ) : isBrowser ? (
+                <BrowserWindowPreview />
               ) : (
-                <Box p={3} sx={preserve3d}>
-                  <AnimatedStoryPanel active={active} panel={panel!} />
-                </Box>
+                <>
+                  <PreviewHeader />
+                  {active === "home" ? (
+                    <HomeWalletSurface />
+                  ) : (
+                    <Box p={3} sx={preserve3d}>
+                      <AnimatedStoryPanel active={active} panel={panel!} />
+                    </Box>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </Box>
+            </Box>
+          </>
+        )}
       </Mockup3DStage>
       {isBatching && <BatchingCallout />}
       {isSigning && <SigningCallouts />}
@@ -159,11 +246,40 @@ export function StoryMockup({ active }: { active: StoryId }) {
 
 function ChainOrbitGraphic() {
   return (
-    <Flex position="relative" minH={{ base: "520px", lg: "650px" }} align="center" justify="center" sx={{ perspective: "1100px", transformStyle: "preserve-3d" }}>
-      <Box position="absolute" inset="8%" borderRadius="full" bg="radial-gradient(circle, rgba(245,158,11,0.12) 0%, rgba(74,222,128,0.055) 28%, rgba(9,9,11,0) 68%)" filter="blur(8px)" />
-      <Box position="relative" w={{ base: "330px", sm: "460px", lg: "560px" }} h={{ base: "330px", sm: "460px", lg: "560px" }} sx={preserve3d}>
-        <Box position="absolute" inset="8%" border="1px solid rgba(245,158,11,0.18)" borderRadius="full" transform="translateZ(-18px)" />
-        <Box position="absolute" inset="19%" border="1px dashed rgba(74,222,128,0.16)" borderRadius="full" transform="translateZ(-10px)" />
+    <Flex
+      position="relative"
+      minH={{ base: "520px", lg: "650px" }}
+      align="center"
+      justify="center"
+      sx={{ perspective: "1100px", transformStyle: "preserve-3d" }}
+    >
+      <Box
+        position="absolute"
+        inset="8%"
+        borderRadius="full"
+        bg="radial-gradient(circle, rgba(245,158,11,0.12) 0%, rgba(74,222,128,0.055) 28%, rgba(9,9,11,0) 68%)"
+        filter="blur(8px)"
+      />
+      <Box
+        position="relative"
+        w={{ base: "330px", sm: "460px", lg: "560px" }}
+        h={{ base: "330px", sm: "460px", lg: "560px" }}
+        sx={preserve3d}
+      >
+        <Box
+          position="absolute"
+          inset="8%"
+          border="1px solid rgba(245,158,11,0.18)"
+          borderRadius="full"
+          transform="translateZ(-18px)"
+        />
+        <Box
+          position="absolute"
+          inset="19%"
+          border="1px dashed rgba(74,222,128,0.16)"
+          borderRadius="full"
+          transform="translateZ(-10px)"
+        />
         <Flex
           position="absolute"
           left="50%"
@@ -180,9 +296,22 @@ function ChainOrbitGraphic() {
           boxShadow="0 24px 80px rgba(0,0,0,0.42)"
           animation={`${chainFloat} 4.2s ease-in-out infinite`}
         >
-          <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" w={{ base: "84px", lg: "108px" }} h={{ base: "84px", lg: "108px" }} />
+          <Image
+            src="/images/walletchan-icon-nobg.png"
+            alt="WalletChan"
+            w={{ base: "84px", lg: "108px" }}
+            h={{ base: "84px", lg: "108px" }}
+          />
         </Flex>
-        <Box position="absolute" left="50%" top="50%" w="1px" h="1px" transform="translateZ(-46px)" zIndex={0}>
+        <Box
+          position="absolute"
+          left="50%"
+          top="50%"
+          w="1px"
+          h="1px"
+          transform="translateZ(-46px)"
+          zIndex={0}
+        >
           <Flex
             position="absolute"
             left={{ base: "64px", lg: "94px" }}
@@ -203,7 +332,14 @@ function ChainOrbitGraphic() {
             EVM Chain
           </Flex>
         </Box>
-        <Box position="absolute" inset="0" borderRadius="full" animation={`${chainOrbit} 28s linear infinite`} zIndex={4} sx={preserve3d}>
+        <Box
+          position="absolute"
+          inset="0"
+          borderRadius="full"
+          animation={`${chainOrbit} 28s linear infinite`}
+          zIndex={4}
+          sx={preserve3d}
+        >
           {orbitChains.map((chain) => (
             <OrbitLogo key={chain.name} chain={chain} />
           ))}
@@ -229,11 +365,17 @@ function OrbitLogo({ chain }: { chain: (typeof orbitChains)[number] }) {
       bg="#f7f7f4"
       border="1px solid rgba(255,255,255,0.18)"
       boxShadow="0 18px 44px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.74)"
-      style={{ transform: `rotate(${chain.angle}deg) translateX(232px) rotate(${-chain.angle}deg) translateZ(72px)` }}
+      style={{
+        transform: `rotate(${chain.angle}deg) translateX(232px) rotate(${-chain.angle}deg) translateZ(72px)`,
+      }}
       sx={preserve3d}
       role="group"
     >
-      <Box position="relative" animation={`${chainCounterOrbit} 28s linear infinite`} transformOrigin="center">
+      <Box
+        position="relative"
+        animation={`${chainCounterOrbit} 28s linear infinite`}
+        transformOrigin="center"
+      >
         <Box
           position="absolute"
           left="50%"
@@ -252,11 +394,21 @@ function OrbitLogo({ chain }: { chain: (typeof orbitChains)[number] }) {
           opacity={0}
           pointerEvents="none"
           transition="opacity 0.16s ease, transform 0.16s ease"
-          _groupHover={{ opacity: 1, transform: "translateX(-50%) translateY(-3px)" }}
+          _groupHover={{
+            opacity: 1,
+            transform: "translateX(-50%) translateY(-3px)",
+          }}
         >
           {chain.name}
         </Box>
-        <Image src={chain.icon} alt={chain.name} w={`${Math.round(chain.size * 0.66)}px`} h={`${Math.round(chain.size * 0.66)}px`} borderRadius="full" objectFit="contain" />
+        <Image
+          src={chain.icon}
+          alt={chain.name}
+          w={`${Math.round(chain.size * 0.66)}px`}
+          h={`${Math.round(chain.size * 0.66)}px`}
+          borderRadius="full"
+          objectFit="contain"
+        />
       </Box>
     </Flex>
   );
@@ -264,15 +416,27 @@ function OrbitLogo({ chain }: { chain: (typeof orbitChains)[number] }) {
 
 function BatchingCallout() {
   return (
-    <Box display={{ base: "none", xl: "block" }} pointerEvents="none" position="absolute" inset={0} zIndex={8}>
-      <Box position="absolute" top="250px" right="-220px" w="210px" color={ui.yellow}>
+    <Box
+      display={{ base: "none", xl: "block" }}
+      pointerEvents="none"
+      position="absolute"
+      inset={0}
+      zIndex={8}
+    >
+      <Box
+        position="absolute"
+        top="330px"
+        right="-220px"
+        w="210px"
+        color={ui.yellow}
+      >
         <ScribbleText label={"Batch multiple calls\nin 1 transaction"} />
         <Box
           as="svg"
           viewBox="0 0 130 78"
           position="absolute"
           top="36px"
-          left="-102px"
+          left="-76px"
           w="120px"
           h="72px"
           overflow="visible"
@@ -280,7 +444,7 @@ function BatchingCallout() {
         >
           <Box
             as="path"
-            d="M118 12 A70 70 0 0 1 48 68"
+            d="M118 12 A70 70 0 0 1 48 54"
             fill="none"
             stroke="currentColor"
             strokeWidth="4.5"
@@ -288,11 +452,13 @@ function BatchingCallout() {
             strokeLinejoin="round"
             strokeDasharray="180"
             strokeDashoffset="180"
-            sx={{ animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards` }}
+            sx={{
+              animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards`,
+            }}
           />
           <Box
             as="path"
-            d="M47 69 L65 57 L68 76 Z"
+            d="M47 55 L65 43 L68 62 Z"
             fill="currentColor"
             opacity={0}
             sx={{
@@ -303,6 +469,12 @@ function BatchingCallout() {
           />
         </Box>
       </Box>
+      <HandwrittenCallout
+        top="540px"
+        right={{ base: "-196px", xl: "-224px" }}
+        label={"Pay gas in\nstablecoins"}
+        arrow="fee"
+      />
     </Box>
   );
 }
@@ -318,8 +490,18 @@ function SigningCallouts() {
         zIndex={8}
         sx={{ "@media (min-width: 1180px)": { display: "block" } }}
       >
-        <HandwrittenCallout top="112px" right={{ base: "-148px", xl: "-176px" }} label="Clear Signing" arrow="upper" />
-        <HandwrittenCallout top="386px" right={{ base: "-160px", xl: "-190px" }} label={"Simulated\nToken Transfers"} arrow="lower" />
+        <HandwrittenCallout
+          top="112px"
+          right={{ base: "-160px", xl: "-190px" }}
+          label={"Simulated\nToken Transfers"}
+          arrow="upper"
+        />
+        <HandwrittenCallout
+          top="324px"
+          right={{ base: "-148px", xl: "-176px" }}
+          label="Clear Signing"
+          arrow="lower"
+        />
       </Box>
       <CompactSigningCallouts />
     </>
@@ -334,15 +516,27 @@ function CompactSigningCallouts() {
       position="absolute"
       inset={0}
       zIndex={8}
-      sx={{ "@media (min-width: 992px) and (max-width: 1179px)": { display: "block" } }}
+      sx={{
+        "@media (min-width: 992px) and (max-width: 1179px)": {
+          display: "block",
+        },
+      }}
     >
-      <CompactCallout top="126px" right="18px" label="Clear Signing" />
-      <CompactCallout top="432px" right="18px" label="Simulated Transfers" />
+      <CompactCallout top="126px" right="18px" label="Simulated Transfers" />
+      <CompactCallout top="324px" right="18px" label="Clear Signing" />
     </Box>
   );
 }
 
-function CompactCallout({ top, right, label }: { top: string; right: string; label: string }) {
+function CompactCallout({
+  top,
+  right,
+  label,
+}: {
+  top: string;
+  right: string;
+  label: string;
+}) {
   return (
     <Box position="absolute" top={top} right={right} color={ui.yellow}>
       <Text
@@ -366,24 +560,48 @@ function CompactCallout({ top, right, label }: { top: string; right: string; lab
   );
 }
 
-function HandwrittenCallout({ top, right, label, arrow }: { top: string; right: string | { base: string; xl: string }; label: string; arrow: "upper" | "lower" }) {
+function HandwrittenCallout({
+  top,
+  right,
+  label,
+  arrow,
+}: {
+  top: string;
+  right: string | { base: string; xl: string };
+  label: string;
+  arrow: "upper" | "lower" | "fee";
+}) {
+  const feeArrow = arrow === "fee";
+
   return (
-    <Box position="absolute" top={top} right={right} w="152px" color={ui.yellow}>
-      <ScribbleText label={label} />
+    <Box
+      position="absolute"
+      top={top}
+      right={right}
+      w="152px"
+      color={ui.yellow}
+    >
+      <Box transform={arrow === "lower" ? "translateY(27px)" : undefined}>
+        <ScribbleText label={label} />
+      </Box>
       <Box
         as="svg"
-        viewBox="0 0 128 78"
+        viewBox={feeArrow ? "0 0 174 84" : "0 0 128 78"}
         position="absolute"
-        top={arrow === "upper" ? "28px" : "42px"}
-        left="-112px"
-        w="120px"
-        h="72px"
+        top={arrow === "upper" || feeArrow ? "28px" : "34px"}
+        left={feeArrow ? "-150px" : arrow === "upper" ? "-112px" : "-86px"}
+        w={feeArrow ? "170px" : "120px"}
+        h={feeArrow ? "82px" : "72px"}
         overflow="visible"
         transform={arrow === "upper" ? "rotate(-6deg)" : "rotate(2deg)"}
       >
         <Box
           as="path"
-          d="M118 12 A70 70 0 0 1 48 68"
+          d={
+            feeArrow
+              ? "M165 10 C130 12 110 55 48 66"
+              : "M118 12 A70 70 0 0 1 48 68"
+          }
           fill="none"
           stroke="currentColor"
           strokeWidth="4.5"
@@ -391,11 +609,13 @@ function HandwrittenCallout({ top, right, label, arrow }: { top: string; right: 
           strokeLinejoin="round"
           strokeDasharray="180"
           strokeDashoffset="180"
-          sx={{ animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards` }}
+          sx={{
+            animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards`,
+          }}
         />
         <Box
           as="path"
-          d="M47 69 L65 57 L68 76 Z"
+          d={feeArrow ? "M47 67 L65 55 L66 74 Z" : "M47 69 L65 57 L68 76 Z"}
           fill="currentColor"
           opacity={0}
           sx={{
@@ -450,10 +670,32 @@ function ScribbleText({ label }: { label: string }) {
 
 function BrowserCallout() {
   return (
-    <Box display={{ base: "none", xl: "block" }} pointerEvents="none" position="absolute" inset={0} zIndex={8}>
-      <Box position="absolute" top="68px" right="clamp(-270px, calc(-188px - (100vw - 1640px) * 0.36), -126px)" w="220px" color={ui.yellow}>
+    <Box
+      display={{ base: "none", xl: "block" }}
+      pointerEvents="none"
+      position="absolute"
+      inset={0}
+      zIndex={8}
+    >
+      <Box
+        position="absolute"
+        top="68px"
+        right="clamp(-270px, calc(-188px - (100vw - 1640px) * 0.36), -126px)"
+        w="220px"
+        color={ui.yellow}
+      >
         <ScribbleText label={".eth works natively\nvia your local IPFS node"} />
-        <Box as="svg" viewBox="0 0 130 78" position="absolute" top="32px" left="-102px" w="126px" h="76px" overflow="visible" transform="rotate(12deg)">
+        <Box
+          as="svg"
+          viewBox="0 0 130 78"
+          position="absolute"
+          top="32px"
+          left="-102px"
+          w="126px"
+          h="76px"
+          overflow="visible"
+          transform="rotate(12deg)"
+        >
           <Box
             as="path"
             d="M118 12 A70 70 0 0 1 48 68"
@@ -464,7 +706,9 @@ function BrowserCallout() {
             strokeLinejoin="round"
             strokeDasharray="180"
             strokeDashoffset="180"
-            sx={{ animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards` }}
+            sx={{
+              animation: `${drawCalloutStroke} 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards`,
+            }}
           />
           <Box
             as="path"
@@ -487,19 +731,66 @@ function BrowserWindowPreview() {
   return (
     <Box borderRadius="30px" overflow="hidden" sx={preserve3d}>
       <BrowserChrome />
-      <Box position="relative" h={{ base: "410px", lg: "492px" }} bg={ui.strip} overflow="hidden" borderBottomRadius="20px">
-        <Box position="absolute" inset={0} animation={`${browserResolving} 9.2s linear infinite`} sx={preserve3d}>
+      <Box
+        position="relative"
+        h={{ base: "410px", lg: "492px" }}
+        bg={ui.strip}
+        overflow="hidden"
+        borderBottomRadius="20px"
+      >
+        <Box
+          position="absolute"
+          inset={0}
+          animation={`${browserResolving} 9.2s linear infinite`}
+          sx={preserve3d}
+        >
           <EnsResolvingInterstitial />
         </Box>
-        <Box position="absolute" inset={0} animation={`${browserPage} 9.2s linear infinite`} sx={preserve3d}>
-          <Image src="/images/home-v2/vitalik-eth-limo.png" alt="Vitalik Buterin website loaded through ENS" w="100%" h="100%" objectFit="cover" objectPosition="center top" />
+        <Box
+          position="absolute"
+          inset={0}
+          animation={`${browserPage} 9.2s linear infinite`}
+          sx={preserve3d}
+        >
+          <Image
+            src="/images/home-v2/vitalik-eth-limo.png"
+            alt="Vitalik Buterin website loaded through ENS"
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            objectPosition="center top"
+          />
           <WalletChanEnsBanner />
         </Box>
-        <Box position="absolute" inset={0} animation={`${browserTyping} 9.2s linear infinite`}>
-          <Box position="absolute" inset={0} opacity={0.55} backgroundImage="linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)" backgroundSize="34px 34px" />
-          <Flex h="100%" align="center" justify="center" direction="column" gap={3} color={ui.faint}>
+        <Box
+          position="absolute"
+          inset={0}
+          animation={`${browserTyping} 9.2s linear infinite`}
+        >
+          <Box
+            position="absolute"
+            inset={0}
+            opacity={0.55}
+            backgroundImage="linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)"
+            backgroundSize="34px 34px"
+          />
+          <Flex
+            h="100%"
+            align="center"
+            justify="center"
+            direction="column"
+            gap={3}
+            color={ui.faint}
+          >
             <SearchIcon boxSize={8} />
-            <Text fontSize="13px" fontWeight="900" textTransform="uppercase" letterSpacing="0.08em">Type any ENS site</Text>
+            <Text
+              fontSize="13px"
+              fontWeight="900"
+              textTransform="uppercase"
+              letterSpacing="0.08em"
+            >
+              Type any ENS site
+            </Text>
           </Flex>
         </Box>
       </Box>
@@ -509,28 +800,106 @@ function BrowserWindowPreview() {
 
 function BrowserChrome() {
   return (
-    <Box bg={ui.raised} borderBottom="1px solid" borderColor={ui.borderStrong} borderTopRadius="20px" px={3.5} pt={3} pb={2.5} transform="translateZ(10px)">
+    <Box
+      bg={ui.raised}
+      borderBottom="1px solid"
+      borderColor={ui.borderStrong}
+      borderTopRadius="20px"
+      px={3.5}
+      pt={3}
+      pb={2.5}
+      transform="translateZ(10px)"
+    >
       <HStack spacing={2.5} align="center">
         <HStack spacing={1.5} flexShrink={0}>
           {["#ff5f57", "#febc2e", "#28c840"].map((color) => (
             <Box key={color} w="9px" h="9px" borderRadius="full" bg={color} />
           ))}
         </HStack>
-        <HStack flex={1} minW={0} h="36px" borderRadius="10px" bg={ui.bg} border="1px solid rgba(255,255,255,0.10)" px={3} spacing={2} overflow="hidden">
+        <HStack
+          flex={1}
+          minW={0}
+          h="36px"
+          borderRadius="10px"
+          bg={ui.bg}
+          border="1px solid rgba(255,255,255,0.10)"
+          px={3}
+          spacing={2}
+          overflow="hidden"
+        >
           <LockIcon color={ui.faint} boxSize={3.5} flexShrink={0} />
-          <Box position="relative" flex="1" minW={0} h="18px" fontFamily="mono" fontWeight="900" fontSize="13px" color={ui.text}>
-            <Text position="absolute" inset={0} noOfLines={1} animation={`${browserResolving} 9.2s linear infinite`} color={ui.muted}>walletchan://ens/vitalik.eth</Text>
-            <Text position="absolute" inset={0} noOfLines={1} animation={`${browserPage} 9.2s linear infinite`}>vitalik.eth</Text>
-            <HStack position="absolute" inset={0} spacing={0} animation={`${browserTyping} 9.2s linear infinite`}>
-              <Box as="span" display="inline-block" overflow="hidden" whiteSpace="nowrap" animation={`${typeVitalik} 9.2s steps(11, end) infinite`}>
+          <Box
+            position="relative"
+            flex="1"
+            minW={0}
+            h="18px"
+            fontFamily="mono"
+            fontWeight="900"
+            fontSize="13px"
+            color={ui.text}
+          >
+            <Text
+              position="absolute"
+              inset={0}
+              noOfLines={1}
+              animation={`${browserResolving} 9.2s linear infinite`}
+              color={ui.muted}
+            >
+              walletchan://ens/vitalik.eth
+            </Text>
+            <Text
+              position="absolute"
+              inset={0}
+              noOfLines={1}
+              animation={`${browserPage} 9.2s linear infinite`}
+            >
+              vitalik.eth
+            </Text>
+            <HStack
+              position="absolute"
+              inset={0}
+              spacing={0}
+              animation={`${browserTyping} 9.2s linear infinite`}
+            >
+              <Box
+                as="span"
+                display="inline-block"
+                overflow="hidden"
+                whiteSpace="nowrap"
+                animation={`${typeVitalik} 9.2s steps(11, end) infinite`}
+              >
                 vitalik.eth
               </Box>
-              <Box as="span" w="2px" h="16px" bg={ui.yellow} ml="1px" animation={`${caretBlink} 0.7s steps(1, end) infinite`} />
+              <Box
+                as="span"
+                w="2px"
+                h="16px"
+                bg={ui.yellow}
+                ml="1px"
+                animation={`${caretBlink} 0.7s steps(1, end) infinite`}
+              />
             </HStack>
           </Box>
-          <HStack spacing={1} color={warmMockup.green} fontSize="10px" fontWeight="700" flexShrink={0}>
-            <Box w="7px" h="7px" borderRadius="full" bg={warmMockup.green} animation={`${resolverPulse} 1.1s ease-in-out infinite`} />
-            <Text display={{ base: "none", md: "block" }} textTransform="uppercase">Local Kubo</Text>
+          <HStack
+            spacing={1}
+            color={warmMockup.green}
+            fontSize="10px"
+            fontWeight="700"
+            flexShrink={0}
+          >
+            <Box
+              w="7px"
+              h="7px"
+              borderRadius="full"
+              bg={warmMockup.green}
+              animation={`${resolverPulse} 1.1s ease-in-out infinite`}
+            />
+            <Text
+              display={{ base: "none", md: "block" }}
+              textTransform="uppercase"
+            >
+              Local Kubo
+            </Text>
           </HStack>
         </HStack>
       </HStack>
@@ -541,28 +910,77 @@ function BrowserChrome() {
 function EnsResolvingInterstitial() {
   return (
     <Flex h="100%" align="center" justify="center" p={6}>
-      <Box position="relative" maxW="430px" w="100%" p={5} borderRadius="12px" bg={ui.raised} border="1px solid rgba(255,255,255,0.16)" boxShadow="0 18px 60px rgba(0,0,0,0.34)" transform="translateZ(48px)">
+      <Box
+        position="relative"
+        maxW="430px"
+        w="100%"
+        p={5}
+        borderRadius="12px"
+        bg={ui.raised}
+        border="1px solid rgba(255,255,255,0.16)"
+        boxShadow="0 18px 60px rgba(0,0,0,0.34)"
+        transform="translateZ(48px)"
+      >
         <VStack align="stretch" spacing={5}>
           <HStack spacing={3}>
-            <Box p={1.5} bg={ui.text} border="1px solid rgba(255,255,255,0.16)" borderRadius="8px">
-              <Image src="/images/walletchan-animated.gif" alt="" w="32px" h="32px" borderRadius="8px" />
+            <Box
+              p={1.5}
+              bg={ui.text}
+              border="1px solid rgba(255,255,255,0.16)"
+              borderRadius="8px"
+            >
+              <Image
+                src="/images/walletchan-animated.gif"
+                alt=""
+                w="32px"
+                h="32px"
+                borderRadius="8px"
+              />
             </Box>
-            <Text fontSize="10px" color={ui.faint} letterSpacing="0.08em" fontWeight="900">
-              WALLETCHAN · DAPP3 - ENS BROWSING
+            <Text
+              fontSize="10px"
+              color={ui.faint}
+              letterSpacing="0.08em"
+              fontWeight="900"
+            >
+              WALLETCHAN · Browser
             </Text>
           </HStack>
           <VStack align="start" spacing={2}>
             <HStack spacing={2} color={ui.muted}>
-              <Box w="13px" h="13px" borderRadius="full" border="2px solid rgba(255,255,255,0.18)" borderTopColor={ui.yellow} sx={{ animation: `${resolverSpin} 0.6s linear infinite` }} />
-              <Text fontSize="11px" fontWeight="900" letterSpacing="0.08em" textTransform="uppercase">Resolving</Text>
+              <Box
+                w="13px"
+                h="13px"
+                borderRadius="full"
+                border="2px solid rgba(255,255,255,0.18)"
+                borderTopColor={ui.yellow}
+                sx={{ animation: `${resolverSpin} 0.6s linear infinite` }}
+              />
+              <Text
+                fontSize="11px"
+                fontWeight="900"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+              >
+                Resolving
+              </Text>
             </HStack>
-            <Text fontFamily="mono" fontWeight="900" fontSize={{ base: "26px", lg: "32px" }} color={ui.text} lineHeight="1.1">
+            <Text
+              fontFamily="mono"
+              fontWeight="900"
+              fontSize={{ base: "26px", lg: "32px" }}
+              color={ui.text}
+              lineHeight="1.1"
+            >
               vitalik.eth
             </Text>
           </VStack>
           <Box borderTop="1px solid rgba(255,255,255,0.12)" pt={3}>
             <Text fontSize="11px" color={ui.faint}>
-              Manage in <Text as="span" fontWeight="900" color={ui.muted}>Settings - dapp3 - ENS Browsing</Text>
+              Manage in{" "}
+              <Text as="span" fontWeight="900" color={ui.muted}>
+                Settings - WalletChan Browser
+              </Text>
             </Text>
           </Box>
         </VStack>
@@ -573,11 +991,29 @@ function EnsResolvingInterstitial() {
 
 function WalletChanEnsBanner() {
   return (
-    <HStack position="absolute" left={4} right={4} bottom={4} spacing={3} borderRadius="12px" bg="rgba(17,17,19,0.92)" border="1px solid rgba(255,255,255,0.12)" color={ui.text} px={3.5} py={3} backdropFilter="blur(10px)" transform="translateZ(58px)">
+    <HStack
+      position="absolute"
+      left={4}
+      right={4}
+      bottom={4}
+      spacing={3}
+      borderRadius="12px"
+      bg="rgba(17,17,19,0.92)"
+      border="1px solid rgba(255,255,255,0.12)"
+      color={ui.text}
+      px={3.5}
+      py={3}
+      backdropFilter="blur(10px)"
+      transform="translateZ(58px)"
+    >
       <Image src="/images/walletchan-icon-nobg.png" alt="" w="30px" h="30px" />
       <Box minW={0}>
-        <Text fontSize="12px" fontWeight="900" color={ui.yellow}>vitalik.eth resolved</Text>
-        <Text fontSize="11px" color={ui.faint} noOfLines={1}>ENS contenthash served through your local IPFS gateway</Text>
+        <Text fontSize="12px" fontWeight="900" color={ui.yellow}>
+          vitalik.eth resolved
+        </Text>
+        <Text fontSize="11px" color={ui.faint} noOfLines={1}>
+          ENS contenthash served through your local IPFS gateway
+        </Text>
       </Box>
       <Spacer />
       <ExternalLinkIcon color={ui.yellow} boxSize={4} />
@@ -597,34 +1033,117 @@ function PreviewHeader() {
   };
 
   return (
-    <Flex py={2.5} px={3.5} bg={ui.strip} color={ui.text} align="center" borderBottom="1px solid" borderColor={ui.border} borderTopRadius="22px" sx={preserve3d}>
+    <Flex
+      py={2.5}
+      px={3.5}
+      bg={ui.strip}
+      color={ui.text}
+      align="center"
+      borderBottom="1px solid"
+      borderColor={ui.border}
+      borderTopRadius="22px"
+      sx={preserve3d}
+    >
       <HStack spacing={2}>
-        <Flex boxSize="34px" borderRadius="8px" bg={ui.text} align="center" justify="center" overflow="hidden">
-          <Image src="/images/walletchan-icon-nobg.png" alt="WalletChan" h="32px" w="32px" />
+        <Flex
+          boxSize="34px"
+          borderRadius="8px"
+          bg={ui.text}
+          align="center"
+          justify="center"
+          overflow="hidden"
+        >
+          <Image
+            src="/images/walletchan-icon-nobg.png"
+            alt="WalletChan"
+            h="32px"
+            w="32px"
+          />
         </Flex>
-        <Text fontFamily="'Anton', sans-serif" fontWeight="400" fontSize="18px" textTransform="uppercase" letterSpacing="0">WalletChan</Text>
+        <Text
+          fontFamily="'Anton', sans-serif"
+          fontWeight="400"
+          fontSize="18px"
+          textTransform="uppercase"
+          letterSpacing="0"
+        >
+          WalletChan
+        </Text>
       </HStack>
       <Spacer />
       <HStack spacing={1}>
-        <IconButton aria-label="Lock wallet" icon={<LockIcon />} {...buttonProps} />
-        <IconButton aria-label="Settings" icon={<SettingsIcon />} {...buttonProps} />
-        <IconButton aria-label="More app options" icon={<MenuIcon />} {...buttonProps} />
+        <IconButton
+          aria-label="Lock wallet"
+          icon={<LockIcon />}
+          {...buttonProps}
+        />
+        <IconButton
+          aria-label="Settings"
+          icon={<SettingsIcon />}
+          {...buttonProps}
+        />
+        <IconButton
+          aria-label="More app options"
+          icon={<MenuIcon />}
+          {...buttonProps}
+        />
       </HStack>
     </Flex>
   );
 }
 
-function AnimatedStoryPanel({ active, panel }: { active: StoryId; panel: (typeof storyPanels)[StoryId] }) {
+function AnimatedStoryPanel({
+  active,
+  panel,
+}: {
+  active: StoryId;
+  panel: (typeof storyPanels)[StoryId];
+}) {
   return (
-    <Box borderRadius="14px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} minH="442px" p={3.5} overflow="visible" transform={depths.card} sx={preserve3d}>
+    <Box
+      borderRadius="14px"
+      bg={ui.raised}
+      border="1px solid"
+      borderColor={ui.borderStrong}
+      minH="442px"
+      p={3.5}
+      overflow="visible"
+      transform={depths.card}
+      sx={preserve3d}
+    >
       <AnimatePresence mode="wait" initial={false}>
-        <MotionBox key={active} initial={{ opacity: 0, y: 18, rotateX: -4 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} exit={{ opacity: 0, y: -14, rotateX: 4 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }} sx={preserve3d}>
+        <MotionBox
+          key={active}
+          initial={{ opacity: 0, y: 18, rotateX: -4 }}
+          animate={{ opacity: 1, y: 0, rotateX: 0 }}
+          exit={{ opacity: 0, y: -14, rotateX: 4 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          sx={preserve3d}
+        >
           <HStack justify="space-between" mb={4} transform={depths.pop}>
-            <HStack color={panel.accent}>{panel.icon}<Text fontSize="11px" fontWeight="900" textTransform="uppercase">{panel.eyebrow}</Text></HStack>
-            <Text color={ui.faint} fontSize="11px" fontWeight="900">app.uniswap.org</Text>
+            <HStack color={panel.accent}>
+              {panel.icon}
+              <Text fontSize="11px" fontWeight="900" textTransform="uppercase">
+                {panel.eyebrow}
+              </Text>
+            </HStack>
+            <Text color={ui.faint} fontSize="11px" fontWeight="900">
+              app.uniswap.org
+            </Text>
           </HStack>
-          <Text color={ui.text} fontSize="28px" lineHeight="0.98" fontWeight="900" letterSpacing="0" transform={depths.pop}>{panel.title}</Text>
-          <Box mt={4} sx={preserve3d}>{panel.body}</Box>
+          <Text
+            color={ui.text}
+            fontSize="28px"
+            lineHeight="0.98"
+            fontWeight="900"
+            letterSpacing="0"
+            transform={depths.pop}
+          >
+            {panel.title}
+          </Text>
+          <Box mt={4} sx={preserve3d}>
+            {panel.body}
+          </Box>
         </MotionBox>
       </AnimatePresence>
     </Box>
@@ -632,5 +1151,13 @@ function AnimatedStoryPanel({ active, panel }: { active: StoryId; panel: (typeof
 }
 
 const MenuIcon = (props: any) => (
-  <ChakraIcon viewBox="0 0 24 24" {...props}><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></ChakraIcon>
+  <ChakraIcon viewBox="0 0 24 24" {...props}>
+    <path
+      d="M4 7h16M4 12h16M4 17h16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </ChakraIcon>
 );

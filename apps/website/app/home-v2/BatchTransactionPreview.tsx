@@ -1,201 +1,538 @@
 "use client";
 
-import { Box, Flex, HStack, Icon as ChakraIcon, IconButton, Image, Spacer, Text, VStack } from "@chakra-ui/react";
-import { ArrowBackIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon, ExternalLinkIcon, InfoOutlineIcon } from "@chakra-ui/icons";
+import {
+  Box,
+  Flex,
+  HStack,
+  IconButton,
+  Image,
+  Spacer,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
+import {
+  ArrowBackIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  InfoOutlineIcon,
+} from "@chakra-ui/icons";
 import { warmMockup } from "./design";
+import { MockSignerIdentity } from "./MockSignerIdentity";
 
 const ui = {
   bg: warmMockup.base,
   raised: warmMockup.surface,
-  raised2: warmMockup.surfaceHover,
-  sunken: warmMockup.sunken,
+  raisedHover: warmMockup.surfaceHover,
   border: warmMockup.border,
   borderStrong: warmMockup.borderStrong,
   text: warmMockup.text,
-  muted: warmMockup.secondary,
-  faint: warmMockup.muted,
+  secondary: warmMockup.secondary,
+  muted: warmMockup.muted,
   blue: warmMockup.blue,
-  yellow: warmMockup.amber,
+  amber: warmMockup.amber,
   green: warmMockup.green,
   red: warmMockup.red,
-  purple: warmMockup.blueSoft,
 };
 
 const preserve3d = { transformStyle: "preserve-3d" } as const;
-
 type DepthFocus = "batching" | "signing";
 
-export function BatchTransactionPreview({ depthFocus = "batching" }: { depthFocus?: DepthFocus }) {
+export function BatchTransactionPreview({
+  depthFocus = "batching",
+}: {
+  depthFocus?: DepthFocus;
+}) {
+  const callsRaised = depthFocus === "batching";
+  const impactRaised = depthFocus === "signing";
+
   return (
-    <VStack align="stretch" spacing={3} bg={ui.bg} color={ui.text} p={3.5} minH="680px" borderRadius="22px" overflow="visible" sx={preserve3d}>
-      <BatchHeader raised={depthFocus === "batching"} />
-      <ClearSigningCard raised={depthFocus === "signing"} />
-      <CallsList raised={depthFocus === "batching"} />
-      <AssetChangesCard raised={depthFocus === "signing"} />
-      <FooterActions />
-    </VStack>
+    <Flex
+      direction="column"
+      bg={ui.bg}
+      color={ui.text}
+      minH="700px"
+      borderRadius="22px"
+      overflow="visible"
+      sx={preserve3d}
+    >
+      <BatchHeader />
+      <Box px={4} pt={3} pb={3.5} sx={preserve3d}>
+        <VStack align="stretch" spacing={4} sx={preserve3d}>
+          <RequestIdentity />
+          <FinancialImpact raised={impactRaised} />
+          <RequestDetails raised={callsRaised} overviewRaised={impactRaised} />
+        </VStack>
+      </Box>
+      <DecisionBar feeRaised={callsRaised} />
+    </Flex>
   );
 }
 
-function BatchHeader({ raised }: { raised: boolean }) {
+function BatchHeader() {
   return (
-    <HStack spacing={2} align="center" sx={preserve3d}>
-      <IconButton aria-label="Back" icon={<ArrowBackIcon boxSize={5} />} variant="ghost" color={ui.text} minW="30px" h="30px" borderRadius="10px" _hover={{ bg: "rgba(255,255,255,0.08)" }} />
-      <VStack flex={1} spacing={0.5} py={2} px={3} borderRadius="10px" bg={ui.blue} border="1px solid" borderColor={ui.borderStrong} boxShadow={raised ? "0 14px 28px rgba(0,0,0,0.28)" : "0 8px 18px rgba(0,0,0,0.2)"} transform={raised ? "translate3d(0,12px,76px)" : undefined}>
-        <Text fontSize="15px" lineHeight="1" fontWeight="900" letterSpacing="0" textTransform="uppercase">Batch Transaction</Text>
-        <Text fontSize="10px" lineHeight="1" fontWeight="900" opacity={0.9} textTransform="uppercase">(2 calls)</Text>
-      </VStack>
-      <IconButton aria-label="Copy batch calldata" icon={<CopyIcon boxSize={4} />} variant="ghost" color={ui.muted} minW="30px" h="30px" borderRadius="10px" _hover={{ bg: "rgba(255,255,255,0.08)", color: ui.yellow }} />
+    <HStack
+      minH="52px"
+      px={2.5}
+      borderBottom="1px solid"
+      borderColor={ui.border}
+      transform="translateZ(22px)"
+      sx={preserve3d}
+    >
+      <IconButton
+        aria-label="Back"
+        icon={<ArrowBackIcon boxSize={5} />}
+        variant="ghost"
+        color={ui.text}
+        minW="34px"
+        h="34px"
+        borderRadius="8px"
+        _hover={{ bg: ui.raisedHover }}
+        _focusVisible={{ boxShadow: `0 0 0 3px ${ui.blue}` }}
+      />
+      <Text flex={1} fontSize="20px" fontWeight="700" letterSpacing="-0.02em">
+        Batch request
+      </Text>
+      <IconButton
+        aria-label="Copy batch JSON"
+        icon={<CopyIcon boxSize={4} />}
+        variant="ghost"
+        color={ui.secondary}
+        minW="34px"
+        h="34px"
+        borderRadius="8px"
+        _hover={{ bg: ui.raisedHover, color: ui.amber }}
+        _focusVisible={{ boxShadow: `0 0 0 3px ${ui.blue}` }}
+      />
     </HStack>
   );
 }
 
-function ClearSigningCard({ raised }: { raised: boolean }) {
+function RequestIdentity() {
   return (
-    <Box sx={preserve3d}>
-      <HStack spacing={2} mb={1.5} color={ui.faint} transform={raised ? "translate3d(0,8px,54px)" : undefined}>
-        <Text fontSize="11px" fontWeight="900" textTransform="uppercase" letterSpacing="0.04em" whiteSpace="nowrap">Call 2 of 2</Text>
-        <Box h="1px" flex={1} bg={ui.borderStrong} />
-      </HStack>
-      <Box bg={ui.raised2} border="1px solid" borderColor={ui.borderStrong} borderRadius="12px" p={3} boxShadow={raised ? "none" : "0 12px 24px rgba(0,0,0,0.2)"} transform={raised ? "translate3d(0,10px,104px)" : undefined}>
-        <HStack align="center">
-          <Text fontSize="18px" fontWeight="900">Swap</Text>
-          <Spacer />
-          <Text fontSize="10px" fontWeight="900" color={ui.faint}>via Velora</Text>
+    <VStack
+      as="section"
+      aria-label="Requesting application"
+      spacing={2}
+      py={0.5}
+      transform="translateZ(34px)"
+    >
+      <Flex
+        boxSize="42px"
+        borderRadius="10px"
+        bg="#f4f4f5"
+        border="1px solid"
+        borderColor={ui.borderStrong}
+        align="center"
+        justify="center"
+        overflow="hidden"
+        boxShadow="0 10px 22px rgba(0,0,0,0.22)"
+      >
+        <Image
+          src="https://swap.defillama.com/favicon.ico"
+          alt=""
+          boxSize="28px"
+          objectFit="contain"
+        />
+      </Flex>
+      <Text fontSize="15px" lineHeight="1.2" fontWeight="700">
+        swap.defillama.com
+      </Text>
+    </VStack>
+  );
+}
+
+function FinancialImpact({ raised }: { raised: boolean }) {
+  return (
+    <Box as="section" sx={preserve3d}>
+      <HStack
+        mb={2.5}
+        minH="28px"
+        transform={raised ? "translate3d(0,0,84px)" : "translateZ(28px)"}
+      >
+        <HStack spacing={1}>
+          <Text fontSize="19px" fontWeight="700" letterSpacing="-0.02em">
+            Estimated changes
+          </Text>
+          <Flex boxSize="22px" align="center" justify="center" color={ui.muted}>
+            <InfoOutlineIcon boxSize="13px" />
+          </Flex>
         </HStack>
-        <Box h="1px" bg={ui.border} my={2.5} />
-        <VStack spacing={2.5} align="stretch">
-          <DetailRow label="Amount to Send" amount="5" symbol="USDC" icon="/images/extension-preview/usdc.png" />
-          <DetailRow label="Minimum to Receive" amount="0.00278533" symbol="ETH" icon="/images/ethereum.svg" sub="$4.95" />
-          <HStack align="center" minW={0}>
-            <Text flex={1} fontSize="12px" fontWeight="900" color={ui.muted}>Beneficiary</Text>
-            <Text fontFamily="mono" fontSize="12px" fontWeight="900" color={ui.blue}>0x0000...0000</Text>
-            <CopyIcon boxSize={3} color={ui.faint} />
-            <ExternalLinkIcon boxSize={3} color={ui.faint} />
-          </HStack>
-        </VStack>
+        <Spacer />
+        <HStack
+          spacing={1}
+          h="30px"
+          px={2}
+          bg={ui.raised}
+          border="1px solid"
+          borderColor={ui.border}
+          borderRadius="8px"
+        >
+          <Text color={ui.secondary} fontSize="12px" fontWeight="500">
+            on
+          </Text>
+          <Flex
+            boxSize="17px"
+            borderRadius="full"
+            bg="#f4f4f5"
+            align="center"
+            justify="center"
+          >
+            <Image src="/images/base.svg" alt="" boxSize="13px" />
+          </Flex>
+          <Text fontSize="12px" fontWeight="600">
+            Base
+          </Text>
+        </HStack>
+      </HStack>
+
+      <Box
+        px={3}
+        py={2.5}
+        bg={ui.raised}
+        border="1px solid"
+        borderColor={ui.border}
+        borderRadius="12px"
+        boxShadow={raised ? "0 18px 38px rgba(0,0,0,0.30)" : "none"}
+        transform={raised ? "translateZ(62px)" : "translateZ(42px)"}
+        transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease"
+        sx={preserve3d}
+      >
+        <AssetChange kind="send" raised={raised} />
+        <AssetChange kind="receive" raised={raised} />
       </Box>
     </Box>
   );
 }
 
-function DetailRow({ label, amount, symbol, icon, sub }: { label: string; amount: string; symbol: string; icon: string; sub?: string }) {
-  return (
-    <HStack align="start" minW={0}>
-      <Text flex={1} fontSize="12px" fontWeight="900" color={ui.muted}>{label}</Text>
-      <VStack align="end" spacing={0}>
-        <HStack spacing={1.5}>
-          <Text fontSize={amount.length > 4 ? "20px" : "19px"} lineHeight="1" fontWeight="900">{amount}</Text>
-          <Image src={icon} alt="" boxSize="22px" borderRadius="full" />
-          <Text fontSize="15px" lineHeight="1" fontWeight="900" color={ui.muted}>{symbol}</Text>
-        </HStack>
-        {sub && <Text mt={1} fontSize="13px" lineHeight="1" color={ui.muted} fontWeight="900">{sub}</Text>}
-      </VStack>
-    </HStack>
-  );
-}
-
-function CallsList({ raised }: { raised: boolean }) {
-  return (
-    <VStack spacing={1.5} align="stretch" transform={raised ? "translate3d(0,-4px,132px)" : undefined} sx={preserve3d}>
-      <Text px={0.5} fontSize="14px" fontWeight="900" color={ui.muted} textTransform="uppercase" transform={raised ? "translateZ(28px)" : undefined}>Calls</Text>
-      <CallRow index={1} raised={raised} accent={ui.purple} title={<HStack spacing={1} minW={0}><Text as="span">Approve 5</Text><Image src="/images/extension-preview/usdc.png" alt="" boxSize="15px" borderRadius="full" /><Text as="span" isTruncated>USDC to AugustusV6</Text></HStack>} />
-      <CallRow index={2} raised={raised} accent={ui.blue} title={<Text isTruncated>swapExactAmountIn</Text>} right="0x6a00...1068" />
-    </VStack>
-  );
-}
-
-function CallRow({ index, raised, accent, title, right }: { index: number; raised: boolean; accent: string; title: React.ReactNode; right?: string }) {
-  return (
-    <HStack position="relative" minH="42px" pl={3} pr={2.5} py={2} bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} borderRadius="14px" overflow="hidden" boxShadow={raised ? "0 10px 24px rgba(0,0,0,0.24)" : undefined} transform={raised ? `translate3d(0,0,${52 - index * 10}px)` : undefined}>
-      <Box position="absolute" left={0} top={0} bottom={0} w="4px" bg={accent} />
-      <Flex w="22px" h="22px" borderRadius="8px" bg={accent} color={ui.text} border="1px solid" borderColor="rgba(255,255,255,0.25)" align="center" justify="center" fontSize="12px" fontWeight="900" flexShrink={0}>{index}</Flex>
-      <Box flex={1} minW={0} fontSize="12px" fontWeight="900" color={ui.text}>{title}</Box>
-      {right && <Text fontFamily="mono" fontSize="11px" color={ui.faint}>{right}</Text>}
-      <ChevronDownIcon boxSize={4} color={ui.muted} flexShrink={0} />
-    </HStack>
-  );
-}
-
-function AssetChangesCard({ raised }: { raised: boolean }) {
-  return (
-    <Box
-      bg={ui.raised}
-      border="1px solid"
-      borderColor={ui.borderStrong}
-      borderRadius="12px"
-      p={3}
-      boxShadow="none"
-      overflow="hidden"
-      isolation="isolate"
-      transform={raised ? "translate3d(0,-3px,100px)" : undefined}
-      sx={{ transformStyle: "flat", backfaceVisibility: "hidden" }}
-    >
-      <HStack>
-        <HStack spacing={1}>
-          <Text fontSize="13px" fontWeight="900" color={ui.muted} textTransform="uppercase">Asset Changes</Text>
-          <InfoOutlineIcon boxSize={3} color={ui.faint} />
-        </HStack>
-        <Spacer />
-        <ChevronUpIcon boxSize={4} color={ui.muted} />
-      </HStack>
-      <Box h="1px" bg={ui.border} my={2.5} />
-      <AssetDeltaSection kind="send" />
-      <AssetDeltaSection kind="receive" />
-    </Box>
-  );
-}
-
-function AssetDeltaSection({ kind }: { kind: "send" | "receive" }) {
+function AssetChange({
+  kind,
+  raised,
+}: {
+  kind: "send" | "receive";
+  raised: boolean;
+}) {
   const outgoing = kind === "send";
+  const color = outgoing ? ui.red : ui.green;
+
   return (
-    <Box mt={outgoing ? 0 : 3}>
-      <Text mb={1.5} fontSize="11px" fontWeight="900" color={outgoing ? ui.red : ui.green} textTransform="uppercase">{outgoing ? "Send" : "Receive"}</Text>
-      <HStack align="center">
-        <Box h="52px" w="3px" bg={outgoing ? ui.red : ui.green} />
-        <Image src={outgoing ? "/images/extension-preview/usdc.png" : "/images/ethereum.svg"} alt="" boxSize="28px" borderRadius="full" ml={2} />
+    <Box pt={outgoing ? 0 : 2.5} pb={outgoing ? 2 : 0} sx={preserve3d}>
+      <HStack
+        spacing={1.5}
+        mb={2}
+        transform={raised ? "translateZ(38px)" : "translateZ(12px)"}
+        transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
+      >
+        <Flex
+          boxSize="20px"
+          borderRadius="full"
+          bg={color}
+          color={ui.bg}
+          align="center"
+          justify="center"
+        >
+          {outgoing ? (
+            <ArrowUpIcon boxSize="11px" transform="rotate(45deg)" />
+          ) : (
+            <ArrowDownIcon boxSize="11px" transform="rotate(45deg)" />
+          )}
+        </Flex>
+        <Text
+          color={color}
+          fontSize="11px"
+          fontWeight="700"
+          textTransform="uppercase"
+        >
+          {outgoing ? "Send" : "Receive"}
+        </Text>
+      </HStack>
+      <HStack
+        align="center"
+        minW={0}
+        transform={raised ? "translateZ(68px)" : "translateZ(18px)"}
+        transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
+      >
+        <Image
+          src={
+            outgoing
+              ? "/images/extension-preview/usdc.png"
+              : "/images/ethereum.svg"
+          }
+          alt=""
+          boxSize="30px"
+          borderRadius="full"
+        />
         <VStack align="start" spacing={0} minW={0}>
-          <Text fontSize="15px" fontWeight="900">{outgoing ? "USDC" : "ETH"}</Text>
+          <Text fontSize="15px" lineHeight="1.2" fontWeight="700">
+            {outgoing ? "USDC" : "ETH"}
+          </Text>
           {outgoing && (
-            <HStack spacing={1} color={ui.faint}>
-              <Text fontSize="10px" fontFamily="mono" fontWeight="700">0x8335...2913</Text>
-              <CopyIcon boxSize={3} />
-              <ExternalLinkIcon boxSize={3} />
+            <HStack spacing={1} color={ui.muted}>
+              <Text fontFamily="mono" fontSize="10px">
+                0x8335...2913
+              </Text>
+              <CopyIcon boxSize="11px" />
+              <ExternalLinkIcon boxSize="10px" />
             </HStack>
           )}
         </VStack>
         <Spacer />
         <VStack align="end" spacing={0}>
-          <Text fontSize="18px" fontFamily="mono" fontWeight="900" color={outgoing ? ui.red : ui.green}>{outgoing ? "-5" : "+0.00281302"}</Text>
-          <Text fontSize="11px" fontWeight="900" color={ui.muted}>$5.00</Text>
+          <Text
+            color={color}
+            fontFamily="mono"
+            fontSize="16px"
+            lineHeight="1.2"
+            fontWeight="700"
+          >
+            {outgoing ? "-5" : "+0.00256622"}
+          </Text>
+          <Text color={ui.secondary} fontSize="11px" fontWeight="600">
+            $5.00
+          </Text>
         </VStack>
       </HStack>
     </Box>
   );
 }
 
-function FooterActions() {
+function RequestDetails({
+  raised,
+  overviewRaised,
+}: {
+  raised: boolean;
+  overviewRaised: boolean;
+}) {
   return (
-    <VStack spacing={2} align="stretch" mt="auto" sx={preserve3d}>
-      <HStack spacing={2}>
-        <HStack flex={1} justify="center" minH="42px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} borderRadius="14px" spacing={2}>
-          <CopyIcon boxSize={4} color={ui.muted} />
-          <TenderlyIcon boxSize={5} color="#9b7cff" />
-          <Text fontSize="13px" fontWeight="900" textTransform="uppercase">Simulate on Tenderly</Text>
-          <ExternalLinkIcon boxSize={3.5} />
+    <Box
+      as="section"
+      transform={raised ? "translate3d(0,0,54px)" : "translateZ(0)"}
+      transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
+      willChange="transform"
+      sx={preserve3d}
+    >
+      <HStack
+        mb={2.5}
+        transform={raised ? "translateZ(24px)" : "translateZ(30px)"}
+      >
+        <Text fontSize="19px" fontWeight="700" letterSpacing="-0.02em">
+          Request details
+        </Text>
+        <Spacer />
+        <Text color={ui.secondary} fontSize="12px" fontWeight="600">
+          2 calls
+        </Text>
+      </HStack>
+
+      <HStack
+        px={1}
+        mb={1}
+        spacing={2}
+        transform={overviewRaised ? "translateZ(86px)" : "translateZ(32px)"}
+        transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1)"
+        sx={preserve3d}
+      >
+        <Text
+          color={ui.secondary}
+          fontSize="11px"
+          fontWeight="600"
+          whiteSpace="nowrap"
+        >
+          Batch overview
+        </Text>
+        <Box
+          flex={1}
+          h="1px"
+          bg={ui.border}
+          transform={overviewRaised ? "translateZ(18px)" : "translateZ(0)"}
+        />
+        <HStack spacing={1} fontSize="13px" fontWeight="700">
+          <Text>Approve</Text>
+          <Text color={ui.amber}>+</Text>
+          <Text>Swap</Text>
         </HStack>
-        <Flex as="button" minH="42px" px={4} borderRadius="10px" bg={ui.yellow} color={ui.bg} align="center" justify="center" fontSize="13px" fontWeight="700">+ Batch</Flex>
       </HStack>
-      <HStack spacing={2}>
-        <Flex flex={1} minH="46px" borderRadius="10px" bg={ui.raised} border="1px solid" borderColor={ui.borderStrong} align="center" justify="center" fontSize="16px" fontWeight="600">Reject</Flex>
-        <Flex flex={1} minH="46px" borderRadius="10px" bg={ui.yellow} color={ui.bg} border="1px solid" borderColor={ui.yellow} align="center" justify="center" fontSize="16px" fontWeight="700">Confirm</Flex>
-      </HStack>
-    </VStack>
+
+      <VStack spacing={1.5} align="stretch" sx={preserve3d}>
+        <CallRow index={1} raised={raised}>
+          <HStack spacing={1} minW={0}>
+            <Text as="span" whiteSpace="nowrap">
+              Approve 5
+            </Text>
+            <Image
+              src="/images/extension-preview/usdc.png"
+              alt=""
+              boxSize="15px"
+              borderRadius="full"
+            />
+            <Text as="span" isTruncated>
+              USDC to AugustusV6
+            </Text>
+          </HStack>
+        </CallRow>
+        <CallRow index={2} raised={raised} right="0x6a00...1068">
+          <Text isTruncated>swapExactAmountIn</Text>
+        </CallRow>
+      </VStack>
+    </Box>
   );
 }
 
-const TenderlyIcon = (props: any) => (
-  <ChakraIcon viewBox="0 0 24 24" {...props}>
-    <path fill="currentColor" d="M20.7 3.1 13.4 7 8.2 4.8 3.3 7.6l5.3 3.1-1 7.6 5.8-4 7.3 2.4-3.3-6.5 3.3-7.1Z" />
-  </ChakraIcon>
-);
+function CallRow({
+  index,
+  raised,
+  right,
+  children,
+}: {
+  index: number;
+  raised: boolean;
+  right?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <HStack
+      minH="46px"
+      px={3}
+      py={2}
+      bg={ui.raised}
+      border="1px solid"
+      borderColor={ui.borderStrong}
+      borderRadius="12px"
+      boxShadow={
+        raised
+          ? index === 1
+            ? "0 22px 42px rgba(0,0,0,0.40)"
+            : "0 12px 28px rgba(0,0,0,0.30)"
+          : "none"
+      }
+      transform={
+        raised ? `translateZ(${index === 1 ? 92 : 58}px)` : "translateZ(38px)"
+      }
+      transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease"
+    >
+      <Flex
+        boxSize="23px"
+        flexShrink={0}
+        borderRadius="8px"
+        border="1px solid"
+        borderColor={ui.borderStrong}
+        color={ui.amber}
+        align="center"
+        justify="center"
+        fontSize="12px"
+        fontWeight="700"
+      >
+        {index}
+      </Flex>
+      <Box flex={1} minW={0} fontSize="13px" fontWeight="700">
+        {children}
+      </Box>
+      {right && (
+        <Text color={ui.muted} fontFamily="mono" fontSize="10px">
+          {right}
+        </Text>
+      )}
+      <ChevronDownIcon boxSize={4} color={ui.secondary} flexShrink={0} />
+    </HStack>
+  );
+}
+
+function DecisionBar({ feeRaised }: { feeRaised: boolean }) {
+  return (
+    <Box
+      mt="auto"
+      px={4}
+      pt={2.5}
+      pb={3}
+      bg={ui.raised}
+      borderTop="1px solid"
+      borderColor={ui.border}
+      transform="translateZ(0)"
+      sx={preserve3d}
+    >
+      <VStack align="stretch" spacing={2} sx={preserve3d}>
+        <HStack minH="28px">
+          <Text color={ui.secondary} fontSize="11px" fontWeight="600">
+            Signing with
+          </Text>
+          <Spacer />
+          <MockSignerIdentity />
+        </HStack>
+        <HStack
+          minH="32px"
+          mt={-3}
+          mx={-2}
+          px={2}
+          borderRadius="8px"
+          bg={ui.raised}
+          boxShadow={feeRaised ? "0 16px 34px rgba(0,0,0,0.34)" : "none"}
+          transform={
+            feeRaised ? "translate3d(0, -14px, 72px)" : "translateZ(0)"
+          }
+          transition="transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease"
+        >
+          <Text color={ui.secondary} fontSize="11px" fontWeight="600">
+            Pay network fee with
+          </Text>
+          <Spacer />
+          <HStack
+            h="32px"
+            px={2.5}
+            border="1px solid"
+            borderColor={ui.border}
+            borderRadius="8px"
+            bg={ui.bg}
+          >
+            <Image
+              src="/images/extension-preview/usdc.png"
+              alt=""
+              boxSize="18px"
+              borderRadius="full"
+            />
+            <Text fontSize="12px" fontWeight="700">
+              USDC
+            </Text>
+            <ChevronDownIcon boxSize={4} />
+          </HStack>
+        </HStack>
+        <HStack spacing={2} pt={1}>
+          <Flex
+            as="button"
+            flex={1}
+            minH="44px"
+            borderRadius="8px"
+            bg={ui.raisedHover}
+            align="center"
+            justify="center"
+            fontSize="15px"
+            fontWeight="600"
+            _hover={{ bg: "#202024" }}
+            _active={{ transform: "translateY(1px)" }}
+            _focusVisible={{ boxShadow: `0 0 0 3px ${ui.blue}` }}
+          >
+            Reject
+          </Flex>
+          <Flex
+            as="button"
+            flex={1}
+            minH="44px"
+            borderRadius="8px"
+            bg={ui.amber}
+            color={ui.bg}
+            align="center"
+            justify="center"
+            fontSize="15px"
+            fontWeight="700"
+            _hover={{ bg: warmMockup.amberSoft }}
+            _active={{ transform: "translateY(1px)" }}
+            _focusVisible={{ boxShadow: `0 0 0 3px ${ui.blue}` }}
+          >
+            Confirm
+          </Flex>
+        </HStack>
+      </VStack>
+    </Box>
+  );
+}

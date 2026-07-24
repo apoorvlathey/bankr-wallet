@@ -45,6 +45,7 @@ import { SlippageSettings } from "../../swap/components/SlippageSettings";
 import { WchanBuyContent } from "./WchanBuyContent";
 import { TOKEN_ADDRESS } from "../../constants";
 import { useTokenData } from "../../contexts/TokenDataContext";
+import { palette } from "../../home-v2/design";
 
 export interface BuyToken {
   address: string;
@@ -98,7 +99,7 @@ function useCoinImage(tokenURI: string | undefined) {
   return imageUrl;
 }
 
-function WalletDisplay() {
+function WalletDisplay({ appearance }: { appearance: BuyModalAppearance }) {
   const { address } = useAccount();
   const { openAccountModal } = useAccountModal();
   const { data: ensName } = useEnsName({
@@ -116,16 +117,27 @@ function WalletDisplay() {
       onClick={openAccountModal}
       display="flex"
       alignItems="center"
-      border="2px solid"
-      borderColor="bauhaus.black"
+      border={appearance === "midnight" ? "1px solid" : "2px solid"}
+      borderColor={
+        appearance === "midnight"
+          ? "rgba(255,255,255,0.12)"
+          : "bauhaus.black"
+      }
+      borderRadius={appearance === "midnight" ? "8px" : 0}
       px={3}
-      py={1}
-      bg="white"
-      fontWeight="800"
+      py={1.5}
+      bg={appearance === "midnight" ? palette.ink3 : "white"}
+      color={appearance === "midnight" ? palette.white : undefined}
+      fontWeight="700"
       fontSize="xs"
-      textTransform="uppercase"
-      letterSpacing="wide"
-      _hover={{ bg: "gray.50" }}
+      textTransform={appearance === "midnight" ? "none" : "uppercase"}
+      letterSpacing={appearance === "midnight" ? "0" : "wide"}
+      _hover={{
+        bg:
+          appearance === "midnight"
+            ? "rgba(255,255,255,0.12)"
+            : "gray.50",
+      }}
       transition="background 0.15s"
     >
       {displayName}
@@ -151,14 +163,24 @@ interface BuyModalProps {
   isOpen: boolean;
   onClose: () => void;
   showWallet?: boolean;
+  appearance?: BuyModalAppearance;
 }
 
-export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) {
+type BuyModalAppearance = "bauhaus" | "midnight";
+
+export function BuyModal({
+  token,
+  isOpen,
+  onClose,
+  showWallet,
+  appearance = "bauhaus",
+}: BuyModalProps) {
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isWrongChain = isConnected && chainId !== SWAP_CHAIN_ID;
+  const isMidnight = appearance === "midnight";
 
   const [sellAmount, setSellAmount] = useState("");
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
@@ -323,13 +345,24 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
-      <ModalOverlay bg="blackAlpha.700" />
+      <ModalOverlay
+        bg={isMidnight ? "rgba(0,0,0,0.78)" : "blackAlpha.700"}
+        backdropFilter={isMidnight ? "blur(8px)" : undefined}
+      />
       <ModalContent
-        bg="white"
-        border="4px solid"
-        borderColor="bauhaus.black"
-        borderRadius={0}
-        boxShadow="8px 8px 0px 0px #121212"
+        bg={isMidnight ? palette.ink2 : "white"}
+        color={isMidnight ? palette.white : undefined}
+        border={isMidnight ? "1px solid" : "4px solid"}
+        borderColor={
+          isMidnight ? "rgba(255,255,255,0.14)" : "bauhaus.black"
+        }
+        borderRadius={isMidnight ? "16px" : 0}
+        boxShadow={
+          isMidnight
+            ? "0 28px 90px rgba(0,0,0,0.58)"
+            : "8px 8px 0px 0px #121212"
+        }
+        overflow="hidden"
         mx={4}
       >
         <ModalHeader pb={2} pt={5} px={6}>
@@ -341,27 +374,45 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                   alt={token?.name}
                   w="36px"
                   h="36px"
-                  border="2px solid"
-                  borderColor="bauhaus.black"
+                  border={isMidnight ? "1px solid" : "2px solid"}
+                  borderColor={
+                    isMidnight
+                      ? "rgba(255,255,255,0.16)"
+                      : "bauhaus.black"
+                  }
+                  borderRadius={isMidnight ? "9px" : 0}
+                  bg={isMidnight ? palette.white : undefined}
+                  p={isMidnight ? 0.5 : 0}
                   objectFit="cover"
                 />
               )}
               <VStack align="flex-start" spacing={0}>
                 <Text
                   fontWeight="900"
-                  fontSize="lg"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
+                  fontSize={isMidnight ? "22px" : "lg"}
+                  fontFamily={
+                    isMidnight && isWchan ? "'Anton', sans-serif" : undefined
+                  }
+                  textTransform={isMidnight ? "none" : "uppercase"}
+                  letterSpacing={isMidnight ? "0" : "wide"}
                   lineHeight="1.2"
                 >
                   ${token?.symbol}
                 </Text>
-                <Text fontSize="sm" color="gray.600" fontWeight="600">
+                <Text
+                  fontSize="sm"
+                  color={isMidnight ? palette.muted : "gray.600"}
+                  fontWeight="600"
+                >
                   {token?.name}
                 </Text>
                 {token?.address && (
                   <HStack spacing={1}>
-                    <Text fontSize="xs" color="gray.400" fontFamily="mono">
+                    <Text
+                      fontSize="xs"
+                      color={isMidnight ? palette.faint : "gray.400"}
+                      fontFamily="mono"
+                    >
                       {token.address.slice(0, 6)}...{token.address.slice(-4)}
                     </Text>
                     <Box
@@ -371,8 +422,24 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                         setCopied(true);
                         setTimeout(() => setCopied(false), 1500);
                       }}
-                      color={copied ? "green.500" : "gray.400"}
-                      _hover={{ color: copied ? "green.500" : "gray.600" }}
+                      color={
+                        copied
+                          ? isMidnight
+                            ? palette.green
+                            : "green.500"
+                          : isMidnight
+                            ? palette.faint
+                            : "gray.400"
+                      }
+                      _hover={{
+                        color: copied
+                          ? isMidnight
+                            ? palette.green
+                            : "green.500"
+                          : isMidnight
+                            ? palette.white
+                            : "gray.600",
+                      }}
                       display="flex"
                       alignItems="center"
                     >
@@ -383,8 +450,16 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
               </VStack>
             </HStack>
             <HStack spacing={2}>
-              {showWallet && isConnected && <WalletDisplay />}
-              <CloseButton size="sm" borderRadius={0} onClick={onClose} />
+              {showWallet && isConnected && (
+                <WalletDisplay appearance={appearance} />
+              )}
+              <CloseButton
+                size="sm"
+                borderRadius={isMidnight ? "8px" : 0}
+                color={isMidnight ? palette.muted : undefined}
+                _hover={isMidnight ? { bg: palette.ink3, color: palette.white } : undefined}
+                onClick={onClose}
+              />
             </HStack>
           </HStack>
         </ModalHeader>
@@ -393,22 +468,46 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
           <VStack spacing={5} align="stretch">
             {/* Buy/Sell tabs for WCHAN */}
             {isWchan && (
-              <HStack spacing={0}>
+              <HStack
+                spacing={isMidnight ? 1 : 0}
+                p={isMidnight ? 1 : 0}
+                bg={isMidnight ? palette.ink : undefined}
+                borderRadius={isMidnight ? "10px" : 0}
+              >
                 {(["buy", "sell"] as const).map((tab) => (
                   <Box
                     key={tab}
                     as="button"
                     flex={1}
                     py={2}
-                    bg={activeTab === tab ? "bauhaus.black" : "white"}
-                    color={activeTab === tab ? "white" : "bauhaus.black"}
-                    border="2px solid"
-                    borderColor="bauhaus.black"
-                    borderRight={tab === "buy" ? "none" : undefined}
+                    bg={
+                      isMidnight
+                        ? activeTab === tab
+                          ? palette.yellow
+                          : "transparent"
+                        : activeTab === tab
+                          ? "bauhaus.black"
+                          : "white"
+                    }
+                    color={
+                      isMidnight
+                        ? activeTab === tab
+                          ? palette.ink
+                          : palette.muted
+                        : activeTab === tab
+                          ? "white"
+                          : "bauhaus.black"
+                    }
+                    border={isMidnight ? "none" : "2px solid"}
+                    borderColor={isMidnight ? undefined : "bauhaus.black"}
+                    borderRight={
+                      !isMidnight && tab === "buy" ? "none" : undefined
+                    }
+                    borderRadius={isMidnight ? "7px" : 0}
                     fontSize="sm"
                     fontWeight="900"
-                    textTransform="uppercase"
-                    letterSpacing="wide"
+                    textTransform={isMidnight ? "none" : "uppercase"}
+                    letterSpacing={isMidnight ? "0" : "wide"}
                     onClick={() => {
                       if (activeTab !== tab) {
                         setActiveTab(tab);
@@ -417,10 +516,18 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                       }
                     }}
                     _hover={{
-                      bg: activeTab === tab ? "bauhaus.black" : "gray.100",
+                      bg: isMidnight
+                        ? activeTab === tab
+                          ? palette.amberSoft
+                          : palette.ink3
+                        : activeTab === tab
+                          ? "bauhaus.black"
+                          : "gray.100",
                     }}
                   >
-                    {tab}
+                    {isMidnight
+                      ? `${tab.charAt(0).toUpperCase()}${tab.slice(1)}`
+                      : tab}
                   </Box>
                 ))}
               </HStack>
@@ -432,9 +539,10 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                 <HStack justify="space-between" mb={2}>
                   <Text
                     fontSize="xs"
-                    fontWeight="bold"
-                    textTransform="uppercase"
-                    letterSpacing="widest"
+                    color={isMidnight ? palette.muted : undefined}
+                    fontWeight="700"
+                    textTransform={isMidnight ? "none" : "uppercase"}
+                    letterSpacing={isMidnight ? "0" : "widest"}
                   >
                     You Pay
                   </Text>
@@ -443,7 +551,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                       <HStack spacing={1}>
                         <Text
                           fontSize="xs"
-                          color="gray.500"
+                          color={isMidnight ? palette.faint : "gray.500"}
                           fontWeight="medium"
                         >
                           Balance: {formattedWchanBalance} WCHAN
@@ -452,8 +560,8 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                           as="button"
                           fontSize="xs"
                           fontWeight="bold"
-                          color="bauhaus.blue"
-                          textTransform="uppercase"
+                          color={isMidnight ? palette.yellow : "bauhaus.blue"}
+                          textTransform={isMidnight ? "none" : "uppercase"}
                           onClick={handleMaxClick}
                           _hover={{ textDecoration: "underline" }}
                         >
@@ -465,7 +573,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                       <HStack spacing={1}>
                         <Text
                           fontSize="xs"
-                          color="gray.500"
+                          color={isMidnight ? palette.faint : "gray.500"}
                           fontWeight="medium"
                         >
                           Balance: {formattedBalance} ETH
@@ -474,8 +582,8 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                           as="button"
                           fontSize="xs"
                           fontWeight="bold"
-                          color="bauhaus.blue"
-                          textTransform="uppercase"
+                          color={isMidnight ? palette.yellow : "bauhaus.blue"}
+                          textTransform={isMidnight ? "none" : "uppercase"}
                           onClick={handleMaxClick}
                           _hover={{ textDecoration: "underline" }}
                         >
@@ -486,8 +594,14 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                   )}
                 </HStack>
                 <HStack
-                  border="2px solid"
-                  borderColor="bauhaus.border"
+                  border={isMidnight ? "1px solid" : "2px solid"}
+                  borderColor={
+                    isMidnight
+                      ? "rgba(255,255,255,0.14)"
+                      : "bauhaus.border"
+                  }
+                  borderRadius={isMidnight ? "12px" : 0}
+                  bg={isMidnight ? palette.ink : undefined}
                   p={3}
                   spacing={3}
                 >
@@ -497,8 +611,12 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                     onChange={(e) => handleSellAmountChange(e.target.value)}
                     border="none"
                     _focus={{ boxShadow: "none" }}
+                    color={isMidnight ? palette.white : undefined}
+                    _placeholder={
+                      isMidnight ? { color: palette.faint } : undefined
+                    }
                     fontSize="xl"
-                    fontWeight="black"
+                    fontWeight={isMidnight ? "600" : "black"}
                     p={0}
                     flex={1}
                   />
@@ -508,7 +626,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                         <Text
                           fontSize="xs"
                           fontWeight="700"
-                          color="gray.400"
+                          color={isMidnight ? palette.faint : "gray.400"}
                           whiteSpace="nowrap"
                           flexShrink={0}
                         >
@@ -519,7 +637,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                         <Text
                           fontSize="xs"
                           fontWeight="700"
-                          color="gray.400"
+                          color={isMidnight ? palette.faint : "gray.400"}
                           whiteSpace="nowrap"
                           flexShrink={0}
                         >
@@ -561,22 +679,38 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                           mt={3}
                           fontSize="xs"
                           fontWeight="800"
-                          color={sliderValue >= pct ? "bauhaus.blue" : "gray.400"}
+                          color={
+                            isMidnight
+                              ? sliderValue >= pct
+                                ? palette.yellow
+                                : palette.faint
+                              : sliderValue >= pct
+                                ? "bauhaus.blue"
+                                : "gray.400"
+                          }
                           whiteSpace="nowrap"
                           transform="translateX(-50%)"
                         >
                           {pct}%
                         </SliderMark>
                       ))}
-                      <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                        <SliderFilledTrack bg="bauhaus.blue" />
+                      <SliderTrack
+                        bg={isMidnight ? palette.ink3 : "gray.200"}
+                        h="6px"
+                        borderRadius={isMidnight ? "999px" : 0}
+                      >
+                        <SliderFilledTrack
+                          bg={isMidnight ? palette.yellow : "bauhaus.blue"}
+                        />
                       </SliderTrack>
                       <SliderThumb
                         boxSize={5}
-                        bg="bauhaus.blue"
-                        border="3px solid"
-                        borderColor="bauhaus.black"
-                        borderRadius={0}
+                        bg={isMidnight ? palette.yellow : "bauhaus.blue"}
+                        border={isMidnight ? "2px solid" : "3px solid"}
+                        borderColor={
+                          isMidnight ? palette.ink : "bauhaus.black"
+                        }
+                        borderRadius={isMidnight ? "7px" : 0}
                         _focus={{ boxShadow: "none" }}
                       />
                     </Slider>
@@ -592,17 +726,50 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
                         flex={1}
                         py={1}
                         px={1}
-                        border="2px solid"
-                        borderColor={sellAmount === preset ? "bauhaus.blue" : "bauhaus.black"}
-                        bg={sellAmount === preset ? "bauhaus.blue" : "white"}
-                        color={sellAmount === preset ? "white" : "bauhaus.black"}
+                        border={isMidnight ? "1px solid" : "2px solid"}
+                        borderColor={
+                          isMidnight
+                            ? sellAmount === preset
+                              ? palette.yellow
+                              : "rgba(255,255,255,0.12)"
+                            : sellAmount === preset
+                              ? "bauhaus.blue"
+                              : "bauhaus.black"
+                        }
+                        borderRadius={isMidnight ? "8px" : 0}
+                        bg={
+                          isMidnight
+                            ? sellAmount === preset
+                              ? "rgba(245,158,11,0.14)"
+                              : palette.ink3
+                            : sellAmount === preset
+                              ? "bauhaus.blue"
+                              : "white"
+                        }
+                        color={
+                          isMidnight
+                            ? sellAmount === preset
+                              ? palette.yellow
+                              : palette.muted
+                            : sellAmount === preset
+                              ? "white"
+                              : "bauhaus.black"
+                        }
                         fontSize={{ base: "10px", sm: "xs" }}
                         fontWeight="800"
                         textAlign="center"
-                        textTransform="uppercase"
+                        textTransform={isMidnight ? "none" : "uppercase"}
                         whiteSpace="nowrap"
                         onClick={() => setSellAmount(preset)}
-                        _hover={{ bg: sellAmount === preset ? "bauhaus.blue" : "gray.100" }}
+                        _hover={{
+                          bg: isMidnight
+                            ? sellAmount === preset
+                              ? "rgba(245,158,11,0.20)"
+                              : "rgba(255,255,255,0.10)"
+                            : sellAmount === preset
+                              ? "bauhaus.blue"
+                              : "gray.100",
+                        }}
                       >
                         {preset} ETH
                       </Box>
@@ -614,13 +781,15 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
               {/* Arrow separator */}
               <Flex justify="center" mt={3} mb={{ base: 1, sm: -3 }} zIndex={2} position="relative">
                 <Flex
-                  w={8}
-                  h={8}
-                  bg="bauhaus.blue"
-                  color="white"
+                  w={isMidnight ? 9 : 8}
+                  h={isMidnight ? 9 : 8}
+                  bg={isMidnight ? palette.yellow : "bauhaus.blue"}
+                  color={isMidnight ? palette.ink : "white"}
                   align="center"
                   justify="center"
-                  border="3px solid white"
+                  border={isMidnight ? "3px solid" : "3px solid white"}
+                  borderColor={isMidnight ? palette.ink2 : undefined}
+                  borderRadius={isMidnight ? "10px" : 0}
                 >
                   <ArrowDownIcon boxSize={4} />
                 </Flex>
@@ -692,6 +861,7 @@ export function BuyModal({ token, isOpen, onClose, showWallet }: BuyModalProps) 
 
             {isWchan ? (
               <WchanBuyContent
+                appearance={appearance}
                 direction={activeTab}
                 sellAmount={sellAmount}
                 sellAmountValid={sellAmountValid}

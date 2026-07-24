@@ -25,4 +25,4 @@ export const BASE_USDC_ADDRESS =
 
 // Uniswap V4 pool ID for WCHAN
 export const WCHAN_POOL_ID =
-  "0x5a7b2f855c58a230afd95981147bd4c15f074ad22e18318140bbe2bfbb79f062";
+  "0x81c7a2a2c33ea285f062c5ac0c4e3d4ffb2f6fd2588bbd354d0d3af8a58b6337";

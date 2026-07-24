@@ -28,9 +28,7 @@ export const BUY_LINK =
   "https://app.uniswap.org/swap?chain=base&inputCurrency=NATIVE&outputCurrency=0xBa5ED0000e1CA9136a695f0a848012A16008B032";
 export const DEXSCREENER_URL = `https://dexscreener.com/base/${POOL_ADDRESS}`;
 export const GECKOTERMINAL_URL = `https://www.geckoterminal.com/base/pools/${POOL_ADDRESS}`;
-// FIXME: uncomment this to use 1d chart
-// export const GECKOTERMINAL_EMBED_URL = `https://www.geckoterminal.com/base/pools/${POOL_ADDRESS}?embed=1&info=0&swaps=0&grayscale=0&light_chart=0&chart_type=market_cap&resolution=1d`;
-export const GECKOTERMINAL_EMBED_URL = `https://www.geckoterminal.com/base/pools/${POOL_ADDRESS}?embed=1&info=0&swaps=0&grayscale=0&light_chart=0&chart_type=market_cap&resolution=30s`;
+export const GECKOTERMINAL_EMBED_URL = `https://www.geckoterminal.com/base/pools/${POOL_ADDRESS}?embed=1&info=0&swaps=0&grayscale=0&light_chart=0&chart_type=market_cap&resolution=1h`;
 export const GECKOTERMINAL_EMBED_URL_30s = `https://www.geckoterminal.com/base/pools/${POOL_ADDRESS}?embed=1&info=0&swaps=0&grayscale=0&light_chart=0&chart_type=market_cap&resolution=30s`;
 export const GECKOTERMINAL_API_URL = `https://api.geckoterminal.com/api/v2/networks/base/pools/${POOL_ADDRESS}`;
 // FIXME: update to WCHAN coingecko URL once the new coin is live there

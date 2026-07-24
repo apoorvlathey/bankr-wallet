@@ -15,6 +15,7 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { SLIPPAGE_PRESETS } from "../constants";
+import { palette } from "../../home-v2/design";
 
 function GearIcon(props: React.ComponentProps<typeof Icon>) {
   return (
@@ -31,13 +32,16 @@ interface SlippageSettingsProps {
   slippageBps: number;
   onSlippageChange: (bps: number) => void;
   presets?: number[];
+  appearance?: "bauhaus" | "midnight";
 }
 
 export function SlippageSettings({
   slippageBps,
   onSlippageChange,
   presets,
+  appearance = "bauhaus",
 }: SlippageSettingsProps) {
+  const isMidnight = appearance === "midnight";
   const { isOpen, onToggle, onClose } = useDisclosure();
   const [customValue, setCustomValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,18 +83,32 @@ export function SlippageSettings({
           cursor="pointer"
           _hover={{ opacity: 0.7 }}
         >
-          <Text fontSize="2xs" fontWeight="bold" color="gray.500">
+          <Text
+            fontSize="2xs"
+            fontWeight="bold"
+            color={isMidnight ? palette.faint : "gray.500"}
+          >
             {displayPercent}% slippage
           </Text>
-          <GearIcon boxSize={3} color="gray.500" />
+          <GearIcon
+            boxSize={3}
+            color={isMidnight ? palette.faint : "gray.500"}
+          />
         </HStack>
       </PopoverTrigger>
       <PopoverContent
-        bg="white"
-        border="2px solid"
-        borderColor="bauhaus.border"
-        borderRadius={0}
-        boxShadow="3px 3px 0px 0px #121212"
+        bg={isMidnight ? palette.ink3 : "white"}
+        color={isMidnight ? palette.white : undefined}
+        border={isMidnight ? "1px solid" : "2px solid"}
+        borderColor={
+          isMidnight ? "rgba(255,255,255,0.14)" : "bauhaus.border"
+        }
+        borderRadius={isMidnight ? "12px" : 0}
+        boxShadow={
+          isMidnight
+            ? "0 18px 48px rgba(0,0,0,0.42)"
+            : "3px 3px 0px 0px #121212"
+        }
         w="200px"
         _focus={{ boxShadow: "3px 3px 0px 0px #121212" }}
       >
@@ -108,14 +126,45 @@ export function SlippageSettings({
                     flex={1}
                     justify="center"
                     py={1}
-                    bg={isActive ? "bauhaus.blue" : "gray.100"}
-                    color={isActive ? "white" : "bauhaus.foreground"}
+                    bg={
+                      isMidnight
+                        ? isActive
+                          ? palette.yellow
+                          : palette.ink2
+                        : isActive
+                          ? "bauhaus.blue"
+                          : "gray.100"
+                    }
+                    color={
+                      isMidnight
+                        ? isActive
+                          ? palette.ink
+                          : palette.muted
+                        : isActive
+                          ? "white"
+                          : "bauhaus.foreground"
+                    }
                     fontWeight="bold"
                     fontSize="xs"
                     border="1px solid"
-                    borderColor={isActive ? "bauhaus.blue" : "gray.200"}
+                    borderColor={
+                      isMidnight
+                        ? isActive
+                          ? palette.yellow
+                          : "rgba(255,255,255,0.10)"
+                        : isActive
+                          ? "bauhaus.blue"
+                          : "gray.200"
+                    }
+                    borderRadius={isMidnight ? "7px" : 0}
                     _hover={{
-                      bg: isActive ? "bauhaus.blue" : "gray.200",
+                      bg: isMidnight
+                        ? isActive
+                          ? palette.amberSoft
+                          : "rgba(255,255,255,0.10)"
+                        : isActive
+                          ? "bauhaus.blue"
+                          : "gray.200",
                     }}
                     onClick={() => handlePresetClick(bps)}
                   >
@@ -128,7 +177,17 @@ export function SlippageSettings({
             {/* Custom input */}
             <HStack
               border="1px solid"
-              borderColor={!isPreset && slippageBps > 0 ? "bauhaus.blue" : "gray.200"}
+              borderColor={
+                isMidnight
+                  ? !isPreset && slippageBps > 0
+                    ? palette.yellow
+                    : "rgba(255,255,255,0.12)"
+                  : !isPreset && slippageBps > 0
+                    ? "bauhaus.blue"
+                    : "gray.200"
+              }
+              borderRadius={isMidnight ? "7px" : 0}
+              bg={isMidnight ? palette.ink2 : undefined}
               px={2}
               py={1}
               spacing={1}
@@ -142,19 +201,29 @@ export function SlippageSettings({
                 onChange={(e) => handleCustomChange(e.target.value)}
                 border="none"
                 _focus={{ boxShadow: "none" }}
+                color={isMidnight ? palette.white : undefined}
+                _placeholder={isMidnight ? { color: palette.faint } : undefined}
                 fontSize="xs"
                 fontWeight="bold"
                 p={0}
                 h="auto"
                 flex={1}
               />
-              <Text fontSize="xs" fontWeight="bold" color="gray.400">
+              <Text
+                fontSize="xs"
+                fontWeight="bold"
+                color={isMidnight ? palette.faint : "gray.400"}
+              >
                 %
               </Text>
             </HStack>
 
             {slippageBps > 1000 && (
-              <Text fontSize="2xs" color="bauhaus.red" fontWeight="bold">
+              <Text
+                fontSize="2xs"
+                color={isMidnight ? palette.red : "bauhaus.red"}
+                fontWeight="bold"
+              >
                 High slippage — front-run risk
               </Text>
             )}
