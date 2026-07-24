@@ -192,6 +192,11 @@ export async function handleWalletConnectSessionRequest(
         chainId,
         requestedErc7715Account(method, requestParams),
       );
+      if (account.type === "ledger") {
+        throw new Error(
+          "Delegated permissions are not supported for Ledger accounts",
+        );
+      }
       const peer = getSessionMetadata(session);
       if (method === "wallet_requestExecutionPermissions") {
         const permissionRequestId = crypto.randomUUID();

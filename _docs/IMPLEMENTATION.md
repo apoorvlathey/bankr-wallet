@@ -2678,7 +2678,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 - `eth_accounts`, `eth_requestAccounts`, `eth_chainId`, `net_version`, `wallet_switchEthereumChain`, and a small read-only RPC allowlist are answered directly in the background.
 - WalletConnect chain selection is shared across all WC sessions, not per browser tab. Injected dapps continue to use their existing per-tab content-script chain state.
 
-**Security model:** WalletConnect is a transport only. Request account binding is still pinned at arrival (`accountId`, `accountAddress`, `accountType`), and confirm-time signing resolves the pinned account rather than the currently active account. View-only impersonator accounts cannot approve sessions or sign requests.
+**Security model:** WalletConnect is a transport only. Request account binding is still pinned at arrival (`accountId`, `accountAddress`, `accountType`), and confirm-time signing resolves the pinned account rather than the currently active account. Bankr, private-key, seed-phrase, and Ledger accounts approve sessions through their normal confirmation/signing paths. Ledger advertises only single transactions and its supported personal/EIP-712 signatures; ERC-5792 and delegated-permission methods remain excluded. Verified Safe accounts advertise single transactions and ERC-5792 batching, which remain pending until Safe execution produces the result expected by the dapp; EOA-style message signing and delegated permissions are excluded. View-only impersonator accounts cannot approve sessions or sign requests.
 
 ### Swap API and token metadata
 

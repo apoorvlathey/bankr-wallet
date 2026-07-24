@@ -19,10 +19,25 @@ const SAFE_UNSUPPORTED_SESSION_METHODS = new Set([
   "wallet_getGrantedExecutionPermissions",
 ]);
 
+const LEDGER_UNSUPPORTED_SESSION_METHODS = new Set([
+  "wallet_getCapabilities",
+  "wallet_sendCalls",
+  "wallet_getCallsStatus",
+  "wallet_showCallsStatus",
+  "wallet_getSupportedExecutionPermissions",
+  "wallet_requestExecutionPermissions",
+  "wallet_getGrantedExecutionPermissions",
+]);
+
 export function getWalletConnectMethodsForAccount(account: SessionAccount): string[] {
-  return account.type === "safe"
+  const unsupported = account.type === "safe"
+    ? SAFE_UNSUPPORTED_SESSION_METHODS
+    : account.type === "ledger"
+      ? LEDGER_UNSUPPORTED_SESSION_METHODS
+      : null;
+  return unsupported
     ? WALLETCONNECT_SUPPORTED_METHODS.filter(
-        (method) => !SAFE_UNSUPPORTED_SESSION_METHODS.has(method),
+        (method) => !unsupported.has(method),
       )
     : [...WALLETCONNECT_SUPPORTED_METHODS];
 }

@@ -38,7 +38,7 @@ export function sanitizeWalletConnectMetadataUrl(value: unknown): string {
 
 export type SigningAccount = Extract<
   Account,
-  { type: "bankr" | "privateKey" | "seedPhrase" }
+  { type: "bankr" | "privateKey" | "seedPhrase" | "ledger" }
 >;
 
 export const WALLETCONNECT_SUPPORTED_METHODS = [
@@ -93,7 +93,8 @@ export function isSigningAccount(
   return !!account && (
     account.type === "bankr" ||
     account.type === "privateKey" ||
-    account.type === "seedPhrase"
+    account.type === "seedPhrase" ||
+    account.type === "ledger"
   );
 }
 

@@ -610,6 +610,15 @@ persistent telemetry client identifier must not be enabled in the extension;
 pairing, session relay, and active-session keepalive requests are functional
 transport traffic rather than product analytics.
 
+WalletConnect session methods are account-specific. Bankr, private-key, and
+seed-phrase accounts retain the full supported EOA method set. Ledger sessions
+allow single transactions plus `personal_sign` and validated EIP-712, but do
+not advertise or accept ERC-5792 or delegated-permission methods. Verified
+Safe sessions allow single transactions and ERC-5792 capability/batch/status
+methods, while EOA-style signatures and delegated permissions remain excluded.
+Impersonator accounts cannot approve a session. These proposal-time method
+limits are repeated by request-time namespace and account-resolution checks.
+
 For `eth_sendTransaction`, the WC request is converted to a `PendingTxRequest` with `accountId` / `accountAddress` / `accountType` pinned through `pinnedTxRequest()`. For `personal_sign` / typed-data signatures, the request is converted to a `PendingSignatureRequest` through `pinnedSignatureRequest()`. Confirm-time signing still routes through `txHandlers.ts`, so Bankr, private-key, and seed-phrase accounts keep their existing password/session-restoration behavior. View-only impersonator accounts cannot sign; their only send path is the separately reviewed per-RPC developer opt-in described under Network Metadata Handlers.
 
 For ERC-5792 `wallet_sendCalls`, the WC request reuses `batchTxHandlers.ts` and is converted to a `PendingBatchTxRequest` with the account authorized in the WalletConnect session passed explicitly into the batch handler. The pending request and bundle status pin exact `{ topic, requestId, method }` transport metadata, and the bundle status is scoped to the WalletConnect peer metadata, so another WC peer cannot query, confirm, or open a bundle it did not create.
