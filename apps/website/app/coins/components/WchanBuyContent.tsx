@@ -19,6 +19,7 @@ import { useSwapQuote } from "../../swap-wchan/hooks/useSwapQuote";
 import { SwapButton } from "../../swap-wchan/components/SwapButton";
 import { SlippageSettings } from "../../swap/components/SlippageSettings";
 import { LoadingShapes } from "../../components/ui/LoadingShapes";
+import { palette } from "../../home-v2/design";
 
 const CHAIN_ID = base.id;
 
@@ -31,6 +32,7 @@ function formatAmount(value: bigint): string {
 }
 
 interface WchanBuyContentProps {
+  appearance?: "bauhaus" | "midnight";
   direction: SwapDirection;
   sellAmount: string;
   sellAmountValid: boolean;
@@ -42,6 +44,7 @@ interface WchanBuyContentProps {
 }
 
 export function WchanBuyContent({
+  appearance = "bauhaus",
   direction,
   sellAmount,
   sellAmountValid,
@@ -51,6 +54,7 @@ export function WchanBuyContent({
   inputBalanceWei,
   onTxConfirmed,
 }: WchanBuyContentProps) {
+  const isMidnight = appearance === "midnight";
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const chainId = useChainId();
@@ -90,9 +94,10 @@ export function WchanBuyContent({
         <HStack justify="space-between" mb={2}>
           <Text
             fontSize="xs"
-            fontWeight="bold"
-            textTransform="uppercase"
-            letterSpacing="widest"
+            color={isMidnight ? palette.muted : undefined}
+            fontWeight="700"
+            textTransform={isMidnight ? "none" : "uppercase"}
+            letterSpacing={isMidnight ? "0" : "widest"}
           >
             You Receive
           </Text>
@@ -100,14 +105,18 @@ export function WchanBuyContent({
             slippageBps={slippageBps}
             onSlippageChange={onSlippageChange}
             presets={SLIPPAGE_PRESETS}
+            appearance={appearance}
           />
         </HStack>
         <HStack
-          border="2px solid"
-          borderColor="bauhaus.border"
+          border={isMidnight ? "1px solid" : "2px solid"}
+          borderColor={
+            isMidnight ? "rgba(255,255,255,0.14)" : "bauhaus.border"
+          }
+          borderRadius={isMidnight ? "12px" : 0}
           p={3}
           spacing={3}
-          bg="gray.50"
+          bg={isMidnight ? palette.ink : "gray.50"}
         >
           <Input
             placeholder={quote === null && !isQuoteLoading ? "\u2014" : "0.0"}
@@ -115,8 +124,10 @@ export function WchanBuyContent({
             readOnly
             border="none"
             _focus={{ boxShadow: "none" }}
+            color={isMidnight ? palette.white : undefined}
+            _placeholder={isMidnight ? { color: palette.faint } : undefined}
             fontSize="xl"
-            fontWeight="black"
+            fontWeight={isMidnight ? "600" : "black"}
             p={0}
             flex={1}
             cursor="default"
@@ -124,8 +135,13 @@ export function WchanBuyContent({
           />
           {isQuoteLoading && <LoadingShapes />}
           <Flex
-            bg="bauhaus.blue"
-            color="white"
+            bg={isMidnight ? palette.ink3 : "bauhaus.blue"}
+            color={isMidnight ? palette.white : "white"}
+            border={isMidnight ? "1px solid" : undefined}
+            borderColor={
+              isMidnight ? "rgba(255,255,255,0.12)" : undefined
+            }
+            borderRadius={isMidnight ? "8px" : 0}
             px={3}
             py={1}
             align="center"
@@ -141,9 +157,9 @@ export function WchanBuyContent({
         {quote && (
           <Text
             fontSize="xs"
-            color="gray.500"
+            color={isMidnight ? palette.faint : "gray.500"}
             fontWeight="bold"
-            textTransform="uppercase"
+            textTransform={isMidnight ? "none" : "uppercase"}
             textAlign="right"
             mt={1}
           >
@@ -158,7 +174,7 @@ export function WchanBuyContent({
       {quoteError && (
         <Text
           fontSize="sm"
-          color="bauhaus.red"
+          color={isMidnight ? palette.red : "bauhaus.red"}
           fontWeight="bold"
           textAlign="center"
         >
@@ -169,10 +185,17 @@ export function WchanBuyContent({
       {/* Action buttons */}
       {!isConnected ? (
         <Button
-          variant="primary"
+          variant={isMidnight ? undefined : "primary"}
           size="lg"
           w="full"
           onClick={openConnectModal}
+          bg={isMidnight ? palette.yellow : undefined}
+          color={isMidnight ? palette.ink : undefined}
+          borderRadius={isMidnight ? "9px" : undefined}
+          fontWeight={isMidnight ? "700" : undefined}
+          textTransform={isMidnight ? "none" : undefined}
+          letterSpacing={isMidnight ? "0" : undefined}
+          _hover={isMidnight ? { bg: palette.amberSoft } : undefined}
           fontSize="md"
           py={6}
         >
@@ -184,12 +207,12 @@ export function WchanBuyContent({
           w="full"
           bg="orange.500"
           color="white"
-          fontWeight="900"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          borderRadius={0}
-          border="3px solid"
-          borderColor="bauhaus.black"
+          fontWeight={isMidnight ? "700" : "900"}
+          textTransform={isMidnight ? "none" : "uppercase"}
+          letterSpacing={isMidnight ? "0" : "wide"}
+          borderRadius={isMidnight ? "9px" : 0}
+          border={isMidnight ? "none" : "3px solid"}
+          borderColor={isMidnight ? undefined : "bauhaus.black"}
           fontSize="md"
           py={6}
           _hover={{ bg: "orange.600" }}
@@ -202,6 +225,7 @@ export function WchanBuyContent({
         </Button>
       ) : (
         <SwapButton
+          appearance={appearance}
           direction={direction}
           quote={quote}
           chainId={CHAIN_ID}

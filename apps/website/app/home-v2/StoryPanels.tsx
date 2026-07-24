@@ -7,7 +7,7 @@ import { WarmMidnightHomeSurface as HomeWalletSurface } from "./WarmMidnightHome
 
 export { HomeWalletSurface };
 
-export type StoryId = "home" | "batching" | "signing" | "swap" | "browser" | "chains" | "trust" | "token";
+export type StoryId = "home" | "batching" | "accounts" | "privacy" | "signing" | "swap" | "browser" | "chains" | "trust" | "token";
 
 const ui = {
   strip: warmMockup.sunken,
@@ -28,6 +28,8 @@ const panelChains = [["Ethereum", "/images/ethereum.svg"], ["Base", "/images/bas
 export const storyPanels: Record<StoryId, { title: string; eyebrow: string; accent: string; icon: React.ReactNode; body: React.ReactNode }> = {
   home: { eyebrow: "Wallet home", title: "Wallet home", accent: palette.yellow, icon: <Sparkles size={16} />, body: <HomeWalletSurface /> },
   batching: { eyebrow: "Smart batch ready", title: "Approve + swap + revoke", accent: palette.yellow, icon: <Layers3 size={16} />, body: <BatchingPanel /> },
+  accounts: { eyebrow: "Hardware + multisig", title: "Ledger and Safe", accent: palette.green, icon: <WalletCards size={16} />, body: <TrustPanel /> },
+  privacy: { eyebrow: "Privacy Pools", title: "Shielded ETH", accent: palette.yellow, icon: <EyeOff size={16} />, body: <TrustPanel /> },
   signing: { eyebrow: "Pre-sign review", title: "Asset changes decoded", accent: palette.green, icon: <ShieldCheck size={16} />, body: <SigningPanel /> },
   swap: { eyebrow: "Route inside wallet", title: "Swap / bridge preview", accent: palette.blue, icon: <Shuffle size={16} />, body: <SwapPanel /> },
   browser: { eyebrow: "Onchain browser", title: "ENS/IPFS resolved", accent: palette.cyan, icon: <Globe2 size={16} />, body: <BrowserPanel /> },

@@ -242,6 +242,15 @@
 
 ## Slop audit
 
+- 2026-07-22 Home-v2 batch-preview audit: replaced the legacy blue-banner
+  transaction mockup with the current Warm Midnight batch decision path:
+  requester identity, estimated changes, request details, signer/fee context,
+  and one amber final commitment. The marketing-only 3D treatment remains on
+  meaningful section layers and call rows, while the represented wallet UI
+  keeps restrained neutral surfaces and semantic asset colors. Timeout/retry
+  feedback is intentionally excluded from the canonical product preview.
+  Result: pass.
+
 - 2026-07-22 Unshield recipient-account audit: added one established 44px
   header action to the full-screen address chooser, using the existing semantic
   icon-button and theme-token treatment. The action appears only in Unshield,

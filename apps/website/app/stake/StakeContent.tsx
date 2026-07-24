@@ -36,11 +36,10 @@ import {
   useCallsStatus,
 } from "wagmi";
 import { formatUnits, parseUnits, encodeFunctionData, maxUint256 } from "viem";
-import { Navigation } from "../components/Navigation";
-import { TokenBanner } from "../components/TokenBanner";
-import { Footer } from "../components/Footer";
+import { palette } from "../home-v2/design";
 import { useVaultData } from "../contexts/VaultDataContext";
 import { useTokenData } from "../contexts/TokenDataContext";
+import { StakeFooter, StakeNavigation } from "./StakeChrome";
 import { erc20Abi, wchanVaultAbi, migrateZapAbi } from "./abi";
 import {
   STAKE_CHAIN_ID,
@@ -396,11 +395,10 @@ function MigrationBanner({
 
   return (
     <Box
-      bg="bauhaus.yellow"
-      border="3px solid"
-      borderColor="bauhaus.black"
-      boxShadow="4px 4px 0px 0px #121212"
-      p={4}
+      bg="rgba(245,158,11,0.08)"
+      border="1px solid rgba(245,158,11,0.30)"
+      borderRadius="12px"
+      p={5}
     >
       <Flex
         direction={{ base: "column", md: "row" }}
@@ -410,34 +408,39 @@ function MigrationBanner({
       >
         <VStack align="flex-start" spacing={1}>
           <Text
-            fontWeight="900"
-            fontSize="sm"
+            color={palette.yellow}
+            fontWeight="800"
+            fontSize="12px"
             textTransform="uppercase"
             letterSpacing="wider"
           >
             Migrate from old vault
           </Text>
-          <Text fontSize="xs" fontWeight="600" color="gray.700">
+          <Text fontSize="13px" fontWeight="600" color={palette.muted}>
             You have{" "}
-            <Text as="span" fontWeight="900">
+            <Text as="span" color={palette.white} fontWeight="800">
               {formatBalance(balance)}
             </Text>{" "}
             sBNKRW in the old vault.
           </Text>
-          <Text fontSize="xs" fontWeight="600" color="gray.700">
-            Migrate to sWCHAN in one click and
-          </Text>
-          <Text fontSize="xs" fontWeight="600" color="gray.700">
-            start earning{" "}
-            <Text as="span" fontWeight="900">
-              {vaultData ? `${vaultData.totalApy.toFixed(1)}%` : "—"} APY.
+          <Text fontSize="13px" fontWeight="600" color={palette.muted}>
+            Move to sWCHAN and start earning{" "}
+            <Text as="span" color={palette.green} fontWeight="800">
+              {vaultData ? `${vaultData.totalApy.toFixed(1)}%` : "—"} APY
             </Text>
+            .
           </Text>
         </VStack>
         <Button
-          variant="secondary"
           size="sm"
           minW="160px"
+          h="42px"
+          px={5}
+          bg={palette.yellow}
+          color={palette.ink}
+          borderRadius="8px"
+          fontWeight="800"
+          _hover={{ bg: palette.amberSoft }}
           isDisabled={isBusy}
           isLoading={isBusy}
           loadingText={buttonLabel}
@@ -463,8 +466,13 @@ function MigrationBanner({
             isMigrateConfirming ||
             isMigrateBatchConfirming) && (
             <>
-              <Spinner size="xs" />
-              <Text fontSize="xs" fontWeight="700" textTransform="uppercase">
+              <Spinner size="xs" color={palette.yellow} />
+              <Text
+                color={palette.muted}
+                fontSize="xs"
+                fontWeight="700"
+                textTransform="uppercase"
+              >
                 Confirming...
               </Text>
             </>
@@ -476,6 +484,7 @@ function MigrationBanner({
               fontSize="xs"
               fontWeight="700"
               textTransform="uppercase"
+              color={palette.yellow}
               display="inline-flex"
               alignItems="center"
               gap={1}
@@ -1119,124 +1128,128 @@ export default function StakeContent() {
   };
 
   return (
-    <Box minH="100vh" bg="bauhaus.background">
-      <Navigation />
-      <TokenBanner />
+    <Box
+      minH="100vh"
+      bg={palette.ink}
+      color={palette.white}
+      backgroundImage="linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)"
+      backgroundSize="64px 64px"
+      sx={{ colorScheme: "dark" }}
+    >
+      <StakeNavigation />
 
-      <Container maxW="7xl" pt={10} pb={40}>
-        <VStack spacing={6} align="stretch">
-          {/* Header */}
-          <VStack spacing={1} textAlign="center" ref={headingRef}>
-            <MotionBox
-              initial={{ opacity: 0, y: 20 }}
-              animate={isHeadingInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5 }}
+      <Container maxW="6xl" pt={{ base: 14, md: 20 }} pb={{ base: 24, md: 32 }}>
+        <VStack spacing={{ base: 8, md: 10 }} align="stretch">
+          <Flex
+            direction={{ base: "column", md: "row" }}
+            align={{ base: "stretch", md: "flex-start" }}
+            justify="space-between"
+            gap={{ base: 6, md: 10 }}
+          >
+            {/* Header */}
+            <VStack
+              spacing={4}
+              textAlign="left"
+              align="flex-start"
+              maxW="760px"
+              ref={headingRef}
             >
-              <HStack spacing={3} justify="center">
-                <Box
-                  w="16px"
-                  h="16px"
-                  bg="bauhaus.blue"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  borderRadius="full"
+              <MotionBox
+                initial={{ opacity: 0, y: 20 }}
+                animate={isHeadingInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5 }}
+              >
+                <HStack spacing={3}>
+                  <Box boxSize="9px" bg={palette.yellow} borderRadius="full" />
+                  <Text
+                    color={palette.yellow}
+                    fontSize="12px"
+                    fontWeight="800"
+                    textTransform="uppercase"
+                    letterSpacing="0.14em"
+                  >
+                    WCHAN vault · Base
+                  </Text>
+                </HStack>
+              </MotionBox>
+
+              <Text
+                color={palette.white}
+                fontSize={{ base: "42px", md: "64px" }}
+                fontWeight="750"
+                letterSpacing="-0.045em"
+                lineHeight="0.98"
+              >
+                Put your WCHAN to work.
+              </Text>
+              <Text
+                fontSize={{ base: "16px", md: "18px" }}
+                color={palette.muted}
+                maxW="640px"
+                lineHeight="1.7"
+              >
+                Deposit WCHAN into the vault to earn WETH and WCHAN rewards.
+              </Text>
+            </VStack>
+
+            {/* Connect Button */}
+            <HStack justify={{ base: "flex-end", md: "flex-start" }}>
+              <Box
+                sx={{
+                  "& button": {
+                    background: `${palette.ink3} !important`,
+                    color: `${palette.white} !important`,
+                    border: "1px solid rgba(255,255,255,0.12) !important",
+                    borderRadius: "9px !important",
+                    fontWeight: "700 !important",
+                    fontFamily: "'Outfit', sans-serif !important",
+                    boxShadow: "none !important",
+                  },
+                  "& button:hover": {
+                    background: "rgba(255,255,255,0.12) !important",
+                  },
+                }}
+              >
+                <ConnectButton
+                  chainStatus="none"
+                  showBalance={false}
+                  accountStatus="full"
                 />
-                <Text
-                  fontSize={{ base: "2xl", md: "3xl" }}
-                  fontWeight="900"
-                  textTransform="uppercase"
-                  letterSpacing="wider"
-                >
-                  WCHAN Staking
-                </Text>
-                <Box
-                  w="16px"
-                  h="16px"
-                  bg="bauhaus.yellow"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  transform="rotate(45deg)"
-                />
-              </HStack>
-            </MotionBox>
-
-            <Text
-              fontSize="lg"
-              color="gray.600"
-              maxW="500px"
-              fontWeight="500"
-              textAlign="center"
-            >
-              Stake & earn{" "}
-              <Text as="span" fontWeight="800">
-                WETH + WCHAN
-              </Text>{" "}
-              rewards.
-            </Text>
-            <Text
-              fontSize="xs"
-              color="gray.400"
-              maxW="500px"
-              fontWeight="500"
-              textAlign="center"
-            >
-              (20% early withdrawal penalty before 7 days, linearly decays to
-              0%)
-            </Text>
-          </VStack>
-
-          {/* Connect Button */}
-          <HStack justify="flex-end" maxW="lg" mx="auto" w="full">
-            <Box
-              sx={{
-                "& button": {
-                  borderRadius: "0 !important",
-                  fontWeight: "bold !important",
-                  textTransform: "uppercase",
-                  fontFamily: "'Outfit', sans-serif !important",
-                },
-              }}
-            >
-              <ConnectButton
-                chainStatus="none"
-                showBalance={false}
-                accountStatus="address"
-              />
-            </Box>
-          </HStack>
+              </Box>
+            </HStack>
+          </Flex>
 
           {/* Wrong Chain Banner */}
           {isWrongChain && (
             <HStack
               justify="center"
               spacing={3}
-              bg="bauhaus.red"
-              border="3px solid"
-              borderColor="bauhaus.black"
+              maxW="3xl"
+              mx="auto"
+              w="full"
+              bg="rgba(248,113,113,0.10)"
+              border="1px solid rgba(248,113,113,0.35)"
+              borderRadius="10px"
               px={4}
               py={3}
             >
-              <AlertTriangle size={18} color="white" />
+              <AlertTriangle size={18} color={palette.red} />
               <Text
                 fontSize="sm"
                 fontWeight="800"
                 textTransform="uppercase"
                 letterSpacing="wide"
-                color="white"
+                color={palette.red}
               >
                 Wrong Network
               </Text>
               <Button
                 size="sm"
-                bg="white"
-                color="bauhaus.black"
+                bg={palette.red}
+                color={palette.ink}
                 fontWeight="900"
-                textTransform="uppercase"
-                letterSpacing="wide"
-                borderRadius={0}
-                border="2px solid"
-                borderColor="bauhaus.black"
-                _hover={{ bg: "gray.100" }}
+                borderRadius="8px"
+                _hover={{ bg: "#fca5a5" }}
                 onClick={() => switchChain({ chainId: STAKE_CHAIN_ID })}
                 leftIcon={
                   <Image src="/images/base.svg" alt="Base" w="18px" h="18px" />
@@ -1249,7 +1262,7 @@ export default function StakeContent() {
 
           {/* Migration Banner */}
           {isWalletConnected && !isWrongChain && address && (
-            <Box maxW="lg" mx="auto" w="full">
+            <Box maxW="3xl" mx="auto" w="full">
               <MigrationBanner
                 address={address}
                 onMigrated={() => {
@@ -1262,41 +1275,45 @@ export default function StakeContent() {
           )}
 
           {/* Staking Card */}
-          <Box maxW="lg" mx="auto" w="full">
+          <Box maxW="3xl" mx="auto" w="full">
             {/* Stats Row */}
             {!isVaultLoading && vaultData && (
               <Flex gap={3} mb={4}>
                 {/* APY Box */}
                 <Box
                   flex={1}
-                  bg="white"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
-                  px={4}
-                  py={3}
-                  textAlign="center"
+                  bg={palette.ink2}
+                  border="1px solid rgba(255,255,255,0.10)"
+                  borderRadius="12px"
+                  px={{ base: 4, md: 5 }}
+                  py={4}
                 >
                   <Text
                     fontSize="xs"
                     fontWeight="800"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    color="gray.500"
+                    color={palette.faint}
                   >
                     Total APY
                   </Text>
-                  <Text fontSize="xl" fontWeight="900" color="bauhaus.blue">
+                  <Text
+                    mt={1}
+                    fontSize={{ base: "26px", md: "32px" }}
+                    fontWeight="800"
+                    color={palette.green}
+                    letterSpacing="-0.03em"
+                  >
                     {vaultData.totalApy.toFixed(2)}%
                   </Text>
-                  <Flex gap={1.5} justify="center" mt={1}>
-                    <Text fontSize="xs" fontWeight="800" color="gray.500">
+                  <Flex gap={1.5} mt={1}>
+                    <Text fontSize="xs" fontWeight="700" color={palette.muted}>
                       WCHAN {vaultData.wchanApy.toFixed(1)}%
                     </Text>
-                    <Text fontSize="xs" fontWeight="900" color="gray.400">
+                    <Text fontSize="xs" fontWeight="900" color={palette.faint}>
                       +
                     </Text>
-                    <Text fontSize="xs" fontWeight="800" color="gray.500">
+                    <Text fontSize="xs" fontWeight="700" color={palette.muted}>
                       WETH {vaultData.wethApy.toFixed(1)}%
                     </Text>
                   </Flex>
@@ -1305,15 +1322,13 @@ export default function StakeContent() {
                 {/* TVL Box */}
                 <Flex
                   flex={1}
-                  bg="bauhaus.yellow"
-                  border="3px solid"
-                  borderColor="bauhaus.black"
-                  boxShadow="4px 4px 0px 0px #121212"
-                  px={4}
-                  py={3}
-                  textAlign="center"
+                  bg="#1c160d"
+                  border="1px solid rgba(245,158,11,0.28)"
+                  borderRadius="12px"
+                  px={{ base: 4, md: 5 }}
+                  py={4}
                   direction="column"
-                  align="center"
+                  align="flex-start"
                   justify="center"
                 >
                   <Text
@@ -1321,11 +1336,17 @@ export default function StakeContent() {
                     fontWeight="800"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    color="bauhaus.black"
+                    color={palette.faint}
                   >
                     TVL
                   </Text>
-                  <Text fontSize="xl" fontWeight="900" color="bauhaus.black">
+                  <Text
+                    mt={1}
+                    color={palette.yellow}
+                    fontSize={{ base: "26px", md: "32px" }}
+                    fontWeight="800"
+                    letterSpacing="-0.03em"
+                  >
                     {formatUsd(vaultData.tvlUsd)}
                   </Text>
                 </Flex>
@@ -1335,37 +1356,37 @@ export default function StakeContent() {
             {/* Staked Balance + WETH Rewards */}
             {isWalletConnected && !isWrongChain && (
               <Box
-                bg="white"
-                border="3px solid"
-                borderColor="bauhaus.black"
-                boxShadow="4px 4px 0px 0px #121212"
+                bg={palette.ink2}
+                border="1px solid rgba(255,255,255,0.10)"
+                borderRadius="12px"
+                overflow="hidden"
                 mb={4}
               >
                 {/* Staked Balance */}
                 <Box
                   px={4}
                   py={3}
-                  borderBottom="2px solid"
-                  borderColor="gray.100"
+                  borderBottom="1px solid"
+                  borderColor="rgba(255,255,255,0.08)"
                 >
                   <Text
                     fontSize="xs"
                     fontWeight="800"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    color="gray.500"
+                    color={palette.faint}
                   >
                     Your Staked Balance
                   </Text>
                   <HStack spacing={2} align="baseline">
-                    <Text fontSize="lg" fontWeight="900" color="bauhaus.black">
+                    <Text fontSize="lg" fontWeight="800" color={palette.white}>
                       {formatBalance(stakedBalance as bigint | undefined)}{" "}
                       sWCHAN
                     </Text>
                     {tokenPrice > 0 &&
                       vaultData &&
                       stakedBalance !== undefined && (
-                        <Text fontSize="xs" fontWeight="600" color="gray.400">
+                        <Text fontSize="xs" fontWeight="600" color={palette.faint}>
                           {formatUsd(
                             parseFloat(
                               formatUnits(stakedBalance as bigint, 18),
@@ -1391,7 +1412,7 @@ export default function StakeContent() {
                       fontWeight="800"
                       textTransform="uppercase"
                       letterSpacing="wider"
-                      color="gray.500"
+                      color={palette.faint}
                     >
                       Claimable WETH Rewards
                     </Text>
@@ -1399,7 +1420,7 @@ export default function StakeContent() {
                       <Text
                         fontSize="lg"
                         fontWeight="900"
-                        color="bauhaus.black"
+                        color={palette.white}
                       >
                         {earnedWeth !== undefined
                           ? `${formatUnits(earnedWeth as bigint, 18).slice(0, 12)} WETH`
@@ -1408,7 +1429,11 @@ export default function StakeContent() {
                       {earnedWeth !== undefined &&
                         (earnedWeth as bigint) > 0n &&
                         ethPrice > 0 && (
-                          <Text fontSize="sm" fontWeight="700" color="gray.400">
+                          <Text
+                            fontSize="sm"
+                            fontWeight="700"
+                            color={palette.faint}
+                          >
                             {formatUsd(
                               parseFloat(
                                 formatUnits(earnedWeth as bigint, 18),
@@ -1419,8 +1444,12 @@ export default function StakeContent() {
                     </HStack>
                   </Box>
                   <Button
-                    variant="primary"
                     size="sm"
+                    bg={palette.yellow}
+                    color={palette.ink}
+                    borderRadius="8px"
+                    fontWeight="800"
+                    _hover={{ bg: palette.amberSoft }}
                     onClick={handleClaim}
                     isLoading={isClaiming || isClaimConfirming}
                     loadingText="Claiming..."
@@ -1438,52 +1467,39 @@ export default function StakeContent() {
             )}
 
             <Box
-              bg="white"
-              border="4px solid"
-              borderColor="bauhaus.black"
-              boxShadow="8px 8px 0px 0px #121212"
+              bg={palette.ink2}
+              border="1px solid rgba(255,255,255,0.12)"
+              borderRadius="14px"
+              boxShadow="0 28px 80px rgba(0,0,0,0.32)"
               position="relative"
               overflow="hidden"
             >
-              {/* Geometric decorator */}
-              <Box
-                position="absolute"
-                top={-6}
-                right={-6}
-                w={16}
-                h={16}
-                bg="bauhaus.yellow"
-                opacity={0.15}
-                borderRadius="full"
-              />
-              <Box
-                position="absolute"
-                bottom={-4}
-                left={-4}
-                w={12}
-                h={12}
-                bg="bauhaus.red"
-                opacity={0.1}
-                transform="rotate(45deg)"
-              />
-
               {/* Tabs */}
-              <Flex borderBottom="4px solid" borderColor="bauhaus.black">
+              <Flex
+                p={1.5}
+                m={3}
+                mb={0}
+                bg={palette.ink}
+                border="1px solid rgba(255,255,255,0.08)"
+                borderRadius="10px"
+              >
                 <Box
                   as="button"
                   flex={1}
-                  py={4}
-                  bg={activeTab === "deposit" ? "bauhaus.blue" : "white"}
-                  color={activeTab === "deposit" ? "white" : "bauhaus.black"}
-                  fontWeight="900"
+                  py={3}
+                  bg={activeTab === "deposit" ? palette.yellow : "transparent"}
+                  color={activeTab === "deposit" ? palette.ink : palette.muted}
+                  borderRadius="7px"
+                  fontWeight="800"
                   fontSize="sm"
-                  textTransform="uppercase"
-                  letterSpacing="wider"
-                  borderRight="2px solid"
-                  borderColor="bauhaus.black"
-                  transition="all 0.15s ease-out"
+                  transition="background 180ms ease, color 180ms ease"
                   _hover={{
-                    bg: activeTab === "deposit" ? "bauhaus.blue" : "gray.50",
+                    bg:
+                      activeTab === "deposit"
+                        ? palette.yellow
+                        : "rgba(255,255,255,0.06)",
+                    color:
+                      activeTab === "deposit" ? palette.ink : palette.white,
                   }}
                   onClick={() => {
                     setActiveTab("deposit");
@@ -1496,18 +1512,20 @@ export default function StakeContent() {
                 <Box
                   as="button"
                   flex={1}
-                  py={4}
-                  bg={activeTab === "withdraw" ? "bauhaus.blue" : "white"}
-                  color={activeTab === "withdraw" ? "white" : "bauhaus.black"}
-                  fontWeight="900"
+                  py={3}
+                  bg={activeTab === "withdraw" ? palette.yellow : "transparent"}
+                  color={activeTab === "withdraw" ? palette.ink : palette.muted}
+                  borderRadius="7px"
+                  fontWeight="800"
                   fontSize="sm"
-                  textTransform="uppercase"
-                  letterSpacing="wider"
-                  borderLeft="2px solid"
-                  borderColor="bauhaus.black"
-                  transition="all 0.15s ease-out"
+                  transition="background 180ms ease, color 180ms ease"
                   _hover={{
-                    bg: activeTab === "withdraw" ? "bauhaus.blue" : "gray.50",
+                    bg:
+                      activeTab === "withdraw"
+                        ? palette.yellow
+                        : "rgba(255,255,255,0.06)",
+                    color:
+                      activeTab === "withdraw" ? palette.ink : palette.white,
                   }}
                   onClick={() => {
                     setActiveTab("withdraw");
@@ -1520,7 +1538,7 @@ export default function StakeContent() {
               </Flex>
 
               {/* Content */}
-              <VStack spacing={5} p={6} position="relative" zIndex={1}>
+              <VStack spacing={5} p={{ base: 4, md: 6 }} position="relative">
                 {/* Balance display */}
                 <Flex justify="space-between" w="full" align="center">
                   <Text
@@ -1528,7 +1546,7 @@ export default function StakeContent() {
                     fontWeight="800"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    color="gray.500"
+                    color={palette.faint}
                   >
                     {activeTab === "deposit"
                       ? "Deposit WCHAN"
@@ -1539,7 +1557,7 @@ export default function StakeContent() {
                       <Text
                         fontSize="xs"
                         fontWeight="700"
-                        color="gray.500"
+                        color={palette.faint}
                         textTransform="uppercase"
                         letterSpacing="wider"
                       >
@@ -1548,7 +1566,7 @@ export default function StakeContent() {
                       <Text
                         fontSize="xs"
                         fontWeight="900"
-                        color="bauhaus.black"
+                        color={palette.white}
                       >
                         {formatBalance(currentBalance as bigint | undefined)}{" "}
                         {currentSymbol}
@@ -1560,22 +1578,29 @@ export default function StakeContent() {
                 {/* Input */}
                 <Box w="full">
                   <Flex
-                    border="3px solid"
+                    bg={palette.ink}
+                    border="1px solid"
                     borderColor={
-                      hasInsufficientBalance ? "red.400" : "bauhaus.black"
+                      hasInsufficientBalance
+                        ? "rgba(248,113,113,0.65)"
+                        : "rgba(255,255,255,0.12)"
                     }
+                    borderRadius="10px"
                     align="center"
                     px={4}
-                    h="60px"
+                    h="68px"
+                    transition="border-color 160ms ease"
+                    _focusWithin={{ borderColor: palette.yellow }}
                   >
                     <Input
                       value={amount}
                       onChange={(e) => handleAmountChange(e.target.value)}
                       placeholder="0.0"
                       border="none"
-                      borderRadius={0}
+                      color={palette.white}
+                      borderRadius="8px"
                       fontWeight="900"
-                      fontSize="xl"
+                      fontSize="24px"
                       h="full"
                       p={0}
                       flex={1}
@@ -1587,7 +1612,7 @@ export default function StakeContent() {
                         <Text
                           fontSize="xs"
                           fontWeight="700"
-                          color="gray.400"
+                          color={palette.faint}
                           whiteSpace="nowrap"
                         >
                           ≈ {formatUsd(parseFloat(amount) * tokenPrice)}
@@ -1596,7 +1621,7 @@ export default function StakeContent() {
                       <Text
                         fontSize="sm"
                         fontWeight="900"
-                        color="gray.400"
+                        color={palette.muted}
                         textTransform="uppercase"
                       >
                         {currentSymbol}
@@ -1641,7 +1666,9 @@ export default function StakeContent() {
                               fontSize="xs"
                               fontWeight="800"
                               color={
-                                sliderValue >= pct ? "bauhaus.blue" : "gray.400"
+                                sliderValue >= pct
+                                  ? palette.yellow
+                                  : palette.faint
                               }
                               whiteSpace="nowrap"
                               transform="translateX(-50%)"
@@ -1649,16 +1676,23 @@ export default function StakeContent() {
                               {pct}%
                             </SliderMark>
                           ))}
-                          <SliderTrack bg="gray.200" h="6px" borderRadius={0}>
-                            <SliderFilledTrack bg="bauhaus.blue" />
+                          <SliderTrack
+                            bg="rgba(255,255,255,0.08)"
+                            h="4px"
+                            borderRadius="full"
+                          >
+                            <SliderFilledTrack
+                              bg={palette.yellow}
+                              borderRadius="full"
+                            />
                           </SliderTrack>
                           <SliderThumb
                             boxSize={5}
-                            bg="bauhaus.blue"
-                            border="3px solid"
-                            borderColor="bauhaus.black"
-                            borderRadius={0}
-                            _focus={{ boxShadow: "none" }}
+                            bg={palette.yellow}
+                            border="2px solid"
+                            borderColor={palette.ink}
+                            borderRadius="6px"
+                            _focus={{ boxShadow: `0 0 0 3px ${palette.ink3}` }}
                           />
                         </Slider>
                       </Box>
@@ -1670,7 +1704,7 @@ export default function StakeContent() {
                   <Text
                     fontSize="xs"
                     fontWeight="700"
-                    color="red.500"
+                    color={palette.red}
                     textTransform="uppercase"
                     letterSpacing="wider"
                     alignSelf="flex-start"
@@ -1684,24 +1718,24 @@ export default function StakeContent() {
                   <HStack
                     w="full"
                     spacing={2}
-                    bg="orange.50"
-                    border="2px solid"
-                    borderColor="orange.300"
+                    bg="rgba(245,158,11,0.08)"
+                    border="1px solid rgba(245,158,11,0.28)"
+                    borderRadius="9px"
                     px={4}
                     py={3}
                   >
                     <AlertTriangle
                       size={14}
-                      color="#DD6B20"
+                      color={palette.yellow}
                       style={{ flexShrink: 0 }}
                     />
                     <Box>
-                      <Text fontSize="xs" fontWeight="700" color="orange.700">
+                      <Text fontSize="xs" fontWeight="700" color={palette.yellow}>
                         Early withdrawal penalty: {penaltyPct.toFixed(1)}%
                         (decays linearly to 0%)
                       </Text>
                       {zeroPenaltyDate && (
-                        <Text fontSize="xs" fontWeight="600" color="orange.600">
+                        <Text fontSize="xs" fontWeight="600" color={palette.muted}>
                           0% penalty in{" "}
                           {(() => {
                             const diff = zeroPenaltyDate.getTime() - Date.now();
@@ -1735,15 +1769,15 @@ export default function StakeContent() {
                   previewShares !== undefined && (
                     <Box
                       w="full"
-                      bg="gray.50"
-                      border="2px solid"
-                      borderColor="gray.200"
+                      bg={palette.ink}
+                      border="1px solid rgba(255,255,255,0.09)"
+                      borderRadius="9px"
                     >
                       <Flex justify="space-between" px={4} py={3}>
                         <Text
                           fontSize="xs"
                           fontWeight="700"
-                          color="gray.500"
+                          color={palette.muted}
                           textTransform="uppercase"
                           letterSpacing="wider"
                         >
@@ -1752,7 +1786,7 @@ export default function StakeContent() {
                         <Text
                           fontSize="xs"
                           fontWeight="900"
-                          color="bauhaus.black"
+                          color={palette.white}
                         >
                           {formatBalance(previewShares as bigint)} sWCHAN
                         </Text>
@@ -1764,12 +1798,12 @@ export default function StakeContent() {
                             px={4}
                             py={2}
                             borderTop="1px solid"
-                            borderColor="gray.200"
+                            borderColor="rgba(255,255,255,0.08)"
                           >
                             <Text
                               fontSize="xs"
                               fontWeight="700"
-                              color="orange.500"
+                              color={palette.yellow}
                               textTransform="uppercase"
                               letterSpacing="wider"
                             >
@@ -1778,7 +1812,7 @@ export default function StakeContent() {
                             <Text
                               fontSize="xs"
                               fontWeight="800"
-                              color="orange.600"
+                              color={palette.muted}
                             >
                               {(() => {
                                 const existing = stakedBalance as bigint;
@@ -1826,16 +1860,16 @@ export default function StakeContent() {
                     <Flex
                       w="full"
                       justify="space-between"
-                      bg="gray.50"
-                      border="2px solid"
-                      borderColor="gray.200"
+                      bg={palette.ink}
+                      border="1px solid rgba(255,255,255,0.09)"
+                      borderRadius="9px"
                       px={4}
                       py={3}
                     >
                       <Text
                         fontSize="xs"
                         fontWeight="700"
-                        color="gray.500"
+                        color={palette.muted}
                         textTransform="uppercase"
                         letterSpacing="wider"
                       >
@@ -1845,7 +1879,7 @@ export default function StakeContent() {
                         <Text
                           fontSize="xs"
                           fontWeight="900"
-                          color="bauhaus.black"
+                          color={palette.white}
                         >
                           {formatBalance(previewAssetsNet as bigint)} WCHAN
                         </Text>
@@ -1853,7 +1887,7 @@ export default function StakeContent() {
                           <Text
                             fontSize="xs"
                             fontWeight="700"
-                            color="orange.500"
+                            color={palette.yellow}
                           >
                             ({penaltyPct.toFixed(1)}% penalty)
                           </Text>
@@ -1872,9 +1906,9 @@ export default function StakeContent() {
                     w="full"
                     justify="center"
                     spacing={2}
-                    bg="gray.50"
-                    border="2px solid"
-                    borderColor="gray.200"
+                    bg={palette.ink}
+                    border="1px solid rgba(255,255,255,0.09)"
+                    borderRadius="9px"
                     px={4}
                     py={2}
                   >
@@ -1883,11 +1917,11 @@ export default function StakeContent() {
                       isRedeemConfirming ||
                       isDepositBatchConfirming) && (
                       <>
-                        <Spinner size="xs" color="bauhaus.blue" />
+                        <Spinner size="xs" color={palette.yellow} />
                         <Text
                           fontSize="xs"
                           fontWeight="700"
-                          color="gray.500"
+                          color={palette.muted}
                           textTransform="uppercase"
                         >
                           Confirming...
@@ -1903,7 +1937,7 @@ export default function StakeContent() {
                         isExternal
                         fontSize="xs"
                         fontWeight="700"
-                        color="bauhaus.blue"
+                        color={palette.yellow}
                         textTransform="uppercase"
                         display="inline-flex"
                         alignItems="center"
@@ -1923,9 +1957,8 @@ export default function StakeContent() {
                     sx={{
                       "& button": {
                         w: "full",
-                        borderRadius: "0 !important",
-                        fontWeight: "bold !important",
-                        textTransform: "uppercase",
+                        borderRadius: "9px !important",
+                        fontWeight: "800 !important",
                         fontFamily: "'Outfit', sans-serif !important",
                         h: "52px",
                         fontSize: "md !important",
@@ -1936,9 +1969,12 @@ export default function StakeContent() {
                       {({ openConnectModal }) => (
                         <Button
                           w="full"
-                          variant="primary"
                           size="lg"
                           h="52px"
+                          bg={palette.yellow}
+                          color={palette.ink}
+                          borderRadius="9px"
+                          _hover={{ bg: palette.amberSoft }}
                           onClick={openConnectModal}
                         >
                           Connect Wallet
@@ -1949,9 +1985,13 @@ export default function StakeContent() {
                 ) : isWrongChain ? (
                   <Button
                     w="full"
-                    variant="secondary"
                     size="lg"
                     h="52px"
+                    bg={palette.yellow}
+                    color={palette.ink}
+                    borderRadius="9px"
+                    fontWeight="800"
+                    _hover={{ bg: palette.amberSoft }}
                     onClick={() => switchChain({ chainId: STAKE_CHAIN_ID })}
                     leftIcon={
                       <Image
@@ -1967,15 +2007,19 @@ export default function StakeContent() {
                 ) : (
                   <Button
                     w="full"
-                    variant={
-                      activeTab === "deposit"
-                        ? needsApproval && !supportsAtomicBatch
-                          ? "yellow"
-                          : "secondary"
-                        : "primary"
-                    }
                     size="lg"
                     h="52px"
+                    bg={palette.yellow}
+                    color={palette.ink}
+                    borderRadius="9px"
+                    fontWeight="800"
+                    _hover={{ bg: palette.amberSoft }}
+                    _disabled={{
+                      bg: palette.ink3,
+                      color: palette.faint,
+                      opacity: 1,
+                      cursor: "not-allowed",
+                    }}
                     isDisabled={
                       !amount ||
                       parseFloat(amount) <= 0 ||
@@ -1989,6 +2033,17 @@ export default function StakeContent() {
                     {getButtonLabel()}
                   </Button>
                 )}
+                {activeTab === "deposit" && (
+                  <Text
+                    color={palette.faint}
+                    fontSize="11px"
+                    lineHeight="1.5"
+                    textAlign="center"
+                  >
+                    The early-withdrawal penalty starts at 20% and decays to
+                    zero over seven days.
+                  </Text>
+                )}
               </VStack>
             </Box>
           </Box>
@@ -2001,8 +2056,8 @@ export default function StakeContent() {
               gap={1}
               fontSize="xs"
               fontWeight="700"
-              color="gray.500"
-              _hover={{ color: "bauhaus.red" }}
+              color={palette.faint}
+              _hover={{ color: palette.yellow }}
             >
               Vault
               <ExternalLink size={12} />
@@ -2010,7 +2065,7 @@ export default function StakeContent() {
           </Center>
         </VStack>
       </Container>
-      <Footer />
+      <StakeFooter />
     </Box>
   );
 }
