@@ -58,6 +58,8 @@ import { createBackgroundCrossDappBatchMessageRouter } from "../crossDappBatchRo
 import { createBackgroundDelegationMessageRouter } from "../delegationRouter";
 import { createBackgroundErc7715PermissionMessageRouter } from "../erc7715PermissionRouter";
 import { createBackgroundGasSimulationMessageRouter } from "../gasSimulationRouter";
+import { detectResidualApprovalsForPendingRequest } from "../../approvalCleanup/detection";
+import { resolveApprovalCleanupEvidence } from "../../approvalCleanup/evidenceRegistry";
 import type { PendingResolutionComposition } from "./pendingResolution";
 
 export function composeAdvancedRoutes(
@@ -80,6 +82,7 @@ export function composeAdvancedRoutes(
       handleUpdateCallInPendingBatch,
       handleAppendApprovalRevokeToPendingBatch,
       handleAppendApprovalRevokesToPendingBatch,
+      resolveApprovalCleanupEvidence,
       updatePendingTxRequestData,
       runPendingRequestResolution: pending.runPendingRequestResolution,
       pendingResolutionConflict: pending.pendingResolutionConflict,
@@ -105,6 +108,7 @@ export function composeAdvancedRoutes(
       handleAddCallsToCrossDappBatch,
       handleAppendApprovalRevokeToCrossDappBatch,
       handleAppendApprovalRevokesToCrossDappBatch,
+      resolveApprovalCleanupEvidence,
       handleRemoveFromCrossDappBatch,
       handleUpdateCallInCrossDappBatch,
       handleRejectCrossDappBatch,
@@ -137,6 +141,7 @@ export function composeAdvancedRoutes(
       simulateBatchAssetChanges,
       simulateBatchAssetChangesNonAtomic,
       simulateSafeAssetChanges,
+      detectResidualApprovals: detectResidualApprovalsForPendingRequest,
       retryTokenMetadata,
     });
 

@@ -2789,33 +2789,49 @@ a nonzero locally/event-discovered grant remains visible only as
 An exact outer Safe revert suppresses all permission rows, while an unavailable
 outer pass downgrades underlying-call rows to unverified.
 
-Residual-approval discovery starts only from successful positive outgoing
-fungible ERC-20 `Transfer` logs. An exact successful `Approval` event may
-identify the spender; otherwise the bounded fallback checks the successful
-top-level call target responsible for that outgoing transfer. Incoming,
-zero-value, NFT-shaped, failed-call, malformed, and truncated candidates are
-ignored or mark detection incomplete. A residual warning is released only
-when both the pinned pre-state and simulated final read succeed and final
-`allowance(owner, spender)` is nonzero. This deliberately retains unchanged
-unlimited allowances, which many ERC-20 implementations do not decrement or
-re-emit while spending.
+Residual-approval discovery is a separate late task and never delays the
+primary asset-change response. Successful positive outgoing fungible ERC-20
+`Transfer` logs retain the current per-call target fallback, and an exact
+successful `Approval` event may identify another spender. When the configured
+RPC supports `debug_traceCall` with `callTracer`, one state-overridden
+sequential request trace also finds successful nested
+`token.transferFrom(owner, recipient, amount)` frames: the token is the frame
+target and the actual spender is its immediate EVM caller. Trace evidence wins
+over an Approval event, which wins over the per-call target when the same pair
+is found more than once. Incoming, zero-value, wrong-owner, delegatecall,
+reverted, malformed, over-depth, and truncated trace candidates are ignored or
+mark detection incomplete.
 
-The read path is rate-limit conscious. Candidate allowance pre-state is
-collected in one pinned Multicall3 request. One exact post-state replay appends
-all allowance reads to the reviewed call sequence, and token metadata for
-permission-change and residual rows shares one bounded enrichment pass.
-Spender labels are resolved only for the approval-change ledger that displays
-them; residual warnings neither request nor display spender names. There is no
-per-row RPC loop, trace call, or third-party simulator dependency.
+The late read path is rate-limit conscious. Trace and log discovery run
+concurrently at one pinned block. A single isolated TxSimulator `eth_call`
+reads all candidate allowances, executes the complete reviewed call sequence
+with the simulator installed at the wallet or Safe address, then reads every
+allowance again. A residual warning is released only when the request and both
+allowance reads succeed and final `allowance(owner, spender)` is nonzero. This
+retains unchanged unlimited allowances. Residual metadata uses one bounded
+token enrichment pass and never resolves spender names.
+
+Tracing uses only the selected configured RPC: at most one trace per request,
+a five-second deadline, 2 MiB response ceiling, 512-frame and 32-level parser
+bounds, no same-request retry, ten-minute supported/unsupported endpoint
+caching, and a one-minute transient cooldown. Unsupported, busy, or failing
+trace endpoints silently retain Approval-event and per-call target discovery.
+No third-party simulator or WalletChan proxy is used.
 
 When the background confirms that a residual row is actionable, the review UI
 offers `Revoke?` with a hover/focus explanation of the appended batch call.
 When two or more actionable rows remain, one centered `Revoke all` action
 submits every displayed token/spender pair through the same request-family
 mutation in one operation.
-The renderer sends only the source request ID/index,
-token, and spender; background policy constructs the canonical
-`approve(spender, 0)` calldata and appends it after the dapp-authored calls.
+The late detector resolves the durable transaction, ERC-5792 bundle,
+cross-dapp batch, or Safe proposal entirely in the background and returns only
+short-lived opaque detection/evidence IDs alongside display rows. The
+renderer sends those IDs back; it does not authorize token, spender, calldata,
+or source-call selection. Before mutation, the background re-resolves the
+pending request and requires the exact account/chain/call fingerprint to match
+the in-memory five-minute evidence record. It then constructs canonical
+`approve(spender, 0)` calldata from the bound evidence and appends it after the
+dapp-authored calls.
 Bulk cleanup validates and deduplicates the complete bounded list, verifies
 capacity before writing, and performs one durable update so it cannot expose a
 partially modified request. The resulting call-list change triggers one fresh
@@ -2843,15 +2859,14 @@ presentation only: every background handler independently rechecks the pinned
 account, chain capability, request phase, aggregate call limit, duplicate
 cleanup, and every source identity under the owning storage lock.
 
-Approval projection never uses the balance/allowance state overrides employed
-by asset-preview retry, never calls debug tracing or third-party simulation
-services, and never affects signing/submission. Candidate rows are capped at
-64; static recursion is capped at four levels and 128 calls; configured RPC
-request/response/deadline bounds still apply. Opaque calldata or malformed RPC
-events never produce a verified claim on their own; when the runtime event
-path or final readback is unavailable, affected nonzero grants remain
-unverified and detection is marked incomplete. ERC-7674 temporary approvals
-are outside the current scope.
+Permission-increase projection never uses the balance/allowance state
+overrides employed by asset-preview retry. Residual projection uses only its
+isolated trace/allowance simulator methods and never affects
+signing/submission. Candidate rows are capped at 64; static recursion is capped
+at four levels and 128 calls; configured RPC request/response/deadline bounds
+still apply. Opaque calldata or malformed RPC output never produces a verified
+claim on its own. ERC-7674 temporary approvals and Permit2 residual cleanup are
+outside the current scope.
 
 ### Gas Estimation
 

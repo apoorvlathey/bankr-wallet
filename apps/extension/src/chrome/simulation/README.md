@@ -20,14 +20,29 @@ simulation modules:
   extensions.
 - `residualApprovalCandidates.ts` derives bounded spender candidates only from
   successful positive outgoing fungible transfers, exact approval events, and
-  the successful top-level call-target fallback.
+  the successful per-call target fallback, then merges stronger traced
+  `transferFrom` evidence.
+- `residualApprovalLogEvidence.ts` parses successful transfer and approval
+  logs into owner-bound evidence without choosing a spender fallback.
+- `residualApprovalTrace.ts` owns the optional configured-RPC
+  `debug_traceCall`/callTracer transport, support cache, resource bounds, and
+  pure nested-spender parser.
+- `residualAllowanceSimulation.ts` executes the reviewed calls once through
+  the isolated simulator and returns every candidate's explicit-success
+  pre/post ERC-20 allowance state.
+- `residualApprovalDetection.ts` coordinates the optional trace, fallback
+  evidence, one pinned allowance simulation, and metadata enrichment on the
+  late best-effort path.
+- `residualApprovalSimulatorAbis.ts` owns the narrow trace-wrapper and
+  pre/post allowance simulator contracts.
+- `residualApprovalRequestTypes.ts` is the public, secret-free late-detection
+  request/result contract shared with trusted UI transport.
 - `approvalAllowanceState.ts` owns the shared pinned Multicall3 pre-read and
   exact allowance result decoding for permission and residual candidates.
 - `residualApprovalProjection.ts` releases only final nonzero ERC-20
   allowances with complete pre/final reads.
-- `approvalSimulation.ts` coordinates the two-pass, block-pinned approval
-  simulation, shares its read/replay work with residual-allowance projection,
-  and produces explicitly unverified calldata fallback rows when
+- `approvalSimulation.ts` coordinates the two-pass, block-pinned explicit
+  approval simulation and produces explicitly unverified calldata fallback rows when
   `eth_simulateV1` or final readback is unavailable.
 - `approvalAttachment.ts` applies the shared projection to single and atomic
   asset results, including authoritative-revert suppression.
@@ -94,22 +109,30 @@ not merely calldata or the presence of an event:
 4. If the second pass or a state read is unavailable, nonzero grant intents
    remain visible as `unverified`; they are never presented as final state.
 
-Residual approval warnings reuse those same bounded passes:
+Residual approval warnings run as a separate late projection so their optional
+trace work never delays the primary asset-change result:
 
 1. Successful positive outgoing fungible transfers identify token/owner rows.
    An exact approval event supplies the spender when available; otherwise only
-   the successful top-level call target is considered.
-2. One pinned Multicall3 pre-read covers every permission and residual pair.
-   One exact reviewed-call replay appends every final allowance read.
+   the successful per-call target is considered. When call tracing is
+   supported, every successful nested
+   `token.transferFrom(reviewedOwner, recipient, amount)` adds its immediate
+   EVM caller as a stronger spender candidate.
+2. One pinned state-override simulator call captures successful pre-state
+   allowance reads, executes the exact call sequence, and captures successful
+   final reads for every deduplicated pair.
 3. A residual row is emitted only when both reads are known and the final
    ERC-20 allowance is nonzero. Unchanged maximum allowances therefore remain
    visible, while zero final allowance and incomplete guesses do not become
    actionable warnings.
-4. Permission and residual token/spender metadata share one bounded enrichment
-   pass, avoiding per-row RPC amplification.
+4. Residual token metadata uses one bounded enrichment pass and never resolves
+   spender names, avoiding per-row contract-name RPC work.
 
-The permission projection never consumes TxSimulator retry overrides, never
-traces debug APIs, and never signs or submits. Results are capped at 64
+The permission-increase projection never consumes TxSimulator retry overrides
+or traces debug APIs. Residual tracing uses only the configured RPC, one trace
+per request, a five-second/2 MiB/512-frame/32-depth ceiling, endpoint support
+cooldowns, and no retries. Either projection can fail independently and
+neither signs or submits. Results are capped at 64
 owner/token/spender pairs, nested static decoding is capped at 128 calls and
 four levels, configured RPC transport retains its byte/deadline ceilings, and
 all untrusted RPC fields are decoded fail-closed. Event detection improves

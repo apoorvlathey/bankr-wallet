@@ -41,6 +41,27 @@ contract HeavyMetadataMintTarget {
     }
 }
 
+contract AllowanceToken {
+    mapping(address owner => mapping(address spender => uint256 amount))
+        public allowance;
+
+    function setAllowance(address owner, address spender, uint256 amount)
+        external
+    {
+        allowance[owner][spender] = amount;
+    }
+
+    function spend(address owner, uint256 amount) external {
+        allowance[owner][msg.sender] -= amount;
+    }
+}
+
+contract AllowancePuller {
+    function pull(address token, address owner, uint256 amount) external {
+        AllowanceToken(token).spend(owner, amount);
+    }
+}
+
 contract TxSimulatorTest is Test {
     function testNativeDeltaSurvivesGasBurningBalanceProbe() public {
         TxSimulator simulator = new TxSimulator();
@@ -90,5 +111,69 @@ contract TxSimulatorTest is Test {
         assertTrue(success);
         assertEq(nfts.length, 1);
         assertGt(nfts[0].tokenUriRaw.length, 0);
+    }
+
+    function testBatchAllowanceSnapshotsPreserveCallerIdentity() public {
+        TxSimulator simulator = new TxSimulator();
+        AllowanceToken token = new AllowanceToken();
+        AllowancePuller puller = new AllowancePuller();
+        token.setAllowance(address(simulator), address(puller), 25);
+
+        TxSimulator.BatchCall[] memory calls = new TxSimulator.BatchCall[](1);
+        calls[0] = TxSimulator.BatchCall({
+            to: address(puller),
+            value: 0,
+            data: abi.encodeWithSelector(
+                AllowancePuller.pull.selector,
+                address(token),
+                address(simulator),
+                10
+            )
+        });
+        TxSimulator.AllowancePair[] memory pairs =
+            new TxSimulator.AllowancePair[](1);
+        pairs[0] = TxSimulator.AllowancePair({
+            token: address(token),
+            spender: address(puller)
+        });
+
+        (
+            bool allSuccess,
+            bool[] memory beforeSuccess,
+            uint256[] memory beforeAmount,
+            bool[] memory afterSuccess,
+            uint256[] memory afterAmount
+        ) = simulator.simulateBatchAllowances(calls, pairs);
+
+        assertTrue(allSuccess);
+        assertTrue(beforeSuccess[0]);
+        assertEq(beforeAmount[0], 25);
+        assertTrue(afterSuccess[0]);
+        assertEq(afterAmount[0], 15);
+    }
+
+    function testBatchAllowanceSnapshotReportsMalformedTokenRead() public {
+        TxSimulator simulator = new TxSimulator();
+        TxSimulator.BatchCall[] memory calls = new TxSimulator.BatchCall[](0);
+        TxSimulator.AllowancePair[] memory pairs =
+            new TxSimulator.AllowancePair[](1);
+        pairs[0] = TxSimulator.AllowancePair({
+            token: address(0x1234),
+            spender: address(0x5678)
+        });
+
+        (
+            bool allSuccess,
+            bool[] memory beforeSuccess,
+            uint256[] memory beforeAmount,
+            bool[] memory afterSuccess,
+            uint256[] memory afterAmount
+        ) = simulator.simulateBatchAllowances(calls, pairs);
+
+        assertTrue(allSuccess);
+        assertFalse(beforeSuccess[0]);
+        assertFalse(afterSuccess[0]);
+        assertEq(beforeAmount[0], 0);
+        assertEq(afterAmount[0], 0);
     }
 }

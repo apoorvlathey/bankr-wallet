@@ -2,7 +2,10 @@ import {
   getApprovalCleanupDisabledReason,
   type ApprovalCleanupAccountType,
 } from "@/components/AssetChanges/approvalCleanupAvailability";
-import { sendApprovalCleanupMessage } from "@/components/AssetChanges/approvalCleanupTransport";
+import {
+  approvalCleanupEvidence,
+  sendApprovalCleanupMessage,
+} from "@/components/AssetChanges/approvalCleanupTransport";
 import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 import type { BatchStrategy } from "@/hooks/useBatchPlan";
 
@@ -39,23 +42,27 @@ export function createTransactionApprovalCleanup(input: {
       requestBlockedReason,
     }),
     onRevoke: async (approval) => {
+      const evidence = approvalCleanupEvidence([approval]);
+      if (!evidence) {
+        return { success: false, error: "Approval evidence expired" };
+      }
       const result = await sendApprovalCleanupMessage({
         type: "addApprovalRevokeToTransactionBatch",
         txId: input.txId,
-        tokenAddress: approval.tokenAddress,
-        spender: approval.spender,
+        ...evidence,
       });
       if (result.success) input.onAddedToBatch?.();
       return result;
     },
     onRevokeAll: async (approvals) => {
+      const evidence = approvalCleanupEvidence(approvals);
+      if (!evidence) {
+        return { success: false, error: "Approval evidence expired" };
+      }
       const result = await sendApprovalCleanupMessage({
         type: "addApprovalRevokeToTransactionBatch",
         txId: input.txId,
-        approvals: approvals.map((approval) => ({
-          tokenAddress: approval.tokenAddress,
-          spender: approval.spender,
-        })),
+        ...evidence,
       });
       if (result.success) input.onAddedToBatch?.();
       return result;

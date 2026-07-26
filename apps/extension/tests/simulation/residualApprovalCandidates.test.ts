@@ -70,6 +70,42 @@ test("outgoing ERC-20 logs retain exact Approval evidence plus the call-target f
   );
 });
 
+test("trace candidates supplement nested spenders and replace weaker duplicate evidence", () => {
+  const result = discoverResidualApprovalCandidates(
+    [{ to: ROUTER, data: "0x", value: "0x0" }],
+    outgoingLogs(true),
+    OWNER,
+    [
+      {
+        tokenAddress: EXACT_SPENDER,
+        owner: OWNER,
+        spender: RECIPIENT,
+        sourceCallIndex: 0,
+        evidence: "transferFromTrace",
+      },
+      {
+        tokenAddress: TOKEN,
+        owner: OWNER,
+        spender: EXACT_SPENDER,
+        sourceCallIndex: 0,
+        evidence: "transferFromTrace",
+      },
+    ],
+  );
+  assert.deepEqual(
+    result.candidates.map((candidate) => [
+      candidate.tokenAddress.toLowerCase(),
+      candidate.spender.toLowerCase(),
+      candidate.evidence,
+    ]),
+    [
+      [TOKEN, EXACT_SPENDER, "transferFromTrace"],
+      [TOKEN, ROUTER, "callTarget"],
+      [EXACT_SPENDER, RECIPIENT, "transferFromTrace"],
+    ],
+  );
+});
+
 test("incoming transfers and failed calls never create residual candidates", () => {
   const incoming = outgoingLogs(false);
   incoming[0].logs![0].topics = [

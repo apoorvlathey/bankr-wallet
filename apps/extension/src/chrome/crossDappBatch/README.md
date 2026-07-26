@@ -62,3 +62,6 @@ terminal outcome. Their durable identity uses WalletChan's bundled icon; the
 renderer retains the same icon for already-staged legacy cleanup entries. Bulk
 cleanup validates every source before one storage write, then appends the
 complete generated cleanup set at the tail.
+The trusted route derives that set only from short-lived evidence IDs bound to
+the exact active-batch fingerprint; renderer-provided token/spender pairs are
+not mutation authority.

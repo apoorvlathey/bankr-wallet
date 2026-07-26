@@ -1,5 +1,8 @@
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
-import type { ResidualApproval } from "@/chrome/txSimulation";
+import type {
+  ResidualApproval,
+  ResidualApprovalRequestRef,
+} from "@/chrome/txSimulation";
 
 export interface BatchAssetChangeCall {
   to?: string;
@@ -13,6 +16,8 @@ export interface AssetChangesDisplayProps {
   safeAddress?: string;
   /** Exact outer Safe execution request used to determine the revert verdict. */
   safeExecutionRequest?: PendingTxRequest;
+  /** Durable background request identity used for late residual detection. */
+  residualApprovalRequest?: ResidualApprovalRequestRef;
   /** Remove the panel's duplicate disclosure header inside a titled parent section. */
   embedded?: boolean;
   /** For batch transactions: simulate each call individually instead of the encoded batch. */

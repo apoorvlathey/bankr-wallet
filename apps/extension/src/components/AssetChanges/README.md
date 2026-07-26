@@ -9,8 +9,9 @@ the named simulation-warning banner exports.
 - `AssetChangesDisplay.tsx` resolves the active chain explorer, composes the
   simulation hook and presentation, and owns the memoized public component.
 - `useAssetChangesSimulation.ts` owns Chrome simulation messages, screen-entry
-  deferral, parent status callbacks, and the released three-attempt metadata
-  retry schedule.
+  deferral, parent status callbacks, the released three-attempt metadata retry
+  schedule, and non-blocking late residual-approval detection keyed to the
+  exact durable request identity.
 - `AssetChangesPanel.tsx` owns loading, empty, collapsed-summary, and grouped
   approval/Send/Receive presentation. Approval increases are rendered
   before asset deltas and remain visible when asset simulation is unavailable;
@@ -28,9 +29,10 @@ the named simulation-warning banner exports.
   the shared contract popover for address, copy, and explorer disclosure.
 - `approvalCleanupAvailability.ts` is the pure all-wallet-type projection for
   whether a cleanup action is available and why it is disabled.
-- `approvalCleanupTransport.ts` is the narrow trusted-renderer message adapter;
-  request-family composition roots choose and invoke its single or atomic bulk
-  mutation.
+- `approvalCleanupTransport.ts` is the narrow trusted-renderer message adapter
+  and opaque-evidence projector; request-family composition roots choose and
+  invoke its single or atomic bulk mutation without returning token/spender
+  authority to the renderer.
 - `AssetRow.tsx` renders one asset delta, restores shared token-symbol contract
   disclosure, and owns the persistent metadata-row copy/explorer effects.
 - `TokenIcon.tsx` delegates fungible-token imagery and symbol fallback to the

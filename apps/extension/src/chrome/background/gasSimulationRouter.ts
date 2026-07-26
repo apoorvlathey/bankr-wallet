@@ -8,6 +8,7 @@ export const BACKGROUND_GAS_SIMULATION_MESSAGE_TYPES = [
   "simulateBatchAssetChanges",
   "simulateBatchAssetChangesNonAtomic",
   "simulateSafeAssetChanges",
+  "detectResidualApprovals",
   "retryTokenMetadata",
 ] as const;
 
@@ -23,6 +24,7 @@ export type BackgroundGasSimulationDependencies = {
   simulateBatchAssetChanges: (...args: any[]) => Promise<any>;
   simulateBatchAssetChangesNonAtomic: (...args: any[]) => Promise<any>;
   simulateSafeAssetChanges: (...args: any[]) => Promise<any>;
+  detectResidualApprovals: (...args: any[]) => Promise<any>;
   retryTokenMetadata: (...args: any[]) => Promise<any>;
 };
 
@@ -93,6 +95,17 @@ export function createBackgroundGasSimulationMessageRouter(
             message.chainId,
           )
           .then(sendResponse);
+        return HANDLED_ASYNC;
+      case "detectResidualApprovals":
+        dependencies
+          .detectResidualApprovals(message.requestRef)
+          .then((result) => sendResponse({ success: true, result }))
+          .catch((error) => sendResponse({
+            success: false,
+            error: error instanceof Error
+              ? error.message
+              : "Approval detection unavailable",
+          }));
         return HANDLED_ASYNC;
       case "retryTokenMetadata":
         dependencies

@@ -42,8 +42,12 @@ export interface ResidualApproval {
   spender: string;
   previousAmount: string;
   remainingAmount: string;
-  /** Top-level reviewed call whose successful logs implicated this spender. */
+  /** Reviewed call whose logs or trace implicated this spender. */
   sourceCallIndex: number;
+  evidence: "transferFromTrace" | "approvalEvent" | "callTarget";
+  /** Opaque identifiers added only by the trusted detection route. */
+  detectionId?: string;
+  evidenceId?: string;
   symbol: string;
   name: string;
   decimals: number;

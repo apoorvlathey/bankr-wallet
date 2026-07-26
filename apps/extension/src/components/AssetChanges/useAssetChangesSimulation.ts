@@ -3,6 +3,7 @@ import type {
   ApprovalChange,
   AssetChange,
   ResidualApproval,
+  ResidualApprovalDetectionResult,
   SimulationResult,
   TokenMetadataResult,
 } from "@/chrome/txSimulation";
@@ -26,6 +27,7 @@ type SimulationProps = Pick<
   | "isNonAtomic"
   | "safeAddress"
   | "safeExecutionRequest"
+  | "residualApprovalRequest"
   | "onRevertedChange"
   | "onSimulationUnavailableChange"
 >;
@@ -36,12 +38,35 @@ export function useAssetChangesSimulation({
   isNonAtomic,
   safeAddress,
   safeExecutionRequest,
+  residualApprovalRequest,
   onRevertedChange,
   onSimulationUnavailableChange,
 }: SimulationProps) {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [completedSimulationKey, setCompletedSimulationKey] =
+    useState<string | null>(null);
   const batchCallsKey = makeBatchCallsKey(batchCalls);
+  const simulationKey = [
+    txRequest.id,
+    batchCallsKey ?? "",
+    safeAddress ?? "",
+    safeExecutionRequest?.id ?? "",
+  ].join("|");
+  const residualFamily = residualApprovalRequest?.family;
+  const residualRequestId = residualApprovalRequest?.requestId;
+  const residualDetectionReady =
+    !loading &&
+    !!result &&
+    !result.simulationFailed &&
+    result.txSuccess &&
+    completedSimulationKey === simulationKey &&
+    !!residualFamily &&
+    !!residualRequestId;
+  const residualMetadataKey = (result?.residualApprovals ?? [])
+    .map((approval) =>
+      `${approval.tokenAddress}|${approval.symbol}|${approval.logoUrl ?? ""}`)
+    .join(";");
 
   // Heavy simulation waits for the confirmation screen's entry animation.
   const screenEntered = useScreenEntered();
@@ -51,6 +76,7 @@ export function useAssetChangesSimulation({
     let cancelled = false;
     setLoading(true);
     setResult(null);
+    setCompletedSimulationKey(null);
 
     const message = buildSimulationMessage({
       txRequest,
@@ -97,6 +123,7 @@ export function useAssetChangesSimulation({
         approvalDetectionIncomplete:
           response.approvalDetectionIncomplete ?? false,
       });
+      setCompletedSimulationKey(simulationKey);
       setLoading(false);
     });
 
@@ -106,6 +133,62 @@ export function useAssetChangesSimulation({
     // Simulate from the stable request id plus batch-call signature, not array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txRequest.id, batchCallsKey, safeAddress, safeExecutionRequest?.id, screenEntered]);
+
+  useEffect(() => {
+    if (
+      !screenEntered ||
+      !residualDetectionReady ||
+      !residualFamily ||
+      !residualRequestId
+    ) {
+      return;
+    }
+    let cancelled = false;
+    chrome.runtime.sendMessage(
+      {
+        type: "detectResidualApprovals",
+        requestRef: {
+          family: residualFamily,
+          requestId: residualRequestId,
+        },
+      },
+      (response: {
+        success: boolean;
+        result?: ResidualApprovalDetectionResult;
+      } | undefined) => {
+        if (
+          cancelled ||
+          chrome.runtime.lastError ||
+          !response?.success ||
+          !response.result
+        ) {
+          return;
+        }
+        const detection = response.result;
+        setResult((previous) => previous
+          ? {
+              ...previous,
+              residualApprovals: detection.residualApprovals,
+              approvalDetectionIncomplete:
+                (previous.approvalDetectionIncomplete ?? false) ||
+                detection.approvalDetectionIncomplete,
+              metadataComplete:
+                previous.metadataComplete && detection.metadataComplete,
+            }
+          : previous);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    residualDetectionReady,
+    residualFamily,
+    residualRequestId,
+    screenEntered,
+    simulationKey,
+    txRequest.id,
+  ]);
 
   useEffect(() => {
     if (!onRevertedChange) return;
@@ -192,7 +275,12 @@ export function useAssetChangesSimulation({
     };
     // Retry scheduling is keyed to result status and request id to avoid duplicate timers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result?.metadataComplete, result?.simulationFailed, txRequest.id]);
+  }, [
+    residualMetadataKey,
+    result?.metadataComplete,
+    result?.simulationFailed,
+    txRequest.id,
+  ]);
 
   return { loading, result };
 }

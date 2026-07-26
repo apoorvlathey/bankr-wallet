@@ -5,6 +5,7 @@ import {
   getApprovalCleanupDisabledReason,
   getSafeApprovalCleanupDisabledReason,
 } from "../../src/components/AssetChanges/approvalCleanupAvailability";
+import { approvalCleanupEvidence } from "../../src/components/AssetChanges/approvalCleanupTransport";
 
 test("only atomic PK and seed requests can add an EOA cleanup call", () => {
   for (const accountType of ["privateKey", "seedPhrase"] as const) {
@@ -70,5 +71,26 @@ test("unsigned Safe requests can be edited regardless of later owner signer type
   assert.match(
     getSafeApprovalCleanupDisabledReason({ editable: true, busy: true }) ?? "",
     /current Safe action/,
+  );
+});
+
+test("cleanup transport accepts only one complete opaque evidence set", () => {
+  assert.deepEqual(
+    approvalCleanupEvidence([
+      { detectionId: "detection", evidenceId: "one" },
+      { detectionId: "detection", evidenceId: "two" },
+    ]),
+    { detectionId: "detection", evidenceIds: ["one", "two"] },
+  );
+  assert.equal(
+    approvalCleanupEvidence([
+      { detectionId: "a", evidenceId: "one" },
+      { detectionId: "b", evidenceId: "two" },
+    ]),
+    null,
+  );
+  assert.equal(
+    approvalCleanupEvidence([{ detectionId: "a" }]),
+    null,
   );
 });

@@ -1,7 +1,10 @@
 import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
-import type { ResidualApproval } from "@/chrome/txSimulation";
+import type {
+  ResidualApproval,
+  ResidualApprovalRequestRef,
+} from "@/chrome/txSimulation";
 import type { FeePaymentRequestKind } from "@/components/FeePaymentSelector";
 
 export interface BatchTransactionConfirmationProps {
@@ -46,6 +49,8 @@ export interface BatchTransactionConfirmationProps {
   approvalCleanupAllHandler?: (
     approvals: ResidualApproval[],
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Overrides the pending ERC-5792 identity for assembled batches. */
+  residualApprovalRequest?: ResidualApprovalRequestRef;
   crossDappBatch?: CrossDappBatch | null;
   onAddedToBatch?: () => void;
   pageBgColor?: string;

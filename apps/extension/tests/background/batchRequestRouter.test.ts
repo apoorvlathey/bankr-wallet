@@ -35,6 +35,12 @@ function createDependencies(
     handleUpdateCallInPendingBatch: async () => ({ success: true }),
     handleAppendApprovalRevokeToPendingBatch: async () => ({ success: true }),
     handleAppendApprovalRevokesToPendingBatch: async () => ({ success: true }),
+    resolveApprovalCleanupEvidence: async ({ evidenceIds }) =>
+      (evidenceIds as string[]).map((evidenceId) => ({
+        tokenAddress: `token:${evidenceId}`,
+        spender: `spender:${evidenceId}`,
+        sourceCallIndex: 0,
+      })),
     updatePendingTxRequestData: async () => {},
     runPendingRequestResolution: async (options) => options.resolve(),
     pendingResolutionConflict: () => ({ success: false, error: "conflict" }),
@@ -287,16 +293,14 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
   await dispatch(dependencies, {
     type: "appendApprovalRevokeToPendingBatch",
     bundleId: "cleanup-bundle",
-    tokenAddress: "0xtoken",
-    spender: "0xspender",
+    detectionId: "detection-1",
+    evidenceIds: ["evidence-1"],
   });
   await dispatch(dependencies, {
     type: "appendApprovalRevokeToPendingBatch",
     bundleId: "cleanup-all-bundle",
-    approvals: [
-      { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
-      { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
-    ],
+    detectionId: "detection-2",
+    evidenceIds: ["evidence-a", "evidence-b"],
   });
   await dispatch(dependencies, {
     type: "updatePendingTxRequestData",
@@ -328,13 +332,29 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     ],
     ["split", "split-bundle", 9],
     ["edit", "edit-bundle", 2, "0xdata"],
-    ["approval-cleanup", "cleanup-bundle", "0xtoken", "0xspender"],
+    [
+      "approval-cleanup-all",
+      "cleanup-bundle",
+      [{
+        tokenAddress: "token:evidence-1",
+        spender: "spender:evidence-1",
+        sourceCallIndex: 0,
+      }],
+    ],
     [
       "approval-cleanup-all",
       "cleanup-all-bundle",
       [
-        { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
-        { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+        {
+          tokenAddress: "token:evidence-a",
+          spender: "spender:evidence-a",
+          sourceCallIndex: 0,
+        },
+        {
+          tokenAddress: "token:evidence-b",
+          spender: "spender:evidence-b",
+          sourceCallIndex: 0,
+        },
       ],
     ],
     ["tx-edit", "tx-1", "0xnew"],

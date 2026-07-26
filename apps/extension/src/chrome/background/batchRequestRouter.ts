@@ -1,5 +1,4 @@
 /** ERC-5792 provider transport and trusted-UI batch decision routing. */
-
 export const BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES = [
   "walletGetCapabilities",
   "walletSendCalls",
@@ -15,7 +14,6 @@ export const BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES = [
   "appendApprovalRevokeToPendingBatch",
   "updatePendingTxRequestData",
 ] as const;
-
 export type BackgroundBatchRequestRouteResult =
   | { handled: false }
   | { handled: true; keepChannelOpen: boolean };
@@ -34,8 +32,8 @@ export type BackgroundBatchRequestDependencies = {
   handleSplitBatchIntoIndividualTxs: (...args: any[]) => Promise<any>;
   handleRemoveCallFromPendingBatch: (...args: any[]) => Promise<any>;
   handleUpdateCallInPendingBatch: (...args: any[]) => Promise<any>;
-  handleAppendApprovalRevokeToPendingBatch: (...args: any[]) => Promise<any>;
   handleAppendApprovalRevokesToPendingBatch: (...args: any[]) => Promise<any>;
+  resolveApprovalCleanupEvidence: (...args: any[]) => Promise<any>;
   updatePendingTxRequestData: (txId: string, newData: string) => Promise<void>;
   runPendingRequestResolution: <T>(options: any) => Promise<T>;
   pendingResolutionConflict: (action: any) => any;
@@ -322,17 +320,20 @@ export function createBackgroundBatchRequestMessageRouter(
           {
             bundleId: message.bundleId,
             action: "edit",
-            resolve: (bundleId) =>
-              Array.isArray(message.approvals)
-                ? dependencies.handleAppendApprovalRevokesToPendingBatch(
-                    bundleId,
-                    message.approvals,
-                  )
-                : dependencies.handleAppendApprovalRevokeToPendingBatch(
-                    bundleId,
-                    message.tokenAddress,
-                    message.spender,
-                  ),
+            resolve: async (bundleId) => {
+              const targets = await dependencies.resolveApprovalCleanupEvidence({
+                ref: {
+                  family: "batchTransaction",
+                  requestId: bundleId,
+                },
+                detectionId: message.detectionId,
+                evidenceIds: message.evidenceIds,
+              });
+              return dependencies.handleAppendApprovalRevokesToPendingBatch(
+                bundleId,
+                targets,
+              );
+            },
             fallback: "Failed to add approval cleanup",
           },
           dependencies,

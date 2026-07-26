@@ -3,6 +3,7 @@ import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
 import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
+import type { ResidualApprovalRequestRef } from "@/chrome/txSimulation";
 
 interface FinancialImpactProps {
   calls: PendingBatchTxRequest["params"]["calls"];
@@ -11,6 +12,7 @@ interface FinancialImpactProps {
   onRevertedChange: (reverted: boolean) => void;
   onUnavailableChange: (unavailable: boolean) => void;
   approvalCleanup?: AssetChangesDisplayProps["approvalCleanup"];
+  residualApprovalRequest: ResidualApprovalRequestRef;
 }
 
 export function FinancialImpact({
@@ -20,6 +22,7 @@ export function FinancialImpact({
   onRevertedChange,
   onUnavailableChange,
   approvalCleanup,
+  residualApprovalRequest,
 }: FinancialImpactProps) {
   return (
     <Box
@@ -42,6 +45,7 @@ export function FinancialImpact({
         isNonAtomic={isNonAtomic}
         embedded
         approvalCleanup={approvalCleanup}
+        residualApprovalRequest={residualApprovalRequest}
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}
       />

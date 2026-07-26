@@ -63,6 +63,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "updatePendingTxRequestData",
   "updateCallInPendingBatch",
   "appendApprovalRevokeToPendingBatch",
+  "detectResidualApprovals",
   "rejectSignatureRequest",
   "rejectErc7715PermissionRequest",
   "rejectAddChain",

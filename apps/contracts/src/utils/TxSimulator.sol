@@ -139,6 +139,11 @@ contract TxSimulator {
         bytes data;
     }
 
+    struct AllowancePair {
+        address token;
+        address spender;
+    }
+
     /**
      * @notice Simulate a batch of calls and return cumulative balance deltas.
      * @param calls      Array of calls to execute sequentially
@@ -183,6 +188,52 @@ contract TxSimulator {
         _postProcessNfts(candidates, snap.balances, after_, snap.nextTokenIds, rawDeltas);
 
         nftsReceived = _readAllReceived();
+    }
+
+    /**
+     * @notice Minimal sequential executor used only as a debug_traceCall
+     *         envelope. It avoids metadata probes that would inflate the call
+     *         tree and make source-call indexing ambiguous.
+     */
+    function executeBatchForTrace(BatchCall[] calldata calls)
+        external
+        returns (bool allSuccess)
+    {
+        allSuccess = _executeCalls(calls);
+    }
+
+    /**
+     * @notice Execute the reviewed calls and return bounded ERC-20 allowance
+     *         state on both sides of the request.
+     */
+    function simulateBatchAllowances(
+        BatchCall[] calldata calls,
+        AllowancePair[] calldata pairs
+    )
+        external
+        returns (
+            bool allSuccess,
+            bool[] memory beforeSuccess,
+            uint256[] memory beforeAmount,
+            bool[] memory afterSuccess,
+            uint256[] memory afterAmount
+        )
+    {
+        uint256 length = pairs.length;
+        beforeSuccess = new bool[](length);
+        beforeAmount = new uint256[](length);
+        afterSuccess = new bool[](length);
+        afterAmount = new uint256[](length);
+
+        for (uint256 i; i < length; ++i) {
+            (beforeSuccess[i], beforeAmount[i]) =
+                _tryAllowance(pairs[i].token, pairs[i].spender);
+        }
+        allSuccess = _executeCalls(calls);
+        for (uint256 i; i < length; ++i) {
+            (afterSuccess[i], afterAmount[i]) =
+                _tryAllowance(pairs[i].token, pairs[i].spender);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -235,6 +286,18 @@ contract TxSimulator {
             return abi.decode(ret, (uint256));
         }
         return 0;
+    }
+
+    function _tryAllowance(address token, address spender)
+        internal
+        view
+        returns (bool success, uint256 amount)
+    {
+        (bool ok, bytes memory ret) = token.staticcall{gas: PROBE_GAS_LIMIT}(
+            abi.encodeWithSelector(0xdd62ed3e, address(this), spender)
+        );
+        if (!ok || ret.length < 32) return (false, 0);
+        return (true, abi.decode(ret, (uint256)));
     }
 
     // -----------------------------------------------------------------------

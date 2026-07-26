@@ -557,6 +557,7 @@ export function responseForPreviewMessage(
     case "simulateAssetChanges":
     case "simulateBatchAssetChanges":
     case "simulateBatchAssetChangesNonAtomic":
+    case "simulateSafeAssetChanges":
       if (
         scenario === "simulation-error" ||
         (route === "cross-batch" && scenario === "error")
@@ -578,7 +579,24 @@ export function responseForPreviewMessage(
       if (route === "batch" && scenario === "approval-and-send") {
         return previewApprovalAndSendSimulationResult;
       }
-      return previewSimulationResult;
+      return { ...previewSimulationResult, residualApprovals: [] };
+    case "detectResidualApprovals":
+      return {
+        success: true,
+        result: {
+          detectionId: "preview-detection",
+          residualApprovals:
+            (previewSimulationResult.residualApprovals ?? []).map(
+              (approval, index) => ({
+                ...approval,
+                detectionId: "preview-detection",
+                evidenceId: `preview-evidence-${index}`,
+              }),
+            ),
+          approvalDetectionIncomplete: false,
+          metadataComplete: true,
+        },
+      };
     case "retryTokenMetadata":
       return {
         tokenChanges: previewSimulationResult.tokenChanges,

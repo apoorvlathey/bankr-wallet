@@ -52,6 +52,10 @@ export function SafeProposalFinancialImpact({
         safeExecutionRequest={executionRequest ?? undefined}
         embedded
         approvalCleanup={approvalCleanup}
+        residualApprovalRequest={{
+          family: "safeProposal",
+          requestId: proposal.id,
+        }}
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}
       />

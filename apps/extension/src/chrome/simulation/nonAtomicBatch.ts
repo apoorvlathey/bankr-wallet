@@ -124,6 +124,7 @@ export async function simulateBatchAssetChangesNonAtomic(
       fromAddress,
       chainId,
       firstRun,
+      { includeResidualApprovals: false },
     ),
   ]);
   const merged = mergeNonAtomicSimulationResults(v1Result, byteResult);

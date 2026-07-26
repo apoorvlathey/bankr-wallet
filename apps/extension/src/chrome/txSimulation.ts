@@ -26,3 +26,7 @@ export type {
   SimulationResult,
   TokenMetadataResult,
 } from "./simulation/types";
+export type {
+  ResidualApprovalDetectionResult,
+  ResidualApprovalRequestRef,
+} from "./simulation/residualApprovalRequestTypes";

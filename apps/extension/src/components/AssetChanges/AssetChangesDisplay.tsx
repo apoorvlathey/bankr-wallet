@@ -10,7 +10,14 @@ function AssetChangesDisplay(props: AssetChangesDisplayProps) {
   const { networksInfo } = useNetworks();
   const explorerUrl =
     getResolvedChainById(txRequest.tx.chainId, networksInfo)?.explorer ?? "";
-  const { loading, result } = useAssetChangesSimulation(props);
+  const residualApprovalRequest = props.residualApprovalRequest ??
+    (!props.batchCalls
+      ? { family: "transaction" as const, requestId: txRequest.id }
+      : undefined);
+  const { loading, result } = useAssetChangesSimulation({
+    ...props,
+    residualApprovalRequest,
+  });
 
   return (
     <AssetChangesPanel

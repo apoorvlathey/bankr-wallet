@@ -18,11 +18,10 @@ export type BackgroundCrossDappBatchDependencies = {
   runPendingRequestResolutions: <T>(options: any) => Promise<T>;
   pendingResolutionConflict: (action: any) => any;
   handleAddToCrossDappBatch: (txId: string) => Promise<any>;
-  handleAddApprovalRevokeToTransactionBatch: (...args: any[]) => Promise<any>;
   handleAddApprovalRevokesToTransactionBatch: (...args: any[]) => Promise<any>;
   handleAddCallsToCrossDappBatch: (bundleId: string) => Promise<any>;
-  handleAppendApprovalRevokeToCrossDappBatch: (...args: any[]) => Promise<any>;
   handleAppendApprovalRevokesToCrossDappBatch: (...args: any[]) => Promise<any>;
+  resolveApprovalCleanupEvidence: (...args: any[]) => Promise<any>;
   handleRemoveFromCrossDappBatch: (txId: string) => Promise<any>;
   handleUpdateCallInCrossDappBatch: (...args: any[]) => Promise<any>;
   handleRejectCrossDappBatch: () => Promise<any>;
@@ -111,17 +110,17 @@ export function createBackgroundCrossDappBatchMessageRouter(
                 action: "move",
               },
             ],
-            resolve: () =>
-              Array.isArray(message.approvals)
-                ? dependencies.handleAddApprovalRevokesToTransactionBatch(
-                    txId,
-                    message.approvals,
-                  )
-                : dependencies.handleAddApprovalRevokeToTransactionBatch(
-                    txId,
-                    message.tokenAddress,
-                    message.spender,
-                  ),
+            resolve: async () => {
+              const targets = await dependencies.resolveApprovalCleanupEvidence({
+                ref: { family: "transaction", requestId: txId },
+                detectionId: message.detectionId,
+                evidenceIds: message.evidenceIds,
+              });
+              return dependencies.handleAddApprovalRevokesToTransactionBatch(
+                txId,
+                targets,
+              );
+            },
             conflictResult: (_family: any, _requestId: any, action: any) =>
               dependencies.pendingResolutionConflict(action),
           })
@@ -199,16 +198,16 @@ export function createBackgroundCrossDappBatchMessageRouter(
         resolveActiveBatch(
           {
             action: "edit",
-            resolve: () =>
-              Array.isArray(message.approvals)
-                ? dependencies.handleAppendApprovalRevokesToCrossDappBatch(
-                    message.approvals,
-                  )
-                : dependencies.handleAppendApprovalRevokeToCrossDappBatch(
-                    message.tokenAddress,
-                    message.spender,
-                    message.sourceCallIndex,
-                  ),
+            resolve: async () => {
+              const targets = await dependencies.resolveApprovalCleanupEvidence({
+                ref: { family: "crossDappBatch", requestId: "active" },
+                detectionId: message.detectionId,
+                evidenceIds: message.evidenceIds,
+              });
+              return dependencies.handleAppendApprovalRevokesToCrossDappBatch(
+                targets,
+              );
+            },
             fallback: "Failed to add approval cleanup",
           },
           dependencies,

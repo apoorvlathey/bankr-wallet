@@ -4,6 +4,26 @@ export interface ApprovalCleanupResponse<T = unknown> {
   result?: T;
 }
 
+export function approvalCleanupEvidence(
+  approvals: Array<{ detectionId?: string; evidenceId?: string }>,
+): { detectionId: string; evidenceIds: string[] } | null {
+  const detectionId = approvals[0]?.detectionId;
+  if (
+    !detectionId ||
+    approvals.length === 0 ||
+    approvals.some(
+      (approval) =>
+        approval.detectionId !== detectionId || !approval.evidenceId,
+    )
+  ) {
+    return null;
+  }
+  return {
+    detectionId,
+    evidenceIds: approvals.map((approval) => approval.evidenceId!),
+  };
+}
+
 export function sendApprovalCleanupMessage<T = unknown>(
   message: Record<string, unknown>,
 ): Promise<ApprovalCleanupResponse<T>> {

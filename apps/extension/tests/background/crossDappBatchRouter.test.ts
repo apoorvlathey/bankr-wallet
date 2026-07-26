@@ -20,6 +20,12 @@ function createDependencies(
     handleAddCallsToCrossDappBatch: async () => ({ success: true }),
     handleAppendApprovalRevokeToCrossDappBatch: async () => ({ success: true }),
     handleAppendApprovalRevokesToCrossDappBatch: async () => ({ success: true }),
+    resolveApprovalCleanupEvidence: async ({ evidenceIds }) =>
+      (evidenceIds as string[]).map((evidenceId, index) => ({
+        tokenAddress: `token:${evidenceId}`,
+        spender: `spender:${evidenceId}`,
+        sourceCallIndex: index,
+      })),
     handleRemoveFromCrossDappBatch: async () => ({ success: true }),
     handleUpdateCallInCrossDappBatch: async () => ({ success: true }),
     handleRejectCrossDappBatch: async () => ({ success: false }),
@@ -81,16 +87,14 @@ test("single and ERC-5792 sources acquire both source and active-batch claims", 
   await dispatch(dependencies, {
     type: "addApprovalRevokeToTransactionBatch",
     txId: "tx-2",
-    tokenAddress: "0xtoken",
-    spender: "0xspender",
+    detectionId: "detection-1",
+    evidenceIds: ["evidence-1"],
   });
   await dispatch(dependencies, {
     type: "addApprovalRevokeToTransactionBatch",
     txId: "tx-3",
-    approvals: [
-      { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
-      { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
-    ],
+    detectionId: "detection-2",
+    evidenceIds: ["evidence-a", "evidence-b"],
   });
   await dispatch(dependencies, {
     type: "addCallsToCrossDappBatch",
@@ -120,13 +124,29 @@ test("single and ERC-5792 sources acquire both source and active-batch claims", 
   ]);
   assert.deepEqual(handlers, [
     ["transaction", "tx-1"],
-    ["transaction-cleanup", "tx-2", "0xtoken", "0xspender"],
+    [
+      "transaction-cleanup-all",
+      "tx-2",
+      [{
+        tokenAddress: "token:evidence-1",
+        spender: "spender:evidence-1",
+        sourceCallIndex: 0,
+      }],
+    ],
     [
       "transaction-cleanup-all",
       "tx-3",
       [
-        { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
-        { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+        {
+          tokenAddress: "token:evidence-a",
+          spender: "spender:evidence-a",
+          sourceCallIndex: 0,
+        },
+        {
+          tokenAddress: "token:evidence-b",
+          spender: "spender:evidence-b",
+          sourceCallIndex: 1,
+        },
       ],
     ],
     ["batch", "bundle-1"],
@@ -178,24 +198,13 @@ test("active cross-dapp edits and decisions retain one claim and exact inputs", 
   });
   await dispatch(dependencies, {
     type: "appendApprovalRevokeToCrossDappBatch",
-    tokenAddress: "0xtoken",
-    spender: "0xspender",
-    sourceCallIndex: 2,
+    detectionId: "detection-3",
+    evidenceIds: ["evidence-3"],
   });
   await dispatch(dependencies, {
     type: "appendApprovalRevokeToCrossDappBatch",
-    approvals: [
-      {
-        tokenAddress: "0xtoken-a",
-        spender: "0xspender-a",
-        sourceCallIndex: 0,
-      },
-      {
-        tokenAddress: "0xtoken-b",
-        spender: "0xspender-b",
-        sourceCallIndex: 1,
-      },
-    ],
+    detectionId: "detection-4",
+    evidenceIds: ["evidence-a", "evidence-b"],
   });
   await dispatch(dependencies, { type: "rejectCrossDappBatch" });
   await dispatch(dependencies, {
@@ -216,18 +225,25 @@ test("active cross-dapp edits and decisions retain one claim and exact inputs", 
   assert.deepEqual(handlers, [
     ["remove", "tx-1"],
     ["update", "tx-2", "0xdata"],
-    ["cleanup", "0xtoken", "0xspender", 2],
+    [
+      "cleanup-all",
+      [{
+        tokenAddress: "token:evidence-3",
+        spender: "spender:evidence-3",
+        sourceCallIndex: 0,
+      }],
+    ],
     [
       "cleanup-all",
       [
         {
-          tokenAddress: "0xtoken-a",
-          spender: "0xspender-a",
+          tokenAddress: "token:evidence-a",
+          spender: "spender:evidence-a",
           sourceCallIndex: 0,
         },
         {
-          tokenAddress: "0xtoken-b",
-          spender: "0xspender-b",
+          tokenAddress: "token:evidence-b",
+          spender: "spender:evidence-b",
           sourceCallIndex: 1,
         },
       ],

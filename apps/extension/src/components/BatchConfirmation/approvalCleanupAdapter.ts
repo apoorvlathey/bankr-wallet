@@ -3,7 +3,10 @@ import {
   getApprovalCleanupDisabledReason,
   type ApprovalCleanupAccountType,
 } from "@/components/AssetChanges/approvalCleanupAvailability";
-import { sendApprovalCleanupMessage } from "@/components/AssetChanges/approvalCleanupTransport";
+import {
+  approvalCleanupEvidence,
+  sendApprovalCleanupMessage,
+} from "@/components/AssetChanges/approvalCleanupTransport";
 import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 import type { BatchStrategy } from "@/hooks/useBatchPlan";
 
@@ -25,22 +28,34 @@ export function createBatchApprovalCleanup(input: {
   return {
     disabledReason: getApprovalCleanupDisabledReason(input),
     onRevoke: input.handler ??
-      ((approval) =>
-        sendApprovalCleanupMessage({
+      ((approval) => {
+        const evidence = approvalCleanupEvidence([approval]);
+        if (!evidence) {
+          return Promise.resolve({
+            success: false,
+            error: "Approval evidence expired",
+          });
+        }
+        return sendApprovalCleanupMessage({
           type: "appendApprovalRevokeToPendingBatch",
           bundleId: input.bundleId,
-          tokenAddress: approval.tokenAddress,
-          spender: approval.spender,
-        })),
+          ...evidence,
+        });
+      }),
     onRevokeAll: input.allHandler ??
-      ((approvals) =>
-        sendApprovalCleanupMessage({
+      ((approvals) => {
+        const evidence = approvalCleanupEvidence(approvals);
+        if (!evidence) {
+          return Promise.resolve({
+            success: false,
+            error: "Approval evidence expired",
+          });
+        }
+        return sendApprovalCleanupMessage({
           type: "appendApprovalRevokeToPendingBatch",
           bundleId: input.bundleId,
-          approvals: approvals.map((approval) => ({
-            tokenAddress: approval.tokenAddress,
-            spender: approval.spender,
-          })),
-        })),
+          ...evidence,
+        });
+      }),
   };
 }

@@ -27,6 +27,7 @@ export function projectResidualApprovals(
       previousAmount: previous.amount.toString(),
       remainingAmount: remaining.amount.toString(),
       sourceCallIndex: candidate.sourceCallIndex,
+      evidence: candidate.evidence,
       symbol:
         `${candidate.tokenAddress.slice(0, 6)}...${candidate.tokenAddress.slice(-4)}`,
       name: "",

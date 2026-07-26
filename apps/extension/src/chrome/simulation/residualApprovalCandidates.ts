@@ -1,90 +1,17 @@
-import {
-  decodeAbiParameters,
-  getAddress,
-  keccak256,
-  stringToHex,
-  type Address,
-  type Hex,
-} from "viem";
+import { getAddress, type Address } from "viem";
 
 import { MAX_SIMULATION_APPROVAL_CHANGES } from "./constants";
 import type { ApprovalSimulationCall } from "./approvalIntents";
-import type {
-  EthSimulateCallResult,
-  EthSimulateLog,
-} from "./ethSimulateLogs";
-
-const TRANSFER_TOPIC = keccak256(
-  stringToHex("Transfer(address,address,uint256)"),
-).toLowerCase();
-const APPROVAL_TOPIC = keccak256(
-  stringToHex("Approval(address,address,uint256)"),
-).toLowerCase();
+import type { EthSimulateCallResult } from "./ethSimulateLogs";
+import { discoverResidualApprovalLogEvidence } from "./residualApprovalLogEvidence";
+import type { TracedResidualApprovalCandidate } from "./residualApprovalTrace";
 
 export interface ResidualApprovalCandidate {
   tokenAddress: Address;
   owner: Address;
   spender: Address;
   sourceCallIndex: number;
-  evidence: "approvalEvent" | "callTarget";
-}
-
-function topicAddress(topic: string | undefined): Address | null {
-  if (!topic || !/^0x[0-9a-fA-F]{64}$/.test(topic)) return null;
-  try {
-    return getAddress(`0x${topic.slice(-40)}`);
-  } catch {
-    return null;
-  }
-}
-
-function logAddress(log: EthSimulateLog): Address | null {
-  try {
-    return log.address ? getAddress(log.address) : null;
-  } catch {
-    return null;
-  }
-}
-
-function transferAmount(log: EthSimulateLog): bigint | null {
-  try {
-    return decodeAbiParameters(
-      [{ type: "uint256" }],
-      (log.data ?? "0x") as Hex,
-    )[0];
-  } catch {
-    return null;
-  }
-}
-
-function approvalEvent(
-  log: EthSimulateLog,
-  owner: Address,
-): { tokenAddress: Address; spender: Address } | null {
-  const topics = log.topics ?? [];
-  if (topics[0]?.toLowerCase() !== APPROVAL_TOPIC || topics.length !== 3) {
-    return null;
-  }
-  const tokenAddress = logAddress(log);
-  const eventOwner = topicAddress(topics[1]);
-  const spender = topicAddress(topics[2]);
-  if (
-    !tokenAddress ||
-    !eventOwner ||
-    !spender ||
-    eventOwner.toLowerCase() !== owner.toLowerCase()
-  ) {
-    return null;
-  }
-  try {
-    decodeAbiParameters(
-      [{ type: "uint256" }],
-      (log.data ?? "0x") as Hex,
-    );
-    return { tokenAddress, spender };
-  } catch {
-    return null;
-  }
+  evidence: "transferFromTrace" | "approvalEvent" | "callTarget";
 }
 
 function candidateKey(candidate: ResidualApprovalCandidate): string {
@@ -93,6 +20,28 @@ function candidateKey(candidate: ResidualApprovalCandidate): string {
     candidate.owner.toLowerCase(),
     candidate.spender.toLowerCase(),
   ].join(":");
+}
+
+function evidencePriority(
+  evidence: ResidualApprovalCandidate["evidence"],
+): number {
+  if (evidence === "transferFromTrace") return 3;
+  if (evidence === "approvalEvent") return 2;
+  return 1;
+}
+
+function retainStrongestCandidate(
+  byKey: Map<string, ResidualApprovalCandidate>,
+  candidate: ResidualApprovalCandidate,
+): void {
+  const key = candidateKey(candidate);
+  const previous = byKey.get(key);
+  if (
+    !previous ||
+    evidencePriority(candidate.evidence) > evidencePriority(previous.evidence)
+  ) {
+    byKey.set(key, candidate);
+  }
 }
 
 /**
@@ -106,6 +55,7 @@ export function discoverResidualApprovalCandidates(
   calls: ApprovalSimulationCall[],
   callResults: EthSimulateCallResult[],
   ownerAddress: string,
+  tracedCandidates: TracedResidualApprovalCandidate[] = [],
 ): { candidates: ResidualApprovalCandidate[]; incomplete: boolean } {
   let owner: Address;
   try {
@@ -114,55 +64,25 @@ export function discoverResidualApprovalCandidates(
     return { candidates: [], incomplete: true };
   }
 
-  const outgoingTokens = new Set<string>();
-  const callOutgoingTokens = new Map<number, Address[]>();
-  const approvalEvents: ResidualApprovalCandidate[] = [];
-  let incomplete = callResults.length !== calls.length;
-
-  callResults.forEach((callResult, callIndex) => {
-    if (callResult.status !== "0x1") return;
-    for (const log of callResult.logs ?? []) {
-      const topics = log.topics ?? [];
-      const tokenAddress = logAddress(log);
-      if (
-        tokenAddress &&
-        topics[0]?.toLowerCase() === TRANSFER_TOPIC &&
-        topics.length === 3 &&
-        topicAddress(topics[1])?.toLowerCase() === owner.toLowerCase()
-      ) {
-        const amount = transferAmount(log);
-        if (amount === null) {
-          incomplete = true;
-          continue;
-        }
-        if (amount === 0n) continue;
-        outgoingTokens.add(tokenAddress.toLowerCase());
-        const tokens = callOutgoingTokens.get(callIndex) ?? [];
-        if (!tokens.some((token) =>
-          token.toLowerCase() === tokenAddress.toLowerCase()
-        )) {
-          tokens.push(tokenAddress);
-          callOutgoingTokens.set(callIndex, tokens);
-        }
-      }
-      const approval = approvalEvent(log, owner);
-      if (approval) {
-        approvalEvents.push({
-          ...approval,
-          owner,
-          sourceCallIndex: callIndex,
-          evidence: "approvalEvent",
-        });
-      }
-    }
-  });
+  const logEvidence = discoverResidualApprovalLogEvidence(
+    callResults,
+    calls.length,
+    owner,
+  );
+  let incomplete = logEvidence.incomplete;
 
   const byKey = new Map<string, ResidualApprovalCandidate>();
-  for (const event of approvalEvents) {
-    if (!outgoingTokens.has(event.tokenAddress.toLowerCase())) continue;
-    byKey.set(candidateKey(event), event);
+  for (const event of logEvidence.approvalEvents) {
+    if (!logEvidence.outgoingTokens.has(event.tokenAddress.toLowerCase())) {
+      continue;
+    }
+    retainStrongestCandidate(byKey, {
+      ...event,
+      owner,
+      evidence: "approvalEvent",
+    });
   }
-  for (const [callIndex, tokens] of callOutgoingTokens) {
+  for (const [callIndex, tokens] of logEvidence.callOutgoingTokens) {
     const target = calls[callIndex]?.to;
     if (!target) continue;
     let spender: Address;
@@ -180,9 +100,11 @@ export function discoverResidualApprovalCandidates(
         sourceCallIndex: callIndex,
         evidence: "callTarget",
       };
-      const key = candidateKey(candidate);
-      if (!byKey.has(key)) byKey.set(key, candidate);
+      retainStrongestCandidate(byKey, candidate);
     }
+  }
+  for (const traced of tracedCandidates) {
+    retainStrongestCandidate(byKey, traced);
   }
 
   return {

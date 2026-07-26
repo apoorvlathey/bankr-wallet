@@ -1,7 +1,10 @@
 import type { SafeProposalRecord } from "@/chrome/safe/types";
 import { isUnsignedSafeNonceEditable } from "@/chrome/safe/proposalNonce";
 import { getSafeApprovalCleanupDisabledReason } from "@/components/AssetChanges/approvalCleanupAvailability";
-import { sendApprovalCleanupMessage } from "@/components/AssetChanges/approvalCleanupTransport";
+import {
+  approvalCleanupEvidence,
+  sendApprovalCleanupMessage,
+} from "@/components/AssetChanges/approvalCleanupTransport";
 import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 
 export function createSafeApprovalCleanup(input: {
@@ -16,11 +19,14 @@ export function createSafeApprovalCleanup(input: {
       busy: input.busy,
     }),
     onRevoke: async (approval) => {
+      const evidence = approvalCleanupEvidence([approval]);
+      if (!evidence) {
+        return { success: false, error: "Approval evidence expired" };
+      }
       const response = await sendApprovalCleanupMessage<SafeProposalRecord>({
         type: "appendApprovalRevokeToSafeProposal",
         proposalId: input.proposal.id,
-        tokenAddress: approval.tokenAddress,
-        spender: approval.spender,
+        ...evidence,
       });
       if (response.success && response.result) {
         await input.onReload();
@@ -29,13 +35,14 @@ export function createSafeApprovalCleanup(input: {
       return response;
     },
     onRevokeAll: async (approvals) => {
+      const evidence = approvalCleanupEvidence(approvals);
+      if (!evidence) {
+        return { success: false, error: "Approval evidence expired" };
+      }
       const response = await sendApprovalCleanupMessage<SafeProposalRecord>({
         type: "appendApprovalRevokeToSafeProposal",
         proposalId: input.proposal.id,
-        approvals: approvals.map((approval) => ({
-          tokenAddress: approval.tokenAddress,
-          spender: approval.spender,
-        })),
+        ...evidence,
       });
       if (response.success && response.result) {
         await input.onReload();

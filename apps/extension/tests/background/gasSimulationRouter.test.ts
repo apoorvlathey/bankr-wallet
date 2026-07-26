@@ -25,6 +25,7 @@ function createDependencies(
       "simulateBatchAssetChangesNonAtomic",
     ),
     simulateSafeAssetChanges: handler("simulateSafeAssetChanges"),
+    detectResidualApprovals: handler("detectResidualApprovals"),
     retryTokenMetadata: handler("retryTokenMetadata"),
   };
 }
@@ -87,6 +88,10 @@ test("gas/simulation transport declares unique routes and exact arguments", asyn
     chainId: 8453,
   });
   await dispatch({
+    type: "detectResidualApprovals",
+    requestRef: { family: "transaction", requestId: "tx-1" },
+  });
+  await dispatch({
     type: "retryTokenMetadata",
     chainId: 130,
     tokenChanges: [{ address: "0xtoken" }],
@@ -124,6 +129,10 @@ test("gas/simulation transport declares unique routes and exact arguments", asyn
       "0xsafe",
       { from: "0xexecutor", to: "0xsafe" },
       8453,
+    ],
+    [
+      "detectResidualApprovals",
+      { family: "transaction", requestId: "tx-1" },
     ],
     [
       "retryTokenMetadata",

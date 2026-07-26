@@ -28,6 +28,9 @@ import {
 import {
   discoverResidualApprovalCandidates,
 } from "./residualApprovalCandidates";
+import {
+  type TracedResidualApprovalCandidate,
+} from "./residualApprovalTrace";
 import { projectResidualApprovals } from "./residualApprovalProjection";
 import type {
   ApprovalChange,
@@ -39,6 +42,13 @@ export interface ApprovalProjection {
   residualApprovals: ResidualApproval[];
   approvalDetectionIncomplete: boolean;
   metadataComplete: boolean;
+}
+
+interface ApprovalSimulationOptions {
+  includeApprovalChanges?: boolean;
+  includeResidualApprovals?: boolean;
+  tracedResidualCandidates?: TracedResidualApprovalCandidate[];
+  traceIncomplete?: boolean;
 }
 
 function mergeIntents(
@@ -106,8 +116,13 @@ export async function simulateApprovalChanges(
   ownerAddress: string,
   chainId: number,
   initialRun?: EthSimulateV1Run | null,
+  options: ApprovalSimulationOptions = {},
 ): Promise<ApprovalProjection> {
-  const staticDiscovery = discoverApprovalIntents(calls, ownerAddress);
+  const includeApprovalChanges = options.includeApprovalChanges !== false;
+  const includeResidualApprovals = options.includeResidualApprovals !== false;
+  const staticDiscovery = includeApprovalChanges
+    ? discoverApprovalIntents(calls, ownerAddress)
+    : { intents: [], incomplete: false };
   const client = await getSimulationClient(chainId);
   const firstRun =
     initialRun === undefined
@@ -124,19 +139,21 @@ export async function simulateApprovalChanges(
     );
   }
 
-  const eventDiscovery = discoverApprovalIntentsFromLogs(
-    firstRun.callResults,
-    ownerAddress,
-  );
+  const eventDiscovery = includeApprovalChanges
+    ? discoverApprovalIntentsFromLogs(firstRun.callResults, ownerAddress)
+    : { intents: [], incomplete: false };
   const merged = mergeIntents(
     staticDiscovery.intents,
     eventDiscovery.intents,
   );
-  const residualDiscovery = discoverResidualApprovalCandidates(
-    calls,
-    firstRun.callResults,
-    ownerAddress,
-  );
+  const residualDiscovery = includeResidualApprovals
+    ? discoverResidualApprovalCandidates(
+        calls,
+        firstRun.callResults,
+        ownerAddress,
+        options.tracedResidualCandidates,
+      )
+    : { candidates: [], incomplete: false };
   const pairMerge = mergeAllowancePairs(
     merged.intents,
     residualDiscovery.candidates,
@@ -149,7 +166,8 @@ export async function simulateApprovalChanges(
       approvalDetectionIncomplete:
         eventDiscovery.incomplete ||
         residualDiscovery.incomplete ||
-        merged.incomplete,
+        merged.incomplete ||
+        options.traceIncomplete === true,
       metadataComplete: true,
     };
   }
@@ -195,6 +213,7 @@ export async function simulateApprovalChanges(
     merged.incomplete ||
     pairMerge.incomplete ||
     firstRun.callResults.length !== calls.length;
+  verificationIncomplete ||= options.traceIncomplete === true;
   pairs.forEach((pair, index) => {
     const readResult = secondRun.callResults[calls.length + index];
     const remaining =

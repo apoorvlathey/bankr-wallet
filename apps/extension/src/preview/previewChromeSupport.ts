@@ -128,6 +128,7 @@ export const previewApprovalAndSendSimulationResult: SimulationResult = {
       previousAmount: ((1n << 256n) - 1n).toString(),
       remainingAmount: ((1n << 256n) - 1n).toString(),
       sourceCallIndex: 1,
+      evidence: "callTarget",
       symbol: "USDC",
       name: "USD Coin",
       decimals: 6,

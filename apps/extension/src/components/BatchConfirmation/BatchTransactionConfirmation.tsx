@@ -45,7 +45,6 @@ import { useBatchActions } from "./useBatchActions";
 import { useBatchReviewState } from "./useBatchReviewState";
 import { createBatchApprovalCleanup } from "./approvalCleanupAdapter";
 import { allowsBatchFeePaymentSelection } from "./feePaymentPolicy";
-
 function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) {
   const {
     batchRequest, currentIndex, totalCount, isInSidePanel, accountType,
@@ -53,7 +52,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     onBeforeReject, onNavigate, onRemoveCall, onEditCallData, originPerCall,
     titleOverride, customConfirmHandler, customRejectHandler, crossDappBatch,
     approvalCleanupHandler, approvalCleanupAllHandler, onAddedToBatch,
-    pageBgColor, feePaymentRequestKind = "batch",
+    pageBgColor, feePaymentRequestKind = "batch", residualApprovalRequest,
   } = props;
   const { themeId, tokens } = useTheme();
   const { bg: stripBg, fg: stripFg } = useStripTokens();
@@ -275,6 +274,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           syntheticTxRequest={syntheticTxRequest}
           isNonAtomic={isNonAtomic}
           approvalCleanup={approvalCleanup}
+          residualApprovalRequest={residualApprovalRequest ?? { family: "batchTransaction", requestId: batchRequest.id }}
           onRevertedChange={review.setSimulationReverted}
           onUnavailableChange={review.setSimulationUnavailable}
         />}

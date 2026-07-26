@@ -13,7 +13,9 @@ export function createApprovalProjectionPromise(
   includeApprovals = true,
 ): Promise<ApprovalProjection> {
   return includeApprovals
-    ? simulateApprovalChanges(calls, ownerAddress, chainId)
+    ? simulateApprovalChanges(calls, ownerAddress, chainId, undefined, {
+        includeResidualApprovals: false,
+      })
     : Promise.resolve({
         ...withoutApprovalChanges(false),
         metadataComplete: true,

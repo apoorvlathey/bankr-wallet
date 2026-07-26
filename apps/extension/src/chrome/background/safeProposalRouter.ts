@@ -2,10 +2,11 @@ import { approveSafeProposalWithOwner } from "../safe/ownerAuthorization";
 import { estimateSafeExecution, executeSafeProposal, reconcileSafeExecution } from "../safe/execution";
 import { publishSafeProposalConfirmations, reconcileSafeProposal, retryAmbiguousSafePublication } from "../safe/publication";
 import { getSafeProposal, getSafeProposals } from "../safe/proposalRepository";
-import { appendApprovalRevokeToSafeProposal, appendApprovalRevokesToSafeProposal, authorizeSafeProposalRoute, cancelSafeProposal, changeSafeProposalNonce, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
+import { appendApprovalRevokesToSafeProposal, authorizeSafeProposalRoute, cancelSafeProposal, changeSafeProposalNonce, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
 import { startSafeProposalRejection } from "../safe/proposalRejection";
 import { requireSafeFeature } from "../safe/featurePolicy";
 import { syncSafeAccount } from "../safe/sync";
+import { resolveApprovalCleanupEvidence } from "../approvalCleanup/evidenceRegistry";
 
 export const BACKGROUND_SAFE_PROPOSAL_MESSAGE_TYPES = [
   "getSafeProposals", "getSafeProposal", "syncSafeRequests", "createSafeProposal",
@@ -53,17 +54,20 @@ export function routeBackgroundSafeProposalMessage(
     case "changeSafeProposalNonce": work = gated("sendProposal", () => changeSafeProposalNonce({ proposalId: message.proposalId, nonce: message.nonce })); break;
     case "appendApprovalRevokeToSafeProposal": work = gated(
       "sendProposal",
-      () =>
-        Array.isArray(message.approvals)
-          ? appendApprovalRevokesToSafeProposal({
-              proposalId: message.proposalId,
-              targets: message.approvals,
-            })
-          : appendApprovalRevokeToSafeProposal({
-              proposalId: message.proposalId,
-              tokenAddress: message.tokenAddress,
-              spender: message.spender,
-            }),
+      async () => {
+        const targets = await resolveApprovalCleanupEvidence({
+          ref: {
+            family: "safeProposal",
+            requestId: message.proposalId,
+          },
+          detectionId: message.detectionId,
+          evidenceIds: message.evidenceIds,
+        });
+        return appendApprovalRevokesToSafeProposal({
+          proposalId: message.proposalId,
+          targets,
+        });
+      },
     ); break;
     case "approveSafeProposal": work = gated("sendProposal", async () => {
       const proposal = await approveSafeProposalWithOwner({

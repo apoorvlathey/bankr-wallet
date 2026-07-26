@@ -60,9 +60,10 @@
   Activity details because replaying an old Safe nonce against current chain
   state is neither a receipt nor a trustworthy historical estimate. While an
   unsigned proposal is editable it may request one or all canonical
-  residual-approval cleanups; the background re-verifies the live Safe once
-  and replaces the proposal with a same-nonce hash whose final operations are
-  the requested zero-value CALLs.
+  residual-approval cleanups through opaque evidence bound to the exact
+  proposal calls; the background re-verifies the live Safe once and replaces
+  the proposal with a same-nonce hash whose final operations are the requested
+  zero-value CALLs.
 - `approvalCleanupAdapter.ts`: projects unsigned/editable availability and owns
   the narrow cleanup message plus replacement-proposal reload/navigation.
 - `safeProposalTransport.ts`: typed Chrome response/error adapter used by the

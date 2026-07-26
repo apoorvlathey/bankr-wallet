@@ -8,6 +8,7 @@ import type {
 import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { ResidualApproval } from "@/chrome/txSimulation";
+import { approvalCleanupEvidence } from "@/components/AssetChanges/approvalCleanupTransport";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 
 /**
@@ -187,39 +188,49 @@ function CrossDappBatchConfirmation({
 
   const handleApprovalCleanup = (
     approval: ResidualApproval,
-  ): Promise<{ success: boolean; error?: string }> =>
-    new Promise((resolve) => {
+  ): Promise<{ success: boolean; error?: string }> => {
+    const evidence = approvalCleanupEvidence([approval]);
+    if (!evidence) {
+      return Promise.resolve({
+        success: false,
+        error: "Approval evidence expired",
+      });
+    }
+    return new Promise((resolve) => {
       chrome.runtime.sendMessage(
         {
           type: "appendApprovalRevokeToCrossDappBatch",
-          tokenAddress: approval.tokenAddress,
-          spender: approval.spender,
-          sourceCallIndex: approval.sourceCallIndex,
+          ...evidence,
         },
         (result: { success: boolean; error?: string } | undefined) => {
           resolve(result || { success: false, error: "No response" });
         },
       );
     });
+  };
 
   const handleAllApprovalCleanup = (
     approvals: ResidualApproval[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    new Promise((resolve) => {
+  ): Promise<{ success: boolean; error?: string }> => {
+    const evidence = approvalCleanupEvidence(approvals);
+    if (!evidence) {
+      return Promise.resolve({
+        success: false,
+        error: "Approval evidence expired",
+      });
+    }
+    return new Promise((resolve) => {
       chrome.runtime.sendMessage(
         {
           type: "appendApprovalRevokeToCrossDappBatch",
-          approvals: approvals.map((approval) => ({
-            tokenAddress: approval.tokenAddress,
-            spender: approval.spender,
-            sourceCallIndex: approval.sourceCallIndex,
-          })),
+          ...evidence,
         },
         (result: { success: boolean; error?: string } | undefined) => {
           resolve(result || { success: false, error: "No response" });
         },
       );
     });
+  };
 
   return (
     <BatchTransactionConfirmation
@@ -244,6 +255,10 @@ function CrossDappBatchConfirmation({
       customRejectHandler={handleCustomReject}
       approvalCleanupHandler={handleApprovalCleanup}
       approvalCleanupAllHandler={handleAllApprovalCleanup}
+      residualApprovalRequest={{
+        family: "crossDappBatch",
+        requestId: "active",
+      }}
       // Cross-dapp identity is communicated by the title and per-action dapp
       // attribution, not by a warning-colored page tint.
       pageBgColor="surface.base"

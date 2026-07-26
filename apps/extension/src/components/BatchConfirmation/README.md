@@ -37,7 +37,9 @@ to `useBatchActions.ts`, the default edit path in `CallsReview.tsx`, and the
 explicit residual-approval cleanup adapter. Pending ERC-5792 requests append
 under their own storage lock; cross-dapp adapters instead append the selected
 generated entries to the active assembled batch. Bulk cleanup performs one
-bounded storage mutation and one subsequent simulation refresh.
+bounded storage mutation and one subsequent simulation refresh. Both paths
+return only opaque late-detection evidence IDs; token and spender targets are
+re-resolved from the exact current request fingerprint in the background.
 
 Cross-dapp confirmation explicitly opts its custom transport into the shared
 batch fee selector. The selected native/token mode and one-shot quote ID flow
