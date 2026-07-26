@@ -23,6 +23,10 @@ function dependencies(overrides: Record<string, unknown> = {}): any {
     getDappPermissions: async () => ({}),
     handleGetDappConnectionContext: async () => ({ success: true }),
     getPendingDappConnectionRequests: async () => [],
+    getDappConnectionReputation: async () => ({
+      success: true,
+      reputation: { status: "unverified", reason: "not-listed" },
+    }),
     handleConfirmDappConnection: async () => ({ success: true }),
     handleRejectDappConnection: async () => ({ success: true }),
     handleRevokeDappPermission: async () => ({ success: true }),
@@ -153,6 +157,36 @@ test("trusted permission reads and revocation preserve response shapes", async (
     success: true,
     origin: "https://one.example",
   });
+});
+
+test("trusted reputation lookup forwards only the opaque pending request id", async () => {
+  let receivedRequestId: unknown;
+  const capture = responseCapture();
+  const route = createBackgroundDappPermissionMessageRouter(
+    dependencies({
+      getDappConnectionReputation: async (requestId: unknown) => {
+        receivedRequestId = requestId;
+        return {
+          success: true,
+          reputation: { status: "unverified", reason: "not-listed" },
+        };
+      },
+    }),
+  );
+  route(
+    {
+      type: "getDappConnectionReputation",
+      requestId: "pending-connect-1",
+      hostname: "renderer-controlled.example",
+    },
+    {} as any,
+    capture.sendResponse,
+  );
+  assert.deepEqual(await capture.response, {
+    success: true,
+    reputation: { status: "unverified", reason: "not-listed" },
+  });
+  assert.equal(receivedRequestId, "pending-connect-1");
 });
 
 test("trusted connection UI can read public ENS contenthash provenance", async () => {

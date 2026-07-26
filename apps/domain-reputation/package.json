@@ -1,0 +1,25 @@
+{
+  "name": "@walletchan/domain-reputation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@metamask/phishing-controller": "12.6.0",
+    "hono": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

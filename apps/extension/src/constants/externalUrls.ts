@@ -38,6 +38,7 @@ export const WALLETCHAN_PREMIUM_STATUS_API = `${WALLETCHAN_API_BASE}/premium-sta
 export const WALLETCHAN_VAULT_DATA_API = `${WALLETCHAN_API_BASE}/vault-data`;
 export const WALLETCHAN_CLEAR_SIGNING_API = `${WALLETCHAN_API_BASE}/clearsigning/descriptor`;
 export const WALLETCHAN_PIMLICO_PROXY_BASE = `${WALLETCHAN_API_BASE}/gas/pimlico`;
+export const WALLETCHAN_DOMAIN_REPUTATION_API = `${WALLETCHAN_API_BASE}/domain-reputation`;
 
 // ---------------------------------------------------------------------------
 // WalletChan Assets & Pages

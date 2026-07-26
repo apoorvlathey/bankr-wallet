@@ -23,3 +23,11 @@ See `apps/indexer/` for the reference setup.
 - `apps/wchan-vault-indexer/` — Ponder indexer for sWCHAN
 - `apps/tg-bot/` — Token-gated Telegram bot
 - `apps/arb-bot/` — Cross-pool arbitrage bot
+- `apps/domain-reputation/` — Long-running MetaMask phishing-list synchronizer
+  and lookup API. Attach one volume at `/data`, set
+  `DOMAIN_REPUTATION_SERVICE_TOKEN`, generate a public Railway domain, and put
+  that domain plus the same token in the website's
+  `DOMAIN_REPUTATION_SERVICE_URL` / `DOMAIN_REPUTATION_SERVICE_TOKEN`
+  environment variables. `/readyz` is the deployment healthcheck. The service
+  loads its last-known-good snapshot from the volume, then polls the fixed
+  MetaMask raw configuration URL every five minutes with ETag validation.

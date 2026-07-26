@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Flex, Heading, HStack, Icon, Text, VStack } from "@chakra-ui/react";
 import type { Account } from "@/chrome/types";
 import type { PendingDappConnectionRequest } from "@/chrome/requests/dappPermissionStorage";
@@ -11,6 +11,9 @@ import DisplayModeMenu from "@/components/DisplayModeMenu";
 import { playInteractionSound } from "@/sounds/soundManager";
 import { contenthashHistoryLabel } from "@/components/DappConnection/contenthashHistoryModel";
 import { useEnsContenthashLastUpdated } from "@/components/DappConnection/useEnsContenthashLastUpdated";
+import { useDappConnectionReputation } from "@/components/DappConnection/useDappConnectionReputation";
+import { DappConnectionReputationNotice } from "@/components/DappConnection/DappConnectionReputationNotice";
+import { buildDappReputationPresentation } from "@/components/DappConnection/reputationPresentation";
 
 interface DappConnectionConfirmationProps {
   request: PendingDappConnectionRequest;
@@ -104,6 +107,7 @@ export default function DappConnectionConfirmation({
 }: DappConnectionConfirmationProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [riskAcknowledged, setRiskAcknowledged] = useState(false);
   const formatOrigin = useDappOriginFormatter();
   const displayOrigin = formatOrigin(request.origin);
   const contenthashHistory = useEnsContenthashLastUpdated(
@@ -111,6 +115,21 @@ export default function DappConnectionConfirmation({
     displayOrigin.isEnsIpfsGateway,
   );
   const contenthashLabel = contenthashHistoryLabel(contenthashHistory);
+  const reputation = useDappConnectionReputation(request.id);
+  const reputationPresentation =
+    reputation.status === "ready"
+      ? buildDappReputationPresentation(reputation.reputation)
+      : null;
+  const requiresRiskAcknowledgement =
+    reputationPresentation?.requiresAcknowledgement === true;
+  const reputationStatus =
+    reputation.status === "ready" ? reputation.reputation.status : "loading";
+  const canConnect =
+    reputation.status === "ready" &&
+    (!requiresRiskAcknowledgement || riskAcknowledged);
+  useEffect(() => {
+    setRiskAcknowledged(false);
+  }, [request.id, reputationStatus]);
   const favicon = useMemo(
     () => request.favicon || googleFaviconUrl(request.hostname, 64),
     [request.favicon, request.hostname],
@@ -205,6 +224,12 @@ export default function DappConnectionConfirmation({
       contextTitle="Connecting as"
       context={
         <VStack align="stretch" spacing={4}>
+          <DappConnectionReputationNotice
+            state={reputation}
+            acknowledged={riskAcknowledged}
+            onAcknowledgedChange={setRiskAcknowledged}
+          />
+
           <DappConnectionAccountSelector
             accounts={accounts}
             account={account}
@@ -247,12 +272,16 @@ export default function DappConnectionConfirmation({
       }
       confirmAction={
         <Button
-          variant="brand"
+          variant={requiresRiskAcknowledgement ? "danger" : "brand"}
           isLoading={isConfirming}
-          isDisabled={isRejecting}
+          isDisabled={isRejecting || !canConnect}
           onClick={() => void finish("confirmDappConnection")}
         >
-          Connect
+          {reputation.status === "loading"
+            ? "Checking site…"
+            : requiresRiskAcknowledgement
+              ? "Connect anyway"
+              : "Connect"}
         </Button>
       }
     />

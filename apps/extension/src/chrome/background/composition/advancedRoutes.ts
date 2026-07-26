@@ -5,7 +5,6 @@ import { estimateBatchGasSequential } from "../../batchGasEstimation";
 import {
   handleConfirmBatchTransaction,
   handleConfirmBatchTransactionPK,
-  handleAppendApprovalRevokeToPendingBatch,
   handleAppendApprovalRevokesToPendingBatch,
   handleRejectBatchTransaction,
   handleRemoveCallFromPendingBatch,
@@ -17,9 +16,7 @@ import {
 } from "../../batchTxHandlers";
 import {
   handleAddCallsToCrossDappBatch,
-  handleAppendApprovalRevokeToCrossDappBatch,
   handleAppendApprovalRevokesToCrossDappBatch,
-  handleAddApprovalRevokeToTransactionBatch,
   handleAddApprovalRevokesToTransactionBatch,
   handleAddToCrossDappBatch,
   handleConfirmCrossDappBatch,
@@ -80,7 +77,6 @@ export function composeAdvancedRoutes(
       handleSplitBatchIntoIndividualTxs,
       handleRemoveCallFromPendingBatch,
       handleUpdateCallInPendingBatch,
-      handleAppendApprovalRevokeToPendingBatch,
       handleAppendApprovalRevokesToPendingBatch,
       resolveApprovalCleanupEvidence,
       updatePendingTxRequestData,
@@ -103,10 +99,8 @@ export function composeAdvancedRoutes(
       runPendingRequestResolutions: pending.runPendingRequestResolutions,
       pendingResolutionConflict: pending.pendingResolutionConflict,
       handleAddToCrossDappBatch,
-      handleAddApprovalRevokeToTransactionBatch,
       handleAddApprovalRevokesToTransactionBatch,
       handleAddCallsToCrossDappBatch,
-      handleAppendApprovalRevokeToCrossDappBatch,
       handleAppendApprovalRevokesToCrossDappBatch,
       resolveApprovalCleanupEvidence,
       handleRemoveFromCrossDappBatch,

@@ -13,6 +13,7 @@ export const BACKGROUND_DAPP_PERMISSION_MESSAGE_TYPES = [
   "getDappPermissions",
   "getDappConnectionContext",
   "getPendingDappConnectionRequests",
+  "getDappConnectionReputation",
   "confirmDappConnection",
   "rejectDappConnection",
   "revokeDappPermission",
@@ -32,6 +33,7 @@ type Dependencies = {
   getDappPermissions: () => Promise<Record<string, unknown>>;
   handleGetDappConnectionContext: (tabId: number) => Promise<any>;
   getPendingDappConnectionRequests: () => Promise<any>;
+  getDappConnectionReputation: (requestId: unknown) => Promise<any>;
   handleConfirmDappConnection: (requestId: string) => Promise<any>;
   handleRejectDappConnection: (requestId: string) => Promise<any>;
   handleRevokeDappPermission: (origin: string) => Promise<any>;
@@ -109,6 +111,19 @@ export function createBackgroundDappPermissionMessageRouter(
 
       case "getPendingDappConnectionRequests": {
         dependencies.getPendingDappConnectionRequests().then(sendResponse);
+        return HANDLED_ASYNC;
+      }
+
+      case "getDappConnectionReputation": {
+        dependencies
+          .getDappConnectionReputation(message.requestId)
+          .then(sendResponse)
+          .catch(() =>
+            sendResponse({
+              success: false,
+              error: "Domain reputation check failed",
+            }),
+          );
         return HANDLED_ASYNC;
       }
 

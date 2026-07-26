@@ -1138,6 +1138,22 @@ The extension maintains address consistency between storage and the active accou
   public `VITE_THE_GRAPH_API_KEY` / `NEXT_PUBLIC_THE_GRAPH_API_KEY` used by
   swiss-knife and compiles it only into the service-worker bundle; without a
   configured key it falls back to the legacy public ENS subgraph endpoint.
+- Every new connection prompt also performs a wallet-UI-only
+  `getDappConnectionReputation` lookup. The renderer supplies only the opaque
+  pending request ID; `dapp/reputationClient.ts` re-resolves the durable
+  Chrome-attested hostname and concurrently queries WalletChan's bounded
+  first-party `/api/domain-reputation` proxy plus the existing DefiLlama
+  directory client. MetaMask blocklist and fuzzy matches always win. Otherwise,
+  an exact DefiLlama route-hostname match (with only `www.` normalization)
+  shows `Listed on DeFiLlama` even when the negative-list request is unavailable
+  or stale. Sites missing from DeFiLlama show an amber warning when negative-list
+  coverage is unavailable, or an ordinary unlisted warning after a fresh
+  negative result. Known/fuzzy threats retain their red warning even from a
+  stale last-known-good snapshot and require an explicit renderer
+  acknowledgement before the trusted-UI Connect action is enabled. Network
+  failure warns but does not prevent connection. Reputation is live
+  presentation state and is never added to `dappPermissions` or
+  `pendingDappConnectionRequests`.
 - Request surfaces share the same origin presentation formatter. When
   WalletChan Browser is disabled, hosted and local gateway origins are not
   rewritten through the ENS resolution cache: connection, transaction,

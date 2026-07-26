@@ -33,6 +33,7 @@ pnpm dev-sepolia:extension # Local APIs with Sepolia Privacy Pools
 pnpm dev:website           # Start website dev server at localhost:3030
 pnpm dev:staking-indexer   # Start staking indexer at localhost:42070
 pnpm dev:tg-bot            # Start TG bot + API at localhost:3001
+pnpm dev:domain-reputation # Start domain reputation service at localhost:42110
 pnpm dev:arb-bot           # Start arb bot (requires .env with PRIVATE_KEY + BASE_RPC_URL)
 pnpm dev:walletchan-rpc    # Start local JSON-RPC -> WalletConnect proxy at localhost:4209
 pnpm dev:walletchan-mcp    # Start local stdio MCP adapter backed by walletchan-rpc
@@ -44,6 +45,8 @@ pnpm build-sepolia:extension # Production APIs with Sepolia Privacy Pools
 pnpm build:website      # Build website only
 pnpm build:walletchan-rpc # Build WalletChan RPC CLI only
 pnpm build:walletchan-mcp # Build WalletChan MCP CLI only
+pnpm build:domain-reputation # Build Railway domain reputation service
+pnpm test:domain-reputation  # Test source validation, snapshots, and lookups
 
 # Extension-specific
 pnpm zip                # Build + zip (for GitHub Releases)
@@ -174,6 +177,16 @@ Starts the Next.js dev server at `http://localhost:3030`. The port is intentiona
 ## Environment Variables
 
 When adding or using new environment variables in any app, always update (or create) the `.env.example` file in that app's directory. This ensures developers know what env vars are needed.
+
+Domain reputation requires:
+
+- Railway: `DOMAIN_REPUTATION_SERVICE_TOKEN` (at least 32 characters). Railway
+  injects `PORT`; attach a persistent volume at `/data`, exposed through
+  `RAILWAY_VOLUME_MOUNT_PATH`.
+- Website/Vercel: `DOMAIN_REPUTATION_SERVICE_URL` and the identical
+  `DOMAIN_REPUTATION_SERVICE_TOKEN`.
+- Extension: the existing `VITE_DEFILLAMA_SEARCH_KEY`; no Railway secret is
+  compiled into the extension.
 
 ## WalletChan RPC / MCP
 

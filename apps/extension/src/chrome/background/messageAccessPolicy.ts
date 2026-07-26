@@ -239,6 +239,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "getDappPermissions",
   "getDappConnectionContext",
   "getPendingDappConnectionRequests",
+  "getDappConnectionReputation",
   "confirmDappConnection",
   "rejectDappConnection",
   "revokeDappPermission",

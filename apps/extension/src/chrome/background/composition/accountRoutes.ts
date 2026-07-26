@@ -91,6 +91,7 @@ import { createBackgroundLedgerMessageRouter } from "../ledgerRouter";
 import { handleConfirmLedgerSignatureRequest } from "../../ledger/signatureConfirmation";
 import { clearTxHistoryForAddresses } from "../../txHistoryStorage";
 import { assertPrivacyAccountRemovalSafe } from "../../privacy/accountSafety";
+import { getDappConnectionReputation } from "../../dapp/reputationClient";
 
 export function composeAccountRoutes(
   pending: PendingResolutionComposition,
@@ -104,6 +105,7 @@ export function composeAccountRoutes(
       getDappPermissions,
       handleGetDappConnectionContext,
       getPendingDappConnectionRequests,
+      getDappConnectionReputation,
       handleConfirmDappConnection,
       handleRejectDappConnection,
       handleRevokeDappPermission,

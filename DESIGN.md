@@ -242,6 +242,17 @@
 
 ## Slop audit
 
+- 2026-07-26 phishing-warning attribution audit: changed the user-facing
+  blocklist sentence from an implementation-source attribution to WalletChan's
+  product voice. The warning remains direct, preserves the risk consequence,
+  and keeps source attribution in technical documentation. Result: pass.
+
+- 2026-07-26 dapp-reputation success audit: removed the redundant protocol-name
+  sentence from the green DeFiLlama banner. The check icon and source-specific
+  title already communicate the positive result; warning states retain their
+  safety-critical explanations. This reduces noise and vertical height without
+  weakening status semantics or accessibility. Result: pass.
+
 - 2026-07-26 cross-dapp fee-payment audit: reused the existing batch decision
   row, token action sheet, loading/error feedback, native default, and Advanced
   fee disclosure without adding a new card, badge, gradient, or explanatory
@@ -1028,6 +1039,14 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-26: changed the reported-phishing banner to say `our phishing
+  blocklist`; MetaMask remains identified as the underlying source in
+  implementation and security documentation.
+
+- 2026-07-26: reduced the successful dapp-reputation banner to the check icon
+  and `Listed on DeFiLlama` title while retaining explanatory copy for unknown,
+  unavailable, blocklisted, and lookalike states.
 
 - 2026-07-26: extended the existing batch “Pay network fee with” control to
   cross-dapp confirmation without introducing a new visual pattern. It reuses

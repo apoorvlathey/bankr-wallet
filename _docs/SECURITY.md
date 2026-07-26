@@ -372,6 +372,15 @@ DefiLlama key is an intentionally public client key shared with the website OS
 build, is confined to the background bundle at runtime, and grants no wallet
 authority. Direct launcher navigation likewise accepts only credential-free
 HTTPS URLs up to 2,048 characters; ordinary HTTP input fails closed.
+The trusted wallet connection screen reuses the same bounded directory client
+through `getDappConnectionReputation`, but it cannot choose the queried
+hostname. The wallet-UI message carries only a bounded pending request ID; the
+service worker resolves that ID from `pendingDappConnectionRequests` and sends
+its Chrome-attested hostname to the fixed first-party reputation endpoint and
+DefiLlama. A renderer-supplied hostname is ignored. An exact DefiLlama
+route-hostname comparison is an independent positive display signal, including
+when the negative-list request is unavailable; it never overrides a MetaMask
+block/fuzzy result returned by the parallel check.
 The exact launcher may also call `ens-cache-browser-image` with a public image
 URL returned by the directory or connected-dapp projection. This is a distinct
 message from trusted wallet UI image requests and exposes only the existing
@@ -885,6 +894,14 @@ submission, signing, debug/admin, or stateful filter methods through the proxy.
 
 The extension has broad HTTP(S) host access, so background fetches must not
 turn that privilege into a private-network proxy or an unbounded memory sink.
+
+`dapp/reputationClient.ts` posts one hostname derived from durable
+Chrome-attested pending state to the fixed WalletChan API URL. The shared
+bounded reader rejects redirects and ambient credentials/referrers and applies
+a 4-second deadline and 16 KiB response ceiling. The response is schema checked
+before combination. Reputation failure is display-only and fail-open with an
+explicit unavailable warning; it grants no permission and cannot reach signing
+or submission.
 
 `network/safeRpcForwarding.ts` applies the following boundary to injected-provider and
 WalletConnect RPC forwarding:
