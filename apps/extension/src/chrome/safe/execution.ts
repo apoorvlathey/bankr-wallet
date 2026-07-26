@@ -3,6 +3,9 @@ import { getAccountById } from "../accountStorage";
 import { getLocalPrivateKeyForAccount } from "../accounts/localKeyResolver";
 import { getAuthCeremonyEpoch, isCurrentAuthCeremonyEpoch } from "../authTransition";
 import { broadcastSerializedTransaction, signAndBroadcastTransaction } from "../localSigner";
+import { getNextNonce, resetNonce } from "../forceInclusion/nonceManager";
+import { ensureLedgerSigningSession } from "../ledger/session";
+import { signAndBroadcastLedgerTransaction } from "../ledger/signing";
 import { getStoredRpcUrl } from "@/lib/chains";
 import { secureHttpTransport } from "../network/rpcClient";
 import { getPasswordType } from "../sessionCache";
@@ -41,6 +44,10 @@ import {
   resumeSafeExecutorHistory,
   trackSafeExecutorBroadcast,
 } from "./executorHistory";
+import {
+  canExecuteSafeWithFeeToken,
+  isSafeExecutorAccount,
+} from "./accountTypePolicy";
 
 const RECONCILE_INITIAL_INTERVAL_MS = 2_000;
 const RECONCILE_MAX_INTERVAL_MS = 15_000;
@@ -73,7 +80,9 @@ export async function executionContext(proposalId: string, executorAccountId: st
     throw new Error("Safe execution is already submitted and awaiting confirmation");
   }
   if (proposal.state !== "readyToExecute") throw new Error("Safe proposal is not ready to execute");
-  if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) throw new Error("Choose a private-key or seed-phrase executor");
+  if (!account || !isSafeExecutorAccount(account)) {
+    throw new Error("Choose a private-key, seed-phrase, or Ledger executor");
+  }
   return { proposal, account };
 }
 
@@ -114,67 +123,124 @@ export async function executeSafeProposal(input: {
   feePaymentQuoteId?: string;
 }) {
   if (input.feePaymentToken === "token") {
+    const { account } = await executionContext(
+      input.proposalId,
+      input.executorAccountId,
+    );
+    if (!canExecuteSafeWithFeeToken(account)) {
+      throw new Error("Selected Safe executor supports native gas only");
+    }
     const { executeSafeProposalWithFeeToken } = await import("./feePaymentExecution");
     return executeSafeProposalWithFeeToken(input);
   }
   const { proposal, account } = await executionContext(input.proposalId, input.executorAccountId);
   const claim = await claimSafeProposalEffect(proposal.id, { kind: "execute" });
   const claimId = claim.effectClaim!.claimId;
+  let ledgerNonceReserved = false;
   try {
-    const key = await getLocalPrivateKeyForAccount(account.id, "");
-    if (!key || !getPasswordType()) throw new Error("Wallet is locked; unlock it and try again");
+    const key = account.type === "ledger"
+      ? null
+      : await getLocalPrivateKeyForAccount(account.id, "");
+    if (account.type === "ledger") {
+      await ensureLedgerSigningSession("");
+    } else if (!key || !getPasswordType()) {
+      throw new Error("Wallet is locked; unlock it and try again");
+    }
     const authEpoch = getAuthCeremonyEpoch();
     await liveExecutable(proposal);
     const rpcUrl = await getStoredRpcUrl(proposal.chainId);
     if (!rpcUrl) throw new Error("No RPC configured for network");
     const gas = validateSafeGasOverrides(input.gasOverrides);
-    const result = await signAndBroadcastTransaction(
-      key,
-      {
-        chainId: proposal.chainId,
-        from: account.address,
-        to: proposal.safeAddress,
-        value: "0",
-        data: buildSafeExecutionData(proposal),
-        ...gas,
-      },
-      rpcUrl,
-      undefined,
-      async ({ serializedTransaction, transactionHash }) => {
-        if (!isCurrentAuthCeremonyEpoch(authEpoch) || !getPasswordType()) throw new Error("Authentication state changed; unlock and try again");
-        const currentAccount = await getAccountById(account.id);
-        if (!currentAccount || currentAccount.type !== account.type || currentAccount.address.toLowerCase() !== account.address.toLowerCase()) throw new Error("Executor account changed");
-        const currentProposal = await getSafeProposal(proposal.id);
-        if (currentProposal?.effectClaim?.claimId !== claimId) throw new Error("Safe execution claim changed");
-        await liveExecutable(proposal);
-        // This is the final read-only operation before the serialized outer
-        // transaction crosses the broadcast boundary. Simulate the exact
-        // immutable Safe envelope with the selected executor, not merely its
-        // underlying calls or an earlier estimate.
-        await enforceSafeExecutionSimulation(
-          async () => {
-            await simulateExecutionEnvelope(proposal, account.address, rpcUrl);
-          },
-          input.allowSimulationFailure,
+    const transaction = {
+      chainId: proposal.chainId,
+      from: account.address,
+      to: proposal.safeAddress,
+      value: "0",
+      data: buildSafeExecutionData(proposal),
+      ...gas,
+    };
+    const beforeBroadcast = async ({
+      serializedTransaction,
+      transactionHash,
+    }: {
+      serializedTransaction: `0x${string}`;
+      transactionHash: `0x${string}`;
+    }) => {
+      if (!isCurrentAuthCeremonyEpoch(authEpoch) || !getPasswordType()) throw new Error("Authentication state changed; unlock and try again");
+      const currentAccount = await getAccountById(account.id);
+      if (
+        !currentAccount ||
+        currentAccount.type !== account.type ||
+        currentAccount.address.toLowerCase() !== account.address.toLowerCase() ||
+        (
+          account.type === "ledger" &&
+          (
+            currentAccount.type !== "ledger" ||
+            currentAccount.deviceId !== account.deviceId ||
+            currentAccount.hdPath !== account.hdPath
+          )
+        )
+      ) {
+        throw new Error("Executor account changed");
+      }
+      const currentProposal = await getSafeProposal(proposal.id);
+      if (currentProposal?.effectClaim?.claimId !== claimId) throw new Error("Safe execution claim changed");
+      await liveExecutable(proposal);
+      // This is the final read-only operation before the serialized outer
+      // transaction crosses the broadcast boundary. Simulate the exact
+      // immutable Safe envelope with the selected executor, not merely its
+      // underlying calls or an earlier estimate.
+      await enforceSafeExecutionSimulation(
+        async () => {
+          await simulateExecutionEnvelope(proposal, account.address, rpcUrl);
+        },
+        input.allowSimulationFailure,
+      );
+      const preparedAt = Date.now();
+      const prepared = await updateSafeProposal(proposal.id, (record) => ({
+        ...record,
+        state: "ambiguous",
+        transactionHash,
+        serializedExecution: serializedTransaction,
+        executionPreparedAt: preparedAt,
+        executor: buildSafeExecutionExecutor({
+          accountId: account.id,
+          accountType: account.type,
+          address: account.address.toLowerCase() as `0x${string}`,
+        }, gas, preparedAt),
+        error: "Execution is crossing the broadcast boundary",
+        updatedAt: preparedAt,
+      }));
+      await ensureSafeExecutorHistory(prepared, true);
+    };
+    const result = account.type === "ledger"
+      ? await (async () => {
+          const nonce = await getNextNonce(account.address, proposal.chainId);
+          ledgerNonceReserved = true;
+          return signAndBroadcastLedgerTransaction({
+            opId: `safe-execution:${proposal.id}`,
+            account,
+            tx: {
+              ...transaction,
+              nonce,
+            },
+            gasOverrides: gas
+              ? {
+                  gasLimit: gas.gas,
+                  maxFeePerGas: gas.maxFeePerGas,
+                  maxPriorityFeePerGas: gas.maxPriorityFeePerGas,
+                }
+              : undefined,
+            beforeBroadcast,
+          });
+        })()
+      : await signAndBroadcastTransaction(
+          key!,
+          transaction,
+          rpcUrl,
+          undefined,
+          beforeBroadcast,
         );
-        const preparedAt = Date.now();
-        const prepared = await updateSafeProposal(proposal.id, (record) => ({
-          ...record,
-          state: "ambiguous",
-          transactionHash,
-          serializedExecution: serializedTransaction,
-          executionPreparedAt: preparedAt,
-          executor: buildSafeExecutionExecutor({
-            accountId: account.id,
-            accountType: account.type,
-            address: account.address.toLowerCase() as `0x${string}`,
-          }, gas, preparedAt),
-          error: "Execution is crossing the broadcast boundary",
-          updatedAt: preparedAt,
-        }));
-        await ensureSafeExecutorHistory(prepared, true);
-      },
-    );
     if (!/^0x[0-9a-fA-F]{64}$/.test(result.txHash)) {
       throw new Error("Executor returned an invalid transaction hash");
     }
@@ -196,6 +262,9 @@ export async function executeSafeProposal(input: {
     return updated;
   } catch (error) {
     const current = await getSafeProposal(proposal.id).catch(() => null);
+    if (ledgerNonceReserved && !current?.serializedExecution) {
+      resetNonce(account.address, proposal.chainId);
+    }
     const recovered = await releaseSafeProposalEffect(proposal.id, claimId, current?.serializedExecution
       ? {
           state: "ambiguous",

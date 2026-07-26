@@ -14,6 +14,12 @@
   A simulated revert uses the shared likely-to-fail confirmation and sends an
   explicit acknowledgement to the final background execution gate; it never
   silently enables execution.
+  A queued future nonce retains normal owner approval and publication controls.
+  Once quorum is reached, it shows the selected executor but withholds fee
+  estimation and disables Execute until the refreshed live nonce matches.
+  Ledger approval/execution reuses the shared hardware-signing status and locks
+  owner/executor, fee, rejection, and advanced mutation controls while the
+  device prompt is active.
   Terminal Activity records switch to a receipt-style, read-only transaction
   detail: no live simulation, route-waiting notice, authority refresh, signer
   or executor controls, rejection action, or sticky request footer.
@@ -31,6 +37,8 @@
   not clear an already-readable row while decoding the same calls again.
 - `SafeProposalDecisionSummary.tsx`: sticky `Signing with` / `Execute with`
   identity row, account dropdown, and shared transaction gas estimator.
+  Long signer/executor lists stay inside a 320px scrollable menu so the
+  selector remains usable in popup, sidepanel, and short-window viewports.
   Execution choices that are also Safe owners carry an explicit `Owner` label;
   non-owner gas payers remain selectable without appearing to hold Safe signing
   authority. At quorum it also reuses the standard fee-token selector. Its
@@ -63,17 +71,22 @@
   for the nonce row. It owns focus, keyboard Escape/Enter behavior, and
   immediate bounds feedback; the background remains the mutation authority.
 - `safeProposalActionModel.ts`: pure owner/executor filtering, owner-first
-  executor defaulting, action selection, and synthetic review request builders.
+  executor ordering/defaulting, queued-execution gating, action selection, and
+  synthetic review request builders. Eligible Safe owners stay above non-owner gas payers in the
+  `Execute with` menu while each group preserves wallet account order.
+  It imports eligibility guards and derived account types from the exhaustive
+  background `safe/accountTypePolicy.ts` instead of maintaining a
+  renderer-specific wallet-type list.
 - `SafeProposalRow.tsx`: Nonce-labeled, Activity-style chain-led request row with
   plain-language action, resolved wallet/contact counterparty, and compact
-  lifecycle status. Future-nonce rows identify the earlier visible request that
-  must execute first. Chain identity stays in the leading logo instead of being
-  repeated in copy.
+  lifecycle status. Future-nonce rows remain approval-oriented before quorum,
+  then identify the earlier nonce that must execute first. Chain identity stays
+  in the leading logo instead of being repeated in copy.
 - `safeProposalPresentation.ts`: pure request-row intent and status projection.
 - `safeProposalOrdering.ts`: pure descending-nonce inbox ordering with stable
   same-nonce tie-breaking.
-- `safeProposalSequence.ts`: maps a verified future Safe nonce to the visible
-  request number that currently blocks it.
+- `safeProposalSequence.ts`: maps a verified future Safe nonce to the live or
+  visible earlier nonce that gates only its final execution.
 - `SafeProposalActivity.tsx`: descending-nonce proposal selection, shared date
   grouping, live origin resolution, and Activity-ledger composition.
 - `SafeProposalActivityRow.tsx`: compact Warm Midnight Activity row with dapp

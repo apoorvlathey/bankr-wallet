@@ -22,6 +22,7 @@ import type { FeePaymentCall } from "./userOperation";
 import { getSafeProposal } from "../safe/proposalRepository";
 import { buildSafeExecutionData } from "../safe/executionData";
 import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
+import { isSafeFeeTokenExecutorAccount } from "../safe/accountTypePolicy";
 import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
 
 const QUOTE_TTL_MS = 45_000;
@@ -251,8 +252,8 @@ export async function prepareFeePaymentQuote(
     if (!proposal || proposal.state !== "readyToExecute" || hasUnresolvedSafeExecution(proposal)) {
       throw new Error("Safe proposal is not ready to execute");
     }
-    if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) {
-      throw new Error("Safe execution account is no longer available");
+    if (!account || !isSafeFeeTokenExecutorAccount(account)) {
+      throw new Error("Safe execution account cannot pay gas with a token");
     }
     return prepareQuote({
       family,

@@ -331,9 +331,10 @@ with chain-led rows, human action labels, wallet/contact-resolved counterparty
 context, and concise approval or execution state instead of call-address cards
 and nonce-heavy copy. Rows show a muted **Nonce** label with a high-emphasis
 **#N** at the upper left. A verified
-future-nonce dependency is rendered as **Blocked · Execute #N first**, using
-the referenced row's visible number; configuration-blocked requests remain
-plain **Blocked**. The chain logo carries network context, so rows do not
+future-nonce request remains approvable and is rendered as **Needs approval ·
+Queued** before quorum, then **Queued · Execute #N first** once fully signed,
+using the referenced row's visible number. Configuration-blocked requests
+remain plain **Blocked**. The chain logo carries network context, so rows do not
 repeat chain text or the Safe-service origin. A header reload action refreshes
 the selected Safe immediately. Active-Safe mount performs the same refresh on
 popup/sidepanel open and account switch, without waiting for the alarm.
@@ -497,7 +498,8 @@ Rules:
   provider/ERC-5792 result routes.
 - An owner, threshold, singleton, module, guard, or fallback change increments
   the configuration epoch and blocks action until a new review.
-- A future-nonce proposal remains visible but cannot execute early.
+- A future-nonce proposal may collect and publish owner approvals immediately,
+  but cannot estimate or execute the outer transaction early.
 - User wall-clock age never deletes a legitimate proposal.
 
 ## 9. Provider and WalletConnect contract
@@ -1035,10 +1037,11 @@ runs for:
 
 - Bankr owner;
 - private-key owner;
-- seed-phrase owner; and
+- seed-phrase owner;
+- Ledger owner with automated no-device coverage plus real-device QA; and
 - impersonator/view-only negative path.
 
-Also test one Safe linked to all three signing types and prove that each
+Also test one Safe linked to all four signing types and prove that each
 approval requires the intended account's current credential.
 
 ### 15.2 Safe configurations
@@ -1049,7 +1052,8 @@ approval requires the intended account's current credential.
 - unsupported contract owner and nested Safe owner;
 - no modules, known module, unknown module, guard, custom fallback;
 - single call, canonical MultiSend, malformed MultiSend, arbitrary delegatecall;
-- current nonce, future nonce, stale nonce, and same-nonce conflicts; and
+- current nonce, future-nonce approval before execution eligibility, stale
+  nonce, and same-nonce conflicts; and
 - service behind RPC head or unavailable.
 
 ### 15.3 Lifecycle and concurrency

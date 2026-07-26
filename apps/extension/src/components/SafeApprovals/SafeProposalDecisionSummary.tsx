@@ -79,12 +79,22 @@ export function SafeProposalDecisionSummary({
         px={2}
         rightIcon={<ChevronDownIcon boxSize={4} />}
         isDisabled={disabled}
-        aria-label={actionKind === "execute" ? "Choose execution account" : "Choose signing account"}
+        aria-label={
+          actionKind === "execute"
+            ? "Choose execution account"
+            : "Choose signing account"
+        }
       >
         <FromAccountDisplay address={selectedAccount.address} />
       </MenuButton>
       <Portal>
-        <MenuList minW="260px">
+        <MenuList
+          minW="260px"
+          maxW="calc(100vw - 32px)"
+          maxH="320px"
+          overflowY="auto"
+          overscrollBehavior="contain"
+        >
           {accounts.map((account) => (
             <MenuItem
               key={account.id}
@@ -137,7 +147,7 @@ export function SafeProposalDecisionSummary({
           {feePaymentToken === "native" && (
             <GasEstimateDisplay
               txRequest={executionRequest}
-              accountType={selectedAccount.type as "privateKey" | "seedPhrase"}
+              accountType={selectedAccount.type as SafeExecutorAccount["type"]}
               onGasOverrides={onGasOverrides}
               onValidityChange={onGasValidityChange}
               onFeeSummaryChange={setNativeFeeSummary}

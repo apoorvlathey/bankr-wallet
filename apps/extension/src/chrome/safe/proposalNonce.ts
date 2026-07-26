@@ -15,6 +15,15 @@ export function isFutureSafeNonceError(error?: string): boolean {
   return !!error?.startsWith("Future Safe nonce ");
 }
 
+export function getSafeProposalNoncePosition(
+  proposalNonce: number,
+  liveNonce: `${bigint}`,
+): "stale" | "current" | "future" {
+  const proposal = BigInt(proposalNonce);
+  const live = BigInt(liveNonce);
+  return proposal < live ? "stale" : proposal > live ? "future" : "current";
+}
+
 export function reservesSafeNonce(proposal: SafeProposalRecord): boolean {
   return !proposal.hiddenAt && !TERMINAL_STATES.has(proposal.state);
 }

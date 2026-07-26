@@ -3,6 +3,7 @@ import {
   createWalletClient,
   getAddress,
   http,
+  keccak256,
   recoverMessageAddress,
   recoverTypedDataAddress,
   recoverTransactionAddress,
@@ -30,12 +31,63 @@ interface GasOverrides {
   maxPriorityFeePerGas: string;
 }
 
+function ledgerSignatureHex(signature: {
+  r: `0x${string}`;
+  s: `0x${string}`;
+  v: number;
+}): `0x${string}` {
+  const recovery =
+    signature.v === 0 || signature.v === 1 ? signature.v + 27 : signature.v;
+  return concatHex([
+    signature.r,
+    signature.s,
+    toHex(recovery, { size: 1 }),
+  ]);
+}
+
+/** Sign exact chain-bound EIP-712 data and recover it to the pinned Ledger. */
+export async function signLedgerTypedDataForAccount(input: {
+  opId: string;
+  account: LedgerAccount;
+  typedData: object;
+  chainId: number;
+}): Promise<`0x${string}`> {
+  const typedData = input.typedData as Record<string, unknown>;
+  const domainChainId = Number(
+    (typedData as { domain?: { chainId?: unknown } }).domain?.chainId,
+  );
+  if (Number.isFinite(domainChainId) && domainChainId !== input.chainId) {
+    throw new Error(
+      `Provided chainId "${domainChainId}" must match the active chainId "${input.chainId}"`,
+    );
+  }
+  const signature = ledgerSignatureHex(await signLedgerTypedData({
+    opId: input.opId,
+    deviceId: input.account.deviceId,
+    hdPath: input.account.hdPath,
+    typedData,
+  }));
+  const recovered = await recoverTypedDataAddress({
+    ...typedData,
+    signature,
+  } as never);
+  if (recovered.toLowerCase() !== input.account.address.toLowerCase()) {
+    throw new Error(
+      "Ledger signed with a different account. Check the connected device and derivation path.",
+    );
+  }
+  return signature;
+}
+
 export async function signAndBroadcastLedgerTransaction(input: {
   opId: string;
   account: LedgerAccount;
   tx: TransactionParams & { nonce: number };
   gasOverrides?: GasOverrides;
-  beforeBroadcast?: () => Promise<void>;
+  beforeBroadcast?: (prepared: {
+    serializedTransaction: `0x${string}`;
+    transactionHash: `0x${string}`;
+  }) => Promise<void>;
 }): Promise<SignedTransaction> {
   const { chain, rpcUrl } = await resolveChain(input.tx.chainId);
   const client = createWalletClient({ chain, transport: http(rpcUrl, { timeout: 30_000 }) });
@@ -77,7 +129,10 @@ export async function signAndBroadcastLedgerTransaction(input: {
   if (recovered.toLowerCase() !== input.account.address.toLowerCase()) {
     throw new Error("Ledger signed with a different account. Check the connected device and derivation path.");
   }
-  await input.beforeBroadcast?.();
+  await input.beforeBroadcast?.({
+    serializedTransaction: signedRaw,
+    transactionHash: keccak256(signedRaw),
+  });
   const result = await broadcastSerializedTransaction(client as never, signedRaw, {
     chainId: input.tx.chainId,
     supportsSyncSend: false,
@@ -95,7 +150,6 @@ export async function signLedgerSignatureRequest(input: {
   if (input.method === "eth_sign") throw new Error("eth_sign is not supported.");
   let signature: { r: `0x${string}`; s: `0x${string}`; v: number };
   let messageHex: `0x${string}` | null = null;
-  let typedDataForRecovery: Record<string, unknown> | null = null;
   if (input.method === "personal_sign") {
     const raw = input.params[0];
     const hex = typeof raw === "string" && raw.startsWith("0x")
@@ -110,24 +164,18 @@ export async function signLedgerSignatureRequest(input: {
     const raw = input.params[1];
     const typedData = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!typedData || typeof typedData !== "object") throw new Error("Invalid typed data.");
-    const domainChainId = Number((typedData as { domain?: { chainId?: unknown } }).domain?.chainId);
-    if (Number.isFinite(domainChainId) && domainChainId !== input.chainId) {
-      throw new Error(`Provided chainId "${domainChainId}" must match the active chainId "${input.chainId}"`);
-    }
-    signature = await signLedgerTypedData({
-      opId: input.opId, deviceId: input.account.deviceId,
-      hdPath: input.account.hdPath, typedData: typedData as Record<string, unknown>,
+    return signLedgerTypedDataForAccount({
+      opId: input.opId,
+      account: input.account,
+      typedData: typedData as Record<string, unknown>,
+      chainId: input.chainId,
     });
-    typedDataForRecovery = typedData as Record<string, unknown>;
   }
-  const recovery = signature.v === 0 || signature.v === 1 ? signature.v + 27 : signature.v;
-  const signatureHex = concatHex([signature.r, signature.s, toHex(recovery, { size: 1 })]);
-  const recovered = messageHex
-    ? await recoverMessageAddress({ message: { raw: messageHex }, signature: signatureHex })
-    : await recoverTypedDataAddress({
-        ...(typedDataForRecovery as Record<string, unknown>),
-        signature: signatureHex,
-      } as never);
+  const signatureHex = ledgerSignatureHex(signature);
+  const recovered = await recoverMessageAddress({
+    message: { raw: messageHex! },
+    signature: signatureHex,
+  });
   if (recovered.toLowerCase() !== input.account.address.toLowerCase()) {
     throw new Error("Ledger signed with a different account. Check the connected device and derivation path.");
   }

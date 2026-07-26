@@ -197,3 +197,26 @@ test("unsupported Ledger execution modes fail closed", async () => {
   assert.match(transaction, /Force inclusion is not supported for Ledger accounts/);
   assert.match(transaction, /EIP-7702 delegation is not supported for Ledger accounts/);
 });
+
+test("Safe approvals and native execution reuse centralized Ledger signing", async () => {
+  const [ledgerSigning, accountTypePolicy, ownerAuthorization, safeExecution, safeUi] =
+    await Promise.all([
+      source("src/chrome/ledger/signing.ts"),
+      source("src/chrome/safe/accountTypePolicy.ts"),
+      source("src/chrome/safe/ownerAuthorization.ts"),
+      source("src/chrome/safe/execution.ts"),
+      source(
+        "src/components/SafeApprovals/SafeProposalConfirmation.tsx",
+      ),
+    ]);
+
+  assert.match(ledgerSigning, /signLedgerTypedDataForAccount/);
+  assert.match(ledgerSigning, /recoverTypedDataAddress/);
+  assert.match(accountTypePolicy, /ledger:[\s\S]*ownerSigningPath: "ledger"/);
+  assert.match(accountTypePolicy, /ledger:[\s\S]*feeTokenExecution: false/);
+  assert.match(ownerAuthorization, /signLedgerTypedDataForAccount\(/);
+  assert.match(safeExecution, /signAndBroadcastLedgerTransaction\(/);
+  assert.match(safeExecution, /canExecuteSafeWithFeeToken\(/);
+  assert.match(safeUi, /LedgerSigningStatus/);
+  assert.match(safeUi, /isLedgerWaiting/);
+});

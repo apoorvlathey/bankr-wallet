@@ -1,11 +1,10 @@
 import type { Account } from "../types";
+import { isSafeOwnerAccount } from "./accountTypePolicy";
 import type {
   SafeCapability,
   SafeChainSnapshot,
   SafeLinkedOwner,
 } from "./types";
-
-const SIGNING_TYPES = new Set(["bankr", "privateKey", "seedPhrase"]);
 
 export function getLinkedSafeOwners(
   snapshot: SafeChainSnapshot,
@@ -13,12 +12,12 @@ export function getLinkedSafeOwners(
 ): SafeLinkedOwner[] {
   const owners = new Set(snapshot.owners.map((owner) => owner.toLowerCase()));
   return accounts.flatMap((account) => {
-    if (!SIGNING_TYPES.has(account.type)) return [];
+    if (!isSafeOwnerAccount(account)) return [];
     if (!owners.has(account.address.toLowerCase())) return [];
     return [{
       ownerAddress: account.address.toLowerCase() as SafeLinkedOwner["ownerAddress"],
       accountId: account.id,
-      accountType: account.type as SafeLinkedOwner["accountType"],
+      accountType: account.type,
     }];
   });
 }

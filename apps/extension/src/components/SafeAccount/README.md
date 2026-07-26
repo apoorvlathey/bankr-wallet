@@ -1,7 +1,10 @@
 # Safe account UI audit map
 
 - `SafeEntryScreen.tsx`: starts progressive owner discovery as soon as an owner is selected, appends four-chain batches, shows verified network logos/tooltips, and submits background-issued verification receipt IDs so Add Safe performs no duplicate network probe.
-- `SafeOwnerAccountPicker.tsx`: home-selector-style Bankr/private-key/seed owner selection on a dedicated picker screen; only the selected account ID reaches the background lookup.
+- `SafeOwnerAccountPicker.tsx`: home-selector-style Safe-owner account selection
+  on a dedicated picker screen. Eligibility comes from the shared background
+  `safe/accountTypePolicy.ts`; only the selected account ID reaches the
+  background lookup.
 - `useSafeOwnerDiscovery.ts`: cancellable renderer state machine for bounded progressive owner-discovery pages and cross-chain result merging.
 - `DiscoveredSafeRow.tsx`: selectable discovered Safe identity with independent
   copy, first-verified-chain explorer, verified-network mark utilities, and an

@@ -3,6 +3,7 @@ import { getStoredNetworksInfo, getVisibleChains } from "@/lib/chains";
 import { verifySafeOnchainState } from "./onchainState";
 import type { SafeAddress, SafeChainSnapshot } from "./types";
 import type { Account } from "../types";
+import { isSafeOwnerAccount } from "./accountTypePolicy";
 import {
   discoverSafesByOwner,
   fetchSafeInfo,
@@ -306,11 +307,7 @@ async function findSafesOwnedByAccountOnChains(
 }
 
 function assertDiscoverableOwnerAccount(account: Account): void {
-  if (
-    account.type !== "bankr" &&
-    account.type !== "privateKey" &&
-    account.type !== "seedPhrase"
-  ) {
+  if (!isSafeOwnerAccount(account)) {
     throw new Error("Select a signing account to find Safes");
   }
 }

@@ -4,6 +4,10 @@ import { computeSafeTransactionHash } from "./transactionHash";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
 import { getNextAvailableSafeNonce, isUnsignedSafeNonceEditable } from "./proposalNonce";
 import {
+  isSafeExecutorAccountType,
+  isSafeOwnerAccountType,
+} from "./accountTypePolicy";
+import {
   assertSafeProposalEffectClaimable,
   isLocallyCancelledUnsignedSafeProposal,
   recoverInterruptedSafeProposalRecords,
@@ -27,15 +31,25 @@ const MAX_CONFIRMATIONS = 100;
 const MAX_CALLDATA_BYTES = 128 * 1024;
 const MAX_SERIALIZED_EXECUTION_BYTES = 512 * 1024;
 const MAX_STORAGE_BYTES = 4 * 1024 * 1024;
+const activeSafeProposalClaimIds = new Set<string>();
 
 interface Envelope { version: 1; records: SafeProposalRecord[] }
+type SafeProposalEffectRelease = Partial<Pick<
+  SafeProposalRecord,
+  | "state"
+  | "confirmations"
+  | "transactionHash"
+  | "userOperationHash"
+  | "serializedExecution"
+  | "executionPreparedAt"
+  | "executor"
+  | "error"
+>>;
 const STATES = new Set<SafeProposalState>([
   "draft", "authorizing", "approvedLocally", "publishing",
   "awaitingApprovals", "readyToExecute", "executing", "executed",
   "cancelled", "ambiguous", "stale", "replaced", "blocked", "failed",
 ]);
-const ACCOUNT_TYPES = new Set(["bankr", "privateKey", "seedPhrase"]);
-
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid Safe proposal record");
   return value as Record<string, unknown>;
@@ -89,7 +103,15 @@ function transaction(value: unknown): SafeTransactionData {
 function confirmation(value: unknown): SafeOwnerConfirmation {
   const raw = object(value);
   const hasLocalBinding = raw.accountId !== undefined || raw.accountType !== undefined;
-  if (hasLocalBinding && (typeof raw.accountId !== "string" || !ACCOUNT_TYPES.has(raw.accountType as string))) throw new Error("Invalid Safe confirmation account binding");
+  if (
+    hasLocalBinding &&
+    (
+      typeof raw.accountId !== "string" ||
+      !isSafeOwnerAccountType(raw.accountType)
+    )
+  ) {
+    throw new Error("Invalid Safe confirmation account binding");
+  }
   const createdAt = integer(raw.createdAt, "confirmation time", 1);
   return {
     ownerAddress: address(raw.ownerAddress, "confirmation owner"),
@@ -114,7 +136,7 @@ function unsupportedConfirmation(value: unknown): SafeUnsupportedConfirmation {
 
 function executor(value: unknown): SafeExecutionExecutor {
   const raw = object(value);
-  if (raw.accountType !== "privateKey" && raw.accountType !== "seedPhrase") {
+  if (!isSafeExecutorAccountType(raw.accountType)) {
     throw new Error("Invalid Safe execution account type");
   }
   const gasRaw = raw.gasOverrides === undefined
@@ -324,12 +346,30 @@ export async function createSafeProposalAtNextNonce(input: {
 
 /** Recovers effect claims left durable when a previous service worker stopped. */
 export async function recoverInterruptedSafeProposalEffects(
-  input: { minimumAgeMs?: number; now?: number; safeAccountId?: string } = {},
+  input: {
+    minimumAgeMs?: number;
+    now?: number;
+    safeAccountId?: string;
+    /**
+     * Startup-only escape hatch. An empty in-memory registry proves that every
+     * durable claim belonged to a worker that no longer exists.
+     */
+    recoverActiveClaims?: boolean;
+  } = {},
 ): Promise<SafeProposalRecord[]> {
   const now = input.now ?? Date.now();
   const minimumAgeMs = input.minimumAgeMs ?? 0;
+  if (input.recoverActiveClaims) activeSafeProposalClaimIds.clear();
   return mutate((records) => {
-    const recovered = recoverInterruptedSafeProposalRecords({ records, minimumAgeMs, now, safeAccountId: input.safeAccountId });
+    const recovered = recoverInterruptedSafeProposalRecords({
+      records,
+      minimumAgeMs,
+      now,
+      safeAccountId: input.safeAccountId,
+      activeClaimIds: input.recoverActiveClaims
+        ? undefined
+        : activeSafeProposalClaimIds,
+    });
     return {
       records: recovered.records,
       result: recovered.recovered.map(decodeSafeProposal),
@@ -378,16 +418,34 @@ export async function updateSafeProposal(id: string, updater: (record: SafePropo
   });
 }
 export async function claimSafeProposalEffect(id: string, input: { kind: "approve" | "publish" | "execute"; ownerAddress?: SafeAddress }) {
-  return updateSafeProposal(id, (record) => {
+  const claimed = await updateSafeProposal(id, (record) => {
     assertSafeProposalEffectClaimable(record, input);
     return { ...record, effectClaim: { ...input, claimId: crypto.randomUUID(), claimedAt: Date.now() }, updatedAt: Date.now() };
   });
+  activeSafeProposalClaimIds.add(claimed.effectClaim!.claimId);
+  return claimed;
 }
-export async function releaseSafeProposalEffect(id: string, claimId: string, update: Partial<Pick<SafeProposalRecord, "state" | "confirmations" | "transactionHash" | "userOperationHash" | "serializedExecution" | "executionPreparedAt" | "executor" | "error">> = {}) {
-  return updateSafeProposal(id, (record) => {
-    if (record.effectClaim?.claimId !== claimId) throw new Error("Safe proposal claim changed");
-    return { ...record, ...update, effectClaim: undefined, updatedAt: Date.now() };
-  });
+export async function releaseSafeProposalEffect(
+  id: string,
+  claimId: string,
+  update:
+    | SafeProposalEffectRelease
+    | ((record: SafeProposalRecord) => SafeProposalEffectRelease) = {},
+) {
+  try {
+    return await updateSafeProposal(id, (record) => {
+      if (record.effectClaim?.claimId !== claimId) throw new Error("Safe proposal claim changed");
+      const resolved = typeof update === "function" ? update(record) : update;
+      return {
+        ...record,
+        ...resolved,
+        effectClaim: undefined,
+        updatedAt: Date.now(),
+      };
+    });
+  } finally {
+    activeSafeProposalClaimIds.delete(claimId);
+  }
 }
 
 export async function removeSafeProposalsForAccount(accountId: string): Promise<void> {

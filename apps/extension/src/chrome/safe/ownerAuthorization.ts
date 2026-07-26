@@ -3,6 +3,8 @@ import { getAuthCeremonyEpoch, isCurrentAuthCeremonyEpoch } from "../authTransit
 import { signMessageViaApi } from "../bankr/signing";
 import { getLocalPrivateKeyForAccount } from "../accounts/localKeyResolver";
 import { signTypedData } from "../localSigner";
+import { ensureLedgerSigningSession } from "../ledger/session";
+import { signLedgerTypedDataForAccount } from "../ledger/signing";
 import { getPasswordType } from "../sessionCache";
 import { getUnlockedBankrApiKey } from "../transactions/bankrSession";
 import { getSafeAccountRecord } from "./accountRepository";
@@ -14,23 +16,38 @@ import {
 } from "./proposalRepository";
 import { buildSafeTransactionTypedData } from "./transactionHash";
 import { validateSafeOwnerConfirmation } from "./signatureValidation";
-import type { Account } from "../types";
-import type { SafeAddress, SafeProposalRecord } from "./types";
+import {
+  getSafeOwnerSigningPath,
+  isSafeOwnerAccount,
+  type SafeOwnerAccount,
+} from "./accountTypePolicy";
+import {
+  getSafeProposalNoncePosition,
+  isFutureSafeNonceError,
+} from "./proposalNonce";
+import type {
+  SafeAddress,
+  SafeOwnerConfirmation,
+  SafeProposalRecord,
+} from "./types";
 
-type SigningAccount = Extract<Account, { type: "bankr" | "privateKey" | "seedPhrase" }>;
-
-export function getSafeOwnerSigningPath(
-  account: Account,
-): "bankr" | "local" | null {
-  if (account.type === "bankr") return "bankr";
-  if (account.type === "privateKey" || account.type === "seedPhrase") return "local";
-  return null;
-}
+export { getSafeOwnerSigningPath } from "./accountTypePolicy";
 
 export function isAgentPasswordAllowedForSafeOperation(
   operation: "approve" | "execute" | "revealSecret" | "changeConfiguration",
 ): boolean {
   return operation === "approve" || operation === "execute";
+}
+
+export function mergeSafeOwnerConfirmation(
+  current: readonly SafeOwnerConfirmation[],
+  confirmation: SafeOwnerConfirmation,
+): SafeOwnerConfirmation[] {
+  const byOwner = new Map(
+    current.map((item) => [item.ownerAddress, item]),
+  );
+  byOwner.set(confirmation.ownerAddress, confirmation);
+  return [...byOwner.values()];
 }
 
 async function resolveAuthority(proposal: SafeProposalRecord, ownerAccountId: string) {
@@ -41,10 +58,13 @@ async function resolveAuthority(proposal: SafeProposalRecord, ownerAccountId: st
   if (!safe || safe.address !== proposal.safeAddress) throw new Error("Safe account changed");
   const stored = safe.chains[String(proposal.chainId)];
   if (!stored || stored.configEpoch !== proposal.safeConfigEpoch) throw new Error("Safe configuration changed; review again");
-  if (!rawAccount || !["bankr", "privateKey", "seedPhrase"].includes(rawAccount.type)) {
+  if (
+    !rawAccount ||
+    !isSafeOwnerAccount(rawAccount)
+  ) {
     throw new Error("Selected account cannot approve Safe transactions");
   }
-  const account = rawAccount as SigningAccount;
+  const account = rawAccount;
   const ownerAddress = account.address.toLowerCase() as SafeAddress;
   if (!stored.owners.includes(ownerAddress)) throw new Error("Selected account is not a Safe owner");
   return { safe, stored, account, ownerAddress };
@@ -59,13 +79,15 @@ async function assertLiveReview(
     safeAddress: proposal.safeAddress,
   });
   if (live.configEpoch !== proposal.safeConfigEpoch) throw new Error("Safe configuration changed; review again");
-  if (BigInt(live.nonce) !== BigInt(proposal.transaction.nonce)) throw new Error("Safe nonce changed; review again");
+  if (getSafeProposalNoncePosition(proposal.transaction.nonce, live.nonce) === "stale") {
+    throw new Error("Safe nonce already advanced; review again");
+  }
   if (!live.owners.includes(expectedOwner)) throw new Error("Selected signer is no longer a Safe owner");
   return live;
 }
 
 async function signForOwner(input: {
-  account: SigningAccount;
+  account: SafeOwnerAccount;
   proposal: SafeProposalRecord;
 }): Promise<string> {
   const typedData = buildSafeTransactionTypedData({
@@ -83,15 +105,28 @@ async function signForOwner(input: {
     ]);
     return result.signature;
   }
+  if (input.account.type === "ledger") {
+    return signLedgerTypedDataForAccount({
+      opId: `safe-approval:${input.proposal.id}`,
+      account: input.account,
+      typedData,
+      chainId: input.proposal.chainId,
+    });
+  }
   const privateKey = await getLocalPrivateKeyForAccount(input.account.id, "");
   if (!privateKey) throw new Error("Wallet is locked; unlock it and try again");
   return signTypedData(privateKey, typedData, input.proposal.chainId);
 }
 
 async function ensureSafeSigningSession(
-  account: SigningAccount,
+  account: SafeOwnerAccount,
 ) {
-  const material = getSafeOwnerSigningPath(account) === "bankr"
+  const signingPath = getSafeOwnerSigningPath(account);
+  if (signingPath === "ledger") {
+    await ensureLedgerSigningSession("");
+    return;
+  }
+  const material = signingPath === "bankr"
     ? await getUnlockedBankrApiKey()
     : await getLocalPrivateKeyForAccount(account.id, "");
   if (!material || !getPasswordType()) {
@@ -105,7 +140,12 @@ export async function approveSafeProposalWithOwner(input: {
 }): Promise<SafeProposalRecord> {
   const proposal = await getSafeProposal(input.proposalId);
   if (!proposal) throw new Error("Safe proposal not found");
-  if (!["draft", "approvedLocally", "awaitingApprovals"].includes(proposal.state)) throw new Error("Safe proposal cannot be approved in its current state");
+  if (
+    !["draft", "approvedLocally", "awaitingApprovals"].includes(proposal.state) &&
+    !(proposal.state === "blocked" && isFutureSafeNonceError(proposal.error))
+  ) {
+    throw new Error("Safe proposal cannot be approved in its current state");
+  }
   const authority = await resolveAuthority(proposal, input.ownerAccountId);
   if (proposal.confirmations.some((item) => item.ownerAddress === authority.ownerAddress)) throw new Error("This Safe owner already approved");
   const claimed = await claimSafeProposalEffect(proposal.id, { kind: "approve", ownerAddress: authority.ownerAddress });
@@ -120,7 +160,20 @@ export async function approveSafeProposalWithOwner(input: {
     });
     if (!isCurrentAuthCeremonyEpoch(authEpoch) || !getPasswordType()) throw new Error("Authentication state changed; unlock and try again");
     const refreshedAuthority = await resolveAuthority(proposal, input.ownerAccountId);
-    if (refreshedAuthority.ownerAddress !== authority.ownerAddress || refreshedAuthority.account.type !== authority.account.type) throw new Error("Selected owner account changed");
+    if (
+      refreshedAuthority.ownerAddress !== authority.ownerAddress ||
+      refreshedAuthority.account.type !== authority.account.type ||
+      (
+        authority.account.type === "ledger" &&
+        (
+          refreshedAuthority.account.type !== "ledger" ||
+          refreshedAuthority.account.deviceId !== authority.account.deviceId ||
+          refreshedAuthority.account.hdPath !== authority.account.hdPath
+        )
+      )
+    ) {
+      throw new Error("Selected owner account changed");
+    }
     const liveAfter = await assertLiveReview(proposal, authority.ownerAddress);
     if (liveAfter.configEpoch !== liveBefore.configEpoch) throw new Error("Safe configuration changed while approving");
     const confirmation = await validateSafeOwnerConfirmation({
@@ -131,11 +184,18 @@ export async function approveSafeProposalWithOwner(input: {
       accountId: authority.account.id,
       accountType: authority.account.type,
     });
-    const confirmations = [...proposal.confirmations, confirmation];
-    return releaseSafeProposalEffect(proposal.id, claimId, {
-      confirmations,
-      state: confirmations.length >= liveAfter.threshold ? "readyToExecute" : "approvedLocally",
-      error: undefined,
+    return releaseSafeProposalEffect(proposal.id, claimId, (current) => {
+      const confirmations = mergeSafeOwnerConfirmation(
+        current.confirmations,
+        confirmation,
+      );
+      return {
+        confirmations,
+        state: confirmations.length >= liveAfter.threshold
+          ? "readyToExecute"
+          : "approvedLocally",
+        error: undefined,
+      };
     });
   } catch (error) {
     await releaseSafeProposalEffect(proposal.id, claimId, {

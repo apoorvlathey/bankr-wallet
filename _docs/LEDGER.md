@@ -36,6 +36,16 @@ The account/device write is the durable commit boundary. Updating the active-acc
 - Transactions: standard legacy and EIP-1559 transactions are prepared with viem, serialized unsigned, approved on Ledger, reconstructed with the returned `r/s/v`, and recovered locally. Advanced details previews the pinned address's pending nonce without reserving it and allows a decimal edit; confirmation validates, reserves, signs, and broadcasts that exact reviewed nonce. Pending Activity rows can prepare Speed Up and Cancel reviews that pin the original nonce and enforce replacement fee floors before the device prompt. Broadcast is blocked unless the recovered signer exactly matches the pinned Ledger account.
 - Messages: `personal_sign` bytes are approved on device.
 - Typed data: EIP-712 v3/v4 is validated by the existing request path and approved on device. A domain chain ID that differs from the pinned request chain is rejected.
+- Safe: a Ledger address can discover/import Safes it owns, approve the exact
+  SafeTx EIP-712 payload offchain, and pay native gas to execute the outer
+  `execTransaction` transaction. Both effects reuse `chrome/ledger/signing.ts`
+  for device/path binding and recovered-signer verification. Safe remains the
+  authority for proposal claims, current owners/quorum/configuration,
+  publication, exact-envelope simulation, durable signed bytes, and receipt
+  reconciliation. Periodic Safe sync preserves worker-local effect claims for
+  the full hardware interaction window; startup recovery clears abandoned
+  claims after a service-worker restart. Safe token-gas execution remains
+  unavailable because it requires EIP-7702.
 - Privacy Pools: Shield deposits, receiver-paid Unshield, and public exits use
   the same normal single-transaction hardware path. The background revalidates
   the encrypted privacy intent before device signing, starts the privacy
@@ -77,8 +87,12 @@ The offscreen document receives only public device/path metadata and the exact u
   Ledger transaction; the UI limits the selection and the background rejects a
   Ledger batch independently.
 - EIP-7702 authorization/delegation and force inclusion are rejected for Ledger.
+- Token-funded Safe execution is rejected; native-gas Safe execution is
+  supported.
 - WalletChan's direct swap shortcut is rejected; swaps initiated by dapps work through the normal single-transaction confirmation flow.
 - A real Ledger is required for final hardware validation; automated builds can validate bundling, storage and routing but cannot approve device prompts.
+  Safe owner approval and native-gas execution must both be included in the
+  real-device matrix.
 
 ## Dependencies
 

@@ -125,6 +125,31 @@ function requestStatus(
     };
   }
 
+  if (blockedByNonce !== undefined) {
+    const quorumReached = threshold !== undefined && approvalCount >= threshold;
+    if (item.state === "readyToExecute" || quorumReached) {
+      return {
+        status: `Queued · Execute nonce #${blockedByNonce} first`,
+        statusTone: "warning",
+        isProgressing: false,
+      };
+    }
+    if (["draft", "blocked"].includes(item.state)) {
+      return {
+        status: "Needs approval · Queued",
+        statusTone: "warning",
+        isProgressing: false,
+      };
+    }
+    if (["approvedLocally", "awaitingApprovals"].includes(item.state)) {
+      return {
+        status: `${approvalProgress} · Queued`,
+        statusTone: "warning",
+        isProgressing: false,
+      };
+    }
+  }
+
   switch (item.state) {
     case "draft":
       return { status: "Needs approval", statusTone: "warning", isProgressing: false };
@@ -156,9 +181,7 @@ function requestStatus(
       return { status: "Replaced", statusTone: "muted", isProgressing: false };
     case "blocked":
       return {
-        status: blockedByNonce !== undefined
-          ? `Blocked · Execute nonce #${blockedByNonce} first`
-          : "Blocked",
+        status: "Blocked",
         statusTone: "error",
         isProgressing: false,
       };

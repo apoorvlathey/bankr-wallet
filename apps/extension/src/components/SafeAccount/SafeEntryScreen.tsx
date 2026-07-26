@@ -26,6 +26,7 @@ import { SafeOwnerAccountPicker } from "./SafeOwnerAccountPicker";
 import { SafeVerificationCard } from "./SafeVerificationCard";
 import { DiscoveredSafeRow } from "./DiscoveredSafeRow";
 import type { Account } from "@/chrome/types";
+import { isSafeOwnerAccount } from "@/chrome/safe/accountTypePolicy";
 import { fetchPortfolio } from "@/chrome/portfolio/api";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { getResolvedChains } from "@/lib/chains";
@@ -83,10 +84,7 @@ export function SafeEntryScreen({
     [networksInfo],
   );
   const ownerAccounts = useMemo(
-    () => accounts.filter((account) =>
-      account.type === "bankr" ||
-      account.type === "privateKey" ||
-      account.type === "seedPhrase"),
+    () => accounts.filter(isSafeOwnerAccount),
     [accounts],
   );
   const importedSafeAddresses = useMemo(
@@ -219,7 +217,7 @@ export function SafeEntryScreen({
                 <Alert status="info">
                   <AlertIcon />
                   <AlertDescription fontSize="sm">
-                    Add a Bankr, private-key, or seed-phrase account to search by owner.
+                    Add a Bankr, private-key, seed-phrase, or Ledger account to search by owner.
                   </AlertDescription>
                 </Alert>
               )}

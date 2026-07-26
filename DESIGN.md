@@ -242,6 +242,15 @@
 
 ## Slop audit
 
+- 2026-07-26 Safe signer/executor selector audit: the shared `Signing with` /
+  `Execute with` account menu now caps long lists at 320px, constrains width to
+  the active viewport, and contains wheel/touch scrolling within the overlay.
+  The change preserves Chakra's native menu focus, arrow-key, Escape, and focus
+  return behavior while keeping every eligible Safe signer or executor
+  reachable in popup, sidepanel, and short-window layouts. No wallet
+  eligibility, transaction authority, colors, or component hierarchy changed.
+  Result: pass.
+
 - 2026-07-23 Shield source-identity audit: the compact `Deposit from` trigger
   and its account menu now reuse WalletChan's shared contact, saved-name, ENS,
   and fallback-address identity precedence. Resolved ENS avatars use the same

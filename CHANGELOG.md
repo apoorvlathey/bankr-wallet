@@ -62,10 +62,12 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
   Ledger transaction. These account types can also review or edit the address
   nonce before signing.
 - **Safe multisig accounts.** WalletChan can discover and import verified Safe
-  accounts owned by Bankr API, Private Key, or Seed Phrase accounts, surface
-  pending proposals, collect owner approvals, execute at quorum, create
+  accounts owned by Bankr API, Private Key, Seed Phrase, or Ledger accounts,
+  surface pending proposals, collect owner approvals, execute at quorum, create
   canonical rejection proposals, and use Safe-aware Send, Swap, Activity, and
-  security views across supported networks.
+  security views across supported networks. Ledger owners approve on-device and
+  may execute with native gas; token-funded Safe execution remains unavailable
+  for Ledger.
 - **In-wallet WCHAN staking.** Users can stake and unstake WCHAN on Base, claim
   WETH rewards, review the live APY and seven-day fee window, and batch approval
   plus deposit when supported. All four signing wallet types are supported;
@@ -115,6 +117,11 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ### Fixed
 
+- Safe accounts can create, sign, and publish approvals for a queued
+  future-nonce transaction while an earlier request is pending; only fee
+  estimation and final execution wait for the nonce to become current. A fully
+  signed queued request now becomes executable immediately after the preceding
+  nonce confirms instead of remaining stuck on “Waiting for owners.”
 - Ordered Bankr swap submissions stop after a failed, reverted, or
   outcome-unknown leg instead of continuing with later transactions.
 - Native-token MAX sends reserve a conservative network fee instead of trying

@@ -29,11 +29,12 @@ test("capabilities count distinct linked owner addresses, not account records", 
   const accounts = [
     account("a", ownerA, "privateKey"),
     account("duplicate", ownerA, "seedPhrase"),
+    account("ledger-owner", ownerB, "ledger"),
     account("observer", ownerB, "impersonator"),
     account("nested", ownerB, "safe"),
   ];
-  assert.equal(getLinkedSafeOwners(snapshot, accounts).length, 2);
-  assert.equal(deriveSafeCapability({ snapshot, accounts }), "approve");
+  assert.equal(getLinkedSafeOwners(snapshot, accounts).length, 3);
+  assert.equal(deriveSafeCapability({ snapshot, accounts }), "quorumAvailable");
   assert.equal(
     deriveSafeCapability({ snapshot, accounts: [...accounts, account("b", ownerB, "bankr")] }),
     "quorumAvailable",

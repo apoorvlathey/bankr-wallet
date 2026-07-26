@@ -1,4 +1,5 @@
 import type { SafeAddress, SafeProposalRecord } from "./types";
+import { isFutureSafeNonceError } from "./proposalNonce";
 
 export function isLocallyCancelledUnsignedSafeProposal(
   proposal: SafeProposalRecord,
@@ -19,12 +20,14 @@ export function recoverInterruptedSafeProposalRecords(input: {
   minimumAgeMs: number;
   now: number;
   safeAccountId?: string;
+  activeClaimIds?: ReadonlySet<string>;
 }): { records: SafeProposalRecord[]; recovered: SafeProposalRecord[] } {
   const recovered: SafeProposalRecord[] = [];
   const records = input.records.map((record) => {
     const claim = record.effectClaim;
     if (
       !claim ||
+      input.activeClaimIds?.has(claim.claimId) ||
       input.now - claim.claimedAt < input.minimumAgeMs ||
       (input.safeAccountId && record.safeAccountId !== input.safeAccountId)
     ) return record;
@@ -76,7 +79,12 @@ export function assertSafeProposalEffectClaimable(
 ): void {
   if (proposal.effectClaim) throw new Error("Safe proposal operation already in progress");
   if (input.kind === "approve") {
-    if (!["draft", "approvedLocally", "awaitingApprovals"].includes(proposal.state)) {
+    const legacyFutureNonce =
+      proposal.state === "blocked" && isFutureSafeNonceError(proposal.error);
+    if (
+      !["draft", "approvedLocally", "awaitingApprovals"].includes(proposal.state) &&
+      !legacyFutureNonce
+    ) {
       throw new Error("Safe proposal cannot be approved in its current state");
     }
     if (

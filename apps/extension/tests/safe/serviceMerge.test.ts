@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { mergeSafeServiceProposal } from "../../src/chrome/safe/serviceMerge";
+import { mergePublishedSafeConfirmations } from "../../src/chrome/safe/publication";
 import type { SafeProposalRecord } from "../../src/chrome/safe/types";
 
 const SAFE = "0x1111111111111111111111111111111111111111" as const;
@@ -143,4 +145,42 @@ test("an active effect claim and unpublished local approval survive service lag"
   assert.equal(merged.state, "publishing");
   assert.deepEqual(merged.effectClaim, current.effectClaim);
   assert.equal(merged.confirmations[0]?.accountId, "seed-owner");
+});
+
+test("publication completion preserves confirmations received during the request", () => {
+  const first = {
+    ownerAddress: OWNER,
+    accountId: "ledger-owner",
+    accountType: "ledger" as const,
+    signature: `0x${"11".repeat(65)}` as const,
+    createdAt: 10,
+  };
+  const second = {
+    ownerAddress: SECOND_OWNER,
+    signature: `0x${"22".repeat(65)}` as const,
+    createdAt: 20,
+    publishedAt: 21,
+  };
+
+  const merged = mergePublishedSafeConfirmations(
+    [first, second],
+    [{ ...first, publishedAt: 30 }],
+  );
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]?.accountType, "ledger");
+  assert.equal(merged[0]?.publishedAt, 30);
+  assert.deepEqual(merged[1], second);
+});
+
+test("direct proposal reconciliation uses the claim-preserving service merge", async () => {
+  const publication = await readFile(
+    new URL("../../src/chrome/safe/publication.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    publication,
+    /mergeSafeServiceProposal\(current, remote\)/,
+  );
 });

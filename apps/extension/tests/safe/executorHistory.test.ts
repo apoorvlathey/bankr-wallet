@@ -65,7 +65,7 @@ function proposal(
   };
 }
 
-for (const accountType of ["privateKey", "seedPhrase"] as const) {
+for (const accountType of ["privateKey", "seedPhrase", "ledger"] as const) {
   test(`Safe execution creates a normal ${accountType} transaction-history row`, () => {
     const safeProposal = proposal(accountType);
     const entry = buildSafeExecutorHistoryEntry(
@@ -122,8 +122,8 @@ test("token-funded Safe execution records its pending UserOperation and fee toke
   assert.equal(decoded.executor?.feePaymentTokenAddress, FEE_TOKEN);
 });
 
-test("Safe execution persistence rejects Bankr, Ledger, impersonator, and Safe executors", () => {
-  for (const accountType of ["bankr", "ledger", "impersonator", "safe"]) {
+test("Safe execution persistence rejects Bankr, impersonator, and Safe executors", () => {
+  for (const accountType of ["bankr", "impersonator", "safe"]) {
     const invalid = proposal("privateKey") as any;
     invalid.executor = { ...invalid.executor, accountType };
     assert.throws(

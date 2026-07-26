@@ -103,11 +103,9 @@ export async function validateServiceTransaction(input: {
     ? "executed"
     : proposalNonce < liveNonce
       ? "replaced"
-      : proposalNonce > liveNonce
-        ? "blocked"
-        : confirmations.length >= input.snapshot.threshold
-          ? "readyToExecute"
-          : "awaitingApprovals";
+      : confirmations.length >= input.snapshot.threshold
+        ? "readyToExecute"
+        : "awaitingApprovals";
   const purpose = tx.operation === 0 &&
     tx.to === safeAddress &&
     tx.value === "0" &&
@@ -134,10 +132,8 @@ export async function validateServiceTransaction(input: {
     createdAt: Date.parse(raw.submissionDate || "") || now,
     updatedAt: Date.parse(raw.modified || "") || now,
     transactionHash: executionHash,
-    error: proposalNonce > liveNonce
-      ? `Future Safe nonce ${tx.nonce}; executable nonce is ${input.snapshot.nonce}`
-      : proposalNonce < liveNonce && !executionHash
-        ? "Safe nonce already advanced"
-        : undefined,
+    error: proposalNonce < liveNonce && !executionHash
+      ? "Safe nonce already advanced"
+      : undefined,
   };
 }

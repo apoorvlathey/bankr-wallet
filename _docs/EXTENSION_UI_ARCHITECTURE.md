@@ -37,6 +37,8 @@ apps/extension/src/
 │   ├── BatchConfirmation/  # ERC-5792 review and confirmation
 │   ├── ClearSigning/       # Feature domain
 │   ├── Portfolio/Holdings/ # Portfolio loading and holdings presentation
+│   ├── SafeAccount/        # Safe import, discovery, security, and home controls
+│   ├── SafeApprovals/      # Safe proposal review, owner approval, and execution
 │   ├── Shield/             # Separate Shield and Unshield screens over privacy controllers
 │   ├── Settings/           # Feature domain
 │   ├── Swap/               # Feature domain
@@ -222,8 +224,14 @@ Use the lightest test that protects the moved concern:
   transaction/signature behavior.
 
 Any UI touching transactions, signatures, or authentication must retain Bankr,
-private-key, and seed-phrase coverage. View-only behavior must remain visibly
+private-key, seed-phrase, and Ledger coverage. Ledger device waits must use the
+shared hardware status treatment and lock mutable review controls without
+moving authority into the renderer. View-only behavior must remain visibly
 non-signing where relevant.
+
+Safe owner and executor filtering is a renderer projection of
+`chrome/safe/accountTypePolicy.ts`. UI models must import its guards and derived
+types rather than introducing another account-type allowlist.
 
 ## Refactor checklist
 

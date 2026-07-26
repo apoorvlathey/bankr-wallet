@@ -1567,6 +1567,11 @@ These must always hold true. Violations indicate a security bug.
    Fee-payment capability discovery rejects Ledger before inspecting any
    onchain delegate, so even a pre-delegated address cannot enter the ERC-4337
    token-funded gas path that has no hardware signing implementation.
+   Safe owner approval sends only the locally rebuilt, chain-bound SafeTx
+   EIP-712 payload through this same recovered-signer boundary. Native-gas Safe
+   execution sends only the exact outer `execTransaction` envelope through the
+   existing recovered raw-transaction boundary; token-funded Safe execution
+   remains rejected before quote consumption because it requires EIP-7702.
    Pending Ledger requests
    remain durable during the hardware prompt, but the existing synchronous
    first-action claim blocks confirm/edit/reject races across popup, side panel,
@@ -2339,7 +2344,7 @@ Quick reference for which files to examine based on what area of security you're
 
 4. **Owner discovery is one-address opt-in.** The trusted UI sends one selected
    local account ID. The background resolves it afresh and accepts only a
-   Bankr/private-key/seed record before disclosing that one address to Safe.
+   Bankr/private-key/seed/Ledger record before disclosing that one address to Safe.
    It never batches all wallet addresses. Progressive discovery batches the
    intersection of visible WalletChan networks and Safe's live registry, not
    owners: hidden chains cause no owner disclosure, and each bounded page
@@ -2357,8 +2362,14 @@ Quick reference for which files to examine based on what area of security you're
    previously imported snapshot.
 
 5. **One pinned owner per authorization.** Each approval chooses one current
-   Bankr/private-key/seed record and repeats live authority checks immediately
-   before releasing its signature. Impersonator and Safe records cannot sign.
+   Bankr/private-key/seed/Ledger record and repeats live authority checks
+   immediately before releasing its signature. Ledger uses the central
+   device/path-bound SafeTx EIP-712 signer and repeats that public metadata
+   binding after hardware approval. Impersonator and Safe records cannot sign.
+   Account-type eligibility is defined only by the exhaustive
+   `safe/accountTypePolicy.ts` matrix; discovery, stored confirmation decoding,
+   authorization, execution, and renderer filtering must use its guards rather
+   than maintain independent allowlists.
    Agent passwords may approve ordinary proposals but cannot reveal PK/seed
    secrets or make future authority changes. The confirmation renderer does
    not collect another password: Bankr credentials and local keys are resolved
@@ -2369,7 +2380,14 @@ Quick reference for which files to examine based on what area of security you're
    before outer execution broadcast.
 
 6. **Ambiguity is durable.** First-action claims own approval, publication,
-   and execution effects. Exact signed outer execution bytes and their
+   and execution effects. Periodic Safe sync and direct Transaction Service
+   reconciliation preserve a claim that is still owned by a live worker
+   operation, including a long Ledger device prompt. The in-memory active-claim
+   registry is intentionally empty after worker restart, so startup recovery
+   can immediately repair every durable interrupted claim. A completed owner
+   approval merges into the current locked confirmation set rather than
+   replacing approvals that arrived while hardware signing was pending. Exact
+   signed outer execution bytes and their
    deterministic hash are persisted before native broadcast. Token-funded
    execution instead persists the deterministic EntryPoint UserOperation hash
    before Pimlico broadcast; no UserOperation signature, authorization, quote,
@@ -2391,10 +2409,13 @@ Quick reference for which files to examine based on what area of security you're
    persisted. Otherwise exact-envelope reconciliation remains mandatory.
 
 7. **Executor selection is explicit and bounded.** The UI defaults outer
-   execution to a WalletChan-controlled private-key/seed owner when one is
-   available, but may select another local private-key/seed account to pay gas.
-   Bankr, impersonator, and Safe records never fall through to the local outer
-   signer. The background resolves the selected account ID afresh, validates
+   execution to a WalletChan-controlled private-key/seed/Ledger owner when one
+   is available, but may select another local private-key/seed/Ledger account
+   to pay native gas. Bankr, impersonator, and Safe records never fall through
+   to the local outer signer. Ledger execution reuses the central
+   device/path-bound transaction signer, reserves the exact EOA nonce, and
+   persists the same deterministic signed envelope before broadcast. The
+   background resolves the selected account ID afresh, validates
    the shared gas override quantities, rechecks live quorum/configuration, and
    simulates the exact immutable `execTransaction` envelope immediately before
    the serialized transaction crosses the RPC boundary. If that simulation
@@ -2449,6 +2470,16 @@ Quick reference for which files to examine based on what area of security you're
    hashes, signed bytes, and canonical rejection proposals all fail closed.
    Choosing an occupied nonce is therefore possible only through the explicit
    Advanced details pencil action; automatic allocation never selects one.
+   A future nonce is not an approval-authority boundary: owner authorization
+   accepts a freshly verified live nonce less than or equal to the reviewed
+   proposal nonce, so queued requests may collect and publish signatures. It
+   still rejects if the live nonce has advanced past the proposal. Estimation
+   and execution retain the stricter equality check immediately before signing
+   and again before broadcast, so no queued Safe transaction can execute out
+   of order. When a queued nonce becomes current, reconciliation recomputes
+   readiness only from already validated durable confirmations and the freshly
+   verified threshold; it rechecks effect/execution claims under the proposal
+   storage lock so it cannot overwrite an approval or broadcast in flight.
    The sole terminal-record reuse is an atomic reactivation of the same
    `safeTxHash` after a zero-signature local cancellation that has no purpose,
    onchain-rejection link, effect claim, execution hash, or serialized bytes.

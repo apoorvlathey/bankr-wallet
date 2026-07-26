@@ -973,6 +973,15 @@ Activity/Holdings triggers by whichever counter is newer.
   the privacy lifecycle only at the final pre-broadcast boundary, and records
   the submitted hash after broadcast. Public exit is one Ledger transaction per
   commitment because the atomic batch path remains excluded.
+- **Safe:** Ledger addresses participate in owner discovery and Safe capability
+  derivation. Owner approval builds the same chain-bound SafeTx EIP-712 payload
+  as Bankr/local owners, then delegates device signing and recovered-address
+  verification to `ledger/signing.ts`. At quorum, a Ledger account may also pay
+  native gas for the outer `execTransaction` through the existing
+  sign-once/broadcast path. The Safe proposal claim, live authority checks,
+  exact-envelope simulation, durable signed bytes, receipt reconciliation, and
+  Activity publication remain owned by the Safe domain. Ledger does not enter
+  Safe token-gas execution because that route requires EIP-7702.
 - **Hardware-wait boundary:** transaction and signature rows remain pending
   while the Ledger device is waiting for approval, so the request review stays
   mounted. The UI shows a Ledger action banner with the branded black logo tile
@@ -985,7 +994,9 @@ Activity/Holdings triggers by whichever counter is newer.
   after the recovered hardware signature reaches the final pre-broadcast
   callback; a message request is removed only after final authorization passes.
   Safe device/preparation failures therefore leave the request available for a
-  deliberate retry instead of creating a failed Activity row. Device approval
+  deliberate retry instead of creating a failed Activity row. Safe approval
+  and execution reuse the same Ledger status treatment and lock their mutable
+  decision controls during the hardware prompt. Device approval
   is bounded to ten minutes while the separate device-discovery deadline
   remains eight seconds.
 - **Initial exclusions:** Ledger fails closed for ERC-5792/cross-dapp batches
@@ -5069,8 +5080,8 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
 | `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API or PK/SP EIP-7702 local signing |
-| `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked Bankr, private-key, or seed-phrase owner |
-| `executeSafeProposal`              | Submit the exact reviewed Safe envelope with a private-key or seed-phrase gas payer |
+| `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked Bankr, private-key, seed-phrase, or Ledger owner |
+| `executeSafeProposal`              | Submit the exact reviewed Safe envelope with a private-key, seed-phrase, or native-gas Ledger payer; Ledger token gas is blocked |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; custom/non-default Set is master-only at queue and confirm/broadcast, while canonical default and revoke retain routine agent-capable signing; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |
 
 The stable `delegationHandlers.ts`, `delegationStorage.ts`, and
@@ -6284,8 +6295,17 @@ validated confirmations, optional provider/WC/ERC-5792 route, and first-action
 effect claims. Proposal and outer execution hashes are always distinct. Safe
 Transaction Service state is coordination data: sync merges validated remote
 confirmations but cannot downgrade a locally claimed, prepared, or broadcast
-effect or erase its deterministic hash/signed bytes. An opportunistic in-memory
-receipt poller starts immediately after outer execution, while a dedicated
+effect or erase its deterministic hash/signed bytes. Direct proposal
+reconciliation uses the same claim-preserving merge. A worker-local active-claim
+registry prevents periodic stale recovery from cancelling a live Bankr, local,
+or Ledger operation; startup recovery explicitly ignores that
+empty-after-restart registry so durable claims from a dead worker are still
+repaired immediately. Owner approval completion merges its recovered signature
+into the latest stored confirmation set under the proposal lock, preserving
+approvals received during a Ledger hardware wait. Publication completion
+likewise merges published markers into the current confirmation set instead of
+overwriting approvals received during its network request. An opportunistic
+in-memory receipt poller starts immediately after outer execution, while a dedicated
 30-second Chrome alarm and every service-worker startup reconcile unresolved
 executions independently of the slower Transaction Service sync. Receipt reads
 try the selected RPC first and then WalletChan's pinned built-in/canonical
@@ -6304,10 +6324,15 @@ above that value while holding the `safeProposals` storage lock. Pending local
 and service-verified records reserve their nonce; confirmed executed/replaced
 evidence advances a stale local floor without reserving the old nonce. This makes concurrent
 dapp intake deterministic and prevents an ordinary request from silently
-becoming a same-nonce replacement. A future-nonce request remains visibly
-blocked until account refresh or Safe sync observes that nonce onchain, then
-returns to draft/approval/readiness state. If a competitor consumed its nonce,
-the queued request and its provider/ERC-5792 route are terminalized.
+becoming a same-nonce replacement. A future-nonce request enters the ordinary
+draft/approval lifecycle immediately: every linked Bankr, private-key,
+seed-phrase, or Ledger owner may sign and publish its confirmation before the
+preceding nonce executes. Nonce ordering gates only final estimation/execution,
+which still requires the proposal nonce to equal the freshly verified onchain
+nonce. Released records that stored future requests as `blocked` remain
+approvable and migrate into the ordinary lifecycle after their next signature.
+If a competitor consumed a queued request's nonce, the proposal and its
+provider/ERC-5792 route are terminalized.
 An unsigned local cancellation does not consume its Safe nonce. If the same
 reviewed calls are requested again at that nonce, the allocator atomically
 reactivates the one cancelled `safeTxHash` identity with the new provider route
@@ -6330,12 +6355,22 @@ previously imported chain.
 
 Owner authorization selects one concrete WalletChan record. Bankr signs via
 the pinned credential/session-restoring typed-data path; private-key and seed
-owners use requested-account-only local key resolution. Every signature is
-recovered against locally rebuilt Safe EIP-712 data and the current owner set
-before persistence/publication. Impersonators, Safe accounts, contract owners,
+owners use requested-account-only local key resolution; Ledger owners reuse the
+central device-bound EIP-712 signer. Every signature is recovered against
+locally rebuilt Safe EIP-712 data and the current owner set before
+persistence/publication. Impersonators, Safe accounts, contract owners,
 duplicate/removed owners, and unknown Safe signature types never count toward
 quorum. Agent passwords may approve or execute ordinary Safe transactions but
 cannot reveal secrets or authorize future configuration changes.
+
+`safe/accountTypePolicy.ts` is the single account-type extension point for this
+flow. Its exhaustive matrix covers every `AccountType` and independently
+declares owner signing, outer execution, the central signing path, and
+fee-token execution. Safe discovery, capability derivation, durable proposal
+decoding, owner authorization, execution, and renderer account filtering use
+its guards and derived types. Adding a wallet type therefore fails compilation
+until its Safe capabilities are chosen, without duplicating eligibility lists
+throughout the feature.
 
 Safe Transaction Service traffic goes directly from the extension to Safe's
 official gateway. There is no WalletChan Safe API route, server credential, or
@@ -6380,7 +6415,8 @@ snapshots without repeating Safe-service or RPC verification. Receipts are
 discarded after a successful import; worker restart, expiry, address mismatch,
 or chain mismatch fails closed and requires a fresh check. No verification
 receipt is written to Chrome storage.
-The background resolves that ID against current Bankr/private-key/seed records
+The background resolves that ID against current
+Bankr/private-key/seed/Ledger records
 and passes only that one address to `findSafesOwnedByAccount`; view-only, Safe,
 missing, or stale IDs fail before network access. Direct Safe-address import is
 a separate Safe-service preflight followed by exact onchain verification and
@@ -6408,9 +6444,10 @@ records into human action, a wallet/contact-resolved counterparty, and lifecycle
 status. The leading chain logo owns network context; rows do not repeat the
 chain name or Safe-service origin in text. Each visible row shows its actual
 Safe nonce as **Nonce #N**; same-nonce alternatives deliberately repeat it. For
-verified future-nonce records, `safeProposalSequence.ts` resolves
-the earliest pending lower nonce for the same Safe and chain, allowing the row
-to say **Blocked · Execute nonce #N first**. Configuration-blocked rows remain simply
+verified future-nonce records, `safeProposalSequence.ts` resolves the freshly
+verified live nonce or earliest pending lower nonce for the same Safe and chain.
+Before quorum the row says **Needs approval · Queued**; at quorum it says
+**Queued · Execute nonce #N first**. Configuration-blocked rows remain simply
 **Blocked**, so the UI never invents a nonce dependency.
 There is no raw proposal-creation form in this inbox; reviewed wallet, provider,
 WalletConnect, and batch intake remain the proposal creation boundaries.
@@ -6422,8 +6459,9 @@ Safe to `safeSwapProposal.ts` before any Bankr or local EOA execution handler.
 That adapter normalizes call values and creates a wallet-origin draft through
 `createSafeProposal`; the Safe transaction builder performs canonical
 MultiSend wrapping when multiple calls must be atomic. The renderer opens that
-proposal in the shared Safe request screen, where Bankr/private-key/seed owners
-approve and a selected EOA later pays execution gas. Impersonators remain
+proposal in the shared Safe request screen, where
+Bankr/private-key/seed/Ledger owners approve and a selected EOA later pays
+execution gas. Impersonators remain
 blocked. Cross-chain Safe bridge selection remains disabled because reusing a
 Safe address on another network is unsafe until WalletChan verifies that the
 destination Safe deployment exists there.
@@ -6440,14 +6478,23 @@ proposal identity without changing its calls or dapp route. Advanced details
 keeps this exceptional action behind a pencil beside the nonce; its inline
 editor accepts an already reserved nonce as a deliberate competing replacement,
 while automatic intake never does so. Before quorum the footer says
-**Signing with** and defaults to the first
-available linked owner. At `readyToExecute` it changes to **Execute with**,
+**Signing with** and defaults to the first available linked owner, including
+while a later Safe nonce is queued behind an earlier request. At
+`readyToExecute` it changes to **Execute with**,
 defaults to a locally controlled Safe owner, and exposes the other supported
-private-key/seed accounts through the identity dropdown. The exact outer
+private-key/seed/Ledger accounts through the identity dropdown. The exact outer
 `execTransaction` request is passed through the normal local-account gas tier
 and custom-fee component plus the shared fee-token selector. Fee-token
 availability and quotes are recomputed for the selected executor and proposal
-chain; a quote for one executor cannot authorize another. Safe approval and
+chain; a quote for one executor cannot authorize another. Ledger executors see
+native gas only and reuse the normal device-wait status while approving the
+outer transaction. When quorum is reached on a future nonce, the executor
+identity remains visible but fee estimation and Execute stay disabled with the
+earlier nonce named; refreshing the Safe enables them once that nonce becomes
+current. That nonce reconciliation derives draft/awaiting/ready state again
+from the validated stored confirmations and live threshold, repairing a
+service-merge lag where the confirmation count already reached quorum while
+the durable state still said `awaitingApprovals`. Safe approval and
 execution never render an inline
 password field: like ordinary transaction/signature confirmation, they consume
 the current expiry-checked master/agent/passkey session and fail closed with an
@@ -6510,7 +6557,7 @@ even if a stale service response says the proposal is ready. Lost responses
 become `ambiguous`; reconciliation starts automatically, checks receipt and
 Safe nonce, and may resend only those identical signed bytes with bounded
 backoff. At that same irreversible boundary, WalletChan adds one deterministic
-normal transaction-history record for the private-key or seed-phrase executor
+normal transaction-history record for the private-key, seed-phrase, or Ledger executor
 that pays gas. Its `from` is the executor, its `to` is the Safe, and its data is
 the exact outer `execTransaction` envelope, so only the executor account's
 Activity list receives the normal history row. That row also stores the Safe

@@ -10,6 +10,7 @@ import { getPendingBatchTxRequestById } from "../requests/pendingBatchTxStorage"
 import { resolvePinnedAccount } from "../transactions/runtime";
 import { getSafeProposal } from "../safe/proposalRepository";
 import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
+import { isSafeExecutorAccount } from "../safe/accountTypePolicy";
 import { WALLETCHAN_OFFICIAL_DELEGATE } from "./constants";
 import { getFeeTokenBalanceAtRpc } from "./chainState";
 import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
@@ -202,7 +203,7 @@ export async function getSafeExecutionFeePaymentOptions(
   if (!proposal || proposal.state !== "readyToExecute" || hasUnresolvedSafeExecution(proposal)) {
     return { success: false as const, error: "Safe proposal is not ready to execute" };
   }
-  if (!account || (account.type !== "privateKey" && account.type !== "seedPhrase")) {
+  if (!account || !isSafeExecutorAccount(account)) {
     return { success: false as const, error: "Safe execution account is no longer available" };
   }
   return getOptionsForRequest({

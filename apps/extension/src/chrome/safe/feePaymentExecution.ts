@@ -47,6 +47,7 @@ import {
   updateSafeProposal,
 } from "./proposalRepository";
 import { settleCompetingSafeProposals } from "./executionSettlement";
+import { canExecuteSafeWithFeeToken } from "./accountTypePolicy";
 
 const RECEIPT_POLL_INTERVAL_MS = 2_000;
 const RECEIPT_POLL_ATTEMPTS = 60;
@@ -170,6 +171,9 @@ export async function executeSafeProposalWithFeeToken(input: {
     input.proposalId,
     input.executorAccountId,
   );
+  if (!canExecuteSafeWithFeeToken(account)) {
+    throw new Error("Selected Safe executor supports native gas only");
+  }
   const calls = feePaymentSafeExecutionCalls({
     safeAddress: proposal.safeAddress,
     executionData: buildSafeExecutionData(proposal),

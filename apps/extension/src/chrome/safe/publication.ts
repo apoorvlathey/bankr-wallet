@@ -13,15 +13,18 @@ import {
 } from "./serviceClient";
 import { validateServiceTransaction } from "./serviceValidation";
 import type { SafeOwnerConfirmation, SafeProposalRecord } from "./types";
+import { mergeSafeServiceProposal } from "./serviceMerge";
 
-function mergeConfirmations(
+export function mergePublishedSafeConfirmations(
   local: readonly SafeOwnerConfirmation[],
-  remote: readonly SafeOwnerConfirmation[],
+  published: readonly SafeOwnerConfirmation[],
 ) {
-  const byOwner = new Map(remote.map((item) => [item.ownerAddress, item]));
+  const byOwner = new Map(published.map((item) => [item.ownerAddress, item]));
   for (const item of local) {
-    const remoteItem = byOwner.get(item.ownerAddress);
-    byOwner.set(item.ownerAddress, remoteItem ? { ...item, publishedAt: remoteItem.publishedAt } : item);
+    const publishedItem = byOwner.get(item.ownerAddress);
+    byOwner.set(item.ownerAddress, publishedItem
+      ? { ...item, publishedAt: publishedItem.publishedAt }
+      : item);
   }
   return [...byOwner.values()];
 }
@@ -38,16 +41,8 @@ export async function reconcileSafeProposal(id: string): Promise<SafeProposalRec
     snapshot,
     safeAddress: proposal.safeAddress,
   });
-  return updateSafeProposal(id, (current) => ({
-    ...current,
-    confirmations: mergeConfirmations(current.confirmations, remote.confirmations),
-    unsupportedConfirmations: remote.unsupportedConfirmations,
-    state: remote.state,
-    transactionHash: remote.transactionHash,
-    effectClaim: undefined,
-    error: undefined,
-    updatedAt: Date.now(),
-  }));
+  return updateSafeProposal(id, (current) =>
+    mergeSafeServiceProposal(current, remote));
 }
 
 export async function publishSafeProposalConfirmations(id: string): Promise<SafeProposalRecord> {
@@ -69,15 +64,23 @@ export async function publishSafeProposalConfirmations(id: string): Promise<Safe
       }
     }
     const publishedAt = Date.now();
-    const confirmations = proposal.confirmations.map((item) =>
+    const publishedConfirmations = proposal.confirmations.map((item) =>
       item.publishedAt ? item : { ...item, publishedAt },
     );
     const safe = await getSafeAccountRecord(proposal.safeAccountId);
     const threshold = safe?.chains[String(proposal.chainId)]?.threshold;
-    return releaseSafeProposalEffect(id, claimId, {
-      confirmations,
-      state: threshold && confirmations.length >= threshold ? "readyToExecute" : "awaitingApprovals",
-      error: undefined,
+    return releaseSafeProposalEffect(id, claimId, (current) => {
+      const confirmations = mergePublishedSafeConfirmations(
+        current.confirmations,
+        publishedConfirmations,
+      );
+      return {
+        confirmations,
+        state: threshold && confirmations.length >= threshold
+          ? "readyToExecute"
+          : "awaitingApprovals",
+        error: undefined,
+      };
     });
   } catch (error) {
     await releaseSafeProposalEffect(id, claimId, {

@@ -105,6 +105,30 @@ test("owner discovery preserves the Base Sepolia RPC through verification", asyn
   assert.equal(result.scannedChainIds.includes(84532), true);
 });
 
+test("Ledger accounts can discover Safes without entering an EOA signing path", async () => {
+  let disclosedOwner = "";
+  const result = await findSafesOwnedByAccount({
+    id: "ledger-owner",
+    type: "ledger",
+    address: "0xb06a64615842cba9b3bdb7e6f726f3a5bd20dac2",
+    deviceId: "0x1111111111111111111111111111111111111111",
+    hdPath: "m/44'/60'/0'/0/0",
+    hdIndex: 0,
+    createdAt: 1,
+  }, {
+    discover: async (_chainId, owner) => {
+      disclosedOwner = owner;
+      return { safes: [safe] };
+    },
+    verify: async () => baseSepoliaSnapshot(),
+    getServices: baseSepoliaServices,
+    getNetworksInfo: baseSepoliaNetworks,
+  });
+
+  assert.equal(disclosedOwner, "0xb06a64615842cba9b3bdb7e6f726f3a5bd20dac2");
+  assert.equal(result.candidates.length, 1);
+});
+
 test("visible custom networks use their configured RPC when Safe supports the chain", async () => {
   const chains = await getSafeEligibleChains(undefined, {
     getServices: async () => [{

@@ -15,6 +15,7 @@ import {
   didSafeProposalExecutionConfirm,
   getAvailableSafeOwnerAccounts,
   getDefaultSafeExecutorAccountId,
+  getSafeExecutionBlockedReason,
   getSafeExecutorAccounts,
   getSafeProposalActionKind,
   getSafeProposalDisplayActionKind,
@@ -156,6 +157,7 @@ function safeSnapshot(): SafeChainSnapshot {
       "0xb06a64615842cba9b3bdb7e6f726f3a5bd20dac2",
       "0x2222222222222222222222222222222222222222",
       "0x3333333333333333333333333333333333333333",
+      "0x7777777777777777777777777777777777777777",
     ],
     contractOwners: [],
     threshold: 2,
@@ -173,8 +175,9 @@ const accounts: Account[] = [
   { id: "bankr-owner", type: "bankr", address: "0xb06a64615842cba9b3bdb7e6f726f3a5bd20dac2", createdAt: 2 },
   { id: "seed-owner", type: "seedPhrase", address: "0x2222222222222222222222222222222222222222", seedGroupId: "seed", derivationIndex: 0, createdAt: 3 },
   { id: "pk-owner", type: "privateKey", address: "0x3333333333333333333333333333333333333333", createdAt: 4 },
-  { id: "watch", type: "impersonator", address: "0x5555555555555555555555555555555555555555", createdAt: 5 },
-  { id: "safe", type: "safe", address: "0x6666666666666666666666666666666666666666", createdAt: 6 },
+  { id: "ledger-owner", type: "ledger", address: "0x7777777777777777777777777777777777777777", deviceId: "0x8888888888888888888888888888888888888888", hdPath: "m/44'/60'/0'/0/0", hdIndex: 0, createdAt: 5 },
+  { id: "watch", type: "impersonator", address: "0x5555555555555555555555555555555555555555", createdAt: 6 },
+  { id: "safe", type: "safe", address: "0x6666666666666666666666666666666666666666", createdAt: 7 },
 ];
 
 test("Safe home reuses only the canonical wallet actions", async () => {
@@ -422,7 +425,7 @@ test("Safe request review uses the standard confirmation grammar without passwor
   assert.match(decision, /safeOwnerAccountIds\.has\(account\.id\)/);
   assert.match(decision, />\s*Owner\s*</);
   assert.match(details, /<Divider borderColor="border\.subtle" opacity=\{1\} \/>/);
-  assert.match(screen, /contextHeaderAction=\{<SafeProposalStatusPill proposal=\{proposal\} \/>\}/);
+  assert.match(screen, /contextHeaderAction=\{<SafeProposalStatusPill proposal=\{proposal\} liveNonce=\{snapshot\.nonce\} \/>\}/);
   assert.match(details, /export function SafeProposalStatusPill/);
   assert.match(details, /<SuccessStatusPill label="Signed" \/>/);
   assert.match(details, /"Ready to reject"[\s\S]*: "Ready to execute"/);
@@ -444,6 +447,15 @@ test("Safe request review uses the standard confirmation grammar without passwor
   assert.doesNotMatch(details, /approvals\s*<\/Text>/);
   assert.doesNotMatch(screen, /type="password"|Executor password|Password for this approval/);
   assert.doesNotMatch(decision, /type="password"|Executor password|Password for this approval/);
+});
+
+test("Safe signer and executor account menu is height-bounded and scrollable", async () => {
+  const decision = await readFile(safeDecisionSummaryUrl, "utf8");
+
+  assert.match(decision, /<MenuList[\s\S]*maxW="calc\(100vw - 32px\)"/);
+  assert.match(decision, /<MenuList[\s\S]*maxH="320px"/);
+  assert.match(decision, /<MenuList[\s\S]*overflowY="auto"/);
+  assert.match(decision, /<MenuList[\s\S]*overscrollBehavior="contain"/);
 });
 
 test("terminal Safe Activity details cannot inherit live request behavior", async () => {
@@ -540,19 +552,20 @@ test("Safe execution freezes review state and opens public Activity after submis
   assert.match(confirmation, /if \(submissionLocked\) return;/);
   assert.match(confirmation, /displayRequestView = isRequestView \|\| submissionLocked/);
   assert.match(confirmation, /if \(executing && submitted\) onExecutionSubmitted\(\)/);
-  assert.match(confirmation, /disabled=\{submissionLocked\}/);
+  assert.match(confirmation, /disabled=\{submissionLocked \|\| isLedgerWaiting\}/);
   assert.match(requestsScreen, /onExecutionSubmitted=\{onExecutionSubmitted\}/);
   assert.match(appSurfaces, /onExecutionSubmitted=\{onExecutionSubmitted\}/);
   assert.match(app, /onExecutionSubmitted=.*setWalletHomeMode\("public"\).*setActivityTabTrigger/);
 });
 
-test("Safe execution defaults to a local owner and permits another local account", () => {
-  const executors = getSafeExecutorAccounts(accounts);
+test("Safe execution lists local owners first and permits another local account", () => {
+  const executors = getSafeExecutorAccounts(accounts, safeSnapshot());
 
   assert.deepEqual(executors.map((account) => account.id), [
-    "unrelated",
     "seed-owner",
     "pk-owner",
+    "ledger-owner",
+    "unrelated",
   ]);
   assert.equal(
     getDefaultSafeExecutorAccountId(executors, safeSnapshot()),
@@ -561,25 +574,54 @@ test("Safe execution defaults to a local owner and permits another local account
   );
 });
 
-test("Safe approval candidates cover Bankr, private-key, and seed owners only", () => {
+test("Safe approval candidates cover Bankr, private-key, seed, and Ledger owners", () => {
   const proposal = safeProposal();
-  const candidates = getAvailableSafeOwnerAccounts(accounts, safeSnapshot(), proposal);
+  const snapshot = safeSnapshot();
+  const candidates = getAvailableSafeOwnerAccounts(accounts, snapshot, proposal);
 
-  assert.deepEqual(candidates.map((account) => account.id), ["seed-owner", "pk-owner"]);
-  assert.equal(getSafeProposalActionKind({ ...proposal, state: "awaitingApprovals" }, candidates), "approve");
-  assert.equal(getSafeProposalActionKind(proposal, candidates), "execute");
+  assert.deepEqual(candidates.map((account) => account.id), [
+    "seed-owner",
+    "pk-owner",
+    "ledger-owner",
+  ]);
+  assert.equal(getSafeProposalActionKind({ ...proposal, state: "awaitingApprovals" }, candidates, snapshot), "approve");
+  assert.equal(getSafeProposalActionKind(proposal, candidates, snapshot), "execute");
   assert.equal(getSafeProposalActionKind({
     ...proposal,
     transactionHash: `0x${"55".repeat(32)}`,
-  }, candidates), null);
+  }, candidates, snapshot), null);
   assert.equal(getSafeProposalActionKind({
     ...proposal,
     serializedExecution: `0x${"66".repeat(64)}`,
-  }, candidates), null);
-  assert.equal(getSafeProposalActionKind({ ...proposal, state: "blocked" }, candidates), null);
+  }, candidates, snapshot), null);
+  assert.equal(getSafeProposalActionKind({ ...proposal, state: "blocked" }, candidates, snapshot), null);
   assert.equal(canRejectSafeProposal(proposal), true);
   assert.equal(hasSafeProposalSignatures(proposal), true);
   assert.equal(canRejectSafeProposal({ ...proposal, purpose: "rejection" }), false);
+});
+
+test("future Safe nonces remain approvable and only block execution", () => {
+  const snapshot = safeSnapshot();
+  const proposal = {
+    ...safeProposal(),
+    state: "draft" as const,
+    confirmations: [],
+    transaction: { ...safeProposal().transaction, nonce: 3 },
+  };
+  const candidates = getAvailableSafeOwnerAccounts(accounts, snapshot, proposal);
+
+  assert.equal(getSafeProposalActionKind(proposal, candidates, snapshot), "approve");
+  assert.equal(getSafeExecutionBlockedReason(proposal, snapshot), "Execute Safe nonce #2 first");
+  assert.equal(getSafeProposalActionKind({
+    ...proposal,
+    state: "blocked",
+    error: "Future Safe nonce 3; executable nonce is 2",
+  }, candidates, snapshot), "approve", "released blocked records stay signable");
+  assert.equal(getSafeProposalActionKind({
+    ...proposal,
+    state: "readyToExecute",
+    confirmations: safeProposal().confirmations,
+  }, candidates, snapshot), "execute");
 });
 
 test("Safe request rows describe the action and approval state", () => {
@@ -661,28 +703,46 @@ test("Safe rejection rows describe the onchain nonce replacement", () => {
   assert.equal(presentation.status, "Ready to execute");
 });
 
-test("future Safe requests name the visible request that must execute first", () => {
+test("future Safe requests stay approvable before naming the execution dependency at quorum", () => {
   const first = safeProposal();
-  const blocked: SafeProposalRecord = {
+  const queued: SafeProposalRecord = {
     ...first,
     id: "request-2",
     safeTxHash: `0x${"ef".repeat(32)}`,
     transaction: { ...first.transaction, nonce: 3 },
-    state: "blocked",
+    state: "draft",
     confirmations: [],
-    error: "Future Safe nonce 3; executable nonce is 2",
   };
-  const blockedByNonce = getSafeProposalBlockingNonce(blocked, [first, blocked]);
-  const presentation = getSafeProposalPresentation(blocked, {
+  const stale = {
+    ...first,
+    id: "stale-request",
+    transaction: { ...first.transaction, nonce: 1 },
+  };
+  const blockedByNonce = getSafeProposalBlockingNonce(
+    queued,
+    [stale, first, queued],
+    "2",
+  );
+  const approvalPresentation = getSafeProposalPresentation(queued, {
     nativeSymbol: "ETH",
     nativeDecimals: 18,
+    threshold: 2,
+    blockedByNonce,
+  });
+  const executionPresentation = getSafeProposalPresentation({
+    ...queued,
+    state: "readyToExecute",
+    confirmations: first.confirmations,
+  }, {
     threshold: 1,
     blockedByNonce,
   });
 
   assert.equal(blockedByNonce, 2);
-  assert.equal(presentation.status, "Blocked · Execute nonce #2 first");
-  assert.equal(presentation.statusTone, "error");
+  assert.equal(approvalPresentation.status, "Needs approval · Queued");
+  assert.equal(approvalPresentation.statusTone, "warning");
+  assert.equal(executionPresentation.status, "Queued · Execute nonce #2 first");
+  assert.equal(executionPresentation.statusTone, "warning");
 });
 
 test("Safe advanced details exposes inline nonce editing only before signing", async () => {

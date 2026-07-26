@@ -501,9 +501,10 @@ describes native sends, token transfers/approvals, batches, and contract
 interactions in plain language, then shows a
 wallet/contact-resolved counterparty and compact labeled lifecycle state. The
 chain name and Safe-service origin are not repeated beside the chain mark.
-Future-nonce requests name the dependency directly as
-**Blocked · Execute #N first**; other blocked causes do not show this sequencing
-copy. A
+Future-nonce requests stay signable and publishable: before quorum they show
+**Needs approval · Queued**, and at quorum they name the execution dependency
+as **Queued · Execute #N first**. Only final execution waits for that nonce;
+other blocked causes do not show sequencing copy. A
 header reload action refreshes the selected Safe immediately; selecting a Safe
 or opening the wallet with that Safe active starts the same refresh without
 waiting for the periodic alarm. The inbox does not expose a raw **New
@@ -953,17 +954,17 @@ replayed without a background recheck.
 
 Every signing and execution flow must cover:
 
-| Scenario | Bankr owner | PK owner | Seed owner | View-only |
-| --- | --- | --- | --- | --- |
-| Discover Safe by owner | Yes | Yes | Yes | Optional lookup only |
-| Import and link | Yes | Yes | Yes | Observe only |
-| Propose first signature | Required before ship | Required | Required | Blocked |
-| Add confirmation | Required before ship | Required | Required | Blocked |
-| Execute with owner EOA | Capability-dependent | Required | Required | Blocked |
-| Execute with unrelated local EOA | Capability-dependent | Required | Required | Blocked |
-| Safe message approval | Compatibility-gated | Compatibility-gated | Compatibility-gated | Blocked |
-| Owner/module/settings change | Master-only if supported | Master-only | Master-only | Blocked |
-| Agent password ordinary approval | Explicit policy test | Explicit policy test | Explicit policy test | Blocked |
+| Scenario | Bankr owner | PK owner | Seed owner | Ledger owner | View-only |
+| --- | --- | --- | --- | --- | --- |
+| Discover Safe by owner | Yes | Yes | Yes | Yes | Optional lookup only |
+| Import and link | Yes | Yes | Yes | Yes | Observe only |
+| Propose first signature | Required before ship | Required | Required | Automated + device QA | Blocked |
+| Add confirmation | Required before ship | Required | Required | Automated + device QA | Blocked |
+| Execute with owner EOA | Approval only | Required | Required | Automated + device QA | Blocked |
+| Execute with unrelated local EOA | Approval only | Required | Required | Automated + device QA | Blocked |
+| Safe message approval | Compatibility-gated | Compatibility-gated | Compatibility-gated | Compatibility-gated | Blocked |
+| Owner/module/settings change | Master-only if supported | Master-only | Master-only | Master-only | Blocked |
+| Agent password ordinary approval | Explicit policy test | Explicit policy test | Explicit policy test | Explicit policy + device QA | Blocked |
 
 Also test one Safe linked to multiple WalletChan owner types and prove that the
 wrong cached password/API key/private key can never approve for another owner.
@@ -976,7 +977,9 @@ wrong cached password/API key/private key can never approve for another owner.
 - EOA owners, unsupported contract owner, and nested Safe owner;
 - no modules, canonical module, unknown module, guard, and custom fallback;
 - normal single call, canonical MultiSend, and arbitrary delegatecall;
-- nonce zero, queued future nonce, two proposals at one nonce, stale nonce;
+- nonce zero, queued future-nonce approval across all four signing wallet
+  types, execution gating until that nonce becomes current, two proposals at
+  one nonce, and stale nonce;
 - service proposal whose fields/hash/signatures are malformed;
 - owner/threshold/guard change while confirmation is open;
 - Safe deployed but Transaction Service unavailable or behind chain head.

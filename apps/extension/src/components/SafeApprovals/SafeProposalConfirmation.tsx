@@ -6,6 +6,7 @@ import type { SafeChainSnapshot, SafeProposalRecord } from "@/chrome/safe/types"
 import type { Account, SafeAccount } from "@/chrome/types";
 import type { GasOverrides } from "@/chrome/txHandlers";
 import { CopyButton } from "@/components/CopyButton";
+import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import { SimulationFailureConfirmButton } from "@/components/RequestConfirmation/SimulationFailureConfirmButton";
@@ -26,6 +27,7 @@ import {
   canRejectSafeProposal,
   getAvailableSafeOwnerAccounts,
   getDefaultSafeExecutorAccountId,
+  getSafeExecutionBlockedReason,
   getSafeExecutorAccounts,
   getSafeOwnerAccounts,
   getSafeProposalActionKind,
@@ -89,10 +91,7 @@ export function SafeProposalConfirmation({
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [submissionLocked, setSubmissionLocked] = useState(false);
 
-  const ownerAccounts = useMemo(
-    () => getSafeOwnerAccounts(accounts, snapshot),
-    [accounts, snapshot],
-  );
+  const ownerAccounts = useMemo(() => getSafeOwnerAccounts(accounts, snapshot), [accounts, snapshot]);
   const safeOwnerAccountIds = useMemo(
     () => new Set(ownerAccounts.map((account) => account.id)),
     [ownerAccounts],
@@ -101,8 +100,8 @@ export function SafeProposalConfirmation({
     () => getAvailableSafeOwnerAccounts(accounts, snapshot, proposal),
     [accounts, proposal, snapshot],
   );
-  const executors = useMemo(() => getSafeExecutorAccounts(accounts), [accounts]);
-  const actionKind = getSafeProposalActionKind(proposal, availableOwners);
+  const executors = useMemo(() => getSafeExecutorAccounts(accounts, snapshot), [accounts, snapshot]);
+  const actionKind = getSafeProposalActionKind(proposal, availableOwners, snapshot);
   const isRequestView = isPendingSafeProposal(proposal);
   const isRejection = proposal.purpose === "rejection";
   const requiresOnchainRejection = hasSafeProposalSignatures(proposal);
@@ -220,22 +219,28 @@ export function SafeProposalConfirmation({
     : operation === "approve"
       ? ownerAccounts.find((account) => account.id === ownerAccountId) ?? null
       : selectedOwner;
+  const isLedgerWaiting =
+    selectedAccount?.type === "ledger" &&
+    (operation === "approve" || operation === "execute");
   const actionAccounts = primaryActionKind === "execute"
     ? executors
     : operation === "approve"
       ? ownerAccounts
       : availableOwners;
+  const executionBlockedReason = primaryActionKind === "execute" ? getSafeExecutionBlockedReason(proposal, snapshot) : null;
   const executionRequest = useMemo<PendingTxRequest | null>(
-    () => primaryActionKind === "execute" && selectedExecutor
+    () => primaryActionKind === "execute" && selectedExecutor && !executionBlockedReason
       ? makeSafeExecutionTxRequest(proposal, chainName, selectedExecutor)
       : null,
-    [chainName, primaryActionKind, proposal, selectedExecutor],
+    [chainName, executionBlockedReason, primaryActionKind, proposal, selectedExecutor],
   );
 
   const canReject = canRejectSafeProposal(proposal);
   const disabledReason = !reviewFresh
     ? "Refreshing Safe authority"
-    : !selectedAccount
+    : executionBlockedReason
+      ? executionBlockedReason
+      : !selectedAccount
         ? primaryActionKind === "execute" ? "No local execution account is available" : "No available Safe owner is linked"
       : primaryActionKind === "execute" && feePaymentToken === "native" && (!gasValid || !gasOverrides)
           ? "Set a valid network fee"
@@ -323,18 +328,21 @@ export function SafeProposalConfirmation({
         <EstimatedChangesHeading chainId={proposal.chainId} chainName={chainName} />
       ) : undefined}
       context={(
-        <SafeProposalRequestDetails
-          proposal={proposal}
-          snapshot={snapshot}
-          accounts={ownerAccounts}
-          error={error}
-          notice={notice}
-          simulationReverted={simulationReverted}
-          showRequestLifecycle={displayRequestView}
-        />
+        <>
+          <SafeProposalRequestDetails
+            proposal={proposal}
+            snapshot={snapshot}
+            accounts={ownerAccounts}
+            error={error}
+            notice={notice}
+            simulationReverted={simulationReverted}
+            showRequestLifecycle={displayRequestView}
+          />
+          <LedgerSigningStatus active={isLedgerWaiting} />
+        </>
       )}
       contextTitle={displayRequestView ? "Request details" : "Safe transaction"}
-      contextHeaderAction={<SafeProposalStatusPill proposal={proposal} />}
+      contextHeaderAction={<SafeProposalStatusPill proposal={proposal} liveNonce={snapshot.nonce} />}
       advancedDetails={(
         <SafeProposalAdvancedDetails
           proposal={proposal}
@@ -371,18 +379,17 @@ export function SafeProposalConfirmation({
             }
           }}
           onFeePaymentQuoteChange={setFeePaymentQuote}
-          disabled={submissionLocked}
+          disabled={submissionLocked || isLedgerWaiting}
         />
       ) : undefined}
-      actionNotice={displayRequestView && simulationUnavailable
-        ? "Simulation is unavailable. Review the call details carefully."
-        : undefined}
+      actionNotice={displayRequestView ? executionBlockedReason ??
+        (simulationUnavailable ? "Simulation is unavailable. Review the call details carefully." : undefined) : undefined}
       confirmAction={primaryAction}
       rejectAction={displayRequestView && canReject ? (
         <Button
           variant={requiresOnchainRejection ? "danger" : "secondary"}
           isLoading={operation === "reject"}
-          isDisabled={submissionLocked}
+          isDisabled={submissionLocked || isLedgerWaiting}
           onClick={() => void handleReject()}
         >
           {requiresOnchainRejection ? "Reject onchain" : "Reject"}

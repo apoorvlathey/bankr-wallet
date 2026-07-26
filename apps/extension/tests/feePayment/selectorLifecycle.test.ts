@@ -10,6 +10,10 @@ const capabilitiesSource = readFileSync(
   new URL("../../src/chrome/feePayment/capabilities.ts", import.meta.url),
   "utf8",
 );
+const quotesSource = readFileSync(
+  new URL("../../src/chrome/feePayment/quotes.ts", import.meta.url),
+  "utf8",
+);
 const transactionSummarySource = readFileSync(
   new URL(
     "../../src/components/TransactionConfirmation/TransactionDecisionSummary.tsx",
@@ -106,6 +110,14 @@ test("single, batch, Safe, Swap, and internal-send reviews share the fee-option 
   assert.match(safeSummarySource, /<FeePaymentSelector/u);
   assert.match(safeSummarySource, /requestKind="safe"/u);
   assert.match(safeSummarySource, /accountId=\{selectedAccount\.id\}/u);
+  assert.match(
+    capabilitiesSource,
+    /!account \|\| !isSafeExecutorAccount\(account\)/u,
+  );
+  assert.match(
+    quotesSource,
+    /!account \|\| !isSafeFeeTokenExecutorAccount\(account\)/u,
+  );
   assert.match(internalTransferSource, /pinnedTxRequest\(activeAccount,/u);
   assert.match(internalTransferSource, /savePendingTxRequest\(pendingRequest\)/u);
   assert.match(swapSummarySource, /<FeePaymentSelector/u);

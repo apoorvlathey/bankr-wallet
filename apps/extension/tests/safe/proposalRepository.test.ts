@@ -68,6 +68,54 @@ test("proposal creation is idempotent and effect claims are first-action-wins", 
   assert.equal((await getSafeProposal(initial.id))?.transactionHash, `0x${"34".repeat(32)}`);
 });
 
+test("live worker claims survive stale-effect recovery until their owner releases them", async () => {
+  installed.push(installNativeSessionStorage());
+  const initial = { ...proposal(), state: "readyToExecute" as const };
+  await createSafeProposal(initial);
+  const claimed = await claimSafeProposalEffect(initial.id, { kind: "execute" });
+
+  assert.deepEqual(
+    await recoverInterruptedSafeProposalEffects({
+      minimumAgeMs: 0,
+      now: Date.now() + 20 * 60_000,
+    }),
+    [],
+  );
+  assert.equal(
+    (await getSafeProposal(initial.id))?.effectClaim?.claimId,
+    claimed.effectClaim?.claimId,
+  );
+
+  const released = await releaseSafeProposalEffect(
+    initial.id,
+    claimed.effectClaim!.claimId,
+  );
+  assert.equal(released.effectClaim, undefined);
+});
+
+test("effect release updaters receive the latest locked proposal", async () => {
+  installed.push(installNativeSessionStorage());
+  const initial = proposal();
+  await createSafeProposal(initial);
+  const claimed = await claimSafeProposalEffect(initial.id, { kind: "approve" });
+
+  await updateSafeProposal(initial.id, (current) => ({
+    ...current,
+    error: "changed during the claimed effect",
+    updatedAt: Date.now(),
+  }));
+  const released = await releaseSafeProposalEffect(
+    initial.id,
+    claimed.effectClaim!.claimId,
+    (current) => ({
+      error: `${current.error}: released`,
+    }),
+  );
+
+  assert.equal(released.effectClaim, undefined);
+  assert.equal(released.error, "changed during the claimed effect: released");
+});
+
 test("stale display state cannot make a hashed Safe execution removable", async () => {
   installed.push(installNativeSessionStorage());
   const initial = proposal();
@@ -175,6 +223,7 @@ test("cancel revalidates the durable record against an in-flight approval", asyn
     /already in progress/,
   );
   assert.equal((await getSafeProposal(initial.id))?.effectClaim?.claimId, claimed.effectClaim?.claimId);
+  await releaseSafeProposalEffect(initial.id, claimed.effectClaim!.claimId);
 });
 
 test("worker restart recovery distinguishes retryable and ambiguous Safe effects", async () => {
@@ -182,7 +231,10 @@ test("worker restart recovery distinguishes retryable and ambiguous Safe effects
   const approval = proposal();
   await createSafeProposal(approval);
   await claimSafeProposalEffect(approval.id, { kind: "approve" });
-  const recoveredApproval = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 1 });
+  const recoveredApproval = await recoverInterruptedSafeProposalEffects({
+    now: Date.now() + 1,
+    recoverActiveClaims: true,
+  });
   assert.equal(recoveredApproval[0]?.state, "draft");
   assert.equal(recoveredApproval[0]?.effectClaim, undefined);
 
@@ -213,7 +265,10 @@ test("worker restart recovery distinguishes retryable and ambiguous Safe effects
   };
   await createSafeProposal(publishRecord);
   await claimSafeProposalEffect(publishRecord.id, { kind: "publish" });
-  const recoveredPublication = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 2 });
+  const recoveredPublication = await recoverInterruptedSafeProposalEffects({
+    now: Date.now() + 2,
+    recoverActiveClaims: true,
+  });
   const publication = recoveredPublication.find((item) => item.id === publishRecord.id);
   assert.equal(publication?.state, "ambiguous");
   assert.equal(publication?.confirmations.length, 1);
@@ -241,7 +296,10 @@ test("worker restart recovery distinguishes retryable and ambiguous Safe effects
     serializedExecution: "0x1234",
     executionPreparedAt: Date.now(),
   }));
-  const recoveredExecution = await recoverInterruptedSafeProposalEffects({ now: Date.now() + 3 });
+  const recoveredExecution = await recoverInterruptedSafeProposalEffects({
+    now: Date.now() + 3,
+    recoverActiveClaims: true,
+  });
   const prepared = recoveredExecution.find((item) => item.id === execution.id);
   assert.equal(prepared?.state, "ambiguous");
   assert.equal(prepared?.transactionHash, `0x${"44".repeat(32)}`);

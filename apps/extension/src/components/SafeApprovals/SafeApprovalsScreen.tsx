@@ -190,7 +190,11 @@ export default function SafeApprovalsScreen({ safeAccount, chainId, accounts, in
             <SafeProposalRow
               key={item.id}
               proposal={item}
-              blockedByNonce={getSafeProposalBlockingNonce(item, pendingProposals)}
+              blockedByNonce={getSafeProposalBlockingNonce(
+                item,
+                pendingProposals,
+                itemSnapshot?.nonce,
+              )}
               chainName={itemChain?.name ?? `Chain ${item.chainId}`}
               nativeSymbol={itemChain?.nativeCurrency.symbol}
               nativeDecimals={itemChain?.nativeCurrency.decimals}

@@ -9,6 +9,10 @@ import { BatchCallsList } from "@/components/BatchCallsList";
 import { FromAccountDisplay } from "@/components/FromAccountDisplay";
 import { makeSafeDisplayCalls } from "./safeProposalActionModel";
 import { isSafeExecutionRpcWarning } from "@/chrome/safe/executionStatus";
+import {
+  getSafeProposalNoncePosition,
+  isFutureSafeNonceError,
+} from "@/chrome/safe/proposalNonce";
 
 const STATE_LABELS: Record<SafeProposalRecord["state"], string> = {
   draft: "Needs approval",
@@ -51,10 +55,17 @@ function SuccessStatusPill({ label }: { label: string }) {
 
 export function SafeProposalStatusPill({
   proposal,
+  liveNonce,
 }: {
-  proposal: Pick<SafeProposalRecord, "purpose" | "state">;
+  proposal: Pick<SafeProposalRecord, "purpose" | "state" | "transaction" | "error">;
+  liveNonce: `${bigint}`;
 }) {
-  return proposal.state === "readyToExecute" || proposal.state === "executed" ? (
+  const queued =
+    getSafeProposalNoncePosition(proposal.transaction.nonce, liveNonce) === "future" ||
+    (proposal.state === "blocked" && isFutureSafeNonceError(proposal.error));
+  return queued ? (
+    <Badge variant="warning">Queued</Badge>
+  ) : proposal.state === "readyToExecute" || proposal.state === "executed" ? (
     <SuccessStatusPill
       label={proposal.state === "executed"
         ? "Executed"
@@ -95,10 +106,12 @@ export function SafeProposalRequestDetails({
   const unsupported = new Set(
     proposal.unsupportedConfirmations?.map((confirmation) => confirmation.ownerAddress),
   );
-  const proposalError = proposal.state === "failed" || (
+  const proposalError = !isFutureSafeNonceError(proposal.error) && (
+    proposal.state === "failed" || (
     showRequestLifecycle &&
     proposal.state !== "executing" &&
     proposal.state !== "ambiguous"
+    )
   )
     ? proposal.error
     : null;

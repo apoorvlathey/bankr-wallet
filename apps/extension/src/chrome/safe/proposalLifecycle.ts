@@ -8,10 +8,7 @@ import {
   updateSafeProposal,
 } from "./proposalRepository";
 import type { SafeCall, SafeProposalRecord, SafeProposalRoute } from "./types";
-import {
-  futureSafeNonceError,
-  isUnsignedSafeNonceEditable,
-} from "./proposalNonce";
+import { isUnsignedSafeNonceEditable } from "./proposalNonce";
 import { verifySafeOnchainState } from "./onchainState";
 import { writeResultToStorage } from "../transactions/runtime";
 import { getBundleStatus, saveBundleStatus } from "../batch/bundleStatusStorage";
@@ -106,7 +103,6 @@ export async function createReviewedSafeProposal(input: {
         nonce,
         calls: input.calls,
       });
-      const future = nonce > onchainNonce;
       return {
         version: 1,
         id: `${input.chainId}:${safe.address}:${built.safeTxHash}`,
@@ -119,12 +115,11 @@ export async function createReviewedSafeProposal(input: {
         verifiedAtBlock: live.verifiedAtBlock,
         calls: built.calls,
         transaction: built.transaction,
-        state: future ? "blocked" : "draft",
+        state: "draft",
         confirmations: [],
         route: input.route ?? { kind: "wallet" },
         createdAt: now,
         updatedAt: now,
-        error: future ? futureSafeNonceError(nonce, onchainNonce) : undefined,
       };
     },
   });
@@ -175,7 +170,6 @@ export async function changeSafeProposalNonce(input: {
     nonce,
     calls: proposal.calls,
   });
-  const future = nonce > liveNonce;
   return replaceUnsignedSafeProposal(proposal.id, {
     ...proposal,
     id: `${proposal.chainId}:${proposal.safeAddress}:${built.safeTxHash}`,
@@ -183,11 +177,11 @@ export async function changeSafeProposalNonce(input: {
     verifiedAtBlock: live.verifiedAtBlock,
     calls: built.calls,
     transaction: built.transaction,
-    state: future ? "blocked" : "draft",
+    state: "draft",
     confirmations: [],
     unsupportedConfirmations: undefined,
     effectClaim: undefined,
-    error: future ? futureSafeNonceError(nonce, liveNonce) : undefined,
+    error: undefined,
     updatedAt: Date.now(),
   });
 }

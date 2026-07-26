@@ -1,4 +1,7 @@
-import type { AccountType } from "../types";
+import type {
+  SafeExecutorAccountType,
+  SafeOwnerAccountType,
+} from "./accountTypePolicy";
 
 export type SafeAddress = `0x${string}`;
 export type SafeDecimalString = `${bigint}`;
@@ -30,7 +33,7 @@ export interface SafeTransactionData {
 export interface SafeLinkedOwner {
   ownerAddress: SafeAddress;
   accountId: string;
-  accountType: Extract<AccountType, "bankr" | "privateKey" | "seedPhrase">;
+  accountType: SafeOwnerAccountType;
 }
 
 export interface SafeChainSnapshot {
@@ -99,7 +102,7 @@ export interface SafeUnsupportedConfirmation {
 
 export interface SafeExecutionExecutor {
   accountId: string;
-  accountType: "privateKey" | "seedPhrase";
+  accountType: SafeExecutorAccountType;
   address: SafeAddress;
   preparedAt: number;
   /** ERC-20 symbol when the executor submitted through the fee-token route. */

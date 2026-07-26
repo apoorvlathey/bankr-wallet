@@ -25,6 +25,7 @@ import { mergeSafeServiceProposal } from "./serviceMerge";
 import { hasUnresolvedSafeExecution } from "./executionPolicy";
 import { reconcileSafeProposalNonceQueue } from "./proposalNonceReconciliation";
 import { replayCancelledSafeProposalRoutes } from "./proposalLifecycle";
+import { getSafeProposalNoncePosition } from "./proposalNonce";
 
 const STORAGE_KEY = "safeSyncState";
 const LOCK_KEY = "walletchan:safe-sync";
@@ -61,8 +62,9 @@ async function updateSyncState(mutator: (state: SyncState) => SyncState) {
   });
 }
 
-async function notifyTransition(proposal: SafeProposalRecord, previousState: SafeProposalRecord["state"] | undefined, hasLocalOwner: boolean) {
-  const transition = proposal.state === "readyToExecute" && previousState !== "readyToExecute"
+async function notifyTransition(proposal: SafeProposalRecord, previousState: SafeProposalRecord["state"] | undefined, hasLocalOwner: boolean, liveNonce: `${bigint}`) {
+  const transition = proposal.state === "readyToExecute" &&
+      getSafeProposalNoncePosition(proposal.transaction.nonce, liveNonce) === "current"
     ? "ready"
     : hasLocalOwner && proposal.state === "awaitingApprovals" && previousState === undefined
       ? "approval"
@@ -149,7 +151,14 @@ async function syncSafeRecords(
             ? await updateSafeProposal(remote.id, (current) =>
                 mergeSafeServiceProposal(current, remote))
             : await createSafeProposal(remote);
-          await notifyTransition(merged, previous?.state, getLinkedSafeOwners(snapshot, accounts).some((owner) => !merged.confirmations.some((confirmation) => confirmation.ownerAddress === owner.ownerAddress)));
+          await notifyTransition(
+            merged,
+            previous?.state,
+            getLinkedSafeOwners(live, accounts).some((owner) =>
+              !merged.confirmations.some((confirmation) =>
+                confirmation.ownerAddress === owner.ownerAddress)),
+            live.nonce,
+          );
         }
         if (live.transactionService !== "supported") {
           await importVerifiedSafeAccount({
@@ -229,7 +238,7 @@ export function startSafeSync(): void {
   // Any durable claim visible during worker startup belonged to a worker that
   // no longer exists. Recover it immediately, while retaining ambiguous
   // publication/execution evidence for reconciliation.
-  void recoverInterruptedSafeProposalEffects()
+  void recoverInterruptedSafeProposalEffects({ recoverActiveClaims: true })
     .then(() => replayCancelledSafeProposalRoutes())
     .then(() => reconcilePendingSafeExecutions())
     .catch(() => undefined);

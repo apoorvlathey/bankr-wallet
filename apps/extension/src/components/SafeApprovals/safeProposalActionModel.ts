@@ -8,20 +8,23 @@ import type {
 } from "@/chrome/safe/types";
 import type { Account } from "@/chrome/types";
 import {
+  isSafeExecutorAccount,
+  isSafeOwnerAccount,
+  type SafeExecutorAccount,
+  type SafeOwnerAccount,
+} from "@/chrome/safe/accountTypePolicy";
+import {
   canStartSafeProposalRejection,
   hasSafeProposalSignatures,
 } from "@/chrome/safe/proposalRejectionPolicy";
 import { hasUnresolvedSafeExecution } from "@/chrome/safe/executionPolicy";
+import {
+  getSafeProposalNoncePosition,
+  isFutureSafeNonceError,
+} from "@/chrome/safe/proposalNonce";
 import { getSafeProposalRequestOrigin } from "./safeProposalActivityModel";
 
-export type SafeOwnerAccount = Extract<
-  Account,
-  { type: "bankr" | "privateKey" | "seedPhrase" }
->;
-export type SafeExecutorAccount = Extract<
-  Account,
-  { type: "privateKey" | "seedPhrase" }
->;
+export type { SafeExecutorAccount, SafeOwnerAccount };
 export type SafeProposalActionKind = "approve" | "execute" | null;
 export type SafeProposalActionOperation =
   | Exclude<SafeProposalActionKind, null>
@@ -46,9 +49,7 @@ export function getSafeOwnerAccounts(
   snapshot: SafeChainSnapshot,
 ): SafeOwnerAccount[] {
   return accounts.filter((account): account is SafeOwnerAccount =>
-    (account.type === "bankr" ||
-      account.type === "privateKey" ||
-      account.type === "seedPhrase") &&
+    isSafeOwnerAccount(account) &&
     snapshot.owners.includes(account.address.toLowerCase() as `0x${string}`),
   );
 }
@@ -68,10 +69,23 @@ export function getAvailableSafeOwnerAccounts(
 
 export function getSafeExecutorAccounts(
   accounts: readonly Account[],
+  snapshot: SafeChainSnapshot,
 ): SafeExecutorAccount[] {
-  return accounts.filter((account): account is SafeExecutorAccount =>
-    account.type === "privateKey" || account.type === "seedPhrase",
-  );
+  const ownerAddresses = new Set(snapshot.owners);
+  const ownerExecutors: SafeExecutorAccount[] = [];
+  const otherExecutors: SafeExecutorAccount[] = [];
+
+  for (const account of accounts) {
+    if (!isSafeExecutorAccount(account)) continue;
+    const destination = ownerAddresses.has(
+      account.address.toLowerCase() as `0x${string}`,
+    )
+      ? ownerExecutors
+      : otherExecutors;
+    destination.push(account);
+  }
+
+  return [...ownerExecutors, ...otherExecutors];
 }
 
 export function getDefaultSafeExecutorAccountId(
@@ -87,13 +101,36 @@ export function getDefaultSafeExecutorAccountId(
 export function getSafeProposalActionKind(
   proposal: SafeProposalRecord,
   availableOwners: readonly SafeOwnerAccount[],
+  snapshot: SafeChainSnapshot,
 ): SafeProposalActionKind {
   if (hasUnresolvedSafeExecution(proposal)) return null;
   if (proposal.state === "readyToExecute") return "execute";
+  if (
+    proposal.state === "blocked" &&
+    isFutureSafeNonceError(proposal.error)
+  ) {
+    return proposal.confirmations.length >= snapshot.threshold
+      ? "execute"
+      : availableOwners.length > 0
+        ? "approve"
+        : null;
+  }
   if (APPROVABLE_STATES.has(proposal.state) && availableOwners.length > 0) {
     return "approve";
   }
   return null;
+}
+
+export function getSafeExecutionBlockedReason(
+  proposal: SafeProposalRecord,
+  snapshot: SafeChainSnapshot,
+): string | null {
+  return getSafeProposalNoncePosition(
+    proposal.transaction.nonce,
+    snapshot.nonce,
+  ) === "future"
+    ? `Execute Safe nonce #${snapshot.nonce} first`
+    : null;
 }
 
 /** Keeps the action the user pressed visible while storage advances state. */

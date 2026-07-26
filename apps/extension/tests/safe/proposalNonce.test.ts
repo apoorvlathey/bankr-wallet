@@ -9,9 +9,14 @@ import {
   createSafeProposal,
   getSafeProposal,
   getSafeProposals,
+  claimSafeProposalEffect,
+  releaseSafeProposalEffect,
   replaceUnsignedSafeProposal,
 } from "../../src/chrome/safe/proposalRepository";
-import { getNextAvailableSafeNonce } from "../../src/chrome/safe/proposalNonce";
+import {
+  getNextAvailableSafeNonce,
+  getSafeProposalNoncePosition,
+} from "../../src/chrome/safe/proposalNonce";
 import { reconcileSafeProposalNonceQueue } from "../../src/chrome/safe/proposalNonceReconciliation";
 import { startSafeProposalRejection } from "../../src/chrome/safe/proposalRejection";
 import { buildSafeTransaction } from "../../src/chrome/safe/transactionBuilder";
@@ -105,7 +110,8 @@ test("automatic Safe requests reserve sequential nonces under one storage lock",
 
   assert.deepEqual(created.map((item) => item.transaction.nonce).sort(), [4, 5]);
   assert.equal(created.find((item) => item.transaction.nonce === 4)?.state, "draft");
-  assert.equal(created.find((item) => item.transaction.nonce === 5)?.state, "blocked");
+  assert.equal(created.find((item) => item.transaction.nonce === 5)?.state, "draft");
+  assert.equal(created.find((item) => item.transaction.nonce === 5)?.error, undefined);
 });
 
 test("nonce allocation uses the lowest free pending nonce and ignores terminal records", () => {
@@ -119,6 +125,12 @@ test("nonce allocation uses the lowest free pending nonce and ignores terminal r
       proposalAt(6n, "blocked"),
     ],
   }), 5n);
+});
+
+test("Safe approvals accept current and future nonces but reject stale nonces", () => {
+  assert.equal(getSafeProposalNoncePosition(4, "4"), "current");
+  assert.equal(getSafeProposalNoncePosition(5, "4"), "future");
+  assert.equal(getSafeProposalNoncePosition(3, "4"), "stale");
 });
 
 test("confirmed records advance a stale cached nonce floor", () => {
@@ -147,6 +159,94 @@ test("an unsigned request can explicitly move to a custom nonce and later unbloc
     threshold: 1,
   });
   assert.equal((await getSafeProposal(custom.id))?.state, "draft");
+});
+
+test("a queued approvable request is replaced only if the live nonce passes it", async () => {
+  installed.push(installNativeSessionStorage());
+  const queued = proposalAt(5n);
+  await createSafeProposal(queued);
+
+  await reconcileSafeProposalNonceQueue({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    liveNonce: "4",
+    threshold: 1,
+  });
+  assert.equal((await getSafeProposal(queued.id))?.state, "draft");
+
+  await reconcileSafeProposalNonceQueue({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    liveNonce: "6",
+    threshold: 1,
+  });
+  assert.equal((await getSafeProposal(queued.id))?.state, "replaced");
+});
+
+test("a fully signed queued request becomes executable when its nonce is current", async () => {
+  installed.push(installNativeSessionStorage());
+  const queued = {
+    ...proposalAt(5n),
+    state: "awaitingApprovals" as const,
+    confirmations: [
+      {
+        ownerAddress: "0x1111111111111111111111111111111111111111" as const,
+        accountId: "owner-1",
+        accountType: "privateKey" as const,
+        signature: `0x${"11".repeat(65)}` as `0x${string}`,
+        createdAt: 1,
+        publishedAt: 2,
+      },
+      {
+        ownerAddress: "0x2222222222222222222222222222222222222222" as const,
+        accountId: "owner-2",
+        accountType: "ledger" as const,
+        signature: `0x${"22".repeat(65)}` as `0x${string}`,
+        createdAt: 3,
+        publishedAt: 4,
+      },
+    ],
+  };
+  await createSafeProposal(queued);
+
+  await reconcileSafeProposalNonceQueue({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    liveNonce: "4",
+    threshold: 2,
+  });
+  assert.equal((await getSafeProposal(queued.id))?.state, "awaitingApprovals");
+
+  await reconcileSafeProposalNonceQueue({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    liveNonce: "5",
+    threshold: 2,
+  });
+  assert.equal((await getSafeProposal(queued.id))?.state, "readyToExecute");
+});
+
+test("nonce reconciliation cannot replace an approval claim in progress", async () => {
+  installed.push(installNativeSessionStorage());
+  const queued = proposalAt(5n);
+  await createSafeProposal(queued);
+  const claimed = await claimSafeProposalEffect(queued.id, {
+    kind: "approve",
+    ownerAddress: "0x1111111111111111111111111111111111111111",
+  });
+
+  await reconcileSafeProposalNonceQueue({
+    safeAccountId: "safe-account",
+    chainId: 8453,
+    liveNonce: "6",
+    threshold: 1,
+  });
+  assert.equal((await getSafeProposal(queued.id))?.state, "draft");
+  assert.equal(
+    (await getSafeProposal(queued.id))?.effectClaim?.claimId,
+    claimed.effectClaim?.claimId,
+  );
+  await releaseSafeProposalEffect(queued.id, claimed.effectClaim!.claimId);
 });
 
 test("an unsigned queued future-nonce request can be cancelled locally", async () => {
@@ -301,7 +401,7 @@ test("custom nonce route validates against freshly verified onchain state", asyn
     nonce: "6",
   }, verify);
   assert.equal(changed.transaction.nonce, 6);
-  assert.equal(changed.state, "blocked");
+  assert.equal(changed.state, "draft");
   assert.equal(
     (await getSafeProposal(changed.id))?.transaction.nonce,
     6,
