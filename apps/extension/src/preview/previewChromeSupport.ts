@@ -119,6 +119,21 @@ export const previewApprovalAndSendSimulationResult: SimulationResult = {
       spenderLabel: "Bankr vault",
     },
   ],
+  residualApprovals: [
+    {
+      system: "erc20",
+      tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      owner: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      spender: "0x111111125421cA6dc452d289314280a0f8842A65",
+      previousAmount: ((1n << 256n) - 1n).toString(),
+      remainingAmount: ((1n << 256n) - 1n).toString(),
+      sourceCallIndex: 1,
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6,
+      logoUrl: "/preview-assets/usdc.svg",
+    },
+  ],
   approvalDetectionIncomplete: false,
   nativeChange: null,
   tokenChanges: [

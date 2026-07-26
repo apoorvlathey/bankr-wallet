@@ -17,9 +17,19 @@ import {
   type CrossDappBatch,
   type CrossDappBatchEntry,
 } from "./storage";
+import { buildWalletGeneratedApprovalCleanupEntry } from "./approvalCleanupEntries";
+import {
+  type ApprovalRevokeTarget,
+  buildApprovalRevokeCalls,
+} from "../approvalCleanup/revokeList";
+import { MAX_BATCH_CALLS } from "../provider/limits";
+import { supportsAtomicEoaApprovalCleanup } from "../approvalCleanup/accountPolicy";
 
 export async function handleAddToCrossDappBatch(
   txId: string,
+  approvalRevoke?:
+    | ApprovalRevokeTarget
+    | ApprovalRevokeTarget[],
 ): Promise<{ success: boolean; error?: string }> {
   const pending = await getPendingTxRequestById(txId);
   if (!pending) {
@@ -40,6 +50,12 @@ export async function handleAddToCrossDappBatch(
   const pinned = await resolvePinnedCrossDappAccount(pending, pending.tx.from);
   if (!pinned.ok) return { success: false, error: pinned.error };
   const account = pinned.account;
+  if (approvalRevoke && !supportsAtomicEoaApprovalCleanup(account.type)) {
+    return {
+      success: false,
+      error: "This account cannot add an atomic approval cleanup",
+    };
+  }
   const eligibilityError = await eligibilityErrorForCrossDappBatch(
     account,
     pending.tx.chainId,
@@ -54,6 +70,17 @@ export async function handleAddToCrossDappBatch(
     pending.tx.chainId,
   );
   if (lockError) return { success: false, error: lockError };
+  const revokes = approvalRevoke
+    ? buildApprovalRevokeCalls(
+        Array.isArray(approvalRevoke) ? approvalRevoke : [approvalRevoke],
+      )
+    : [];
+  if (
+    (existing?.entries.length ?? 0) + 1 + revokes.length >
+      MAX_BATCH_CALLS
+  ) {
+    return { success: false, error: "Pending batch has reached the call limit" };
+  }
 
   const entry: CrossDappBatchEntry = {
     txId: pending.id,
@@ -77,14 +104,28 @@ export async function handleAddToCrossDappBatch(
     accountType: pending.accountType,
     bankrCredentialTag: pending.bankrCredentialTag,
   };
+  const addedEntries: CrossDappBatchEntry[] = [
+    entry,
+    ...revokes.map((revoke) =>
+      buildWalletGeneratedApprovalCleanupEntry(
+        {
+          fromAddress: account.address,
+          chainId: pending.tx.chainId,
+          accountType: account.type as CrossDappBatch["accountType"],
+        },
+        entry,
+        revoke,
+      )
+    ),
+  ];
   const next: CrossDappBatch = existing
-    ? { ...existing, entries: [...existing.entries, entry] }
+    ? { ...existing, entries: [...existing.entries, ...addedEntries] }
     : {
         fromAddress: account.address,
         chainId: pending.tx.chainId,
         chainName: pending.chainName,
         accountType: account.type as CrossDappBatch["accountType"],
-        entries: [entry],
+        entries: addedEntries,
         createdAt: Date.now(),
         accountId: account.id,
       };
@@ -92,6 +133,21 @@ export async function handleAddToCrossDappBatch(
   await removePendingTxRequest(pending.id);
   notifyBatchUpdated();
   return { success: true };
+}
+
+export function handleAddApprovalRevokeToTransactionBatch(
+  txId: string,
+  tokenAddress: unknown,
+  spender: unknown,
+): Promise<{ success: boolean; error?: string }> {
+  return handleAddToCrossDappBatch(txId, { tokenAddress, spender });
+}
+
+export function handleAddApprovalRevokesToTransactionBatch(
+  txId: string,
+  targets: ApprovalRevokeTarget[],
+): Promise<{ success: boolean; error?: string }> {
+  return handleAddToCrossDappBatch(txId, targets);
 }
 
 export async function handleAddCallsToCrossDappBatch(

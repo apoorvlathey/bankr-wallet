@@ -86,6 +86,18 @@ test("Safe execution quotes remain pinned to their request family and executor",
   }).family, "safeExecution");
 });
 
+test("cross-dapp quotes cannot be consumed as ordinary ERC-5792 batches", () => {
+  const store = new FeePaymentQuoteStore(30, () => 1_000);
+  store.put(quote({
+    family: "crossDappBatch",
+    requestId: "cross-dapp-batch-1",
+  }));
+  assert.equal(consume(store, {
+    family: "crossDappBatch",
+    requestId: "cross-dapp-batch-1",
+  }).family, "crossDappBatch");
+});
+
 test("Safe fee quotes fingerprint only the exact outer execTransaction call", () => {
   const safe = "0x3333333333333333333333333333333333333333";
   assert.deepEqual(feePaymentSafeExecutionCalls({

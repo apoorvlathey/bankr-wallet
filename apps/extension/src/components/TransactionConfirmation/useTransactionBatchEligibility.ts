@@ -56,6 +56,7 @@ export function useTransactionBatchEligibility(
 
   return {
     addToBatchDisabledReason,
+    batchStrategy: batchPlan.strategy,
     batchedCount: crossDappBatch?.entries.length ?? 0,
     canBatchAccount,
   };

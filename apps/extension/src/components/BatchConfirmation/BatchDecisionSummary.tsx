@@ -9,6 +9,7 @@ import type { ForceInclusionInfo } from "./types";
 import {
   FeePaymentSelector,
   type FeePaymentQuoteSummary,
+  type FeePaymentRequestKind,
 } from "@/components/FeePaymentSelector";
 import type { NativeFeePaymentSummary } from "@/components/feePaymentUi";
 
@@ -38,6 +39,7 @@ interface BatchDecisionSummaryProps {
   feePaymentToken: "native" | `0x${string}`;
   feePaymentQuote: FeePaymentQuoteSummary | null;
   allowFeePaymentSelection: boolean;
+  feePaymentRequestKind: FeePaymentRequestKind;
   onFeePaymentTokenChange: (token: "native" | `0x${string}`) => void;
   onFeePaymentQuoteChange: (quote: FeePaymentQuoteSummary | null) => void;
 }
@@ -63,6 +65,7 @@ export function BatchDecisionSummary({
   feePaymentToken,
   feePaymentQuote,
   allowFeePaymentSelection,
+  feePaymentRequestKind,
   onFeePaymentTokenChange,
   onFeePaymentQuoteChange,
 }: BatchDecisionSummaryProps) {
@@ -84,7 +87,7 @@ export function BatchDecisionSummary({
         <FeePaymentSelector
           txId={bundleId}
           chainId={chainId}
-          requestKind="batch"
+          requestKind={feePaymentRequestKind}
           value={feePaymentToken}
           quote={feePaymentQuote}
           disabled={forceInclusion}

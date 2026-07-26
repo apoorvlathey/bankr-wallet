@@ -6,18 +6,29 @@ const readChrome = (path: string) =>
   readFile(new URL(`../../src/chrome/${path}`, import.meta.url), "utf8");
 
 test("cross-dapp facade preserves every public implementation identity", async () => {
-  const [facade, intake, staging, confirmation] = await Promise.all([
+  const [facade, intake, staging, cleanup, confirmation] = await Promise.all([
     import("../../src/chrome/crossDappBatchHandlers"),
     import("../../src/chrome/crossDappBatch/intake"),
     import("../../src/chrome/crossDappBatch/staging"),
+    import("../../src/chrome/crossDappBatch/approvalCleanup"),
     import("../../src/chrome/crossDappBatch/confirmation"),
   ]);
   for (const name of [
     "handleAddToCrossDappBatch",
     "handleAddCallsToCrossDappBatch",
+    "handleAddApprovalRevokeToTransactionBatch",
+    "handleAddApprovalRevokesToTransactionBatch",
   ] as const) {
     assert.equal(facade[name], intake[name], name);
   }
+  assert.equal(
+    facade.handleAppendApprovalRevokeToCrossDappBatch,
+    cleanup.handleAppendApprovalRevokeToCrossDappBatch,
+  );
+  assert.equal(
+    facade.handleAppendApprovalRevokesToCrossDappBatch,
+    cleanup.handleAppendApprovalRevokesToCrossDappBatch,
+  );
   for (const name of [
     "handleUpdateCallInCrossDappBatch",
     "handleRemoveFromCrossDappBatch",
@@ -35,13 +46,18 @@ test("cross-dapp domain is one-way, audit-sized, and has no root clutter", async
   const budgets: Record<string, number> = {
     "crossDappBatchHandlers.ts": 30,
     "crossDappBatch/accountPolicy.ts": 120,
+    "crossDappBatch/approvalCleanup.ts": 130,
+    "crossDappBatch/approvalCleanupEntries.ts": 130,
     "crossDappBatch/bankr.ts": 130,
     "crossDappBatch/completion.ts": 280,
     "crossDappBatch/confirmation.ts": 180,
-    "crossDappBatch/intake.ts": 260,
+    "crossDappBatch/feePayment.ts": 300,
+    "crossDappBatch/feePaymentCompletion.ts": 150,
+    "crossDappBatch/intake.ts": 270,
     "crossDappBatch/lifecycle.ts": 320,
     "crossDappBatch/local.ts": 340,
     "crossDappBatch/runtime.ts": 30,
+    "crossDappBatch/resultRoute.ts": 80,
     "crossDappBatch/staging.ts": 150,
     "crossDappBatch/storage.ts": 120,
     "crossDappBatch/types.ts": 50,
@@ -150,12 +166,14 @@ test("Bankr and local effects retain final account and transport commits", async
 });
 
 test("completion keeps transaction and wallet_sendCalls result routing separate", async () => {
-  const [source, bankr] = await Promise.all([
+  const [source, route, bankr] = await Promise.all([
     readChrome("crossDappBatch/completion.ts"),
+    readChrome("crossDappBatch/resultRoute.ts"),
     readChrome("crossDappBatch/bankr.ts"),
   ]);
-  assert.match(source, /entry\.source\?\.kind !== "wallet_sendCalls"/);
-  assert.match(source, /`txResult:\$\{entry\.txId\}`/);
+  assert.match(route, /entry\.source\?\.kind === "wallet_sendCalls"/);
+  assert.match(route, /entry\.source\?\.kind === "walletGenerated"/);
+  assert.match(source, /`txResult:\$\{txId\}`/);
   assert.match(source, /BUNDLE_STATUS\.PENDING/);
   assert.match(source, /BUNDLE_STATUS\.CONFIRMED/);
   assert.match(source, /BUNDLE_STATUS\.REVERTED/);

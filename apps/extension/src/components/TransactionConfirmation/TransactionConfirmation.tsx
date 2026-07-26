@@ -26,8 +26,9 @@ import { useTransactionMetadata } from "./useTransactionMetadata";
 import { useTransactionNonce } from "./useTransactionNonce";
 import { useTransactionReviewState } from "./useTransactionReviewState";
 import { LedgerSigningStatus } from "@/components/Ledger/LedgerSigningStatus";
-import { allowsImpersonatedTransactions } from "@/chrome/network/impersonatedRpcPolicy";
 import { replacementGasSelectionError } from "@/lib/transactionReplacement";
+import { createTransactionApprovalCleanup } from "./approvalCleanupAdapter";
+import { useImpersonatedTransactionCapability } from "./useImpersonatedTransactionCapability";
 
 function TransactionConfirmation({
   txRequest,
@@ -67,26 +68,12 @@ function TransactionConfirmation({
   );
   const [feePaymentQuote, setFeePaymentQuote] =
     useState<FeePaymentQuoteSummary | null>(null);
-  const [canSendImpersonatedTransaction, setCanSendImpersonatedTransaction] =
-    useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setCanSendImpersonatedTransaction(false);
-    if (accountType !== "impersonator" || !resolvedChain?.rpcUrl) {
-      return () => {
-        cancelled = true;
-      };
-    }
-    void allowsImpersonatedTransactions(tx.chainId, resolvedChain.rpcUrl)
-      .then((allowed) => {
-        if (!cancelled) setCanSendImpersonatedTransaction(allowed);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [accountType, resolvedChain?.rpcUrl, tx.chainId, txRequest.id]);
+  const canSendImpersonatedTransaction = useImpersonatedTransactionCapability({
+    accountType,
+    chainId: tx.chainId,
+    rpcUrl: resolvedChain?.rpcUrl,
+    requestId: txRequest.id,
+  });
 
   const metadata = useTransactionMetadata(
     txRequest,
@@ -201,6 +188,19 @@ function TransactionConfirmation({
   const showEstimatedChanges = shouldShowTransactionEstimatedChanges(
     Boolean(delegation7702), Boolean(review.parsedApproval),
   );
+  const approvalCleanup = createTransactionApprovalCleanup({
+    accountType,
+    batchStrategy: batch.batchStrategy,
+    replacement: !!replacement,
+    privateTransaction: isPrivacyShield || isPrivacyDirectUnshield ||
+      !!txRequest.privacyRagequitMeta,
+    valueMalformed: review.isValueMalformed,
+    addToBatchDisabledReason: batch.addToBatchDisabledReason,
+    actionReady: actions.state === "ready",
+    canOpenBatch: !!onAddedToBatch,
+    txId: txRequest.id,
+    onAddedToBatch,
+  });
   const rejectButton = (
     <RejectActionButton
       state={actions.state}
@@ -264,6 +264,7 @@ function TransactionConfirmation({
             isValueZero={review.isValueZero}
             onRevertedChange={review.setSimulationReverted}
             onSimulationUnavailableChange={review.setSimulationUnavailable}
+            approvalCleanup={approvalCleanup}
           />
         ) : undefined
       }

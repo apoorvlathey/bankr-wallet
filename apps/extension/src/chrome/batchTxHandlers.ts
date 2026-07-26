@@ -11,6 +11,10 @@ export {
 } from "./batch/batchTxEncoding";
 export { handleWalletGetCapabilities } from "./batch/batchCapabilities";
 export { handleWalletSendCalls } from "./batch/batchRequestIntake";
+export {
+  handleAppendApprovalRevokeToPendingBatch,
+  handleAppendApprovalRevokesToPendingBatch,
+} from "./batch/approvalCleanup";
 export { handleConfirmBatchTransaction } from "./batch/batchBankrExecution";
 export {
   handleConfirmBatchTransactionPK,

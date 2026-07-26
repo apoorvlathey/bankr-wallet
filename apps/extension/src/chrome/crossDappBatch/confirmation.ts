@@ -21,10 +21,13 @@ import {
 } from "./runtime";
 import { getCrossDappBatch } from "./storage";
 import type { CrossDappBatchShipResult } from "./types";
+import { executeCrossDappBatchWithFeeToken } from "./feePayment";
 
 export async function handleConfirmCrossDappBatch(
   password: string,
   precomputedGasEstimates?: GasEstimate[],
+  feePaymentToken: "native" | "token" = "native",
+  feePaymentQuoteId?: string,
 ): Promise<{ success: boolean; error?: string; txHash?: string }> {
   if (!beginCrossDappBatchProcessing()) {
     return { success: false, error: "Batch already being processed" };
@@ -59,6 +62,24 @@ export async function handleConfirmCrossDappBatch(
         success: false,
         error: "Contract deployment transactions cannot be confirmed as a batch",
       };
+    }
+    if (feePaymentToken === "token") {
+      if (
+        batchAccount.type !== "bankr" &&
+        batchAccount.type !== "privateKey" &&
+        batchAccount.type !== "seedPhrase"
+      ) {
+        return {
+          success: false,
+          error: "This account cannot pay cross-dapp batch gas with a token",
+        };
+      }
+      return executeCrossDappBatchWithFeeToken({
+        batch,
+        account: batchAccount,
+        password,
+        feePaymentQuoteId,
+      });
     }
 
     const calls: ERC5792Call[] = batch.entries.map((entry) => ({

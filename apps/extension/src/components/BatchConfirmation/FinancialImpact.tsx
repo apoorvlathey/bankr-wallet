@@ -2,6 +2,7 @@ import { Box } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 
 interface FinancialImpactProps {
   calls: PendingBatchTxRequest["params"]["calls"];
@@ -9,6 +10,7 @@ interface FinancialImpactProps {
   isNonAtomic: boolean;
   onRevertedChange: (reverted: boolean) => void;
   onUnavailableChange: (unavailable: boolean) => void;
+  approvalCleanup?: AssetChangesDisplayProps["approvalCleanup"];
 }
 
 export function FinancialImpact({
@@ -17,6 +19,7 @@ export function FinancialImpact({
   isNonAtomic,
   onRevertedChange,
   onUnavailableChange,
+  approvalCleanup,
 }: FinancialImpactProps) {
   return (
     <Box
@@ -38,6 +41,7 @@ export function FinancialImpact({
         }))}
         isNonAtomic={isNonAtomic}
         embedded
+        approvalCleanup={approvalCleanup}
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}
       />

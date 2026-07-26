@@ -1,12 +1,12 @@
-import {
-  decodeFunctionResult,
-  encodeFunctionData,
-  type Address,
-  type Hex,
-  type PublicClient,
-} from "viem";
+import type { PublicClient } from "viem";
 
-import { ERC20_ALLOWANCE_ABI, PERMIT2_ALLOWANCE_ABI } from "./approvalAbis";
+import {
+  allowancePairKey,
+  decodeAllowanceRead,
+  encodeAllowanceRead,
+  mergeAllowancePairs,
+  readAllowancePreStates,
+} from "./approvalAllowanceState";
 import { discoverApprovalIntentsFromLogs } from "./approvalLogs";
 import {
   discoverApprovalIntents,
@@ -20,26 +20,25 @@ import {
   type AllowanceState,
 } from "./approvalProjection";
 import { getSimulationClient } from "./client";
-import { MAX_SIMULATION_APPROVAL_CHANGES, PERMIT2_ADDRESS } from "./constants";
+import { MAX_SIMULATION_APPROVAL_CHANGES } from "./constants";
 import {
   runEthSimulateV1Calls,
   type EthSimulateV1Run,
 } from "./ethSimulateClient";
-import type { ApprovalChange } from "./types";
+import {
+  discoverResidualApprovalCandidates,
+} from "./residualApprovalCandidates";
+import { projectResidualApprovals } from "./residualApprovalProjection";
+import type {
+  ApprovalChange,
+  ResidualApproval,
+} from "./types";
 
 export interface ApprovalProjection {
   approvalChanges: ApprovalChange[];
+  residualApprovals: ResidualApproval[];
   approvalDetectionIncomplete: boolean;
   metadataComplete: boolean;
-}
-
-function intentKey(intent: ApprovalIntent): string {
-  return [
-    intent.system,
-    intent.tokenAddress.toLowerCase(),
-    intent.owner.toLowerCase(),
-    intent.spender.toLowerCase(),
-  ].join(":");
 }
 
 function mergeIntents(
@@ -48,7 +47,7 @@ function mergeIntents(
 ): { intents: ApprovalIntent[]; incomplete: boolean } {
   const byKey = new Map<string, ApprovalIntent>();
   for (const intent of [...staticIntents, ...eventIntents]) {
-    const key = intentKey(intent);
+    const key = allowancePairKey(intent);
     const previous = byKey.get(key);
     byKey.set(key, {
       ...intent,
@@ -63,93 +62,35 @@ function mergeIntents(
   };
 }
 
-function encodeAllowanceRead(intent: ApprovalIntent): {
-  to: Address;
-  data: Hex;
-} {
-  if (intent.system === "permit2") {
-    return {
-      to: PERMIT2_ADDRESS,
-      data: encodeFunctionData({
-        abi: PERMIT2_ALLOWANCE_ABI,
-        functionName: "allowance",
-        args: [intent.owner, intent.tokenAddress, intent.spender],
-      }),
-    };
-  }
-  return {
-    to: intent.tokenAddress,
-    data: encodeFunctionData({
-      abi: ERC20_ALLOWANCE_ABI,
-      functionName: "allowance",
-      args: [intent.owner, intent.spender],
-    }),
-  };
-}
-
-function decodeAllowanceRead(
-  intent: ApprovalIntent,
-  data: string | undefined,
-): AllowanceState | null {
-  if (!data || data === "0x" || !/^0x[0-9a-fA-F]+$/.test(data)) return null;
-  try {
-    if (intent.system === "permit2") {
-      const [amount, expiration] = decodeFunctionResult({
-        abi: PERMIT2_ALLOWANCE_ABI,
-        functionName: "allowance",
-        data: data as Hex,
-      });
-      return { amount, expiration: Number(expiration) };
-    }
-    const amount = decodeFunctionResult({
-      abi: ERC20_ALLOWANCE_ABI,
-      functionName: "allowance",
-      data: data as Hex,
-    });
-    return { amount, expiration: null };
-  } catch {
-    return null;
-  }
-}
-
-async function readPreState(
-  client: PublicClient,
-  intent: ApprovalIntent,
-  blockNumber: bigint,
-): Promise<AllowanceState | null> {
-  const read = encodeAllowanceRead(intent);
-  try {
-    const result = await client.call({
-      to: read.to,
-      data: read.data,
-      blockNumber,
-    });
-    return decodeAllowanceRead(intent, result.data);
-  } catch {
-    return null;
-  }
-}
-
 async function enrichProjection(
   client: PublicClient | null,
   chainId: number,
   approvalChanges: ApprovalChange[],
+  residualApprovals: ResidualApproval[],
   approvalDetectionIncomplete: boolean,
 ): Promise<ApprovalProjection> {
-  if (!client || approvalChanges.length === 0) {
+  const entries = [...approvalChanges, ...residualApprovals];
+  if (!client || entries.length === 0) {
     return {
       approvalChanges,
+      residualApprovals,
       approvalDetectionIncomplete,
-      metadataComplete: approvalChanges.length === 0,
+      metadataComplete: entries.length === 0,
     };
   }
   const enriched = await enrichApprovalMetadata(
     client,
     chainId,
-    approvalChanges,
-  ).catch(() => ({ changes: approvalChanges, metadataComplete: false }));
+    entries,
+  ).catch(() => ({ changes: entries, metadataComplete: false }));
   return {
-    approvalChanges: enriched.changes,
+    approvalChanges: enriched.changes.slice(
+      0,
+      approvalChanges.length,
+    ) as ApprovalChange[],
+    residualApprovals: enriched.changes.slice(
+      approvalChanges.length,
+    ) as ResidualApproval[],
     approvalDetectionIncomplete,
     metadataComplete: enriched.metadataComplete,
   };
@@ -178,6 +119,7 @@ export async function simulateApprovalChanges(
       client,
       chainId,
       buildFallbackApprovalChanges(staticDiscovery.intents),
+      [],
       true,
     );
   }
@@ -190,22 +132,35 @@ export async function simulateApprovalChanges(
     staticDiscovery.intents,
     eventDiscovery.intents,
   );
-  if (merged.intents.length === 0) {
+  const residualDiscovery = discoverResidualApprovalCandidates(
+    calls,
+    firstRun.callResults,
+    ownerAddress,
+  );
+  const pairMerge = mergeAllowancePairs(
+    merged.intents,
+    residualDiscovery.candidates,
+  );
+  const pairs = pairMerge.pairs;
+  if (pairs.length === 0) {
     return {
       approvalChanges: [],
+      residualApprovals: [],
       approvalDetectionIncomplete:
-        eventDiscovery.incomplete || merged.incomplete,
+        eventDiscovery.incomplete ||
+        residualDiscovery.incomplete ||
+        merged.incomplete,
       metadataComplete: true,
     };
   }
 
-  const preStatesPromise = Promise.all(
-    merged.intents.map((intent) =>
-      readPreState(client, intent, firstRun.blockNumber),
-    ),
+  const preStatesPromise = readAllowancePreStates(
+    client,
+    pairs,
+    firstRun.blockNumber,
   );
-  const readCalls = merged.intents.map((intent) => {
-    const read = encodeAllowanceRead(intent);
+  const readCalls = pairs.map((pair) => {
+    const read = encodeAllowanceRead(pair);
     return { to: read.to, data: read.data, value: "0x0" };
   });
   const [preStates, secondRun, block] = await Promise.all([
@@ -219,40 +174,57 @@ export async function simulateApprovalChanges(
     client.getBlock({ blockNumber: firstRun.blockNumber }).catch(() => null),
   ]);
 
-  if (!secondRun || secondRun.callResults.length < calls.length) {
+  if (
+    !secondRun ||
+    secondRun.callResults.length < calls.length + readCalls.length
+  ) {
     return enrichProjection(
       client,
       chainId,
       buildFallbackApprovalChanges(merged.intents),
+      [],
       true,
     );
   }
 
   const projected: ApprovalChange[] = [];
+  const finalStates = new Map<string, AllowanceState | null>();
   let verificationIncomplete =
     eventDiscovery.incomplete ||
+    residualDiscovery.incomplete ||
     merged.incomplete ||
+    pairMerge.incomplete ||
     firstRun.callResults.length !== calls.length;
-  merged.intents.forEach((intent, index) => {
+  pairs.forEach((pair, index) => {
     const readResult = secondRun.callResults[calls.length + index];
     const remaining =
       readResult?.status === "0x1"
-        ? decodeAllowanceRead(intent, readResult.returnData)
+        ? decodeAllowanceRead(pair, readResult.returnData)
         : null;
+    finalStates.set(allowancePairKey(pair), remaining);
+  });
+  merged.intents.forEach((intent) => {
+    const key = allowancePairKey(intent);
     const projection = projectApprovalChange(
       intent,
-      preStates[index],
-      remaining,
+      preStates.get(key) ?? null,
+      finalStates.get(key) ?? null,
       block?.timestamp ?? null,
     );
     verificationIncomplete ||= projection.incomplete;
     if (projection.change) projected.push(projection.change);
   });
+  const residualApprovals = projectResidualApprovals(
+    residualDiscovery.candidates,
+    preStates,
+    finalStates,
+  );
 
   return enrichProjection(
     client,
     chainId,
     projected,
+    residualApprovals,
     verificationIncomplete,
   );
 }
@@ -261,10 +233,13 @@ export function withoutApprovalChanges(
   incomplete = false,
 ): Pick<
   ApprovalProjection,
-  "approvalChanges" | "approvalDetectionIncomplete"
+  | "approvalChanges"
+  | "residualApprovals"
+  | "approvalDetectionIncomplete"
 > {
   return {
     approvalChanges: [],
+    residualApprovals: [],
     approvalDetectionIncomplete: incomplete,
   };
 }

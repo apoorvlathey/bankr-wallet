@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type {
   ApprovalChange,
   AssetChange,
+  ResidualApproval,
   SimulationResult,
   TokenMetadataResult,
 } from "@/chrome/txSimulation";
@@ -92,6 +93,7 @@ export function useAssetChangesSimulation({
       setResult({
         ...response,
         approvalChanges: response.approvalChanges ?? [],
+        residualApprovals: response.residualApprovals ?? [],
         approvalDetectionIncomplete:
           response.approvalDetectionIncomplete ?? false,
       });
@@ -128,6 +130,8 @@ export function useAssetChangesSimulation({
     let nativeChange: AssetChange | null = result.nativeChange;
     let approvalChanges: ApprovalChange[] =
       result.approvalChanges ?? [];
+    let residualApprovals: ResidualApproval[] =
+      result.residualApprovals ?? [];
 
     function scheduleRetry() {
       if (cancelled || attempt >= MAX_RETRIES) return;
@@ -144,6 +148,7 @@ export function useAssetChangesSimulation({
             accountAddress: txRequest.tx.from,
             nativeChange,
             approvalChanges,
+            residualApprovals,
           },
           (response: TokenMetadataResult) => {
             if (cancelled || chrome.runtime.lastError) return;
@@ -152,10 +157,13 @@ export function useAssetChangesSimulation({
             nativeChange = response.nativeChange ?? nativeChange;
             approvalChanges =
               response.approvalChanges ?? approvalChanges;
+            residualApprovals =
+              response.residualApprovals ?? residualApprovals;
             const stillIncomplete = isMetadataIncomplete(
               tokenChanges,
               nativeChange,
               approvalChanges,
+              residualApprovals,
             );
 
             setResult((previous) =>
@@ -165,6 +173,7 @@ export function useAssetChangesSimulation({
                     tokenChanges,
                     nativeChange,
                     approvalChanges,
+                    residualApprovals,
                     metadataComplete: !stillIncomplete,
                   }
                 : previous,

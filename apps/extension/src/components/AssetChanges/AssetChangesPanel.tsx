@@ -22,7 +22,9 @@ import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { AssetRow } from "./AssetRow";
 import { ApprovalChangesGroup } from "./ApprovalChangesGroup";
+import { ResidualApprovalBanner } from "./ResidualApprovalBanner";
 import { groupAssetChanges } from "./assetChangesModel";
+import type { AssetChangesDisplayProps } from "./types";
 
 function EmbeddedAssetGroup({
   changes,
@@ -83,11 +85,13 @@ export function AssetChangesPanel({
   loading,
   result,
   embedded = false,
+  approvalCleanup,
 }: {
   explorerUrl: string;
   loading: boolean;
   result: SimulationResult | null;
   embedded?: boolean;
+  approvalCleanup?: AssetChangesDisplayProps["approvalCleanup"];
 }) {
   const { tokens } = useTheme();
   const [expanded, setExpanded] = useState(true);
@@ -126,10 +130,19 @@ export function AssetChangesPanel({
 
   const { allChanges, approvals, incoming, outgoing, summary } =
     groupAssetChanges(result);
+  const residualApprovals = result.residualApprovals ?? [];
   const hasAssetChanges = outgoing.length > 0 || incoming.length > 0;
-  if (result.simulationFailed && approvals.length === 0) return null;
+  if (
+    result.simulationFailed &&
+    approvals.length === 0 &&
+    residualApprovals.length === 0
+  ) return null;
 
-  if (allChanges.length === 0 && approvals.length === 0) {
+  if (
+    allChanges.length === 0 &&
+    approvals.length === 0 &&
+    residualApprovals.length === 0
+  ) {
     return (
       <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
         No additional asset changes were detected.
@@ -139,7 +152,11 @@ export function AssetChangesPanel({
 
   if (embedded) {
     return (
-      <VStack align="stretch" spacing={0} pb={2}>
+      <VStack
+        align="stretch"
+        spacing={0}
+        pb={residualApprovals.length > 0 ? 0 : 2}
+      >
         <ApprovalChangesGroup
           changes={approvals}
           detectionIncomplete={result.approvalDetectionIncomplete}
@@ -162,6 +179,11 @@ export function AssetChangesPanel({
             explorerUrl={explorerUrl}
           />
         )}
+        <ResidualApprovalBanner
+          approvals={residualApprovals}
+          cleanup={approvalCleanup}
+          explorerUrl={explorerUrl}
+        />
       </VStack>
     );
   }
@@ -298,6 +320,12 @@ export function AssetChangesPanel({
                 </VStack>
               </>
             )}
+            <ResidualApprovalBanner
+              approvals={residualApprovals}
+              cleanup={approvalCleanup}
+              explorerUrl={explorerUrl}
+              flushBottom
+            />
           </VStack>
         </Collapse>
       </Box>

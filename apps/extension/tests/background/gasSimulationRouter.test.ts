@@ -93,6 +93,7 @@ test("gas/simulation transport declares unique routes and exact arguments", asyn
     accountAddress: "0xaccount",
     nativeChange: { amount: "1" },
     approvalChanges: [{ spender: "0xspender" }],
+    residualApprovals: [{ spender: "0xremaining" }],
   });
 
   assert.deepEqual(calls, [
@@ -131,6 +132,7 @@ test("gas/simulation transport declares unique routes and exact arguments", asyn
       "0xaccount",
       { amount: "1" },
       [{ spender: "0xspender" }],
+      [{ spender: "0xremaining" }],
     ],
   ]);
 });

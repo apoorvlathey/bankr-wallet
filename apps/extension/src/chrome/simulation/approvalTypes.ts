@@ -29,3 +29,23 @@ export interface ApprovalChange {
   spenderLabel?: string;
   spenderEns?: string;
 }
+
+/**
+ * A pre-existing or newly-created ERC-20 allowance that remains after a
+ * simulated outgoing transfer. These rows are emitted only after block-pinned
+ * pre/final allowance reads prove the final amount is non-zero.
+ */
+export interface ResidualApproval {
+  system: "erc20";
+  tokenAddress: string;
+  owner: string;
+  spender: string;
+  previousAmount: string;
+  remainingAmount: string;
+  /** Top-level reviewed call whose successful logs implicated this spender. */
+  sourceCallIndex: number;
+  symbol: string;
+  name: string;
+  decimals: number;
+  logoUrl?: string;
+}

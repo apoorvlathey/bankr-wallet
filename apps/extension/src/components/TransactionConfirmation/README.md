@@ -15,9 +15,11 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 | `useTransactionReviewState.ts` | Simulation, native-price, gas, calldata, clear-signing, and force-inclusion review state. |
 | `useTransactionNonce.ts` | Loads the pinned local/Ledger address nonce and owns the editable decimal review state. |
 | `transactionNonceModel.ts` | Pure wallet-type eligibility for editable transaction nonces. |
+| `useImpersonatedTransactionCapability.ts` | Renderer-only developer-RPC capability check for view-only transaction submission. |
 | `useTransactionBatchEligibility.ts` | Cross-dapp batch eligibility for every wallet type. |
 | `useTransactionActions.ts` | Bankr/local submission routing, rejection, batch-add, and completion transitions. |
-| `TransactionSummary.tsx` | Centered dapp identity, chain-qualified simulation heading, and financial impact. |
+| `approvalCleanupAdapter.ts` | Projects request/wallet/chain availability, sends one canonical single-to-batch cleanup mutation for an individual or complete residual set, and follows established batch navigation. |
+| `TransactionSummary.tsx` | Centered dapp identity, chain-qualified simulation heading, financial impact, and callback-driven residual-approval cleanup. |
 | `TransactionDecisionSummary.tsx` | Sticky signer identity and network-fee control. |
 | `transactionPresentation.ts` | Pure function-name presentation for outcome copy. |
 | `TransactionContext.tsx` | Ordered warnings, intent, metadata, and status. |
@@ -34,7 +36,11 @@ callers and lazy imports. It stays policy-free and preserves the default export.
 
 ## Boundaries and growth rules
 
-- `useTransactionActions.ts` is the transaction-action message boundary;
+- `useTransactionActions.ts` owns normal transaction decisions. The only
+  adjacent mutation boundary is the explicit residual-approval adapter, which
+  converts the pinned single request into the existing user-assembled atomic
+  batch, appends all selected cleanup calls in that same durable move, and then
+  follows the established `onAddedToBatch` navigation.
   `useSplitPriorTxState.ts` only watches history, and metadata effects are
   display-only.
 - `useTransactionReviewState.ts` owns simulation/gas/calldata review effects;

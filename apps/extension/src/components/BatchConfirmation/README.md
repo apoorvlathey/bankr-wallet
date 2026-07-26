@@ -12,12 +12,14 @@ compatibility facade so the existing lazy import remains stable.
 | `useBatchActions.ts` | Confirmation, rejection, split, and add-to-batch ordering for Bankr, private-key, seed-phrase, impersonator, and cross-dapp flows. | Chrome messages, close timer, confirmation sound. |
 | `useBatchReviewState.ts` | Renderer-only disclosure, simulation, gas, and editable-call state. | None outside React state. |
 | `RequestContext.tsx` | Unified call review, warnings, setup state, and request status. | None. |
-| `BatchDecisionSummary.tsx` | Pinned signer, optional L1 route, and batch gas decision controls. | Gas-estimation component callbacks. |
+| `BatchDecisionSummary.tsx` | Pinned signer, optional L1 route, and the shared native/token batch gas decision controls. | Gas-estimation and fee-quote callbacks. |
+| `feePaymentPolicy.ts` | Pure opt-in policy for ordinary and cross-dapp batch fee selection; privacy and unknown custom transports stay native-only. | None. |
 | `RequestWarnings.tsx` | Simulation, calldata, value, and encoding safety banners. | None. |
-| `CallsReview.tsx` | Ordered request-detail calls, clear-signing action headers with always-visible fields, compact expandable approvals, technical calldata disclosure, header metadata, editing, and hover/focus overflow removal controls. | Default calldata-update Chrome message; overrides delegate to the caller. |
+| `CallsReview.tsx` | Ordered request-detail calls, light-canvas source-dapp attribution, clear-signing action headers with always-visible fields, compact expandable approvals, technical calldata disclosure, header metadata, editing, and hover/focus overflow removal controls. | Default calldata-update Chrome message; overrides delegate to the caller. |
 | `batchActionSummary.ts` | Chooses one concise specialized, clear-signed, native, or decoded action label per call and joins the complete batch summary. | None. |
 | `AdvancedDetails.tsx` | Composes the encoded batch digest, shared tool rows, force inclusion, and reduced-motion-aware reveal scrolling. | Opens Tenderly tab and scrolls newly revealed content into view; other effects use callbacks. |
-| `FinancialImpact.tsx` | Embedded asset-change simulation projection. | Simulation component callbacks. |
+| `FinancialImpact.tsx` | Embedded asset-change simulation and callback-driven residual-approval cleanup projection. | Simulation and explicit cleanup callbacks. |
+| `approvalCleanupAdapter.ts` | Builds single and atomic bulk pending-batch cleanup actions from the pure wallet/strategy availability model and the narrow trusted-renderer transport. | One explicit Chrome message per user action. |
 | `TerminalStates.tsx` | Force-inclusion progress and sent animation. | Completion callbacks and close timer. |
 | `SplitBatchModal.tsx` | Split-mode confirmation presentation. | Callbacks only. |
 | `ConfirmationActions.tsx` | Confirm/reject button presentation and batch simulation-warning projection. | Callbacks only. |
@@ -31,7 +33,17 @@ compatibility facade so the existing lazy import remains stable.
 The compatibility facade points into this domain. The composition root depends
 on focused presentation modules and hooks; presentation modules receive data
 and callbacks and do not import the root. Chrome message effects are restricted
-to `useBatchActions.ts` and the default edit path in `CallsReview.tsx`.
+to `useBatchActions.ts`, the default edit path in `CallsReview.tsx`, and the
+explicit residual-approval cleanup adapter. Pending ERC-5792 requests append
+under their own storage lock; cross-dapp adapters instead append the selected
+generated entries to the active assembled batch. Bulk cleanup performs one
+bounded storage mutation and one subsequent simulation refresh.
+
+Cross-dapp confirmation explicitly opts its custom transport into the shared
+batch fee selector. The selected native/token mode and one-shot quote ID flow
+through `useBatchActions.ts` to `confirmCrossDappBatch`; no duplicate selector
+or cross-dapp-only gas UI is introduced. Any staged-call mutation resets the
+parent-owned selection and quote to native.
 
 Behavioral coverage belongs under `tests/ui/`; transaction execution and wallet
 type branches remain covered by the existing recursive batch/security suites.

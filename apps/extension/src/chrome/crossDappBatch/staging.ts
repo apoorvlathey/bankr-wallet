@@ -44,7 +44,7 @@ export async function handleRemoveFromCrossDappBatch(
         error: "Removed from cross-dapp batch by user",
         completedAt: Date.now(),
       });
-    } else {
+    } else if (candidate.source?.kind !== "walletGenerated") {
       await writeResultToStorage(`txResult:${candidate.txId}`, {
         success: false,
         error: "Removed from batch by user",
@@ -76,6 +76,7 @@ export async function handleRejectCrossDappBatch(): Promise<{
           completedAt: Date.now(),
         });
       }
+      if (entry.source?.kind === "walletGenerated") return Promise.resolve();
       return writeResultToStorage(`txResult:${entry.txId}`, {
         success: false,
         error: "Batch rejected by user",
@@ -91,12 +92,28 @@ function entriesRemovedWith(
   entry: CrossDappBatchEntry,
   entries: CrossDappBatchEntry[],
 ): CrossDappBatchEntry[] {
+  if (entry.source?.kind === "walletGenerated") return [entry];
+  if (entry.source?.kind === "eth_sendTransaction" || !entry.source) {
+    return entries.filter((candidate) =>
+      candidate.txId === entry.txId ||
+      (
+        candidate.source?.kind === "walletGenerated" &&
+        candidate.source.parentTxId === entry.txId
+      )
+    );
+  }
   if (entry.source?.kind !== "wallet_sendCalls") return [entry];
   const bundleId = entry.source.bundleId;
   return entries.filter(
     (candidate) =>
-      candidate.source?.kind === "wallet_sendCalls" &&
-      candidate.source.bundleId === bundleId,
+      (
+        candidate.source?.kind === "wallet_sendCalls" &&
+        candidate.source.bundleId === bundleId
+      ) ||
+      (
+        candidate.source?.kind === "walletGenerated" &&
+        candidate.source.parentBundleId === bundleId
+      ),
   );
 }
 

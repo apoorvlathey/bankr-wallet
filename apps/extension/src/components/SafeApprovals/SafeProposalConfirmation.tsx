@@ -19,6 +19,8 @@ import { SafeProposalDecisionSummary } from "./SafeProposalDecisionSummary";
 import { SafeProposalFinancialImpact } from "./SafeProposalFinancialImpact";
 import { useSafeExecutionRefresh } from "./hooks/useSafeExecutionRefresh";
 import { useSafeProposalActions } from "./hooks/useSafeProposalActions";
+import { createSafeApprovalCleanup } from "./approvalCleanupAdapter";
+import { sendSafeProposalMessage } from "./safeProposalTransport";
 import {
   SafeProposalRequestDetails,
   SafeProposalStatusPill,
@@ -35,16 +37,6 @@ import {
   makeSafeExecutionTxRequest,
   makeSafeReviewTxRequest,
 } from "./safeProposalActionModel";
-
-function send<T>(message: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: T) => {
-      const error = chrome.runtime.lastError;
-      if (error) reject(new Error(error.message));
-      else resolve(response);
-    });
-  });
-}
 
 function originHostname(origin: string): string | null {
   try {
@@ -145,7 +137,7 @@ export function SafeProposalConfirmation({
     setReviewError(null);
     void (async () => {
       try {
-        const refreshed = await send<{
+        const refreshed = await sendSafeProposalMessage<{
           success?: boolean;
           record?: { chains: Record<string, SafeChainSnapshot> };
           error?: string;
@@ -162,7 +154,7 @@ export function SafeProposalConfirmation({
           throw new Error("Safe configuration changed; review this request again");
         }
         if (["publishing", "awaitingApprovals", "readyToExecute"].includes(proposal.state)) {
-          await send({
+          await sendSafeProposalMessage({
             type: "reconcileSafeProposal",
             proposalId: proposal.id,
           }).catch(() => undefined);
@@ -235,6 +227,12 @@ export function SafeProposalConfirmation({
     [chainName, executionBlockedReason, primaryActionKind, proposal, selectedExecutor],
   );
 
+  const approvalCleanup = createSafeApprovalCleanup({
+    proposal,
+    busy: busy || submissionLocked || !reviewFresh,
+    onReload,
+    onOpenProposal,
+  });
   const canReject = canRejectSafeProposal(proposal);
   const disabledReason = !reviewFresh
     ? "Refreshing Safe authority"
@@ -320,6 +318,7 @@ export function SafeProposalConfirmation({
           proposal={proposal}
           reviewRequest={reviewRequest}
           executionRequest={executionRequest}
+          approvalCleanup={approvalCleanup}
           onRevertedChange={setSimulationReverted}
           onUnavailableChange={setSimulationUnavailable}
         />

@@ -6,6 +6,12 @@ const STORAGE_KEY = "crossDappBatch";
 export type CrossDappBatchEntrySource =
   | { kind: "eth_sendTransaction" }
   | {
+      kind: "walletGenerated";
+      parentTxId: string;
+      parentBundleId?: string;
+      reason: "approvalRevoke";
+    }
+  | {
       kind: "wallet_sendCalls";
       bundleId: string;
       callIndex: number;

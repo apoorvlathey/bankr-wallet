@@ -41,7 +41,12 @@ import { useNetworks } from "@/contexts/NetworksContext";
 import { getNativeAssetMeta } from "@/lib/chains";
 import NativeValueAmount from "@/components/NativeValueAmount";
 import SafeImage from "@/components/SafeImage";
-import { isDarkThemeId, useTheme } from "@/theme";
+import {
+  isDarkThemeId,
+  useIconChipBg,
+  useIconChipFg,
+  useTheme,
+} from "@/theme";
 import { getEthShLabels } from "@/lib/ethShLabelsCache";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
 
@@ -107,6 +112,8 @@ export function CallCard({
   const { networksInfo } = useNetworks();
   const { themeId } = useTheme();
   const isDarkTheme = isDarkThemeId(themeId);
+  const iconChipBg = useIconChipBg();
+  const iconChipFg = useIconChipFg();
   const prefersReducedMotion = usePrefersReducedMotion();
   const accent = CALL_ACCENTS[index % CALL_ACCENTS.length];
   const accentFg = CALL_ACCENT_FGS[index % CALL_ACCENT_FGS.length];
@@ -320,18 +327,39 @@ export function CallCard({
           )}
           {originHostname && (
             <HStack spacing={1} maxW="100%">
-              <SafeImage
-                src={originDisplay?.faviconSrc || favicon || undefined}
-                fallbackSrc={
-                  originDisplay?.faviconFallbackSrc ||
-                  googleFaviconUrl(originHostname)
-                }
-                alt="favicon"
-                boxSize="10px"
-                fallback={
-                  <Box boxSize="10px" bg="bg.muted" borderRadius="sm" />
-                }
-              />
+              <Box
+                boxSize="14px"
+                bg={iconChipBg}
+                border="1px solid"
+                borderColor="border.subtle"
+                borderRadius="sm"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                overflow="hidden"
+                flexShrink={0}
+              >
+                <SafeImage
+                  src={originDisplay?.faviconSrc || favicon || undefined}
+                  fallbackSrc={
+                    originDisplay?.faviconFallbackSrc ||
+                    googleFaviconUrl(originHostname)
+                  }
+                  alt=""
+                  boxSize="10px"
+                  objectFit="contain"
+                  fallback={
+                    <Text
+                      color={iconChipFg}
+                      fontSize="7px"
+                      fontWeight="700"
+                      lineHeight="1"
+                    >
+                      {originHostname.slice(0, 1).toUpperCase()}
+                    </Text>
+                  }
+                />
+              </Box>
               <Text
                 fontSize="2xs"
                 fontWeight="600"

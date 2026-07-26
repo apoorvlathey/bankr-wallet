@@ -5,6 +5,7 @@ import {
   getSafeProposal,
   getSafeProposals,
   replaceUnsignedSafeProposal,
+  replaceUnsignedSafeProposalCalls,
   updateSafeProposal,
 } from "./proposalRepository";
 import type { SafeCall, SafeProposalRecord, SafeProposalRoute } from "./types";
@@ -13,6 +14,11 @@ import { verifySafeOnchainState } from "./onchainState";
 import { writeResultToStorage } from "../transactions/runtime";
 import { getBundleStatus, saveBundleStatus } from "../batch/bundleStatusStorage";
 import { BUNDLE_STATUS, type WalletConnectRequestMetadata } from "../erc5792Types";
+import {
+  isSameApprovalRevokeCall,
+} from "../approvalCleanup/revokeCall";
+import { buildApprovalRevokeCalls } from "../approvalCleanup/revokeList";
+import { MAX_BATCH_CALLS } from "../provider/limits";
 
 type ProposalLifecycleDependencies = {
   verifySafeOnchainState: typeof verifySafeOnchainState;
@@ -184,6 +190,96 @@ export async function changeSafeProposalNonce(input: {
     error: undefined,
     updatedAt: Date.now(),
   });
+}
+
+export async function appendApprovalRevokeToSafeProposal(input: {
+  proposalId: string;
+  tokenAddress: unknown;
+  spender: unknown;
+}, overrides: Partial<ProposalLifecycleDependencies> = {}): Promise<SafeProposalRecord> {
+  return appendApprovalRevokesToSafeProposal(
+    {
+      proposalId: input.proposalId,
+      targets: [{
+        tokenAddress: input.tokenAddress,
+        spender: input.spender,
+      }],
+    },
+    overrides,
+  );
+}
+
+export async function appendApprovalRevokesToSafeProposal(input: {
+  proposalId: string;
+  targets: unknown;
+}, overrides: Partial<ProposalLifecycleDependencies> = {}): Promise<SafeProposalRecord> {
+  const dependencies = { ...production, ...overrides };
+  const proposal = await getSafeProposal(input.proposalId);
+  if (!proposal) throw new Error("Safe proposal not found");
+  if (!isUnsignedSafeNonceEditable(proposal)) {
+    throw new Error("Safe request can only be changed before signing");
+  }
+  const revokes = buildApprovalRevokeCalls(input.targets);
+  const additions = revokes.filter(
+    (revoke) =>
+      !proposal.calls.some((call) => isSameApprovalRevokeCall(call, revoke)),
+  );
+  if (additions.length === 0) {
+    return proposal;
+  }
+  if (proposal.calls.length + additions.length > MAX_BATCH_CALLS) {
+    throw new Error("Safe request has reached the call limit");
+  }
+  const safe = await getSafeAccountRecord(proposal.safeAccountId);
+  const snapshot = safe?.chains[String(proposal.chainId)];
+  if (!safe || !snapshot || safe.address !== proposal.safeAddress) {
+    throw new Error("Safe account state is unavailable");
+  }
+  const live = await dependencies.verifySafeOnchainState({
+    chainId: proposal.chainId,
+    safeAddress: proposal.safeAddress,
+    transactionService: snapshot.transactionService,
+  });
+  if (
+    live.configEpoch !== proposal.safeConfigEpoch ||
+    live.version !== proposal.safeVersion
+  ) {
+    throw new Error("Safe configuration changed; review again");
+  }
+  const calls = [
+    ...proposal.calls,
+    ...additions.map((revoke) => ({
+      to: revoke.call.to,
+      value: "0" as const,
+      data: revoke.call.data,
+      operation: 0 as const,
+    })),
+  ];
+  const built = buildSafeTransaction({
+    chainId: proposal.chainId,
+    safeAddress: proposal.safeAddress,
+    safeVersion: proposal.safeVersion,
+    nonce: BigInt(proposal.transaction.nonce),
+    calls,
+  });
+  return replaceUnsignedSafeProposalCalls(
+    proposal.id,
+    {
+      ...proposal,
+      id: `${proposal.chainId}:${proposal.safeAddress}:${built.safeTxHash}`,
+      safeTxHash: built.safeTxHash,
+      verifiedAtBlock: live.verifiedAtBlock,
+      calls: built.calls,
+      transaction: built.transaction,
+      state: "draft",
+      confirmations: [],
+      unsupportedConfirmations: undefined,
+      effectClaim: undefined,
+      error: undefined,
+      updatedAt: Date.now(),
+    },
+    additions.length,
+  );
 }
 
 export async function cancelSafeProposal(id: string): Promise<SafeProposalRecord> {

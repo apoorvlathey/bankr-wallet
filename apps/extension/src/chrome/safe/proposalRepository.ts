@@ -407,6 +407,52 @@ export async function replaceUnsignedSafeProposal(id: string, replacement: SafeP
     return { records: next, result: decoded };
   });
 }
+
+/** Atomically append an exact number of already-validated calls. */
+export async function replaceUnsignedSafeProposalCalls(
+  id: string,
+  replacement: SafeProposalRecord,
+  appendedCallCount = 1,
+) {
+  if (
+    !Number.isSafeInteger(appendedCallCount) ||
+    appendedCallCount < 1
+  ) {
+    throw new Error("Invalid Safe approval cleanup call count");
+  }
+  const decoded = decodeSafeProposal(replacement);
+  return mutate((records) => {
+    const index = records.findIndex((record) => record.id === id);
+    if (index < 0) throw new Error("Safe proposal not found");
+    const current = records[index];
+    if (!isUnsignedSafeNonceEditable(current) || !isUnsignedSafeNonceEditable(decoded)) {
+      throw new Error("Safe request can only be changed before signing");
+    }
+    if (
+      decoded.safeAccountId !== current.safeAccountId ||
+      decoded.chainId !== current.chainId ||
+      decoded.safeAddress !== current.safeAddress ||
+      decoded.safeVersion !== current.safeVersion ||
+      decoded.safeConfigEpoch !== current.safeConfigEpoch ||
+      decoded.createdAt !== current.createdAt ||
+      decoded.transaction.nonce !== current.transaction.nonce ||
+      JSON.stringify(decoded.route) !== JSON.stringify(current.route) ||
+      decoded.calls.length !== current.calls.length + appendedCallCount ||
+      JSON.stringify(decoded.calls.slice(0, current.calls.length)) !==
+        JSON.stringify(current.calls)
+    ) {
+      throw new Error("Safe approval cleanup changed immutable request data");
+    }
+    if (records.some((record, candidate) =>
+      candidate !== index && record.id === decoded.id
+    )) {
+      throw new Error("An identical Safe proposal already exists");
+    }
+    const next = [...records];
+    next[index] = decoded;
+    return { records: next, result: decoded };
+  });
+}
 export async function updateSafeProposal(id: string, updater: (record: SafeProposalRecord) => SafeProposalRecord) {
   return mutate((records) => {
     const index = records.findIndex((record) => record.id === id);

@@ -12,6 +12,9 @@
 - `approvalAttachment.test.ts` freezes result merging, authoritative-revert
   suppression, and retention of unverified fallback when only asset preview
   is unavailable.
+- `residualApprovalCandidates.test.ts` freezes successful outgoing-transfer
+  candidate discovery, exact/fallback spender selection, incoming/failed/zero
+  exclusion, unchanged unlimited retention, and zero-final suppression.
 - `approvalIncidentRegression.test.ts` replays the real alphaUSDCDeltaV2
   self-multicall approval that preceded the July 2026 drain and freezes both
   RPC-unavailable fallback and verified unlimited-risk projection.

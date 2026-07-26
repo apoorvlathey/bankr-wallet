@@ -583,6 +583,7 @@ export function responseForPreviewMessage(
       return {
         tokenChanges: previewSimulationResult.tokenChanges,
         approvalChanges: previewSimulationResult.approvalChanges,
+        residualApprovals: previewSimulationResult.residualApprovals,
       };
     case "fetchTokenInfo":
       return {
@@ -843,6 +844,8 @@ export function responseForPreviewMessage(
     }
     case "getTransactionNonce":
       return { success: true, nonce: 42 };
+    case "getFeePaymentOptions":
+      return { success: true, options: [] };
     case "prepareTransactionReplacement":
       return { success: true, txRequest: { id: "preview-replacement" } };
     case "confirmTransactionAsync":
@@ -857,6 +860,10 @@ export function responseForPreviewMessage(
     case "rejectBatchTransaction":
     case "rejectErc7715PermissionRequest":
     case "addToCrossDappBatch":
+    case "addApprovalRevokeToTransactionBatch":
+    case "appendApprovalRevokeToPendingBatch":
+    case "appendApprovalRevokeToCrossDappBatch":
+    case "appendApprovalRevokeToSafeProposal":
     case "addCallsToCrossDappBatch":
     case "updatePendingTxRequestData":
     case "updateCallInPendingBatch":

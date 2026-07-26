@@ -2,7 +2,7 @@ import { approveSafeProposalWithOwner } from "../safe/ownerAuthorization";
 import { estimateSafeExecution, executeSafeProposal, reconcileSafeExecution } from "../safe/execution";
 import { publishSafeProposalConfirmations, reconcileSafeProposal, retryAmbiguousSafePublication } from "../safe/publication";
 import { getSafeProposal, getSafeProposals } from "../safe/proposalRepository";
-import { authorizeSafeProposalRoute, cancelSafeProposal, changeSafeProposalNonce, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
+import { appendApprovalRevokeToSafeProposal, appendApprovalRevokesToSafeProposal, authorizeSafeProposalRoute, cancelSafeProposal, changeSafeProposalNonce, createReviewedSafeProposal, detachSafeProposalRoute, hideSafeProposal } from "../safe/proposalLifecycle";
 import { startSafeProposalRejection } from "../safe/proposalRejection";
 import { requireSafeFeature } from "../safe/featurePolicy";
 import { syncSafeAccount } from "../safe/sync";
@@ -13,6 +13,7 @@ export const BACKGROUND_SAFE_PROPOSAL_MESSAGE_TYPES = [
   "startSafeProposalRejection",
   "hideSafeProposal", "detachSafeProposalRoute", "reconcileSafeProposal",
   "changeSafeProposalNonce",
+  "appendApprovalRevokeToSafeProposal",
   "retrySafePublication",
   "estimateSafeExecution", "executeSafeProposal", "reconcileSafeExecution",
 ] as const;
@@ -50,6 +51,20 @@ export function routeBackgroundSafeProposalMessage(
     }); break;
     case "createSafeProposal": work = gated("sendProposal", () => createReviewedSafeProposal({ safeAccountId: message.safeAccountId, chainId: message.chainId, calls: message.calls, route: message.route })); break;
     case "changeSafeProposalNonce": work = gated("sendProposal", () => changeSafeProposalNonce({ proposalId: message.proposalId, nonce: message.nonce })); break;
+    case "appendApprovalRevokeToSafeProposal": work = gated(
+      "sendProposal",
+      () =>
+        Array.isArray(message.approvals)
+          ? appendApprovalRevokesToSafeProposal({
+              proposalId: message.proposalId,
+              targets: message.approvals,
+            })
+          : appendApprovalRevokeToSafeProposal({
+              proposalId: message.proposalId,
+              tokenAddress: message.tokenAddress,
+              spender: message.spender,
+            }),
+    ); break;
     case "approveSafeProposal": work = gated("sendProposal", async () => {
       const proposal = await approveSafeProposalWithOwner({
         proposalId: message.proposalId,

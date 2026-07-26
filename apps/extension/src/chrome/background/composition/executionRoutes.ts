@@ -7,7 +7,8 @@ import {
   resolveHistoryNftMetadata,
 } from "../../history/detailResolution";
 import { getPendingTxRequestById } from "../../requests/pendingTxStorage";
-import { getBatchFeePaymentOptions, getInternalSwapFeePaymentOptions, getSafeExecutionFeePaymentOptions, getTransactionFeePaymentOptions } from "../../feePayment/capabilities";
+import { getBatchFeePaymentOptions, getCrossDappBatchFeePaymentOptions,
+  getInternalSwapFeePaymentOptions, getSafeExecutionFeePaymentOptions, getTransactionFeePaymentOptions } from "../../feePayment/capabilities";
 import { prepareFeePaymentQuote } from "../../feePayment/quotes";
 import { handleCheckPremiumStatus } from "../../sponsoredTransfers/premiumStatus";
 import {
@@ -47,7 +48,6 @@ import { getArbitrumForceInclusionStatus, submitArbitrumForceInclusion } from ".
 import { handleConfirmTransactionAsyncLedger } from "../../ledger/transactionExecution";
 import { getTransactionNonceForReview } from "../../transactions/nonceReview";
 import { prepareTransactionReplacement } from "../../transactions/replacementPreparation";
-
 export function composeExecutionRoutes(
   pending: PendingResolutionComposition,
 ) {
@@ -68,6 +68,7 @@ export function composeExecutionRoutes(
       readLocalStorage: (key) => chrome.storage.local.get(key),
       getFeePaymentOptions: getTransactionFeePaymentOptions,
       getBatchFeePaymentOptions,
+      getCrossDappBatchFeePaymentOptions,
       getSafeExecutionFeePaymentOptions,
       getInternalSwapFeePaymentOptions,
       prepareFeePaymentQuote,
@@ -95,7 +96,6 @@ export function composeExecutionRoutes(
       handleAcknowledgeSponsoredTransfer,
       handleCheckPremiumStatus,
     });
-
   const routeBackgroundTransactionStatusMessage =
     createBackgroundTransactionStatusMessageRouter({
       handleCancelProcessingTx,

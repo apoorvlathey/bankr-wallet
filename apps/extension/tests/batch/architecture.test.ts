@@ -297,6 +297,97 @@ test("validating batch rows are non-actionable until the ready commit", async ()
   }
 });
 
+test("a pending ERC-5792 batch appends one deduplicated final revoke call", async () => {
+  const request = {
+    id: "approval-cleanup-batch",
+    params: {
+      version: "2.0.0",
+      chainId: "0x2105",
+      calls: [{ to: TARGET_A, data: "0x", value: "0x0" }],
+    },
+    origin: "https://dapp.example",
+    favicon: null,
+    chainName: "Base",
+    chainId: 8453,
+    timestamp: Date.now(),
+  } as const;
+  const harness = createChromeStorageHarness({
+    local: { pendingBatchTxRequests: [request] },
+  });
+  try {
+    const { appendApprovalRevokeToPendingBatchTxRequest } = await import(
+      "../../src/chrome/requests/pendingBatchApprovalCleanup"
+    );
+    const first = await appendApprovalRevokeToPendingBatchTxRequest(
+      request.id,
+      TARGET_B,
+      TARGET_A,
+    );
+    const second = await appendApprovalRevokeToPendingBatchTxRequest(
+      request.id,
+      TARGET_B,
+      TARGET_A,
+    );
+    assert.deepEqual(first, { success: true });
+    assert.deepEqual(second, { success: true, alreadyPresent: true });
+    const stored = (
+      harness.snapshot("local").pendingBatchTxRequests as any[]
+    )[0];
+    assert.equal(stored.params.calls.length, 2);
+    assert.equal(stored.params.calls[1].to.toLowerCase(), TARGET_B);
+    assert.equal(stored.params.atomicRequired, true);
+    assert.match(stored.params.calls[1].data, /^0x095ea7b3/);
+    assert.match(stored.params.calls[1].data, /0{64}$/);
+  } finally {
+    harness.restore();
+  }
+});
+
+test("a pending ERC-5792 batch appends every bulk revoke in one storage update", async () => {
+  const request = {
+    id: "approval-cleanup-bulk-batch",
+    params: {
+      version: "2.0.0",
+      chainId: "0x2105",
+      calls: [{ to: TARGET_A, data: "0x", value: "0x0" }],
+    },
+    origin: "https://dapp.example",
+    favicon: null,
+    chainName: "Base",
+    chainId: 8453,
+    timestamp: Date.now(),
+  } as const;
+  const harness = createChromeStorageHarness({
+    local: { pendingBatchTxRequests: [request] },
+  });
+  try {
+    const { appendApprovalRevokesToPendingBatchTxRequest } = await import(
+      "../../src/chrome/requests/pendingBatchApprovalCleanup"
+    );
+    assert.deepEqual(
+      await appendApprovalRevokesToPendingBatchTxRequest(request.id, [
+        { tokenAddress: TARGET_B, spender: TARGET_A },
+        { tokenAddress: WALLET, spender: TARGET_B },
+        { tokenAddress: TARGET_B, spender: TARGET_A },
+      ]),
+      { success: true },
+    );
+    const stored = (
+      harness.snapshot("local").pendingBatchTxRequests as any[]
+    )[0];
+    assert.equal(stored.params.calls.length, 3);
+    assert.deepEqual(
+      stored.params.calls.slice(1).map((call: any) =>
+        call.to.toLowerCase()
+      ),
+      [TARGET_B, WALLET],
+    );
+    assert.equal(stored.params.atomicRequired, true);
+  } finally {
+    harness.restore();
+  }
+});
+
 test("every batch execution or move boundary rejects validating rows", async () => {
   const sources = await Promise.all([
     "batch/batchBankrExecution.ts",

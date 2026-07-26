@@ -1,6 +1,8 @@
 import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
 import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
+import type { ResidualApproval } from "@/chrome/txSimulation";
+import type { FeePaymentRequestKind } from "@/components/FeePaymentSelector";
 
 export interface BatchTransactionConfirmationProps {
   batchRequest: PendingBatchTxRequest;
@@ -29,9 +31,21 @@ export interface BatchTransactionConfirmationProps {
   /** Cross-dapp batches own their confirmation message and result fan-out. */
   customConfirmHandler?: (
     gasEstimates?: GasEstimate[] | null,
+    feePaymentToken?: "native" | "token",
+    feePaymentQuoteId?: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Opts a custom batch transport into the shared fee-token selector. */
+  feePaymentRequestKind?: FeePaymentRequestKind;
   /** Cross-dapp batches own their rejection message. */
   customRejectHandler?: () => Promise<void>;
+  /** Mutates a user-assembled batch without inventing a provider request. */
+  approvalCleanupHandler?: (
+    approval: ResidualApproval,
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Atomically appends every simulated cleanup to a user-assembled batch. */
+  approvalCleanupAllHandler?: (
+    approvals: ResidualApproval[],
+  ) => Promise<{ success: boolean; error?: string }>;
   crossDappBatch?: CrossDappBatch | null;
   onAddedToBatch?: () => void;
   pageBgColor?: string;

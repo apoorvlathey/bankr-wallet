@@ -151,6 +151,7 @@ test("failure and retry projections preserve released simulation semantics", () 
     nativeChange: null,
     tokenChanges: [],
     approvalChanges: [],
+    residualApprovals: [],
     approvalDetectionIncomplete: true,
     simulationFailed: true,
     simulationError: "offline",

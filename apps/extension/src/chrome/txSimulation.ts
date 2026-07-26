@@ -19,6 +19,7 @@ export type {
   ApprovalChangeType,
   ApprovalSystem,
   ApprovalVerification,
+  ResidualApproval,
   AssetChange,
   NftAssetInfo,
   NftStandard,

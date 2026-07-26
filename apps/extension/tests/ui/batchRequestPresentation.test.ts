@@ -62,3 +62,29 @@ test("unsafe batch confirmation explains the corrective action on the button", a
   assert.equal(unsafePreview.params.calls[0].to, unsafePreview.params.from);
   assert.notEqual(unsafePreview.params.calls[0].data, "0x");
 });
+
+test("cross-dapp call attribution keeps dapp marks legible and identifies wallet-generated calls", async () => {
+  const [callCardSource, crossDappSource] = await Promise.all([
+    readFile(
+      new URL("../../src/components/BatchCallsList.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../src/components/CrossDappBatchConfirmation.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(callCardSource, /const iconChipBg = useIconChipBg\(\)/);
+  assert.match(
+    callCardSource,
+    /boxSize="14px"[\s\S]*bg=\{iconChipBg\}[\s\S]*<SafeImage/,
+  );
+  assert.match(
+    crossDappSource,
+    /entry\.source\?\.kind === "walletGenerated"[\s\S]*"\/walletchan-icon\.png"/,
+  );
+});

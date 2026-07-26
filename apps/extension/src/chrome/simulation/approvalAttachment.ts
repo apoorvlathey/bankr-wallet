@@ -34,6 +34,7 @@ export async function attachApprovalProjection(
   return {
     ...result,
     approvalChanges: approval.approvalChanges,
+    residualApprovals: approval.residualApprovals,
     approvalDetectionIncomplete: approval.approvalDetectionIncomplete,
     metadataComplete: result.metadataComplete && approval.metadataComplete,
   };

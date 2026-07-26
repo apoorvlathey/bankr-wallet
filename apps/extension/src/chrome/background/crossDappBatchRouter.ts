@@ -1,24 +1,28 @@
 /** Trusted-UI assembly and decision transport for the active cross-dapp batch. */
-
+import { crossDappFeePaymentArgs } from "./crossDappBatchRouterSupport";
 export const BACKGROUND_CROSS_DAPP_BATCH_MESSAGE_TYPES = [
   "addToCrossDappBatch",
+  "addApprovalRevokeToTransactionBatch",
   "addCallsToCrossDappBatch",
+  "appendApprovalRevokeToCrossDappBatch",
   "removeFromCrossDappBatch",
   "updateCallInCrossDappBatch",
   "rejectCrossDappBatch",
   "confirmCrossDappBatch",
 ] as const;
-
 export type BackgroundCrossDappBatchRouteResult =
   | { handled: false }
   | { handled: true; keepChannelOpen: true };
-
 export type BackgroundCrossDappBatchDependencies = {
   runPendingRequestResolution: <T>(options: any) => Promise<T>;
   runPendingRequestResolutions: <T>(options: any) => Promise<T>;
   pendingResolutionConflict: (action: any) => any;
   handleAddToCrossDappBatch: (txId: string) => Promise<any>;
+  handleAddApprovalRevokeToTransactionBatch: (...args: any[]) => Promise<any>;
+  handleAddApprovalRevokesToTransactionBatch: (...args: any[]) => Promise<any>;
   handleAddCallsToCrossDappBatch: (bundleId: string) => Promise<any>;
+  handleAppendApprovalRevokeToCrossDappBatch: (...args: any[]) => Promise<any>;
+  handleAppendApprovalRevokesToCrossDappBatch: (...args: any[]) => Promise<any>;
   handleRemoveFromCrossDappBatch: (txId: string) => Promise<any>;
   handleUpdateCallInCrossDappBatch: (...args: any[]) => Promise<any>;
   handleRejectCrossDappBatch: () => Promise<any>;
@@ -29,7 +33,6 @@ const HANDLED_ASYNC: BackgroundCrossDappBatchRouteResult = {
   handled: true,
   keepChannelOpen: true,
 };
-
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
@@ -96,6 +99,44 @@ export function createBackgroundCrossDappBatchMessageRouter(
           );
         return HANDLED_ASYNC;
       }
+      case "addApprovalRevokeToTransactionBatch": {
+        const txId = typeof message.txId === "string" ? message.txId : "";
+        dependencies
+          .runPendingRequestResolutions({
+            requests: [
+              { family: "transaction", requestId: txId, action: "move" },
+              {
+                family: "crossDappBatch",
+                requestId: "active",
+                action: "move",
+              },
+            ],
+            resolve: () =>
+              Array.isArray(message.approvals)
+                ? dependencies.handleAddApprovalRevokesToTransactionBatch(
+                    txId,
+                    message.approvals,
+                  )
+                : dependencies.handleAddApprovalRevokeToTransactionBatch(
+                    txId,
+                    message.tokenAddress,
+                    message.spender,
+                  ),
+            conflictResult: (_family: any, _requestId: any, action: any) =>
+              dependencies.pendingResolutionConflict(action),
+          })
+          .then(sendResponse)
+          .catch((error) =>
+            sendResponse({
+              success: false,
+              error: errorMessage(
+                error,
+                "Failed to add approval cleanup",
+              ),
+            }),
+          );
+        return HANDLED_ASYNC;
+      }
       case "addCallsToCrossDappBatch": {
         const bundleId =
           typeof message.bundleId === "string" ? message.bundleId : "";
@@ -154,6 +195,26 @@ export function createBackgroundCrossDappBatchMessageRouter(
           sendResponse,
         );
         return HANDLED_ASYNC;
+      case "appendApprovalRevokeToCrossDappBatch":
+        resolveActiveBatch(
+          {
+            action: "edit",
+            resolve: () =>
+              Array.isArray(message.approvals)
+                ? dependencies.handleAppendApprovalRevokesToCrossDappBatch(
+                    message.approvals,
+                  )
+                : dependencies.handleAppendApprovalRevokeToCrossDappBatch(
+                    message.tokenAddress,
+                    message.spender,
+                    message.sourceCallIndex,
+                  ),
+            fallback: "Failed to add approval cleanup",
+          },
+          dependencies,
+          sendResponse,
+        );
+        return HANDLED_ASYNC;
       case "rejectCrossDappBatch":
         resolveActiveBatch(
           {
@@ -173,6 +234,7 @@ export function createBackgroundCrossDappBatchMessageRouter(
               dependencies.handleConfirmCrossDappBatch(
                 message.password,
                 message.gasEstimates,
+                ...crossDappFeePaymentArgs(message),
               ),
             fallback: "Failed to confirm cross-dapp batch",
           },

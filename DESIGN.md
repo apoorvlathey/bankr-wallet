@@ -242,6 +242,45 @@
 
 ## Slop audit
 
+- 2026-07-26 cross-dapp fee-payment audit: reused the existing batch decision
+  row, token action sheet, loading/error feedback, native default, and Advanced
+  fee disclosure without adding a new card, badge, gradient, or explanatory
+  block. The control remains at the same signing decision point and preserves
+  the established compact hierarchy; call edits reset stale token quotes.
+  Result: pass.
+
+- 2026-07-26 residual-approval cleanup audit: added one visually separate,
+  unboxed amber cleanup region after outgoing asset deltas. A full-width rule
+  makes the boundary from Send/Receive unmistakable; token identity, concise
+  residual-approval copy, and a single 36px `Revoke?` action follow the existing
+  Warm Midnight hierarchy. Tighter 8px section padding, row gaps, and a 26px
+  token mark keep the optional cleanup subordinate to asset movement.
+  Spender-name resolution and helper copy are omitted from this
+  space-constrained region; the action's hover/focus popover explains that it
+  appends a revoke call to the batch. The token symbol reuses the established
+  address/copy/explorer disclosure. The compact action uses semantic warning
+  fill, border, and foreground instead of a low-contrast gray surface. As the
+  final Estimated changes region it consumes the parent's bottom padding,
+  allowing the main container to clip its amber wash into the shared lower
+  corners. Disabled reasons remain inline instead of opening another modal or
+  nesting a card. The region intentionally does not repeat the transfer amount
+  or the approval-change ledger shown before asset deltas. Symbols truncate
+  safely, semantic warning color is paired with text, and loading/completed
+  states keep the same control footprint. Result: pass.
+  Multiple residual rows retain their individual token actions and add one
+  centered 36px `Revoke all` shortcut beneath the group. It uses the same
+  warning-token family, disappears when fewer than two actions remain, and
+  owns one stable loading state while the background appends the complete
+  cleanup set atomically. This preserves per-token choice without forcing
+  repetitive clicks or turning the warning region into a second confirmation
+  footer. Result: pass.
+  Cross-dapp request details keep source attribution subordinate but legible:
+  every 10px dapp mark sits inside the established 14px light contrast chip,
+  and wallet-generated revoke calls use WalletChan's bundled icon instead of a
+  generic missing-image dot. The adjacent domain or WalletChan label remains
+  the accessible identity, so the decorative mark adds no repeated speech.
+  Result: pass.
+
 - 2026-07-26 approval-change review audit: removed the duplicate Estimated
   changes section from strict standalone ERC-20 approval requests, including
   zero-amount revocations, because the editable Request details approval card
@@ -989,6 +1028,16 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-26: extended the existing batch “Pay network fee with” control to
+  cross-dapp confirmation without introducing a new visual pattern. It reuses
+  the same compact decision row, token action sheet, estimating/error states,
+  native default, and Advanced fee disclosure; staged-call edits invalidate
+  the selection so displayed cost never outlives the reviewed batch.
+
+- 2026-07-26: placed cross-dapp request-detail favicons on the shared light
+  contrast chip and restored the bundled WalletChan mark for generated revoke
+  calls, including batches staged before this presentation fix.
 
 - 2026-07-26: removed redundant simulation UI from standalone editable ERC-20
   approvals, rebuilt nested approval changes as an aligned allowance ledger,

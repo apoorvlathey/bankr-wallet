@@ -29,6 +29,10 @@ function dependencies(
     readLocalStorage: async () => ({}),
     getFeePaymentOptions: async () => ({ success: true, options: [] }),
     getBatchFeePaymentOptions: async () => ({ success: true, options: [] }),
+    getCrossDappBatchFeePaymentOptions: async () => ({
+      success: true,
+      options: [],
+    }),
     getSafeExecutionFeePaymentOptions: async () => ({ success: true, options: [] }),
     prepareFeePaymentQuote: async () => ({ success: true, quoteId: "quote" }),
     ...overrides,
@@ -63,6 +67,41 @@ test("Safe fee discovery and quotes are pinned to the selected executor", async 
   assert.deepEqual(calls, [
     ["options", "safe-proposal", "executor-1"],
     ["quote", "safeExecution", "safe-proposal", `0x${"1".repeat(40)}`, "executor-1"],
+  ]);
+});
+
+test("cross-dapp fee discovery and quotes use the assembled batch family", async () => {
+  const calls: unknown[][] = [];
+  const deps = dependencies({
+    getCrossDappBatchFeePaymentOptions: async (...args) => {
+      calls.push(["options", ...args]);
+      return { success: true, options: [] };
+    },
+    prepareFeePaymentQuote: async (...args) => {
+      calls.push(["quote", ...args]);
+      return { success: true, quoteId: "cross-dapp-quote" };
+    },
+  });
+  await dispatch(deps, {
+    type: "getFeePaymentOptions",
+    requestKind: "crossDapp",
+    txId: "cross-dapp-batch-123",
+  });
+  await dispatch(deps, {
+    type: "prepareFeePaymentQuote",
+    requestKind: "crossDapp",
+    requestId: "cross-dapp-batch-123",
+    feePaymentToken: `0x${"2".repeat(40)}`,
+  });
+  assert.deepEqual(calls, [
+    ["options", "cross-dapp-batch-123"],
+    [
+      "quote",
+      "crossDappBatch",
+      "cross-dapp-batch-123",
+      `0x${"2".repeat(40)}`,
+      undefined,
+    ],
   ]);
 });
 

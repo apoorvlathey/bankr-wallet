@@ -2755,6 +2755,10 @@ unlimited allowances use danger styling, and bounded or unverified grants use
 warning styling. The projection is account-address based and runs before any
 signing path, so Bankr, private-key, seed-phrase, Ledger, and reject-only
 impersonator review surfaces share the same read-only behavior.
+The same simulation also projects verified residual ERC-20 allowances for
+tokens leaving the reviewed account. Those rows render after Send/Receive as a
+separate `Approval remains` warning so an existing spend approval is not
+mistaken for an asset delta.
 One strict standalone ERC-20 `approve(address,uint256)` request, including
 `approve(spender, 0)`, omits the whole `Estimated changes` section because its
 editable approval card in Request details is the more complete single source
@@ -2784,6 +2788,60 @@ a nonzero locally/event-discovered grant remains visible only as
 `unverified`; the UI states that the remaining allowance could not be checked.
 An exact outer Safe revert suppresses all permission rows, while an unavailable
 outer pass downgrades underlying-call rows to unverified.
+
+Residual-approval discovery starts only from successful positive outgoing
+fungible ERC-20 `Transfer` logs. An exact successful `Approval` event may
+identify the spender; otherwise the bounded fallback checks the successful
+top-level call target responsible for that outgoing transfer. Incoming,
+zero-value, NFT-shaped, failed-call, malformed, and truncated candidates are
+ignored or mark detection incomplete. A residual warning is released only
+when both the pinned pre-state and simulated final read succeed and final
+`allowance(owner, spender)` is nonzero. This deliberately retains unchanged
+unlimited allowances, which many ERC-20 implementations do not decrement or
+re-emit while spending.
+
+The read path is rate-limit conscious. Candidate allowance pre-state is
+collected in one pinned Multicall3 request. One exact post-state replay appends
+all allowance reads to the reviewed call sequence, and token metadata for
+permission-change and residual rows shares one bounded enrichment pass.
+Spender labels are resolved only for the approval-change ledger that displays
+them; residual warnings neither request nor display spender names. There is no
+per-row RPC loop, trace call, or third-party simulator dependency.
+
+When the background confirms that a residual row is actionable, the review UI
+offers `Revoke?` with a hover/focus explanation of the appended batch call.
+When two or more actionable rows remain, one centered `Revoke all` action
+submits every displayed token/spender pair through the same request-family
+mutation in one operation.
+The renderer sends only the source request ID/index,
+token, and spender; background policy constructs the canonical
+`approve(spender, 0)` calldata and appends it after the dapp-authored calls.
+Bulk cleanup validates and deduplicates the complete bounded list, verifies
+capacity before writing, and performs one durable update so it cannot expose a
+partially modified request. The resulting call-list change triggers one fresh
+simulation; pairs whose final allowance is zero disappear while any remaining
+nonzero pair stays actionable.
+For an ERC-5792 request this mutates the still-pending bundle and marks atomic
+execution required. For a staged user-assembled batch it appends a
+wallet-generated entry. For a single transaction it durably stages the source
+transaction and cleanup together before removing the original pending row,
+converting review to the existing user-assembled atomic batch flow. The
+generated entry inherits the original transaction or bundle authority group
+but never receives its own dapp result; completion still publishes exactly one
+`txResult` or bundle status for the original request. Removing or rejecting the
+source also removes its generated cleanup.
+
+Private-key and seed-phrase EOAs expose the actions only where the existing
+WalletChan EIP-7702 atomic-batch capability is available. Safe proposals expose
+it on supported Safe chains only while the proposal is unsigned and editable;
+the background rebuilds the same-nonce proposal with the exact final
+zero-value Safe CALL set after re-verifying the live Safe configuration and
+version. Bankr,
+Ledger, and impersonator reviews remain informational because none has a
+released atomic request-mutation path. The renderer's disabled state is
+presentation only: every background handler independently rechecks the pinned
+account, chain capability, request phase, aggregate call limit, duplicate
+cleanup, and every source identity under the owning storage lock.
 
 Approval projection never uses the balance/allowance state overrides employed
 by asset-preview retry, never calls debug tracing or third-party simulation
@@ -2926,9 +2984,10 @@ The implemented domain contains:
   override on submission;
 - `signing.ts`: local PK/seed EIP-712 signing or Bankr `/wallet/sign` signing,
   with recovered-signer verification inherited from `bankr/signing.ts`;
-- `execution.ts` and `batchExecution.ts`: consume a quote once, recheck account,
-  nonce, delegation, balance, allowance, and pending-request authorization,
-  then sign and submit the exact final UserOperation;
+- `execution.ts`, `batchExecution.ts`, and
+  `crossDappBatch/feePayment.ts`: consume a quote once, recheck account, nonce,
+  delegation, balance, allowance, and pending-request authorization, then sign
+  and submit the exact final UserOperation;
 - `submission.ts`: computes the exact EntryPoint v0.7 UserOperation hash,
   persists that hash and public routing fields immediately before broadcast,
   removes it after a definite rejection, and retains it when the submit
@@ -2940,9 +2999,12 @@ The implemented domain contains:
 - `pendingOperations.ts` and `recovery.ts`: serialize bounded recovery-record
   mutations and reconcile deterministic hashes after MV3 restarts without
   persisting calldata, authorization tuples, or UserOperation signatures;
-- `capabilities.ts`: native/token eligibility for pinned single and batch
-  requests plus reviewed internal Swap calls, including precise fresh-account,
-  different-delegate, Bankr, RPC, deployment, and unsupported-chain outcomes.
+- `capabilities.ts`: native/token eligibility for pinned single, ERC-5792,
+  cross-dapp batch, Safe-execution, and reviewed internal Swap calls, including
+  precise fresh-account, different-delegate, Bankr, RPC, deployment, and
+  unsupported-chain outcomes. Cross-dapp discovery resolves the active batch
+  and exact pinned account in the background; the renderer supplies only its
+  synthetic request ID.
 
 The client accepts only an HTTPS WalletChan proxy URL (localhost is allowed for
 development), uses the shared bounded HTTP reader, omits ambient credentials
@@ -2951,8 +3013,8 @@ rejects unrequested token quotes, and rejects a paymaster address that changes
 after quote selection. A Pimlico API key must never be compiled into the
 extension.
 
-`FeePaymentSelector.tsx` is shared by normal, ERC-5792, executable Safe, and
-in-wallet Swap confirmation. Normal
+`FeePaymentSelector.tsx` is shared by normal, ERC-5792, cross-dapp,
+executable Safe, and in-wallet Swap confirmation. Normal
 confirmation includes injected and WalletConnect transactions, extension-
 initiated Send requests, replacements, and other requests persisted through
 the pinned single-transaction queue. It uses
@@ -2976,6 +3038,18 @@ deterministic UserOperation hash plus public executor/fee-token routing data;
 startup and alarm reconciliation require the matching onchain EntryPoint event
 before applying the Safe result or returning the real transaction hash to the
 connected app.
+
+Cross-dapp confirmation uses the same batch fee row, action sheet, quote
+loading/error states, native default, and Advanced fee disclosure as an
+ERC-5792 batch. Its `crossDappBatch` quote family binds the active batch's
+creation-derived request ID, exact ordered calls, account ID/address, chain,
+nonce, delegate, token, and paymaster state. Edited or appended calls reset the
+selection to native. Confirm revalidates every contributing
+injected/WalletConnect authority before signing and again immediately before
+broadcast. Source dapp promises remain pending until an independently verified
+EntryPoint receipt supplies the real transaction hash; a bounded public-only
+map of transaction and ERC-5792 bundle IDs lets restart recovery fan that one
+result back to every source.
 
 New token-funded history stores only `{ token, amountWei? }`: the lowercase
 contract is committed before broadcast and the settled base-unit charge is
@@ -3037,9 +3111,9 @@ authorization in the same submitted UserOperation. Bankr accounts use the
 remote typed-data signer only when the official delegate is already active;
 fresh Bankr accounts receive a precise setup requirement because Bankr does
 not expose the special EIP-7702 authorization signer. View-only impersonator
-accounts cannot quote or confirm. Contract deployments, cross-dapp custom
-batches, swaps, bridges, Max calculations, and force inclusion remain outside
-this first execution gate.
+accounts cannot quote or confirm. Contract deployments, Ledger token-funded
+signing, impersonated transactions, Max calculations, and force inclusion
+remain outside the token-payment execution gate.
 
 The dummy approval uses `uint256.max` only in an unsigned estimation envelope,
 matching Pimlico's maintained `permissionless.js` helper. It is always replaced
@@ -3636,9 +3710,13 @@ and removes unauthorized staging before terminal publication.
 reads, validates the stored account/from/chain lock, encodes the reviewed calls,
 and composes either `bankr.ts` or `local.ts`. Both signer paths re-resolve the
 exact account and perform the final transport/epoch commit at their irreversible
-effect boundary. `completion.ts` fans one shared hash or failure to transaction
-results and ERC-5792 bundle statuses independently and owns delayed receipt
-mirroring.
+effect boundary. Token-funded confirmation instead composes
+`feePayment.ts`/`feePaymentCompletion.ts`: the former owns exact quote
+consumption and sign-once submission, while the latter requires verified
+EntryPoint finality. `resultRoute.ts` retains only bounded public source IDs so
+restart recovery can fan out the real transaction hash. `completion.ts` fans
+one shared hash or failure to transaction results and ERC-5792 bundle statuses
+independently and owns delayed receipt mirroring.
 
 `bundleStatuses` is stored as a single array in `chrome.storage.local` and is
 read by `wallet_getCallsStatus`. The stable `bundleStatusStorage.ts` facade
@@ -5138,7 +5216,7 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `privacyGetResetRisk`              | Return only whether Shield data exists and whether its exact identity has a verified backup |
 | `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
-| `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via Bankr API or PK/SP EIP-7702 local signing |
+| `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via native Bankr/PK/SP EIP-7702 execution or its exact-call fee-token UserOperation quote |
 | `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked Bankr, private-key, seed-phrase, or Ledger owner |
 | `executeSafeProposal`              | Submit the exact reviewed Safe envelope with a private-key, seed-phrase, or native-gas Ledger payer; Ledger token gas is blocked |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; custom/non-default Set is master-only at queue and confirm/broadcast, while canonical default and revoke retain routine agent-capable signing; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |

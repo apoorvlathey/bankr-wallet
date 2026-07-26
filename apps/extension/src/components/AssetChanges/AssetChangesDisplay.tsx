@@ -18,6 +18,7 @@ function AssetChangesDisplay(props: AssetChangesDisplayProps) {
       loading={loading}
       result={result}
       embedded={props.embedded}
+      approvalCleanup={props.approvalCleanup}
     />
   );
 }

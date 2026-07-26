@@ -59,7 +59,7 @@ export async function simulateAssetChanges(
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
-    approvalChanges: [],
+    approvalChanges: [], residualApprovals: [],
     approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete: true,

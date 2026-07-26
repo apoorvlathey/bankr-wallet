@@ -8,7 +8,8 @@ this order:
 2. `pendingRequestResolution.ts` — synchronous first-action claims, effect
    leases, and the wallet-reset barrier.
 3. `pendingTxStorage.ts`, `pendingSignatureStorage.ts`,
-   `pendingBatchTxStorage.ts`, `pendingWatchAssetStorage.ts`,
+   `pendingBatchTxStorage.ts`, `pendingBatchApprovalCleanup.ts`,
+   `pendingWatchAssetStorage.ts`,
    `pendingAddChainStorage.ts`, `dappPermissionStorage.ts`, and
    `pendingBridgeStorage.ts` — locked durable repositories and badge updates.
 4. `pendingRequestLifecycle.ts` — injected-origin, account credential, and
@@ -35,3 +36,10 @@ WalletConnect durable terminal-outbox routing. The root
 `pendingErc7715PermissionStorage.ts` remains the existing stable ERC facade;
 WalletConnect routes/outbox stay in `walletConnect/storage.ts`, and bundle
 status stays with the batch domain.
+
+`pendingBatchApprovalCleanup.ts` may append only canonical
+`ERC20.approve(spender, 0)` calls after fully validated, actionable ERC-5792
+rows. It validates and deduplicates a bounded bulk set before entering the
+pending-batch storage lock, rejects aggregate over-limit edits, preserves every
+dapp-authored prefix call and route field, and marks the request
+atomic-required.

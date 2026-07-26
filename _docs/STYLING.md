@@ -311,6 +311,26 @@ the exact state, while warning iconography and color establish urgency. When
 approval changes and asset deltas coexist, place one full-width subtle divider
 between the approval ledger and the Send/Receive groups.
 
+A verified nonzero ERC-20 allowance that remains after an outgoing asset
+change uses one distinct, unboxed warning region after the Send/Receive groups.
+Lead it with a full-width divider and a restrained amber tint, then show token
+logo/symbol, concise `Approval remains` copy, and one compact 36px `Revoke?`
+action. Give the action a warning-toned fill, border, and foreground so it
+remains visible against the warning wash without competing with the final
+confirmation action. The token symbol must reuse the asset-row contract
+popover for address, copy, and explorer disclosure. Do not fetch or display
+spender names in this space-constrained region. Explain that the action
+appends a batch revoke call in a hover/focus popover, and keep disabled reasons
+inline and specific. With multiple actionable rows, add one compact centered
+`Revoke all` control beneath them; retain the per-token actions and use one
+loading state for the atomic bulk mutation. Hide the bulk control as soon as
+fewer than two uncompleted rows remain. When this is the final Estimated changes group, consume
+the parent's bottom padding and let its overflow clipping supply the shared
+lower corner radius. Do not wrap this region in a nested card, introduce a
+modal, repeat the asset amount, or reuse the approval-change ledger above the
+asset deltas; the visual order must read as asset consequence first, optional
+cleanup second.
+
 Native-gas Private Key, Seed Phrase, and Ledger confirmations place the
 editable address nonce immediately below Add to batch in that same Advanced
 disclosure. Use one compact label/value row with a small decimal field and

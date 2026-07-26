@@ -18,8 +18,16 @@ simulation modules:
 - `approvalProjection.ts` compares pinned pre-state with simulated final
   allowance state and retains only persistent increases or Permit2 expiry
   extensions.
+- `residualApprovalCandidates.ts` derives bounded spender candidates only from
+  successful positive outgoing fungible transfers, exact approval events, and
+  the successful top-level call-target fallback.
+- `approvalAllowanceState.ts` owns the shared pinned Multicall3 pre-read and
+  exact allowance result decoding for permission and residual candidates.
+- `residualApprovalProjection.ts` releases only final nonzero ERC-20
+  allowances with complete pre/final reads.
 - `approvalSimulation.ts` coordinates the two-pass, block-pinned approval
-  simulation and produces explicitly unverified calldata fallback rows when
+  simulation, shares its read/replay work with residual-allowance projection,
+  and produces explicitly unverified calldata fallback rows when
   `eth_simulateV1` or final readback is unavailable.
 - `approvalAttachment.ts` applies the shared projection to single and atomic
   asset results, including authoritative-revert suppression.
@@ -85,6 +93,20 @@ not merely calldata or the presence of an event:
    batch are omitted.
 4. If the second pass or a state read is unavailable, nonzero grant intents
    remain visible as `unverified`; they are never presented as final state.
+
+Residual approval warnings reuse those same bounded passes:
+
+1. Successful positive outgoing fungible transfers identify token/owner rows.
+   An exact approval event supplies the spender when available; otherwise only
+   the successful top-level call target is considered.
+2. One pinned Multicall3 pre-read covers every permission and residual pair.
+   One exact reviewed-call replay appends every final allowance read.
+3. A residual row is emitted only when both reads are known and the final
+   ERC-20 allowance is nonzero. Unchanged maximum allowances therefore remain
+   visible, while zero final allowance and incomplete guesses do not become
+   actionable warnings.
+4. Permission and residual token/spender metadata share one bounded enrichment
+   pass, avoiding per-row RPC amplification.
 
 The permission projection never consumes TxSimulator retry overrides, never
 traces debug APIs, and never signs or submits. Results are capped at 64

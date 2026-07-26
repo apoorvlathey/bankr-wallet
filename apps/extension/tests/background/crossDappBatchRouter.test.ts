@@ -15,7 +15,11 @@ function createDependencies(
     runPendingRequestResolutions: async (options) => options.resolve(),
     pendingResolutionConflict: (action) => ({ error: String(action) }),
     handleAddToCrossDappBatch: async () => ({ success: true }),
+    handleAddApprovalRevokeToTransactionBatch: async () => ({ success: true }),
+    handleAddApprovalRevokesToTransactionBatch: async () => ({ success: true }),
     handleAddCallsToCrossDappBatch: async () => ({ success: true }),
+    handleAppendApprovalRevokeToCrossDappBatch: async () => ({ success: true }),
+    handleAppendApprovalRevokesToCrossDappBatch: async () => ({ success: true }),
     handleRemoveFromCrossDappBatch: async () => ({ success: true }),
     handleUpdateCallInCrossDappBatch: async () => ({ success: true }),
     handleRejectCrossDappBatch: async () => ({ success: false }),
@@ -59,6 +63,14 @@ test("single and ERC-5792 sources acquire both source and active-batch claims", 
       handlers.push(["transaction", ...args]);
       return { success: true };
     },
+    handleAddApprovalRevokeToTransactionBatch: async (...args) => {
+      handlers.push(["transaction-cleanup", ...args]);
+      return { success: true };
+    },
+    handleAddApprovalRevokesToTransactionBatch: async (...args) => {
+      handlers.push(["transaction-cleanup-all", ...args]);
+      return { success: true };
+    },
     handleAddCallsToCrossDappBatch: async (...args) => {
       handlers.push(["batch", ...args]);
       return { success: true };
@@ -67,12 +79,34 @@ test("single and ERC-5792 sources acquire both source and active-batch claims", 
 
   await dispatch(dependencies, { type: "addToCrossDappBatch", txId: "tx-1" });
   await dispatch(dependencies, {
+    type: "addApprovalRevokeToTransactionBatch",
+    txId: "tx-2",
+    tokenAddress: "0xtoken",
+    spender: "0xspender",
+  });
+  await dispatch(dependencies, {
+    type: "addApprovalRevokeToTransactionBatch",
+    txId: "tx-3",
+    approvals: [
+      { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
+      { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+    ],
+  });
+  await dispatch(dependencies, {
     type: "addCallsToCrossDappBatch",
     bundleId: "bundle-1",
   });
   assert.deepEqual(claims, [
     [
       { family: "transaction", requestId: "tx-1", action: "move" },
+      { family: "crossDappBatch", requestId: "active", action: "move" },
+    ],
+    [
+      { family: "transaction", requestId: "tx-2", action: "move" },
+      { family: "crossDappBatch", requestId: "active", action: "move" },
+    ],
+    [
+      { family: "transaction", requestId: "tx-3", action: "move" },
       { family: "crossDappBatch", requestId: "active", action: "move" },
     ],
     [
@@ -86,6 +120,15 @@ test("single and ERC-5792 sources acquire both source and active-batch claims", 
   ]);
   assert.deepEqual(handlers, [
     ["transaction", "tx-1"],
+    ["transaction-cleanup", "tx-2", "0xtoken", "0xspender"],
+    [
+      "transaction-cleanup-all",
+      "tx-3",
+      [
+        { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
+        { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+      ],
+    ],
     ["batch", "bundle-1"],
   ]);
 });
@@ -104,6 +147,14 @@ test("active cross-dapp edits and decisions retain one claim and exact inputs", 
     },
     handleUpdateCallInCrossDappBatch: async (...args) => {
       handlers.push(["update", ...args]);
+      return { success: true };
+    },
+    handleAppendApprovalRevokeToCrossDappBatch: async (...args) => {
+      handlers.push(["cleanup", ...args]);
+      return { success: true };
+    },
+    handleAppendApprovalRevokesToCrossDappBatch: async (...args) => {
+      handlers.push(["cleanup-all", ...args]);
       return { success: true };
     },
     handleRejectCrossDappBatch: async () => {
@@ -125,13 +176,38 @@ test("active cross-dapp edits and decisions retain one claim and exact inputs", 
     txId: "tx-2",
     newData: "0xdata",
   });
+  await dispatch(dependencies, {
+    type: "appendApprovalRevokeToCrossDappBatch",
+    tokenAddress: "0xtoken",
+    spender: "0xspender",
+    sourceCallIndex: 2,
+  });
+  await dispatch(dependencies, {
+    type: "appendApprovalRevokeToCrossDappBatch",
+    approvals: [
+      {
+        tokenAddress: "0xtoken-a",
+        spender: "0xspender-a",
+        sourceCallIndex: 0,
+      },
+      {
+        tokenAddress: "0xtoken-b",
+        spender: "0xspender-b",
+        sourceCallIndex: 1,
+      },
+    ],
+  });
   await dispatch(dependencies, { type: "rejectCrossDappBatch" });
   await dispatch(dependencies, {
     type: "confirmCrossDappBatch",
     password: "password",
     gasEstimates: [123],
+    feePaymentToken: "token",
+    feePaymentQuoteId: "quote-1",
   });
   assert.deepEqual(claims, [
+    ["crossDappBatch", "active", "edit"],
+    ["crossDappBatch", "active", "edit"],
     ["crossDappBatch", "active", "edit"],
     ["crossDappBatch", "active", "edit"],
     ["crossDappBatch", "active", "reject"],
@@ -140,7 +216,34 @@ test("active cross-dapp edits and decisions retain one claim and exact inputs", 
   assert.deepEqual(handlers, [
     ["remove", "tx-1"],
     ["update", "tx-2", "0xdata"],
+    ["cleanup", "0xtoken", "0xspender", 2],
+    [
+      "cleanup-all",
+      [
+        {
+          tokenAddress: "0xtoken-a",
+          spender: "0xspender-a",
+          sourceCallIndex: 0,
+        },
+        {
+          tokenAddress: "0xtoken-b",
+          spender: "0xspender-b",
+          sourceCallIndex: 1,
+        },
+      ],
+    ],
     ["reject"],
-    ["confirm", "password", [123]],
+    ["confirm", "password", [123], "token", "quote-1"],
   ]);
+});
+
+test("cross-dapp confirmation rejects an unknown gas-payment mode", async () => {
+  const result = await dispatch(createDependencies(), {
+    type: "confirmCrossDappBatch",
+    feePaymentToken: "arbitrary-token",
+  });
+  assert.deepEqual(result, {
+    success: false,
+    error: "Invalid gas-payment token",
+  });
 });

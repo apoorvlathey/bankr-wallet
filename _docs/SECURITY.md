@@ -403,6 +403,7 @@ immediate.
 | --- | --- | --- |
 | Account/session reads and ordering | `getAccounts`, `reorderAccounts`, `getTabAccount`, `getSeedGroups`, `isWalletUnlocked`, `isApiKeyCached`, `tryRestoreSession`, `getPasswordType`, `getAutoLockTimeout` | Avoid exposing wallet/account/session state or allowing webpages to mutate wallet UI ordering. |
 | Transaction/history UI | `getTxHistory`, `getTxHistoryPage`, `getTxHistoryItem`, `getTransactionCalldata`, `resolveHistoryNftMetadata`, `getTransactionNonce`, `prepareTransactionReplacement`, `getProcessingTxs`, `getFailedTxResult`, `checkPendingTxReceipt`, `cancelProcessingTx`, `splitBatchIntoIndividualTxs`, gas/simulation helpers including `simulateSafeAssetChanges` | Avoid letting content scripts inspect or alter local pending/history/status state. Nonce preview resolves only the account pinned to that pending request and does not reserve the nonce; replacement preparation accepts only a stored history ID/kind and reconstructs intent from the configured RPC; lazy detail reads operate only on a trusted stored row and configured RPC. Safe composite simulation is read-only and accepts only the reviewed calls plus exact public execution envelope from trusted wallet UI. |
+| Residual-approval cleanup | `addApprovalRevokeToTransactionBatch`, `appendApprovalRevokeToPendingBatch`, `appendApprovalRevokeToCrossDappBatch`, `appendApprovalRevokeToSafeProposal` | Prevent webpages from rewriting pending requests or manufacturing wallet-authored calls. The background constructs only canonical `ERC20.approve(spender, 0)` calldata and rechecks the pinned source, wallet/chain capability, editability, duplicate/call limit, and storage claim. |
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
@@ -548,6 +549,7 @@ These mutate `pendingBatchTxRequests` (dapp `wallet_sendCalls`) before the user 
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `removeCallFromPendingBatch`   | Drops a single call from the pending bundle's `params.calls`. If the last call is removed, falls through to a full reject (writes `batchTxResult` + sets `bundleStatuses` to OFFCHAIN_FAILURE). The user is the only party who can prune calls — a dapp must not be able to silently shrink its own (or another dapp's) bundle. |
 | `updateCallInPendingBatch`     | Replaces one call's `data` field in the pending bundle (e.g. user edits an ERC-20 approve amount on a built-in CallCard). Validates hex format only — the user is responsible for the resulting calldata being semantically valid; the downstream confirmation re-simulates and re-estimates from the new bytes. Must stay extension-only so a content script cannot silently mutate another bundle's calls (e.g. swap a benign approve amount for `MAX_UINT256`) between display and signing. |
+| `appendApprovalRevokeToPendingBatch` | Appends one background-authored canonical `approve(spender, 0)` after every dapp-authored call. The handler accepts no renderer-provided calldata/value, permits only pinned PK/seed requests with an existing WalletChan EIP-7702 atomic path, rejects validating/claimed/duplicate/over-limit rows under the request lock, preserves source routing, and marks the request atomic-required. |
 
 ### Cross-Dapp Batch Handlers (`crossDappBatchHandlers.ts`)
 
@@ -568,7 +570,9 @@ atomic result for every sibling group.
 | Handler                       | Effect                                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
 | `addToCrossDappBatch`         | Removes a `pendingTxRequest` and appends it to `crossDappBatch`. Dapp promise stays open.        |
+| `addApprovalRevokeToTransactionBatch` | Atomically stages a pinned PK/seed single transaction followed by one canonical cleanup call, then removes the source pending row. The generated entry inherits source authority but owns no dapp result route. |
 | `addCallsToCrossDappBatch`    | Removes a `pendingBatchTxRequest` (dapp `wallet_sendCalls`), appends every call as a sibling entry sharing one `bundleId`. The dapp's `bundleStatuses` entry stays at PENDING. |
+| `appendApprovalRevokeToCrossDappBatch` | Appends one canonical cleanup after a validated staged source. The generated entry is linked to its parent transaction/bundle, excluded from result fan-out, and removed with the parent. |
 | `removeFromCrossDappBatch`    | For `eth_sendTransaction` entries: writes rejection to `txResult:{txId}`. For `wallet_sendCalls` entries: removes ALL siblings from the same bundle and updates `bundleStatuses` to OFFCHAIN_FAILURE once. Clears the batch if empty. |
 | `updateCallInCrossDappBatch`  | Replaces one entry's `tx.data` in the cross-dapp batch (e.g. user edits an ERC-20 approve amount on a built-in CallCard). Validates hex only; the originating dapp's promise stays open until the batch ships, so the dapp never sees the edited bytes until on-chain confirmation. Must stay extension-only for the same reason as the dapp-initiated variant. |
 | `rejectCrossDappBatch`        | Writes rejection to every entry — `txResult:{txId}` for plain entries, deduped `bundleStatuses` updates for bundle entries. Clears the batch. |
@@ -682,7 +686,8 @@ Set/Revoke storage reconciliation must read `eth_getCode(EOA)` after any termina
 Token fee payment is an extension-only confirmation capability, never a new
 provider signing method. `getFeePaymentOptions` and `prepareFeePaymentQuote`
 are wallet-UI messages. Normal transaction/batch/Safe execution claims remain
-their sole terminal decisions; the in-wallet Swap route uses the same one-shot
+their sole terminal decisions; cross-dapp confirmation uses its existing
+active-batch claim, and the in-wallet Swap route uses the same one-shot
 quote boundary under a reset-aware internal-operation claim. Quotes live only in service-worker memory
 for 45 seconds and bind request family/id, exact calls, account identity,
 chain, EntryPoint nonce, delegation state, paymaster, and bounded maximum. Safe
@@ -692,6 +697,16 @@ quote, and the background independently resolves the submitted executor ID.
 They are consumed once before pending request removal; a missing/restarted
 worker, edited call, account switch, nonce race, allowance change, or delegate
 change leaves the review retryable and requires a fresh quote.
+
+The `crossDappBatch` quote family resolves the active durable batch in the
+background and binds its creation-derived request ID, pinned account/address,
+chain, and exact ordered calls. The renderer cannot provide replacement calls.
+Before broadcast, every distinct injected/WalletConnect source authority is
+revalidated and synchronously committed. Restart recovery persists only
+bounded public transaction IDs and ERC-5792 bundle IDs beside the deterministic
+UserOperation hash; wallet-generated cleanup entries are excluded. The real
+transaction hash is released to source dapps only after the matching onchain
+EntryPoint event is independently verified.
 
 Internal Swap quote input is accepted only from the trusted wallet UI and is
 bounded to 50 calls, positive safe-integer chain IDs, exact 20-byte destinations,
@@ -1040,6 +1055,14 @@ revocation, reduction, expiry, and exact outer Safe reverts remove the row;
 missing RPC/readback or unavailable Safe-envelope proof can produce only an
 explicitly unverified warning. This path uses configured bounded RPC transport,
 never debug tracing, retry state overrides, signing, submission, or storage.
+Residual-approval projection additionally requires a successful positive
+outgoing fungible Transfer and a bounded spender candidate from an exact
+successful Approval event or the successful top-level call target. Incoming,
+zero-value, NFT-shaped, failed, malformed, and truncated candidates cannot
+produce an actionable warning. One pinned Multicall3 call reads all candidate
+pre-state and one exact replay appends all final reads; only a known nonzero
+final ERC-20 allowance is released. Permission and residual metadata share one
+bounded enrichment pass, avoiding a per-token/spender RPC loop.
 Portfolio-price projections cache only the derived price map with per-account
 single-flight reads, so a confirmation cannot repeatedly hydrate or scan
 complete holdings rows.
@@ -1430,7 +1453,7 @@ accessible resources.
 | `pendingTxRequests`        | No               | Pending transaction queue                               |
 | `pendingSignatureRequests` | No               | Pending signature queue                                 |
 | `pendingBatchTxRequests`   | No               | Pending ERC-5792 queue. A newly pinned row may briefly carry non-actionable `intakeStatus: "validating"`; signing and call mutation fail closed until intake removes it, while terminal rejection may remove it safely. |
-| `pendingUserOperations`    | No               | Bounded transaction/batch/Safe ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, and timestamp. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
+| `pendingUserOperations`    | No               | Bounded transaction/batch/cross-dapp/Safe ERC-4337 recovery records containing only request family/id, UserOperation hash, public sender, chain, timestamp, and—for cross-dapp recovery—a bounded deduplicated list of public transaction/bundle result IDs. No calldata, signature, authorization, paymaster data, credentials, or keys are persisted. Reset clears the key. |
 | `safeProposals`            | No               | Bounded validated Safe proposals, confirmations, public routes, and execution evidence. Token-funded pending execution may add only the deterministic UserOperation hash plus public executor/fee-token metadata; it never stores the UserOperation signature, authorization, quote, paymaster data, private key, or password. |
 | `pendingErc7715PermissionRequests` | No        | Pending ERC-7715 delegated-permission prompts pinned to account/origin/chain. Contains requested public authority scope, not private keys. |
 | `erc7715PermissionGrants`  | No               | ERC-7715 grant records with returned context and signed ERC-7710 delegation. This is reusable public authority material and must stay origin/account/chain scoped in all listing UI/API paths. |
@@ -2461,6 +2484,14 @@ Quick reference for which files to examine based on what area of security you're
    code at the Safe necessarily replaces the proxy runtime and makes Safe
    self-calls unrepresentative. The composite route is read-only and carries
    no credential or signing capability.
+   Residual-approval cleanup is a separate trusted-UI mutation. It is allowed
+   only for a zero-signature editable proposal. The background re-verifies the
+   stored Safe account, chain support, live singleton/version/configuration,
+   proposal identity, and call limit, then rebuilds the same nonce and route
+   with exactly one final zero-value Safe CALL carrying canonical
+   `approve(spender, 0)` calldata. Signed, claimed, executing, rejection, or
+   otherwise immutable proposals fail closed; renderer policy cannot bypass
+   these checks.
 
 8. **Signed rejection is onchain only.** Local cancellation rejects only a
    proposal with zero supported and zero unsupported collected confirmations.

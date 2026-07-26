@@ -23,13 +23,20 @@ import {
 const OPTIONS_REQUEST_TIMEOUT_MS = 10_000;
 const QUOTE_REQUEST_TIMEOUT_MS = 30_000;
 
+export type FeePaymentRequestKind =
+  | "transaction"
+  | "batch"
+  | "crossDapp"
+  | "safe"
+  | "swap";
+
 interface FeePaymentSelectorProps {
   txId: string;
   chainId: number;
   value: FeePaymentTokenId;
   quote: FeePaymentQuoteSummary | null;
   disabled?: boolean;
-  requestKind?: "transaction" | "batch" | "safe" | "swap";
+  requestKind?: FeePaymentRequestKind;
   accountId?: string;
   requestPayload?: {
     chainId: number;

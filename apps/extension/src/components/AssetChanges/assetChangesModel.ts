@@ -1,6 +1,7 @@
 import type {
   ApprovalChange,
   AssetChange,
+  ResidualApproval,
   SimulationResult,
 } from "@/chrome/txSimulation";
 import type {
@@ -20,12 +21,19 @@ function approvalMetadataIsIncomplete(change: ApprovalChange): boolean {
   return change.symbol.includes("...") || !change.logoUrl;
 }
 
+function residualApprovalMetadataIsIncomplete(
+  approval: ResidualApproval,
+): boolean {
+  return approval.symbol.includes("...") || !approval.logoUrl;
+}
+
 export function makeSimulationFailureResult(error: string): SimulationResult {
   return {
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
     approvalChanges: [],
+    residualApprovals: [],
     approvalDetectionIncomplete: true,
     simulationFailed: true,
     simulationError: error,
@@ -88,13 +96,17 @@ export function shouldRetryMetadata(result: SimulationResult): boolean {
   if (result.metadataComplete) return false;
   if (
     result.simulationFailed &&
-    (result.approvalChanges ?? []).length === 0
+    (result.approvalChanges ?? []).length === 0 &&
+    (result.residualApprovals ?? []).length === 0
   ) return false;
   return !(
     result.tokenChanges.length === 0 &&
     (!result.nativeChange || result.nativeChange.valueUsd !== null) &&
     (result.approvalChanges ?? []).every(
       (change) => !approvalMetadataIsIncomplete(change),
+    ) &&
+    (result.residualApprovals ?? []).every(
+      (approval) => !residualApprovalMetadataIsIncomplete(approval),
     )
   );
 }
@@ -103,6 +115,7 @@ export function isMetadataIncomplete(
   tokenChanges: AssetChange[],
   nativeChange: AssetChange | null,
   approvalChanges: ApprovalChange[] = [],
+  residualApprovals: ResidualApproval[] = [],
 ): boolean {
   return (
     tokenChanges.some(
@@ -112,7 +125,8 @@ export function isMetadataIncomplete(
         (!change.nft && !change.logoUrl),
     ) ||
     !!(nativeChange && nativeChange.valueUsd === null) ||
-    approvalChanges.some(approvalMetadataIsIncomplete)
+    approvalChanges.some(approvalMetadataIsIncomplete) ||
+    residualApprovals.some(residualApprovalMetadataIsIncomplete)
   );
 }
 
@@ -136,11 +150,19 @@ export function groupAssetChanges(result: SimulationResult): AssetChangeGroups {
   const outgoing = allChanges.filter((change) => change.direction === "out");
   const incoming = allChanges.filter((change) => change.direction === "in");
   const approvals = sortApprovalChanges(result.approvalChanges ?? []);
+  const residualApprovals = result.residualApprovals ?? [];
 
   const summaryParts: string[] = [];
   if (approvals.length > 0) {
     summaryParts.push(
       `${approvals.length} approval${approvals.length === 1 ? "" : "s"}`,
+    );
+  }
+  if (residualApprovals.length > 0) {
+    summaryParts.push(
+      `${residualApprovals.length} residual approval${
+        residualApprovals.length === 1 ? "" : "s"
+      }`,
     );
   }
   for (const change of outgoing.slice(0, 2)) {

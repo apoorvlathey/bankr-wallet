@@ -17,6 +17,7 @@ export function mergeNonAtomicSimulationResults(
       nativeChange: null,
       tokenChanges: [],
       approvalChanges: [],
+      residualApprovals: [],
       approvalDetectionIncomplete: true,
       simulationFailed: true,
       simulationError: "Batch simulation failed",
@@ -68,6 +69,7 @@ export function mergeNonAtomicSimulationResults(
     nativeChange: v1Result.nativeChange ?? byteResult.nativeChange,
     tokenChanges: merged,
     approvalChanges: v1Result.approvalChanges,
+    residualApprovals: v1Result.residualApprovals,
     approvalDetectionIncomplete:
       v1Result.approvalDetectionIncomplete ||
       byteResult.approvalDetectionIncomplete,
@@ -128,6 +130,7 @@ export async function simulateBatchAssetChangesNonAtomic(
   return {
     ...merged,
     approvalChanges: approval.approvalChanges,
+    residualApprovals: approval.residualApprovals,
     approvalDetectionIncomplete: approval.approvalDetectionIncomplete,
     metadataComplete:
       merged.metadataComplete && approval.metadataComplete,

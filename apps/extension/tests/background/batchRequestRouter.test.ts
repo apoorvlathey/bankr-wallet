@@ -33,6 +33,8 @@ function createDependencies(
     handleSplitBatchIntoIndividualTxs: async () => ({ success: true }),
     handleRemoveCallFromPendingBatch: async () => ({ success: true }),
     handleUpdateCallInPendingBatch: async () => ({ success: true }),
+    handleAppendApprovalRevokeToPendingBatch: async () => ({ success: true }),
+    handleAppendApprovalRevokesToPendingBatch: async () => ({ success: true }),
     updatePendingTxRequestData: async () => {},
     runPendingRequestResolution: async (options) => options.resolve(),
     pendingResolutionConflict: () => ({ success: false, error: "conflict" }),
@@ -239,6 +241,14 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
       handlers.push(["edit", ...args]);
       return { success: true };
     },
+    handleAppendApprovalRevokeToPendingBatch: async (...args) => {
+      handlers.push(["approval-cleanup", ...args]);
+      return { success: true };
+    },
+    handleAppendApprovalRevokesToPendingBatch: async (...args) => {
+      handlers.push(["approval-cleanup-all", ...args]);
+      return { success: true };
+    },
     updatePendingTxRequestData: async (...args) => {
       handlers.push(["tx-edit", ...args]);
     },
@@ -275,6 +285,20 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     newData: "0xdata",
   });
   await dispatch(dependencies, {
+    type: "appendApprovalRevokeToPendingBatch",
+    bundleId: "cleanup-bundle",
+    tokenAddress: "0xtoken",
+    spender: "0xspender",
+  });
+  await dispatch(dependencies, {
+    type: "appendApprovalRevokeToPendingBatch",
+    bundleId: "cleanup-all-bundle",
+    approvals: [
+      { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
+      { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+    ],
+  });
+  await dispatch(dependencies, {
     type: "updatePendingTxRequestData",
     txId: "tx-1",
     newData: "0xnew",
@@ -285,6 +309,8 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     ["batchTransaction", "local-bundle", "confirm"],
     ["batchTransaction", "split-bundle", "split"],
     ["batchTransaction", "edit-bundle", "edit"],
+    ["batchTransaction", "cleanup-bundle", "edit"],
+    ["batchTransaction", "cleanup-all-bundle", "edit"],
     ["transaction", "tx-1", "edit"],
   ]);
   assert.deepEqual(handlers, [
@@ -302,6 +328,15 @@ test("trusted batch decisions preserve claim family, action, and handler argumen
     ],
     ["split", "split-bundle", 9],
     ["edit", "edit-bundle", 2, "0xdata"],
+    ["approval-cleanup", "cleanup-bundle", "0xtoken", "0xspender"],
+    [
+      "approval-cleanup-all",
+      "cleanup-all-bundle",
+      [
+        { tokenAddress: "0xtoken-a", spender: "0xspender-a" },
+        { tokenAddress: "0xtoken-b", spender: "0xspender-b" },
+      ],
+    ],
     ["tx-edit", "tx-1", "0xnew"],
   ]);
 });

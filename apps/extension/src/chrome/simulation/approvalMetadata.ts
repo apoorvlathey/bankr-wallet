@@ -9,7 +9,9 @@ import {
 import { KNOWN_TOKEN_LOGOS } from "../tokenLogoConstants";
 import { getSimulationClient } from "./client";
 import { MULTICALL3_ADDRESS } from "./constants";
-import type { ApprovalChange } from "./types";
+import type { ApprovalChange, ResidualApproval } from "./types";
+
+type ApprovalMetadataEntry = ApprovalChange | ResidualApproval;
 
 interface TokenDisplayMetadata {
   name: string;
@@ -23,16 +25,16 @@ function fallbackSymbol(address: string): string {
 }
 
 export function approvalMetadataIsIncomplete(
-  change: ApprovalChange,
+  change: ApprovalMetadataEntry,
 ): boolean {
   return change.symbol.includes("...") || !change.logoUrl;
 }
 
-export async function enrichApprovalMetadata(
+export async function enrichApprovalMetadata<T extends ApprovalMetadataEntry>(
   client: PublicClient,
   chainId: number,
-  changes: ApprovalChange[],
-): Promise<{ changes: ApprovalChange[]; metadataComplete: boolean }> {
+  changes: T[],
+): Promise<{ changes: T[]; metadataComplete: boolean }> {
   if (changes.length === 0) return { changes, metadataComplete: true };
 
   const uniqueTokens = Array.from(
@@ -136,10 +138,12 @@ export async function enrichApprovalMetadata(
 
   const uniqueSpenders = Array.from(
     new Map(
-      changes.map((change) => [
-        change.spender.toLowerCase(),
-        change.spender,
-      ]),
+      changes
+        .filter((change) => !("sourceCallIndex" in change))
+        .map((change) => [
+          change.spender.toLowerCase(),
+          change.spender,
+        ]),
     ).values(),
   );
   const labels = new Map<
@@ -158,6 +162,15 @@ export async function enrichApprovalMetadata(
 
   const enriched = changes.map((change) => {
     const token = metadata.get(change.tokenAddress.toLowerCase());
+    if ("sourceCallIndex" in change) {
+      return {
+        ...change,
+        name: token?.name ?? change.name,
+        symbol: token?.symbol ?? change.symbol,
+        decimals: token?.decimals ?? change.decimals,
+        logoUrl: token?.logoUrl ?? change.logoUrl,
+      };
+    }
     const spender = labels.get(change.spender.toLowerCase());
     return {
       ...change,
@@ -178,10 +191,10 @@ export async function enrichApprovalMetadata(
   };
 }
 
-export async function retryApprovalMetadata(
+export async function retryApprovalMetadata<T extends ApprovalMetadataEntry>(
   chainId: number,
-  changes: ApprovalChange[],
-): Promise<ApprovalChange[]> {
+  changes: T[],
+): Promise<T[]> {
   if (
     changes.length === 0 ||
     changes.every((change) => !approvalMetadataIsIncomplete(change))

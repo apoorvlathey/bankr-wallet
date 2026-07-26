@@ -15,7 +15,12 @@ import { getSimulationClient } from "./client";
 import { MULTICALL3_ADDRESS } from "./constants";
 import { getPortfolioPriceMap } from "./portfolioPrices";
 import { approvalMetadataIsIncomplete, retryApprovalMetadata } from "./approvalMetadata";
-import type { ApprovalChange, AssetChange, TokenMetadataResult } from "./types";
+import type {
+  ApprovalChange,
+  AssetChange,
+  ResidualApproval,
+  TokenMetadataResult,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Metadata retry — called by the UI when initial metadata fetch was incomplete
@@ -27,6 +32,7 @@ export async function retryTokenMetadata(
   accountAddress: string,
   nativeChange?: AssetChange | null,
   approvalChanges: ApprovalChange[] = [],
+  residualApprovals: ResidualApproval[] = [],
 ): Promise<TokenMetadataResult> {
   // Retry conditions:
   //   - Symbol still looks like an address fragment
@@ -38,15 +44,31 @@ export async function retryTokenMetadata(
     return c.valueUsd === null || !c.logoUrl;
   });
   const nativeNeedsPrice = !!nativeChange && nativeChange.valueUsd === null;
-  const approvalNeedsRetry = approvalChanges.some(approvalMetadataIsIncomplete);
+  const permissionEntries = [...approvalChanges, ...residualApprovals];
+  const permissionNeedsRetry =
+    permissionEntries.some(approvalMetadataIsIncomplete);
   if (
     needsRetry.length === 0 &&
     !nativeNeedsPrice &&
-    !approvalNeedsRetry
-  ) return { tokenChanges, nativeChange, approvalChanges };
+    !permissionNeedsRetry
+  ) {
+    return {
+      tokenChanges,
+      nativeChange,
+      approvalChanges,
+      residualApprovals,
+    };
+  }
 
   const client = await getSimulationClient(chainId);
-  if (!client) return { tokenChanges, nativeChange, approvalChanges };
+  if (!client) {
+    return {
+      tokenChanges,
+      nativeChange,
+      approvalChanges,
+      residualApprovals,
+    };
+  }
 
   // Retry NFT metadata using the URI captured during the original simulation.
   // Re-querying tokenURI/uri here would return CURRENT state, not the post-tx
@@ -248,12 +270,18 @@ export async function retryTokenMetadata(
     }
   }
 
-  const updatedApprovalChanges = approvalNeedsRetry
-    ? await retryApprovalMetadata(chainId, approvalChanges)
-    : approvalChanges;
+  const updatedPermissions = permissionNeedsRetry
+    ? await retryApprovalMetadata(chainId, permissionEntries)
+    : permissionEntries;
   return {
     tokenChanges: updated,
     nativeChange: updatedNativeChange,
-    approvalChanges: updatedApprovalChanges,
+    approvalChanges: updatedPermissions.slice(
+      0,
+      approvalChanges.length,
+    ) as ApprovalChange[],
+    residualApprovals: updatedPermissions.slice(
+      approvalChanges.length,
+    ) as ResidualApproval[],
   };
 }

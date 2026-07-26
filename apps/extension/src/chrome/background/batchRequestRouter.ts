@@ -12,6 +12,7 @@ export const BACKGROUND_BATCH_REQUEST_MESSAGE_TYPES = [
   "splitBatchIntoIndividualTxs",
   "removeCallFromPendingBatch",
   "updateCallInPendingBatch",
+  "appendApprovalRevokeToPendingBatch",
   "updatePendingTxRequestData",
 ] as const;
 
@@ -33,6 +34,8 @@ export type BackgroundBatchRequestDependencies = {
   handleSplitBatchIntoIndividualTxs: (...args: any[]) => Promise<any>;
   handleRemoveCallFromPendingBatch: (...args: any[]) => Promise<any>;
   handleUpdateCallInPendingBatch: (...args: any[]) => Promise<any>;
+  handleAppendApprovalRevokeToPendingBatch: (...args: any[]) => Promise<any>;
+  handleAppendApprovalRevokesToPendingBatch: (...args: any[]) => Promise<any>;
   updatePendingTxRequestData: (txId: string, newData: string) => Promise<void>;
   runPendingRequestResolution: <T>(options: any) => Promise<T>;
   pendingResolutionConflict: (action: any) => any;
@@ -309,6 +312,28 @@ export function createBackgroundBatchRequestMessageRouter(
                 message.callIndex,
               ),
             fallback: "Failed to update batch",
+          },
+          dependencies,
+          sendResponse,
+        );
+        return HANDLED_ASYNC;
+      case "appendApprovalRevokeToPendingBatch":
+        resolveBatchAction(
+          {
+            bundleId: message.bundleId,
+            action: "edit",
+            resolve: (bundleId) =>
+              Array.isArray(message.approvals)
+                ? dependencies.handleAppendApprovalRevokesToPendingBatch(
+                    bundleId,
+                    message.approvals,
+                  )
+                : dependencies.handleAppendApprovalRevokeToPendingBatch(
+                    bundleId,
+                    message.tokenAddress,
+                    message.spender,
+                  ),
+            fallback: "Failed to add approval cleanup",
           },
           dependencies,
           sendResponse,

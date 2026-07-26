@@ -16,6 +16,8 @@ interface UseBatchActionsOptions {
   feePaymentQuoteId: string | null;
   customConfirmHandler?: (
     gasEstimates?: GasEstimate[] | null,
+    feePaymentToken?: "native" | "token",
+    feePaymentQuoteId?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   customRejectHandler?: () => Promise<void>;
   onConfirmed: () => void;
@@ -78,7 +80,11 @@ export function useBatchActions({
     setError("");
 
     if (customConfirmHandler) {
-      const result = await customConfirmHandler(cachedGasEstimates);
+      const result = await customConfirmHandler(
+        cachedGasEstimates,
+        feePaymentToken === "native" ? "native" : "token",
+        feePaymentQuoteId ?? undefined,
+      );
       if (result.success) {
         if (isInSidePanel) {
           onConfirmed();

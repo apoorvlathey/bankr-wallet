@@ -7,6 +7,7 @@ import type {
 } from "@/chrome/erc5792Types";
 import type { CrossDappBatch } from "@/chrome/crossDappBatch/storage";
 import type { GasEstimate } from "@/chrome/gasEstimation";
+import type { ResidualApproval } from "@/chrome/txSimulation";
 import BatchTransactionConfirmation from "@/components/BatchTransactionConfirmation";
 
 /**
@@ -87,7 +88,9 @@ function CrossDappBatchConfirmation({
     () =>
       batch.entries.map((entry) => ({
         origin: entry.origin,
-        favicon: entry.favicon,
+        favicon: entry.source?.kind === "walletGenerated"
+          ? "/walletchan-icon.png"
+          : entry.favicon,
       })),
     [batch],
   );
@@ -101,6 +104,8 @@ function CrossDappBatchConfirmation({
 
   const handleCustomConfirm = (
     gasEstimates?: GasEstimate[] | null,
+    feePaymentToken: "native" | "token" = "native",
+    feePaymentQuoteId?: string,
   ): Promise<{ success: boolean; error?: string }> =>
     new Promise((resolve) => {
       chrome.runtime.sendMessage(
@@ -108,6 +113,8 @@ function CrossDappBatchConfirmation({
           type: "confirmCrossDappBatch",
           password: "",
           ...(gasEstimates ? { gasEstimates } : {}),
+          feePaymentToken,
+          ...(feePaymentQuoteId ? { feePaymentQuoteId } : {}),
         },
         (result: { success: boolean; error?: string }) => {
           if (!result?.success) {
@@ -178,6 +185,42 @@ function CrossDappBatchConfirmation({
       );
     });
 
+  const handleApprovalCleanup = (
+    approval: ResidualApproval,
+  ): Promise<{ success: boolean; error?: string }> =>
+    new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "appendApprovalRevokeToCrossDappBatch",
+          tokenAddress: approval.tokenAddress,
+          spender: approval.spender,
+          sourceCallIndex: approval.sourceCallIndex,
+        },
+        (result: { success: boolean; error?: string } | undefined) => {
+          resolve(result || { success: false, error: "No response" });
+        },
+      );
+    });
+
+  const handleAllApprovalCleanup = (
+    approvals: ResidualApproval[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "appendApprovalRevokeToCrossDappBatch",
+          approvals: approvals.map((approval) => ({
+            tokenAddress: approval.tokenAddress,
+            spender: approval.spender,
+            sourceCallIndex: approval.sourceCallIndex,
+          })),
+        },
+        (result: { success: boolean; error?: string } | undefined) => {
+          resolve(result || { success: false, error: "No response" });
+        },
+      );
+    });
+
   return (
     <BatchTransactionConfirmation
       batchRequest={syntheticBatchRequest}
@@ -197,7 +240,10 @@ function CrossDappBatchConfirmation({
       originPerCall={originPerCall}
       titleOverride="Cross-Dapp Batch"
       customConfirmHandler={handleCustomConfirm}
+      feePaymentRequestKind="crossDapp"
       customRejectHandler={handleCustomReject}
+      approvalCleanupHandler={handleApprovalCleanup}
+      approvalCleanupAllHandler={handleAllApprovalCleanup}
       // Cross-dapp identity is communicated by the title and per-action dapp
       // attribution, not by a warning-colored page tint.
       pageBgColor="surface.base"

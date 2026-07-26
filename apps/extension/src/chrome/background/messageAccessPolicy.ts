@@ -62,6 +62,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "removeCallFromPendingBatch",
   "updatePendingTxRequestData",
   "updateCallInPendingBatch",
+  "appendApprovalRevokeToPendingBatch",
   "rejectSignatureRequest",
   "rejectErc7715PermissionRequest",
   "rejectAddChain",
@@ -70,6 +71,8 @@ export const WALLET_UI_MESSAGE_TYPES = [
 
   // Cross-dapp batch assembly
   "addToCrossDappBatch",
+  "addApprovalRevokeToTransactionBatch",
+  "appendApprovalRevokeToCrossDappBatch",
   "addCallsToCrossDappBatch",
   "removeFromCrossDappBatch",
   "updateCallInCrossDappBatch",
@@ -108,7 +111,7 @@ export const WALLET_UI_MESSAGE_TYPES = [
   "refreshSafeAccount", "removeSafeAccount",
   "getSafeProposals", "getSafeProposal",
   "syncSafeRequests", "createSafeProposal",
-  "changeSafeProposalNonce", "approveSafeProposal",
+  "changeSafeProposalNonce", "appendApprovalRevokeToSafeProposal", "approveSafeProposal",
   "publishSafeProposal", "retrySafePublication",
   "cancelSafeProposal", "startSafeProposalRejection",
   "hideSafeProposal", "detachSafeProposalRoute",

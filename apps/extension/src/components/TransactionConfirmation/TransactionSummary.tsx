@@ -7,6 +7,7 @@ import {
 } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 import { EstimatedChangesHeading } from "@/components/RequestConfirmation/EstimatedChangesHeading";
 import { RequestIdentity } from "@/components/RequestConfirmation/RequestIdentity";
 import { ArrowDownIcon, InfoOutlineIcon } from "@chakra-ui/icons";
@@ -177,6 +178,7 @@ interface FinancialImpactProps {
   isValueZero: boolean;
   onRevertedChange: (reverted: boolean) => void;
   onSimulationUnavailableChange: (unavailable: boolean) => void;
+  approvalCleanup?: AssetChangesDisplayProps["approvalCleanup"];
 }
 
 export function TransactionFinancialImpact({
@@ -185,6 +187,7 @@ export function TransactionFinancialImpact({
   isValueZero,
   onRevertedChange,
   onSimulationUnavailableChange,
+  approvalCleanup,
 }: FinancialImpactProps) {
   const { tx } = txRequest;
   return (
@@ -202,6 +205,7 @@ export function TransactionFinancialImpact({
         <AssetChangesDisplay
           txRequest={txRequest}
           embedded
+          approvalCleanup={approvalCleanup}
           onRevertedChange={onRevertedChange}
           onSimulationUnavailableChange={onSimulationUnavailableChange}
         />

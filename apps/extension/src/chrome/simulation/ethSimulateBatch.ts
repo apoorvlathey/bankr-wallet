@@ -81,6 +81,7 @@ export async function simulateViaEthSimulateV1(
       nativeChange,
       tokenChanges,
       approvalChanges: [],
+      residualApprovals: [],
       approvalDetectionIncomplete: false,
       simulationFailed: false,
       metadataComplete,

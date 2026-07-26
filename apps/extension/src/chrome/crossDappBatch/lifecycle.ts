@@ -21,6 +21,11 @@ import {
 const CROSS_BATCH_REQUEST_ID = "active";
 
 function sourceKey(entry: CrossDappBatchEntry): string {
+  if (entry.source?.kind === "walletGenerated") {
+    return entry.source.parentBundleId
+      ? `batch:${entry.source.parentBundleId}`
+      : `tx:${entry.source.parentTxId}`;
+  }
   return entry.source?.kind === "wallet_sendCalls"
     ? `batch:${entry.source.bundleId}`
     : `tx:${entry.txId}`;

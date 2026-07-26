@@ -30,6 +30,7 @@ export function mergeSafeSimulationResults(
         verification: "unverified" as const,
         changeType: "unknown" as const,
       })),
+      residualApprovals: [],
       approvalDetectionIncomplete:
         (assetResult.approvalDetectionIncomplete ?? false) ||
         (assetResult.approvalChanges ?? []).length > 0,
@@ -45,6 +46,7 @@ export function mergeSafeSimulationResults(
     return {
       ...assetResult,
       approvalChanges: [],
+      residualApprovals: [],
       approvalDetectionIncomplete:
         assetResult.approvalDetectionIncomplete ?? false,
       txSuccess: false,
@@ -76,6 +78,7 @@ export async function simulateSafeAssetChanges(
       nativeChange: null,
       tokenChanges: [],
       approvalChanges: [],
+      residualApprovals: [],
       approvalDetectionIncomplete: true,
       simulationFailed: true,
       simulationError: "Safe execution simulation context does not match",

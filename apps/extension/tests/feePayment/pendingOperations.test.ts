@@ -68,3 +68,31 @@ test("retains recoverable Safe execution UserOperations", async () => {
   assert.equal(records[0]?.family, "safeExecution");
   assert.equal(records[0]?.txId, "safe-proposal");
 });
+
+test("retains only bounded cross-dapp recovery fan-out routes", async () => {
+  installStorage([{
+    ...record(1),
+    family: "crossDappBatch",
+    txId: "cross-dapp-batch-1",
+    crossDappResultRoute: {
+      transactionIds: ["tx-1", "tx-1", "tx-2"],
+      bundleIds: ["bundle-1"],
+    },
+  }]);
+  const [stored] = await getPendingUserOperations();
+  assert.equal(stored?.family, "crossDappBatch");
+  assert.deepEqual(stored?.crossDappResultRoute, {
+    transactionIds: ["tx-1", "tx-2"],
+    bundleIds: ["bundle-1"],
+  });
+
+  installStorage([{
+    ...record(2),
+    family: "crossDappBatch",
+    crossDappResultRoute: {
+      transactionIds: ["x".repeat(129)],
+      bundleIds: [],
+    },
+  }]);
+  assert.deepEqual(await getPendingUserOperations(), []);
+});

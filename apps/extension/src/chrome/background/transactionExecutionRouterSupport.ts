@@ -21,8 +21,9 @@ export type BackgroundTransactionExecutionDependencies = {
   readLocalStorage: (key: string) => Promise<Record<string, unknown>>;
   getFeePaymentOptions: (txId: string) => Promise<any>;
   getBatchFeePaymentOptions: (bundleId: string) => Promise<any>;
+  getCrossDappBatchFeePaymentOptions: (requestId: string) => Promise<any>;
   getSafeExecutionFeePaymentOptions: (proposalId: string, executorAccountId: string) => Promise<any>;
-  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap", requestId: string, tokenId: unknown, accountId?: string, requestPayload?: unknown) => Promise<any>;
+  prepareFeePaymentQuote: (family: "transaction" | "batchTransaction" | "crossDappBatch" | "safeExecution" | "internalSwap", requestId: string, tokenId: unknown, accountId?: string, requestPayload?: unknown) => Promise<any>;
   getInternalSwapFeePaymentOptions: (accountId: string, requestPayload: unknown) => Promise<any>;
 };
 
@@ -57,6 +58,9 @@ export function getFeePaymentOptionsForMessage(
   if (message.requestKind === "batch") {
     return dependencies.getBatchFeePaymentOptions(requestId);
   }
+  if (message.requestKind === "crossDapp") {
+    return dependencies.getCrossDappBatchFeePaymentOptions(requestId);
+  }
   if (message.requestKind === "safe") {
     return dependencies.getSafeExecutionFeePaymentOptions(
       requestId,
@@ -78,6 +82,7 @@ export function prepareFeePaymentQuoteForMessage(
 ): Promise<any> {
   const requestId = typeof message.requestId === "string" ? message.requestId : "";
   const family = message.requestKind === "batch" ? "batchTransaction"
+    : message.requestKind === "crossDapp" ? "crossDappBatch"
     : message.requestKind === "safe" ? "safeExecution"
       : message.requestKind === "swap" ? "internalSwap" : "transaction";
   const accountId = typeof message.accountId === "string" ? message.accountId : undefined;

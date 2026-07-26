@@ -1,9 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { getChainConfig } from "@/constants/chainConfig";
-import {
-  FORCE_INCLUSION_CHAINS,
-  isForceInclusionSupportedForAccount,
-} from "@/constants/chainRegistry";
+import { FORCE_INCLUSION_CHAINS, isForceInclusionSupportedForAccount } from "@/constants/chainRegistry";
 import { useNetworks } from "@/contexts/NetworksContext";
 import { useBatchPlan } from "@/hooks/useBatchPlan";
 import { useDappOriginFormatter } from "@/hooks/useDappOriginDisplay";
@@ -46,6 +43,8 @@ import { ForceInclusionState, SentState } from "./TerminalStates";
 import type { BatchTransactionConfirmationProps, ForceInclusionInfo } from "./types";
 import { useBatchActions } from "./useBatchActions";
 import { useBatchReviewState } from "./useBatchReviewState";
+import { createBatchApprovalCleanup } from "./approvalCleanupAdapter";
+import { allowsBatchFeePaymentSelection } from "./feePaymentPolicy";
 
 function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) {
   const {
@@ -53,7 +52,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     accountAddress, onBack, onConfirmed, onRejected, onRejectAll,
     onBeforeReject, onNavigate, onRemoveCall, onEditCallData, originPerCall,
     titleOverride, customConfirmHandler, customRejectHandler, crossDappBatch,
-    onAddedToBatch, pageBgColor,
+    approvalCleanupHandler, approvalCleanupAllHandler, onAddedToBatch,
+    pageBgColor, feePaymentRequestKind = "batch",
   } = props;
   const { themeId, tokens } = useTheme();
   const { bg: stripBg, fg: stripFg } = useStripTokens();
@@ -63,21 +63,18 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   const { params, origin, chainName, favicon, chainId } = batchRequest;
   const calls = params.calls;
   const isPrivacyRagequitBatch = batchRequest.privacyRagequitMeta?.version === 1;
-  const [feePaymentToken, setFeePaymentToken] = useState<"native" | `0x${string}`>(
-    "native",
-  );
-  const [feePaymentQuote, setFeePaymentQuote] =
-    useState<FeePaymentQuoteSummary | null>(null);
+  const [feePaymentToken, setFeePaymentToken] =
+    useState<"native" | `0x${string}`>("native");
+  const [feePaymentQuote, setFeePaymentQuote] = useState<
+    FeePaymentQuoteSummary | null
+  >(null);
   const isIntakeValidating = batchRequest.intakeStatus === "validating";
   const resolvedChain = getResolvedChainById(chainId, networksInfo);
   const chainConfig = getChainConfig(chainId);
   const review = useBatchReviewState(batchRequest.id, calls.length);
   const fromAddress = params.from || accountAddress;
-  const batchPlan = useBatchPlan({
-    accountId: batchRequest.accountId ?? null,
-    accountType: accountType ?? null,
-    chainId,
-  });
+  const batchPlan = useBatchPlan({ accountId: batchRequest.accountId ?? null,
+    accountType: accountType ?? null, chainId });
   const isLocalSigningAccount = accountType === "privateKey" || accountType === "seedPhrase";
   const isAtomic7702 = batchPlan.strategy === "atomic-7702";
   const isNonAtomic = isLocalSigningAccount && !isAtomic7702;
@@ -91,7 +88,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "?";
-
   const malformedValueInfo = useMemo(() => findMalformedValue(calls), [calls]);
   const malformedCallInfo = useMemo(() => findMalformedCalldata(calls), [calls]);
   const { encodedBatch, encodingError } = useMemo(
@@ -116,7 +112,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     }),
     [calls, review.clearSigningActionNames, review.decodedFunctionNames],
   );
-
   const forceInclusionInfo = useMemo<ForceInclusionInfo | null>(() => {
     if (isPrivacyRagequitBatch || isAtomic7702 ||
       !isForceInclusionSupportedForAccount(chainId, accountType)) return null;
@@ -124,16 +119,21 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     if (entry.protocol !== "op-stack") return null;
     return { l1ChainId: entry.l1ChainId, l1ChainName: entry.l1ChainName };
   }, [chainId, accountType, isAtomic7702, isPrivacyRagequitBatch]);
+  const allowFeePaymentSelection = allowsBatchFeePaymentSelection({
+    customConfirmation: !!customConfirmHandler,
+    requestKind: feePaymentRequestKind,
+    privacyRagequit: isPrivacyRagequitBatch,
+  });
   useEffect(() => {
-    if (review.forceInclusion || customConfirmHandler || isPrivacyRagequitBatch) {
+    if (review.forceInclusion || !allowFeePaymentSelection) {
       setFeePaymentToken("native");
       setFeePaymentQuote(null);
     }
-  }, [customConfirmHandler, isPrivacyRagequitBatch, review.forceInclusion]);
+  }, [allowFeePaymentSelection, review.forceInclusion]);
   useEffect(() => {
     setFeePaymentToken("native");
     setFeePaymentQuote(null);
-  }, [batchRequest.id]);
+  }, [batchRequest.id, calls]);
   const actions = useBatchActions({
     batchRequest,
     accountType,
@@ -171,7 +171,25 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
   }, [crossDappBatch, fromAddress, chainId]);
   const showAddToBatch = !isPrivacyRagequitBatch && !isIntakeValidating && canBatchAccount && !customConfirmHandler && !!onAddedToBatch
     && !isNonAtomic && !hasDeploymentCall && !isValueMalformed && !encodingError;
-
+  const approvalCleanupRequestBlockedReason = isPrivacyRagequitBatch
+    ? "Public exit calls cannot be changed."
+    : isIntakeValidating
+      ? "Wait for request validation to finish."
+      : customConfirmHandler && !approvalCleanupHandler
+        ? "This assembled batch cannot add cleanup calls from this screen."
+        : isValueMalformed || isCalldataMalformed || !!encodingError
+          ? "Fix the malformed batch before adding a cleanup call."
+          : actions.state !== "ready"
+            ? "Wait for the current request action to finish."
+            : null;
+  const approvalCleanup = createBatchApprovalCleanup({
+    accountType,
+    batchStrategy: batchPlan.strategy,
+    requestBlockedReason: approvalCleanupRequestBlockedReason,
+    bundleId: batchRequest.id,
+    handler: approvalCleanupHandler,
+    allHandler: approvalCleanupAllHandler,
+  });
   if (actions.state === "forceInclusion" && forceInclusionInfo) {
     return (
       <ForceInclusionState
@@ -223,7 +241,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
       onReject={actions.handleReject}
     />
   );
-
   return (
     <>
       <ConfirmationScreen
@@ -257,6 +274,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           calls={calls}
           syntheticTxRequest={syntheticTxRequest}
           isNonAtomic={isNonAtomic}
+          approvalCleanup={approvalCleanup}
           onRevertedChange={review.setSimulationReverted}
           onUnavailableChange={review.setSimulationUnavailable}
         />}
@@ -343,7 +361,8 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           bundleId={batchRequest.id}
           feePaymentToken={feePaymentToken}
           feePaymentQuote={feePaymentQuote}
-          allowFeePaymentSelection={!customConfirmHandler && !isPrivacyRagequitBatch}
+          allowFeePaymentSelection={allowFeePaymentSelection}
+          feePaymentRequestKind={feePaymentRequestKind}
           onFeePaymentTokenChange={setFeePaymentToken}
           onFeePaymentQuoteChange={setFeePaymentQuote}
         />}

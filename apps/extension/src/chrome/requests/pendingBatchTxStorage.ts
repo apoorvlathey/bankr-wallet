@@ -9,6 +9,8 @@ import { withStorageLock } from "../storageLock";
 
 const STORAGE_KEY = "pendingBatchTxRequests";
 const STORAGE_LOCK_KEY = `local:${STORAGE_KEY}`;
+export const PENDING_BATCH_TX_STORAGE_KEY = STORAGE_KEY;
+export const PENDING_BATCH_TX_STORAGE_LOCK_KEY = STORAGE_LOCK_KEY;
 const MAX_PENDING_BATCH_REQUESTS = 20;
 const MAX_PENDING_BATCH_REQUESTS_PER_ORIGIN = 5;
 

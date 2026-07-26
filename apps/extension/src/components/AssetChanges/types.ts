@@ -1,4 +1,5 @@
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
+import type { ResidualApproval } from "@/chrome/txSimulation";
 
 export interface BatchAssetChangeCall {
   to?: string;
@@ -22,4 +23,14 @@ export interface AssetChangesDisplayProps {
   onRevertedChange?: (reverted: boolean) => void;
   /** Surface simulation transport failures above the confirmation content. */
   onSimulationUnavailableChange?: (unavailable: boolean) => void;
+  /** Optional reducing-authority mutation for verified residual allowances. */
+  approvalCleanup?: {
+    disabledReason?: string | null;
+    onRevoke: (
+      approval: ResidualApproval,
+    ) => Promise<{ success: boolean; error?: string }>;
+    onRevokeAll: (
+      approvals: ResidualApproval[],
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
 }

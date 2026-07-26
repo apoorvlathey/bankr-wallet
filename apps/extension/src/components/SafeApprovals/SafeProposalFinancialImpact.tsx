@@ -2,6 +2,7 @@ import { Box, Text } from "@chakra-ui/react";
 import type { PendingTxRequest } from "@/chrome/requests/pendingTxStorage";
 import type { SafeProposalRecord } from "@/chrome/safe/types";
 import AssetChangesDisplay from "@/components/AssetChangesDisplay";
+import type { AssetChangesDisplayProps } from "@/components/AssetChanges/types";
 
 export function SafeProposalFinancialImpact({
   proposal,
@@ -9,12 +10,14 @@ export function SafeProposalFinancialImpact({
   executionRequest,
   onRevertedChange,
   onUnavailableChange,
+  approvalCleanup,
 }: {
   proposal: SafeProposalRecord;
   reviewRequest: PendingTxRequest;
   executionRequest: PendingTxRequest | null;
   onRevertedChange: (reverted: boolean) => void;
   onUnavailableChange: (unavailable: boolean) => void;
+  approvalCleanup?: AssetChangesDisplayProps["approvalCleanup"];
 }) {
   if (proposal.purpose === "rejection") {
     return (
@@ -48,6 +51,7 @@ export function SafeProposalFinancialImpact({
         safeAddress={proposal.safeAddress}
         safeExecutionRequest={executionRequest ?? undefined}
         embedded
+        approvalCleanup={approvalCleanup}
         onRevertedChange={onRevertedChange}
         onSimulationUnavailableChange={onUnavailableChange}
       />

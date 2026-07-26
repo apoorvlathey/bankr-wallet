@@ -17,7 +17,10 @@ Implemented modules:
 - `paymaster.ts` computes the token bound and exact approval.
 - `prepareUserOperation.ts` assembles the final unsigned provider envelope.
 - `chainState.ts` owns delegation, nonce, balance, and allowance reads.
-- `capabilities.ts` gates pinned single/batch/Safe-execution requests and account types.
+- `capabilities.ts` gates pinned single/ERC-5792/cross-dapp/Safe-execution
+  requests and account types.
+- `crossDappRequest.ts` resolves the active assembled batch and projects its
+  exact ordered calls from background-owned storage.
 - `quotes.ts` owns short-lived exact-call quote pinning and one-time consume.
 - `quoteValidation.ts` rechecks live nonce and delegation bindings at confirm.
 - `signing.ts` chooses local or recovered-signer-verified Bankr EIP-712 signing.
@@ -25,8 +28,9 @@ Implemented modules:
   rejection versus an outcome-unknown transport response.
 - `receiptValidation.ts` requires a matching onchain EntryPoint event before
   accepting a bundler receipt.
-- `execution.ts`, `batchExecution.ts`, and `safe/feePaymentExecution.ts`
-  recheck, sign, submit, and reconcile their request families.
+- `execution.ts`, `batchExecution.ts`, `crossDappBatch/feePayment.ts`, and
+  `safe/feePaymentExecution.ts` recheck, sign, submit, and reconcile their
+  request families.
 - `pendingOperations.ts` and `recovery.ts` own bounded MV3 receipt recovery.
 
 Keep provider data separate from locally constructed executable calldata and
@@ -42,6 +46,12 @@ currently selected private-key/seed executor. Changing executor invalidates the
 renderer quote. The Safe proposal stores only the deterministic UserOperation
 hash and public executor/fee-token metadata while pending; verified EntryPoint
 finality supplies the real onchain transaction hash returned to a waiting dapp.
+
+Cross-dapp execution uses a separate quote family bound to the active batch's
+background-resolved account and exact calls. Recovery stores only the
+deterministic hash plus bounded public transaction/bundle IDs, never the staged
+calls. A matching onchain EntryPoint event supplies the single real transaction
+hash fanned back to every originating dapp.
 
 Ledger and impersonator accounts fail closed at capability discovery. Ledger
 remains native-gas-only even when its address already has WalletChan's official

@@ -24,13 +24,19 @@ import { buildSafeExecutionData } from "../safe/executionData";
 import { hasUnresolvedSafeExecution } from "../safe/executionPolicy";
 import { isSafeFeeTokenExecutorAccount } from "../safe/accountTypePolicy";
 import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
+import { resolveCrossDappFeePaymentRequest } from "./crossDappRequest";
 
 const QUOTE_TTL_MS = 45_000;
 const MAX_QUOTES = 30;
 
 export interface PreparedFeePaymentQuote {
   id: string;
-  family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap";
+  family:
+    | "transaction"
+    | "batchTransaction"
+    | "crossDappBatch"
+    | "safeExecution"
+    | "internalSwap";
   requestId: string;
   accountId: string;
   accountAddress: Address;
@@ -217,7 +223,7 @@ async function prepareQuote(input: {
 }
 
 export async function prepareFeePaymentQuote(
-  family: "transaction" | "batchTransaction" | "safeExecution" | "internalSwap",
+  family: PreparedFeePaymentQuote["family"],
   requestId: string,
   tokenId: unknown,
   accountId?: string,
@@ -281,6 +287,18 @@ export async function prepareFeePaymentQuote(
       account,
       chainId: payload.chainId,
       calls: payload.calls,
+      tokenId,
+    });
+  }
+  if (family === "crossDappBatch") {
+    const { batch, account, calls } =
+      await resolveCrossDappFeePaymentRequest(requestId);
+    return prepareQuote({
+      family,
+      requestId,
+      account,
+      chainId: batch.chainId,
+      calls,
       tokenId,
     });
   }

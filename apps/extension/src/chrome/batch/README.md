@@ -6,6 +6,8 @@ Focused boundaries in this directory are:
 - `batchTxEncoding.ts`: pure ERC-7821 encoding and self-recursion policy.
 - `batchRequestIntake.ts`: validated `wallet_sendCalls` two-record commit.
 - `batchRequestStatusHandlers.ts`: pending-call controls and origin-scoped status.
+- `approvalCleanup.ts`: pinned PK/seed and EIP-7702 capability gate for
+  canonical single or atomic bulk post-request approval revocation.
 - `bundleStatusStorage.ts`: locked released `bundleStatuses` repository,
   retention, and bounded history.
 - `batchBankrExecution.ts`: pinned Bankr confirmation and path selection.

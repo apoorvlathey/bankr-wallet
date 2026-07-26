@@ -121,6 +121,13 @@ test("App, Settings, and portfolio reads have explicit response shapes", async (
   );
   assert.deepEqual(
     responseForPreviewMessage(environment, {
+      type: "getFeePaymentOptions",
+      txId: environment.pendingTxRequests[0]?.id,
+    }),
+    { success: true, options: [] },
+  );
+  assert.deepEqual(
+    responseForPreviewMessage(environment, {
       type: "getErc7715PermissionGrantsForAccount",
       accountId: environment.activeAccount.id,
     }),

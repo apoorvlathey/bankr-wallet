@@ -136,6 +136,13 @@ local interaction state such as disclosure, copied-icon feedback, or controlled
 input focus. They do not call Chrome storage, RPC, Bankr, swap, signing, or
 transaction handlers.
 
+The shared `AssetChanges` domain owns residual-approval warning presentation,
+retry projection, and pure action-availability copy. Transaction, batch,
+cross-dapp batch, and Safe composition roots own the corresponding background
+mutation callback and pass it down explicitly. This keeps wallet/account
+authorization out of the shared renderer while allowing the same simulation
+row to produce request-family-specific durable edits.
+
 ### Pure models and formatting
 
 Pure modules contain no React, Chakra, Chrome APIs, storage, network calls, DOM

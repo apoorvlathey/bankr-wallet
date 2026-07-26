@@ -1,5 +1,9 @@
 import type { Address, Hex } from "./pimlicoTypes";
 import { withStorageLock } from "../storageLock";
+import {
+  parseCrossDappBatchResultRoute,
+  type CrossDappBatchResultRoute,
+} from "../crossDappBatch/resultRoute";
 
 export const PENDING_USER_OPERATIONS_STORAGE_KEY = "pendingUserOperations";
 const MAX_PENDING_USER_OPERATIONS = 50;
@@ -8,12 +12,18 @@ const PENDING_USER_OPERATIONS_STORAGE_LOCK_KEY =
 
 export interface PendingUserOperation {
   version: 1;
-  family: "transaction" | "batchTransaction" | "safeExecution";
+  family:
+    | "transaction"
+    | "batchTransaction"
+    | "crossDappBatch"
+    | "safeExecution";
   txId: string;
   userOperationHash: Hex;
   sender: Address;
   chainId: number;
   createdAt: number;
+  /** Public bounded result IDs needed to resume cross-dapp fan-out. */
+  crossDappResultRoute?: CrossDappBatchResultRoute;
 }
 
 export async function getPendingUserOperations(): Promise<
@@ -25,18 +35,41 @@ export async function getPendingUserOperations(): Promise<
   const value = stored[PENDING_USER_OPERATIONS_STORAGE_KEY];
   if (!Array.isArray(value)) return [];
   return value
-    .filter(
-      (record): record is PendingUserOperation =>
-        record?.version === 1 &&
-        (record.family === "transaction" ||
-          record.family === "batchTransaction" ||
-          record.family === "safeExecution") &&
-        typeof record.txId === "string" &&
-        /^0x[0-9a-fA-F]{64}$/.test(record.userOperationHash) &&
-        /^0x[0-9a-fA-F]{40}$/.test(record.sender) &&
-        Number.isSafeInteger(record.chainId) &&
-        Number.isSafeInteger(record.createdAt),
-    )
+    .flatMap((record): PendingUserOperation[] => {
+      const familyValid =
+        record?.family === "transaction" ||
+        record?.family === "batchTransaction" ||
+        record?.family === "crossDappBatch" ||
+        record?.family === "safeExecution";
+      if (
+        record?.version !== 1 ||
+        !familyValid ||
+        typeof record.txId !== "string" ||
+        record.txId.length === 0 ||
+        record.txId.length > 128 ||
+        !/^0x[0-9a-fA-F]{64}$/.test(record.userOperationHash) ||
+        !/^0x[0-9a-fA-F]{40}$/.test(record.sender) ||
+        !Number.isSafeInteger(record.chainId) ||
+        !Number.isSafeInteger(record.createdAt)
+      ) {
+        return [];
+      }
+      const crossDappResultRoute =
+        record.family === "crossDappBatch"
+          ? parseCrossDappBatchResultRoute(record.crossDappResultRoute)
+          : null;
+      if (record.family === "crossDappBatch" && !crossDappResultRoute) return [];
+      return [{
+        version: 1,
+        family: record.family,
+        txId: record.txId,
+        userOperationHash: record.userOperationHash,
+        sender: record.sender,
+        chainId: record.chainId,
+        createdAt: record.createdAt,
+        ...(crossDappResultRoute ? { crossDappResultRoute } : {}),
+      }];
+    })
     .slice(-MAX_PENDING_USER_OPERATIONS);
 }
 

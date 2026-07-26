@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
+  appendApprovalRevokeToSafeProposal,
+  appendApprovalRevokesToSafeProposal,
   cancelSafeProposal,
   changeSafeProposalNonce,
   createReviewedSafeProposal,
@@ -20,6 +22,7 @@ import {
 import { reconcileSafeProposalNonceQueue } from "../../src/chrome/safe/proposalNonceReconciliation";
 import { startSafeProposalRejection } from "../../src/chrome/safe/proposalRejection";
 import { buildSafeTransaction } from "../../src/chrome/safe/transactionBuilder";
+import { parseApproveCalldata } from "../../src/lib/erc20Approve";
 import type {
   SafeAccountRecord,
   SafeProposalRecord,
@@ -31,6 +34,10 @@ afterEach(() => installed.pop()?.restore());
 
 const safeAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const target = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+const token = "0xcccccccccccccccccccccccccccccccccccccccc" as const;
+const spender = "0xdddddddddddddddddddddddddddddddddddddddd" as const;
+const tokenTwo = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
+const spenderTwo = "0xffffffffffffffffffffffffffffffffffffffff" as const;
 
 const safeRecord: SafeAccountRecord = {
   version: 1,
@@ -407,4 +414,88 @@ test("custom nonce route validates against freshly verified onchain state", asyn
     6,
     "the trusted UI may deliberately create a competing same-nonce request",
   );
+});
+
+test("an unsigned Safe draft appends a revoke without changing route or nonce", async () => {
+  installed.push(installNativeSessionStorage({
+    local: { safeAccounts: { version: 1, records: [safeRecord] } },
+  }));
+  const initial = proposalAt(4n);
+  await createSafeProposal(initial);
+
+  const updated = await appendApprovalRevokeToSafeProposal(
+    {
+      proposalId: initial.id,
+      tokenAddress: token,
+      spender,
+    },
+    { verifySafeOnchainState: async () => safeRecord.chains["8453"] },
+  );
+
+  assert.equal(updated.transaction.nonce, initial.transaction.nonce);
+  assert.equal(updated.route.kind, initial.route.kind);
+  assert.equal(updated.calls.length, 2);
+  assert.equal(updated.calls[1]?.to.toLowerCase(), token);
+  assert.equal(updated.calls[1]?.operation, 0);
+  assert.equal(updated.calls[1]?.value, "0");
+  assert.equal(parseApproveCalldata(updated.calls[1]!.data)?.isRevoke, true);
+  assert.equal(await getSafeProposal(initial.id), null);
+  assert.equal((await getSafeProposal(updated.id))?.id, updated.id);
+});
+
+test("a Safe cleanup cannot rewrite a proposal after any owner signs", async () => {
+  installed.push(installNativeSessionStorage());
+  const signed = {
+    ...proposalAt(4n),
+    state: "awaitingApprovals" as const,
+    confirmations: [{
+      ownerAddress: "0x1111111111111111111111111111111111111111" as const,
+      accountId: "ledger-owner",
+      accountType: "ledger" as const,
+      signature: `0x${"11".repeat(65)}` as `0x${string}`,
+      createdAt: 1,
+    }],
+  };
+  await createSafeProposal(signed);
+  await assert.rejects(
+    () => appendApprovalRevokeToSafeProposal({
+      proposalId: signed.id,
+      tokenAddress: token,
+      spender,
+    }),
+    /before signing/,
+  );
+});
+
+test("an unsigned Safe draft appends all revokes with one replacement", async () => {
+  installed.push(installNativeSessionStorage({
+    local: { safeAccounts: { version: 1, records: [safeRecord] } },
+  }));
+  const initial = proposalAt(4n);
+  await createSafeProposal(initial);
+
+  const updated = await appendApprovalRevokesToSafeProposal(
+    {
+      proposalId: initial.id,
+      targets: [
+        { tokenAddress: token, spender },
+        { tokenAddress: tokenTwo, spender: spenderTwo },
+      ],
+    },
+    { verifySafeOnchainState: async () => safeRecord.chains["8453"] },
+  );
+
+  assert.equal(updated.transaction.nonce, initial.transaction.nonce);
+  assert.equal(updated.calls.length, 3);
+  assert.deepEqual(
+    updated.calls.slice(1).map((call) => call.to.toLowerCase()),
+    [token, tokenTwo],
+  );
+  assert.ok(
+    updated.calls.slice(1).every((call) =>
+      parseApproveCalldata(call.data)?.isRevoke
+    ),
+  );
+  assert.equal(await getSafeProposal(initial.id), null);
+  assert.equal((await getSafeProposal(updated.id))?.id, updated.id);
 });

@@ -126,6 +126,19 @@ export async function resumePendingFeePaymentOperations(): Promise<void> {
         await finalizeTransaction(record, verifiedReceipt);
       } else if (record.family === "batchTransaction") {
         await finalizeBatch(record, verifiedReceipt);
+      } else if (record.family === "crossDappBatch") {
+        if (!record.crossDappResultRoute) {
+          throw new Error("Cross-dapp recovery route is missing");
+        }
+        const { finalizeCrossDappFeePaymentReceipt } = await import(
+          "../crossDappBatch/feePaymentCompletion"
+        );
+        await finalizeCrossDappFeePaymentReceipt({
+          historyId: record.txId,
+          chainId: record.chainId,
+          route: record.crossDappResultRoute,
+          verified,
+        });
       } else {
         const { finalizeSafeFeePaymentReceipt } = await import(
           "../safe/feePaymentExecution"

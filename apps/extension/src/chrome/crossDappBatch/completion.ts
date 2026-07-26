@@ -12,6 +12,10 @@ import { getTxById, updateTxInHistory } from "../txHistoryStorage";
 import { showNotification } from "../transactions/notification";
 import { writeResultToStorage } from "../transactions/runtime";
 import { clearCrossDappBatch, type CrossDappBatch } from "./storage";
+import {
+  createCrossDappBatchResultRoute,
+  type CrossDappBatchResultRoute,
+} from "./resultRoute";
 import type {
   CrossDappBatchShipResult,
   EthSendTransactionFanOutOutcome,
@@ -28,15 +32,18 @@ export interface CrossDappBatchFanOut {
 export function createCrossDappBatchFanOut(
   batch: CrossDappBatch,
 ): CrossDappBatchFanOut {
+  return createCrossDappBatchFanOutFromRoute(
+    createCrossDappBatchResultRoute(batch),
+  );
+}
+
+export function createCrossDappBatchFanOutFromRoute(
+  route: CrossDappBatchResultRoute,
+): CrossDappBatchFanOut {
   return {
     walletSendCalls: async (outcome) => {
-      const seenBundles = new Set<string>();
       await Promise.all(
-        batch.entries.map(async (entry) => {
-          if (entry.source?.kind !== "wallet_sendCalls") return;
-          const bundleId = entry.source.bundleId;
-          if (seenBundles.has(bundleId)) return;
-          seenBundles.add(bundleId);
+        route.bundleIds.map(async (bundleId) => {
           if (outcome.kind === "submitted") {
             await updateBundleStatus(bundleId, {
               status: BUNDLE_STATUS.PENDING,
@@ -71,12 +78,9 @@ export function createCrossDappBatchFanOut(
     },
     ethSendTransactions: async (outcome) => {
       await Promise.all(
-        batch.entries.map((entry) => {
-          if (entry.source?.kind === "wallet_sendCalls") {
-            return Promise.resolve();
-          }
+        route.transactionIds.map((txId) => {
           return writeResultToStorage(
-            `txResult:${entry.txId}`,
+            `txResult:${txId}`,
             outcome.kind === "submitted"
               ? { success: true, txHash: outcome.txHash }
               : { success: false, error: outcome.error },

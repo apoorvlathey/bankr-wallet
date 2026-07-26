@@ -14,6 +14,7 @@ import { isSafeExecutorAccount } from "../safe/accountTypePolicy";
 import { WALLETCHAN_OFFICIAL_DELEGATE } from "./constants";
 import { getFeeTokenBalanceAtRpc } from "./chainState";
 import { parseInternalSwapFeePaymentPayload } from "./internalSwap";
+import { resolveCrossDappFeePaymentRequest } from "./crossDappRequest";
 import {
   getFeePaymentTokens,
   getPimlicoFeeTokens,
@@ -190,6 +191,26 @@ export async function getBatchFeePaymentOptions(bundleId: string) {
     account,
     hasDeployment: pending.params.calls.some((call) => !call.to),
   });
+}
+
+export async function getCrossDappBatchFeePaymentOptions(requestId: string) {
+  try {
+    const { batch, account } =
+      await resolveCrossDappFeePaymentRequest(requestId);
+    return getOptionsForRequest({
+      chainId: batch.chainId,
+      account,
+      hasDeployment: false,
+    });
+  } catch (error) {
+    return {
+      success: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Cross-dapp batch request not found",
+    };
+  }
 }
 
 export async function getSafeExecutionFeePaymentOptions(
