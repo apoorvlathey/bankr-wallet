@@ -17,7 +17,7 @@ import { shouldConfirmSimulationFailure } from "@/components/RequestConfirmation
 import { ForceInclusionScreen, TransactionSentScreen } from "./StateScreens";
 import { TransactionContext } from "./TransactionContext";
 import { TransactionDecisionSummary } from "./TransactionDecisionSummary";
-import { getDecodedActionFallback } from "./transactionPresentation";
+import { getDecodedActionFallback, shouldShowTransactionEstimatedChanges } from "./transactionPresentation";
 import { PrivacyShieldRequestContext, PrivacyShieldTransactionOutcome, TransactionEstimatedChangesTitle, TransactionFinancialImpact, TransactionOutcome } from "./TransactionSummary";
 import type { TransactionConfirmationProps } from "./types";
 import { useTransactionActions } from "./useTransactionActions";
@@ -55,8 +55,7 @@ function TransactionConfirmation({
   const delegation7702 = txRequest.delegation7702Meta;
   const is7702Revoke = delegation7702?.kind === "revoke";
   const is7702SetDelegate = delegation7702?.kind === "setDelegate";
-  const isErc7715PermissionRevoke =
-    !!txRequest.erc7715PermissionRevokeMeta;
+  const isErc7715PermissionRevoke = !!txRequest.erc7715PermissionRevokeMeta;
   const replacement = txRequest.replacement;
   const isPrivacyShield = !!txRequest.privacyShieldMeta;
   const isPrivacyDirectUnshield = !!txRequest.privacyUnshieldMeta;
@@ -93,10 +92,7 @@ function TransactionConfirmation({
     txRequest,
     resolvedChain?.nativeCurrency.symbol,
   );
-  const review = useTransactionReviewState(
-    txRequest,
-    accountType,
-  );
+  const review = useTransactionReviewState(txRequest, accountType);
   const transactionNonce = useTransactionNonce(txRequest.id, accountType);
   useEffect(() => {
     if (review.forceInclusion || replacement) {
@@ -202,6 +198,9 @@ function TransactionConfirmation({
           review.parsedApproval || isErc7715PermissionRevoke,
         ),
       });
+  const showEstimatedChanges = shouldShowTransactionEstimatedChanges(
+    Boolean(delegation7702), Boolean(review.parsedApproval),
+  );
   const rejectButton = (
     <RejectActionButton
       state={actions.state}
@@ -258,7 +257,7 @@ function TransactionConfirmation({
         />
       }
       financialImpact={
-        delegation7702 ? undefined : (
+        showEstimatedChanges ? (
           <TransactionFinancialImpact
             txRequest={txRequest}
             isValueMalformed={review.isValueMalformed}
@@ -266,15 +265,15 @@ function TransactionConfirmation({
             onRevertedChange={review.setSimulationReverted}
             onSimulationUnavailableChange={review.setSimulationUnavailable}
           />
-        )
+        ) : undefined
       }
       financialImpactTitle={
-        delegation7702 ? undefined : (
+        showEstimatedChanges ? (
           <TransactionEstimatedChangesTitle
             txRequest={txRequest}
             resolvedChainName={resolvedChainName}
           />
-        )
+        ) : undefined
       }
       context={
         isPrivacyShield ? (

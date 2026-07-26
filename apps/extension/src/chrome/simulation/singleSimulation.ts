@@ -20,6 +20,10 @@ import {
   buildErc7715RedeemDecodedResult,
   isErc7715RedeemDelegationsTx,
 } from "./erc7715Preview";
+import {
+  attachApprovalProjection,
+  createApprovalProjectionPromise,
+} from "./approvalAttachment";
 import { buildSimulationResult } from "./resultBuilder";
 import { buildRetryOverrides } from "./stateOverrides";
 import {
@@ -40,6 +44,7 @@ export async function simulateAssetChanges(
     chainId: number;
   },
   accountAddress: string,
+  options: { includeApprovals?: boolean } = {},
 ): Promise<SimulationResult> {
   console.log("[TxSim] simulateAssetChanges called", {
     from: tx.from,
@@ -54,6 +59,8 @@ export async function simulateAssetChanges(
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete: true,
   };
@@ -64,10 +71,23 @@ export async function simulateAssetChanges(
     return EMPTY;
   }
 
+  const approvalPromise = createApprovalProjectionPromise(
+    [{ to: tx.to, data: tx.data, value: tx.value }],
+    accountAddress,
+    tx.chainId,
+    options.includeApprovals !== false,
+  );
+  const attachApprovals = (result: SimulationResult) =>
+    attachApprovalProjection(result, approvalPromise);
+
   const client = await getSimulationClient(tx.chainId);
   if (!client) {
     console.log("[TxSim] Failed: no RPC URL for chainId", tx.chainId);
-    return { ...EMPTY, simulationFailed: true, simulationError: "No RPC URL" };
+    return attachApprovals({
+      ...EMPTY,
+      simulationFailed: true,
+      simulationError: "No RPC URL",
+    });
   }
 
   // Checksum addresses. viem's `formatStateOverride` runs `getAddress` on
@@ -102,18 +122,18 @@ export async function simulateAssetChanges(
           ),
         },
       );
-      return decodedResult;
+      return attachApprovals(decodedResult);
     }
 
     console.log(
       "[TxSim] Skipping bytecode-injection simulation for ERC-7715 redeemDelegations; unsupported execution shape or EIP-7702 account code dependency.",
     );
-    return {
+    return attachApprovals({
       ...EMPTY,
       simulationFailed: true,
       simulationError:
         "ERC-7715 redemption asset-change simulation is unavailable",
-    };
+    });
   }
 
   try {
@@ -181,20 +201,34 @@ export async function simulateAssetChanges(
       const retryResult = await runSimulation(client, from, to, value, data, candidates, retryOverrides);
       if (retryResult.tokens.length > 0 || retryResult.ethDelta !== 0n) {
         console.log("[TxSim] Retry succeeded! tokens:", retryResult.tokens.length, "ethDelta:", retryResult.ethDelta.toString());
-        return await buildSimulationResult(client, tx.chainId, accountAddress, retryResult);
+        return attachApprovals(
+          await buildSimulationResult(
+            client,
+            tx.chainId,
+            accountAddress,
+            retryResult,
+          ),
+        );
       }
       console.log("[TxSim] Retry also produced no changes");
     }
 
-    return await buildSimulationResult(client, tx.chainId, accountAddress, simResult);
+    return attachApprovals(
+      await buildSimulationResult(
+        client,
+        tx.chainId,
+        accountAddress,
+        simResult,
+      ),
+    );
   } catch (err: any) {
     console.warn("[TxSim] Simulation error:", err.shortMessage || err.message || err);
-    return {
+    return attachApprovals({
       ...EMPTY,
       metadataComplete: true,
       simulationFailed: true,
       simulationError: err.shortMessage || err.message || "Simulation failed",
-    };
+    });
   }
 }
 

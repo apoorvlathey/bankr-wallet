@@ -23,11 +23,33 @@ export function mergeSafeSimulationResults(
   if (executionResult.simulationFailed) {
     return {
       ...assetResult,
+      approvalChanges: (assetResult.approvalChanges ?? []).map((change) => ({
+        ...change,
+        previousAmount: null,
+        remainingAmount: null,
+        verification: "unverified" as const,
+        changeType: "unknown" as const,
+      })),
+      approvalDetectionIncomplete:
+        (assetResult.approvalDetectionIncomplete ?? false) ||
+        (assetResult.approvalChanges ?? []).length > 0,
       txSuccess: true,
       simulationFailed: true,
       simulationError:
         executionResult.simulationError ||
         "Safe execution simulation unavailable",
+    };
+  }
+
+  if (!executionResult.txSuccess) {
+    return {
+      ...assetResult,
+      approvalChanges: [],
+      approvalDetectionIncomplete:
+        assetResult.approvalDetectionIncomplete ?? false,
+      txSuccess: false,
+      simulationFailed: assetResult.simulationFailed,
+      simulationError: assetResult.simulationError,
     };
   }
 
@@ -53,6 +75,8 @@ export async function simulateSafeAssetChanges(
       txSuccess: true,
       nativeChange: null,
       tokenChanges: [],
+      approvalChanges: [],
+      approvalDetectionIncomplete: true,
       simulationFailed: true,
       simulationError: "Safe execution simulation context does not match",
       metadataComplete: true,
@@ -66,7 +90,11 @@ export async function simulateSafeAssetChanges(
 
   const [assetResult, executionResult] = await Promise.all([
     assetPromise,
-    simulateAssetChanges(executionTx, executionTx.from),
+    simulateAssetChanges(
+      executionTx,
+      executionTx.from,
+      { includeApprovals: false },
+    ),
   ]);
   return mergeSafeSimulationResults(assetResult, executionResult);
 }

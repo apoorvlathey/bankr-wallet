@@ -101,6 +101,7 @@ export function createBackgroundGasSimulationMessageRouter(
             message.tokenChanges,
             message.accountAddress,
             message.nativeChange,
+            message.approvalChanges,
           )
           .then(sendResponse);
         return HANDLED_ASYNC;

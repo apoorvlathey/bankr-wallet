@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Collapse,
+  Divider,
   Flex,
   HStack,
   Text,
@@ -20,6 +21,7 @@ import type { AssetChange, SimulationResult } from "@/chrome/txSimulation";
 import { ShapesLoader } from "@/components/Chat/ShapesLoader";
 import { useTheme } from "@/theme";
 import { AssetRow } from "./AssetRow";
+import { ApprovalChangesGroup } from "./ApprovalChangesGroup";
 import { groupAssetChanges } from "./assetChangesModel";
 
 function EmbeddedAssetGroup({
@@ -120,12 +122,14 @@ export function AssetChangesPanel({
     );
   }
 
-  if (!result || result.simulationFailed) return null;
+  if (!result) return null;
 
-  const { allChanges, incoming, outgoing, summary } =
+  const { allChanges, approvals, incoming, outgoing, summary } =
     groupAssetChanges(result);
+  const hasAssetChanges = outgoing.length > 0 || incoming.length > 0;
+  if (result.simulationFailed && approvals.length === 0) return null;
 
-  if (allChanges.length === 0) {
+  if (allChanges.length === 0 && approvals.length === 0) {
     return (
       <Text color="fg.secondary" fontSize="sm" lineHeight="1.45">
         No additional asset changes were detected.
@@ -135,7 +139,15 @@ export function AssetChangesPanel({
 
   if (embedded) {
     return (
-      <VStack align="stretch" spacing={2} pb={2}>
+      <VStack align="stretch" spacing={0} pb={2}>
+        <ApprovalChangesGroup
+          changes={approvals}
+          detectionIncomplete={result.approvalDetectionIncomplete}
+          explorerUrl={explorerUrl}
+        />
+        {approvals.length > 0 && hasAssetChanges && (
+          <Divider mt={2} borderColor="border.subtle" opacity={1} />
+        )}
         {outgoing.length > 0 && (
           <EmbeddedAssetGroup
             changes={outgoing}
@@ -230,6 +242,16 @@ export function AssetChangesPanel({
         >
           <VStack align="stretch" spacing={0} px={3} pb={3} pt={1}>
             <Box h="1px" bg="border.subtle" />
+
+            <ApprovalChangesGroup
+              changes={approvals}
+              detectionIncomplete={result.approvalDetectionIncomplete}
+              explorerUrl={explorerUrl}
+            />
+
+            {approvals.length > 0 && hasAssetChanges && (
+              <Divider mt={2} borderColor="border.subtle" opacity={1} />
+            )}
 
             {outgoing.length > 0 && (
               <>

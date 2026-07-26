@@ -15,6 +15,10 @@ export { simulateAssetChanges } from "./simulation/singleSimulation";
 export { simulateSafeAssetChanges } from "./simulation/safeSimulation";
 export { SIMULATOR_BYTECODE } from "./simulation/simulatorContract";
 export type {
+  ApprovalChange,
+  ApprovalChangeType,
+  ApprovalSystem,
+  ApprovalVerification,
   AssetChange,
   NftAssetInfo,
   NftStandard,

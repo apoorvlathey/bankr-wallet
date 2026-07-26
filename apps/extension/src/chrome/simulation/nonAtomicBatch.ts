@@ -1,5 +1,9 @@
 import { simulateBatchAssetChanges } from "./batchSimulation";
-import { simulateViaEthSimulateV1 } from "./ethSimulateBatch";
+import {
+  simulateViaEthSimulateV1,
+} from "./ethSimulateBatch";
+import { runEthSimulateV1Calls } from "./ethSimulateClient";
+import { simulateApprovalChanges } from "./approvalSimulation";
 import type { AssetChange, SimulationResult } from "./types";
 
 export function mergeNonAtomicSimulationResults(
@@ -12,6 +16,8 @@ export function mergeNonAtomicSimulationResults(
       txSuccess: true,
       nativeChange: null,
       tokenChanges: [],
+      approvalChanges: [],
+      approvalDetectionIncomplete: true,
       simulationFailed: true,
       simulationError: "Batch simulation failed",
       metadataComplete: true,
@@ -61,6 +67,10 @@ export function mergeNonAtomicSimulationResults(
     txSuccess: byteResult.txSuccess,
     nativeChange: v1Result.nativeChange ?? byteResult.nativeChange,
     tokenChanges: merged,
+    approvalChanges: v1Result.approvalChanges,
+    approvalDetectionIncomplete:
+      v1Result.approvalDetectionIncomplete ||
+      byteResult.approvalDetectionIncomplete,
     simulationFailed: false,
     metadataComplete:
       v1Result.metadataComplete && byteResult.metadataComplete,
@@ -76,18 +86,50 @@ export async function simulateBatchAssetChangesNonAtomic(
   fromAddress: string,
   chainId: number,
 ): Promise<SimulationResult> {
-  const [v1Result, byteResult] = await Promise.all([
-    simulateViaEthSimulateV1(calls, fromAddress, chainId).catch((err) => {
-      console.log("[batchSimNonAtomic] eth_simulateV1 path threw:", err?.message);
-      return null;
-    }),
-    simulateBatchAssetChanges(calls, fromAddress, chainId).catch((err) => {
+  const firstRunPromise = runEthSimulateV1Calls(
+    calls,
+    fromAddress,
+    chainId,
+  ).catch((err) => {
+    console.log("[batchSimNonAtomic] eth_simulateV1 path threw:", err?.message);
+    return null;
+  });
+  const bytePromise = simulateBatchAssetChanges(
+    calls,
+    fromAddress,
+    chainId,
+    { includeApprovals: false },
+  ).catch((err) => {
       console.log(
         "[batchSimNonAtomic] bytecode-injection path threw:",
         err?.message,
       );
       return null;
-    }),
+    });
+  const [firstRun, byteResult] = await Promise.all([
+    firstRunPromise,
+    bytePromise,
   ]);
-  return mergeNonAtomicSimulationResults(v1Result, byteResult);
+  const [v1Result, approval] = await Promise.all([
+    simulateViaEthSimulateV1(
+      calls,
+      fromAddress,
+      chainId,
+      firstRun,
+    ),
+    simulateApprovalChanges(
+      calls,
+      fromAddress,
+      chainId,
+      firstRun,
+    ),
+  ]);
+  const merged = mergeNonAtomicSimulationResults(v1Result, byteResult);
+  return {
+    ...merged,
+    approvalChanges: approval.approvalChanges,
+    approvalDetectionIncomplete: approval.approvalDetectionIncomplete,
+    metadataComplete:
+      merged.metadataComplete && approval.metadataComplete,
+  };
 }

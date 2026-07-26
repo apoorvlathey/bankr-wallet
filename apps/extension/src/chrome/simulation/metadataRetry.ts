@@ -14,10 +14,8 @@ import { formatAmount } from "./assetChangeNormalization";
 import { getSimulationClient } from "./client";
 import { MULTICALL3_ADDRESS } from "./constants";
 import { getPortfolioPriceMap } from "./portfolioPrices";
-import type {
-  AssetChange,
-  TokenMetadataResult,
-} from "./types";
+import { approvalMetadataIsIncomplete, retryApprovalMetadata } from "./approvalMetadata";
+import type { ApprovalChange, AssetChange, TokenMetadataResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Metadata retry — called by the UI when initial metadata fetch was incomplete
@@ -28,6 +26,7 @@ export async function retryTokenMetadata(
   tokenChanges: AssetChange[],
   accountAddress: string,
   nativeChange?: AssetChange | null,
+  approvalChanges: ApprovalChange[] = [],
 ): Promise<TokenMetadataResult> {
   // Retry conditions:
   //   - Symbol still looks like an address fragment
@@ -39,12 +38,15 @@ export async function retryTokenMetadata(
     return c.valueUsd === null || !c.logoUrl;
   });
   const nativeNeedsPrice = !!nativeChange && nativeChange.valueUsd === null;
-  if (needsRetry.length === 0 && !nativeNeedsPrice) {
-    return { tokenChanges, nativeChange };
-  }
+  const approvalNeedsRetry = approvalChanges.some(approvalMetadataIsIncomplete);
+  if (
+    needsRetry.length === 0 &&
+    !nativeNeedsPrice &&
+    !approvalNeedsRetry
+  ) return { tokenChanges, nativeChange, approvalChanges };
 
   const client = await getSimulationClient(chainId);
-  if (!client) return { tokenChanges, nativeChange };
+  if (!client) return { tokenChanges, nativeChange, approvalChanges };
 
   // Retry NFT metadata using the URI captured during the original simulation.
   // Re-querying tokenURI/uri here would return CURRENT state, not the post-tx
@@ -246,5 +248,12 @@ export async function retryTokenMetadata(
     }
   }
 
-  return { tokenChanges: updated, nativeChange: updatedNativeChange };
+  const updatedApprovalChanges = approvalNeedsRetry
+    ? await retryApprovalMetadata(chainId, approvalChanges)
+    : approvalChanges;
+  return {
+    tokenChanges: updated,
+    nativeChange: updatedNativeChange,
+    approvalChanges: updatedApprovalChanges,
+  };
 }

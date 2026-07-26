@@ -25,24 +25,41 @@ import {
 } from "./simulatorContract";
 import { buildIsolatedSimulatorOverride } from "./simulatorOverride";
 import { enrichTokenChanges } from "./tokenEnrichment";
+import {
+  attachApprovalProjection,
+  createApprovalProjectionPromise,
+} from "./approvalAttachment";
 import type { SimulationResult } from "./types";
 
 export async function simulateBatchAssetChanges(
   calls: BatchSimulationCall[],
   fromAddress: string,
   chainId: number,
-  options: { candidateDiscovery?: BatchCandidateDiscovery } = {},
+  options: {
+    candidateDiscovery?: BatchCandidateDiscovery;
+    includeApprovals?: boolean;
+  } = {},
 ): Promise<SimulationResult> {
   const EMPTY: SimulationResult = {
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete: true,
   };
 
   const validCalls = calls.filter((c) => c.to);
   if (validCalls.length === 0) return EMPTY;
+  const approvalPromise = createApprovalProjectionPromise(
+    validCalls,
+    fromAddress,
+    chainId,
+    options.includeApprovals !== false,
+  );
+  const attachApprovals = (result: SimulationResult) =>
+    attachApprovalProjection(result, approvalPromise);
 
   console.log(`[batchSim] Starting batch simulation: ${validCalls.length} calls, from=${fromAddress}, chainId=${chainId}`);
   for (let i = 0; i < validCalls.length; i++) {
@@ -52,7 +69,11 @@ export async function simulateBatchAssetChanges(
   const client = await getSimulationClient(chainId);
   if (!client) {
     console.log("[batchSim] FAILED: No RPC URL for chainId", chainId);
-    return { ...EMPTY, simulationFailed: true, simulationError: "No RPC URL" };
+    return attachApprovals({
+      ...EMPTY,
+      simulationFailed: true,
+      simulationError: "No RPC URL",
+    });
   }
 
   const from = fromAddress as Address;
@@ -100,7 +121,11 @@ export async function simulateBatchAssetChanges(
 
     if (!result.data) {
       console.log("[batchSim] FAILED: Empty response from eth_call");
-      return { ...EMPTY, simulationFailed: true, simulationError: "Empty response" };
+      return attachApprovals({
+        ...EMPTY,
+        simulationFailed: true,
+        simulationError: "Empty response",
+      });
     }
 
     // Step 3: Decode return values (same shape as simulate())
@@ -153,13 +178,21 @@ export async function simulateBatchAssetChanges(
       nativeChange: nativeChange ? `${nativeChange.direction} ${nativeChange.formattedAmount} ${nativeChange.symbol}` : null,
       tokenChanges: tokenChanges.map((tc) => `${tc.direction} ${tc.formattedAmount} ${tc.symbol} (${tc.address})`),
     });
-    return { txSuccess, nativeChange, tokenChanges, simulationFailed: false, metadataComplete };
+    return attachApprovals({
+      txSuccess,
+      nativeChange,
+      tokenChanges,
+      approvalChanges: [],
+      approvalDetectionIncomplete: false,
+      simulationFailed: false,
+      metadataComplete,
+    });
   } catch (err: any) {
     console.log("[batchSim] EXCEPTION:", err.shortMessage || err.message, err);
-    return {
+    return attachApprovals({
       ...EMPTY,
       simulationFailed: true,
       simulationError: err.shortMessage || err.message || "Batch simulation failed",
-    };
+    });
   }
 }

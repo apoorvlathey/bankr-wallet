@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AssetChange, SimulationResult } from "../../src/chrome/txSimulation";
+import type {
+  ApprovalChange,
+  AssetChange,
+  SimulationResult,
+} from "../../src/chrome/txSimulation";
 import {
   buildSimulationMessage,
   groupAssetChanges,
@@ -8,6 +12,7 @@ import {
   makeBatchCallsKey,
   makeSimulationFailureResult,
   shouldRetryMetadata,
+  sortApprovalChanges,
 } from "../../src/components/AssetChanges/assetChangesModel";
 
 function asset(
@@ -34,8 +39,33 @@ function result(overrides: Partial<SimulationResult> = {}): SimulationResult {
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete: true,
+    ...overrides,
+  };
+}
+
+function approval(
+  overrides: Partial<ApprovalChange> = {},
+): ApprovalChange {
+  return {
+    system: "erc20",
+    tokenAddress: "0x2222222222222222222222222222222222222222",
+    owner: "0x1111111111111111111111111111111111111111",
+    spender: "0x3333333333333333333333333333333333333333",
+    requestedAmount: "100",
+    previousAmount: "0",
+    remainingAmount: "100",
+    expiration: null,
+    verification: "verified",
+    changeType: "increase",
+    isUnlimited: false,
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+    logoUrl: "https://example.com/usdc.png",
     ...overrides,
   };
 }
@@ -120,6 +150,8 @@ test("failure and retry projections preserve released simulation semantics", () 
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: true,
     simulationFailed: true,
     simulationError: "offline",
     metadataComplete: true,
@@ -152,6 +184,20 @@ test("failure and retry projections preserve released simulation semantics", () 
     ),
     true,
   );
+  assert.equal(
+    shouldRetryMetadata(
+      result({
+        simulationFailed: true,
+        metadataComplete: false,
+        approvalChanges: [approval({ logoUrl: undefined })],
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isMetadataIncomplete([], null, [approval({ logoUrl: undefined })]),
+    true,
+  );
 });
 
 test("asset grouping keeps native-first order and the four-item summary cap", () => {
@@ -170,4 +216,39 @@ test("asset grouping keeps native-first order and the four-item summary cap", ()
   assert.deepEqual(grouped.outgoing, [native, changes[1]]);
   assert.deepEqual(grouped.incoming, [changes[0], changes[2], changes[3]]);
   assert.equal(grouped.summary, "-1 ETH, -1 DAI, +1 USDC, +1 WETH, +1 more");
+});
+
+test("approvals lead summaries and sort unlimited and unverified risk first", () => {
+  const verified = approval({ spender: "0x0000000000000000000000000000000000000001" });
+  const unverified = approval({
+    spender: "0x0000000000000000000000000000000000000002",
+    verification: "unverified",
+    changeType: "unknown",
+  });
+  const unlimited = approval({
+    spender: "0x0000000000000000000000000000000000000003",
+    isUnlimited: true,
+  });
+  const sorted = sortApprovalChanges([verified, unverified, unlimited]);
+  assert.deepEqual(
+    sorted.map((entry) => entry.spender),
+    [unlimited.spender, unverified.spender, verified.spender],
+  );
+
+  const grouped = groupAssetChanges(
+    result({
+      approvalChanges: [verified],
+      tokenChanges: [
+        asset("USDC", "in"),
+        asset("DAI", "out"),
+        asset("WETH", "in"),
+        asset("WCHAN", "in"),
+        asset("USDT", "in"),
+      ],
+    }),
+  );
+  assert.equal(
+    grouped.summary,
+    "1 approval, -1 DAI, +1 USDC, +1 WETH, +2 more",
+  );
 });

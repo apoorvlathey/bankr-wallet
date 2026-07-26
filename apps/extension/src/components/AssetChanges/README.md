@@ -12,7 +12,12 @@ the named simulation-warning banner exports.
   deferral, parent status callbacks, and the released three-attempt metadata
   retry schedule.
 - `AssetChangesPanel.tsx` owns loading, empty, collapsed-summary, and grouped
-  Send/Receive presentation.
+  approval/Send/Receive presentation. Approval increases are rendered
+  before asset deltas and remain visible when asset simulation is unavailable.
+- `ApprovalChangesGroup.tsx` renders verified and unverified ERC-20/Permit2
+  allowance increases as a separator-led token/allowance/spender ledger,
+  promotes unlimited grants to danger styling, and discloses
+  incomplete-detection state without nesting another warning card.
 - `AssetRow.tsx` renders one asset delta, restores shared token-symbol contract
   disclosure, and owns the persistent metadata-row copy/explorer effects.
 - `TokenIcon.tsx` delegates fungible-token imagery and symbol fallback to the
@@ -22,7 +27,7 @@ the named simulation-warning banner exports.
   must never enter this renderer.
 - `SimulationBanners.tsx` owns the two parent-rendered simulation warnings.
 - `assetChangesModel.ts` contains pure message selection, retry predicates,
-  grouping, and collapsed-summary projection.
+  risk ordering, grouping, and approval-first collapsed-summary projection.
 - `types.ts` contains feature-local component and batch-call contracts.
 
 ## Dependency and effect direction
@@ -36,7 +41,8 @@ visible while remote rasterization is pending. The pure model imports only types
 ## Coverage
 
 - `tests/ui/assetChangesModel.test.ts` protects message selection, stable batch
-  keys, retry decisions, grouping, and summaries.
+  keys, approval metadata retry decisions, risk ordering, grouping, and
+  approval-first summaries.
 - `tests/ui/tokenContractPopover.test.ts` requires both estimated and confirmed
   ERC-20 symbols to retain the shared hover/focus address, copy, and explorer
   disclosure with help-cursor and amber interaction feedback.

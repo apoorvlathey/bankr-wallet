@@ -107,6 +107,10 @@ const approveData =
   "0x095ea7b3" +
   previewSpender.toLowerCase().replace("0x", "").padStart(64, "0") +
   BigInt(250_000_000).toString(16).padStart(64, "0");
+const increaseAllowanceData =
+  "0x39509351" +
+  previewSpender.toLowerCase().replace("0x", "").padStart(64, "0") +
+  BigInt(25_000_000).toString(16).padStart(64, "0");
 
 const previewPermissionStart = Math.floor(PREVIEW_EPOCH_MS / 1000);
 const previewPermissionExpiry = previewPermissionStart + 3600;
@@ -355,6 +359,13 @@ export function createPreviewTxScenario(
   walletType: PreviewWalletType,
   scenario: string,
 ): PendingTxRequest {
+  if (scenario === "increase-allowance") {
+    return createPreviewTxRequest(walletType, {
+      id: `preview-tx-increase-allowance-${walletType}`,
+      tx: { data: increaseAllowanceData },
+    });
+  }
+
   if (scenario === "malformed-disabled") {
     return createPreviewTxRequest(walletType, {
       id: `preview-tx-malformed-${walletType}`,

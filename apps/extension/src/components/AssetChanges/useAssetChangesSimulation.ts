@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  ApprovalChange,
   AssetChange,
   SimulationResult,
   TokenMetadataResult,
@@ -88,7 +89,12 @@ export function useAssetChangesSimulation({
         return;
       }
       console.log("[AssetChangesUI] Simulation response:", response);
-      setResult(response);
+      setResult({
+        ...response,
+        approvalChanges: response.approvalChanges ?? [],
+        approvalDetectionIncomplete:
+          response.approvalDetectionIncomplete ?? false,
+      });
       setLoading(false);
     });
 
@@ -120,6 +126,8 @@ export function useAssetChangesSimulation({
     let attempt = 0;
     let tokenChanges: AssetChange[] = result.tokenChanges;
     let nativeChange: AssetChange | null = result.nativeChange;
+    let approvalChanges: ApprovalChange[] =
+      result.approvalChanges ?? [];
 
     function scheduleRetry() {
       if (cancelled || attempt >= MAX_RETRIES) return;
@@ -135,15 +143,19 @@ export function useAssetChangesSimulation({
             tokenChanges,
             accountAddress: txRequest.tx.from,
             nativeChange,
+            approvalChanges,
           },
           (response: TokenMetadataResult) => {
             if (cancelled || chrome.runtime.lastError) return;
 
             tokenChanges = response.tokenChanges;
             nativeChange = response.nativeChange ?? nativeChange;
+            approvalChanges =
+              response.approvalChanges ?? approvalChanges;
             const stillIncomplete = isMetadataIncomplete(
               tokenChanges,
               nativeChange,
+              approvalChanges,
             );
 
             setResult((previous) =>
@@ -152,6 +164,7 @@ export function useAssetChangesSimulation({
                     ...previous,
                     tokenChanges,
                     nativeChange,
+                    approvalChanges,
                     metadataComplete: !stillIncomplete,
                   }
                 : previous,

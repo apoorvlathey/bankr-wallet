@@ -18,6 +18,7 @@ import { Navigation } from "../components/Navigation";
 import { Footer } from "../components/Footer";
 import { ConnectSection } from "./sections/ConnectSection";
 import { SendTxSection } from "./sections/SendTxSection";
+import { ApprovalSection } from "./sections/ApprovalSection";
 import { SignatureSection } from "./sections/SignatureSection";
 import { DelegationsSection } from "./sections/DelegationsSection";
 import { BatchSection } from "./sections/BatchSection";
@@ -26,16 +27,24 @@ import { ChainSection } from "./sections/ChainSection";
 import { RpcProxySection } from "./sections/RpcProxySection";
 import { ClearSigningSection } from "./sections/ClearSigningSection";
 import { TEST_CHAINS } from "./constants";
+import {
+  TestSectionNav,
+  type TestSectionAccent,
+  type TestSectionLink,
+} from "./TestSectionNav";
 
 function SectionCard({
+  id,
   title,
   accent,
   children,
 }: {
+  id: string;
   title: string;
-  accent: "red" | "blue" | "yellow" | "green";
+  accent: TestSectionAccent;
   children: React.ReactNode;
 }) {
+  const headingId = `${id}-heading`;
   const accentBg = {
     red: "bauhaus.red",
     blue: "bauhaus.blue",
@@ -46,6 +55,10 @@ function SectionCard({
 
   return (
     <Box
+      as="section"
+      id={id}
+      aria-labelledby={headingId}
+      scrollMarginTop="76px"
       bg="white"
       border="3px solid"
       borderColor="bauhaus.black"
@@ -55,6 +68,8 @@ function SectionCard({
     >
       <Box bg={accentBg} px={4} py={3} borderBottom="3px solid" borderColor="bauhaus.black">
         <Text
+          as="h2"
+          id={headingId}
           fontSize="sm"
           fontWeight="900"
           textTransform="uppercase"
@@ -76,6 +91,19 @@ function SectionCard({
 // burn through the full clear-signing matrix. Default to Base on first
 // connect; respect manual switches afterwards.
 const PREFERRED_TEST_CHAIN_ID = 8453;
+
+const TEST_SECTION_LINKS = [
+  { id: "connect-account", label: "Account", accent: "blue" },
+  { id: "send-transaction", label: "Transaction", accent: "red" },
+  { id: "approval-detection", label: "Approvals", accent: "red" },
+  { id: "signatures", label: "Signatures", accent: "yellow" },
+  { id: "delegations", label: "Delegations", accent: "blue" },
+  { id: "batch", label: "Batch", accent: "green" },
+  { id: "clear-signing", label: "Clear signing", accent: "yellow" },
+  { id: "watch-asset", label: "Watch asset", accent: "blue" },
+  { id: "chain", label: "Chain", accent: "red" },
+  { id: "read-only-rpc", label: "RPC", accent: "yellow" },
+] as const satisfies readonly TestSectionLink[];
 
 export default function TestContent() {
   const { address, isConnected } = useAccount();
@@ -239,41 +267,47 @@ export default function TestContent() {
             </HStack>
           </Flex>
 
+          <TestSectionNav sections={TEST_SECTION_LINKS} />
+
           {/* Section grid */}
           <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={5}>
-            <SectionCard title="Connect & Account" accent="blue">
+            <SectionCard id="connect-account" title="Connect & Account" accent="blue">
               <ConnectSection />
             </SectionCard>
 
-            <SectionCard title="Send Transaction" accent="red">
+            <SectionCard id="send-transaction" title="Send Transaction" accent="red">
               <SendTxSection />
             </SectionCard>
 
-            <SectionCard title="Signatures" accent="yellow">
+            <SectionCard id="approval-detection" title="Approval Detection" accent="red">
+              <ApprovalSection />
+            </SectionCard>
+
+            <SectionCard id="signatures" title="Signatures" accent="yellow">
               <SignatureSection />
             </SectionCard>
 
-            <SectionCard title="Delegations (ERC-7715)" accent="blue">
+            <SectionCard id="delegations" title="Delegations (ERC-7715)" accent="blue">
               <DelegationsSection />
             </SectionCard>
 
-            <SectionCard title="Batch (ERC-5792)" accent="green">
+            <SectionCard id="batch" title="Batch (ERC-5792)" accent="green">
               <BatchSection />
             </SectionCard>
 
-            <SectionCard title="Clear Signing (ERC-7730)" accent="yellow">
+            <SectionCard id="clear-signing" title="Clear Signing (ERC-7730)" accent="yellow">
               <ClearSigningSection />
             </SectionCard>
 
-            <SectionCard title="Watch Asset" accent="blue">
+            <SectionCard id="watch-asset" title="Watch Asset" accent="blue">
               <WatchAssetSection />
             </SectionCard>
 
-            <SectionCard title="Chain" accent="red">
+            <SectionCard id="chain" title="Chain" accent="red">
               <ChainSection />
             </SectionCard>
 
-            <SectionCard title="Read-only RPC" accent="yellow">
+            <SectionCard id="read-only-rpc" title="Read-only RPC" accent="yellow">
               <RpcProxySection />
             </SectionCard>
           </SimpleGrid>

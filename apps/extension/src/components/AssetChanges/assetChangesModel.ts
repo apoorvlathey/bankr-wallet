@@ -1,4 +1,5 @@
 import type {
+  ApprovalChange,
   AssetChange,
   SimulationResult,
 } from "@/chrome/txSimulation";
@@ -11,7 +12,12 @@ export interface AssetChangeGroups {
   allChanges: AssetChange[];
   incoming: AssetChange[];
   outgoing: AssetChange[];
+  approvals: ApprovalChange[];
   summary: string;
+}
+
+function approvalMetadataIsIncomplete(change: ApprovalChange): boolean {
+  return change.symbol.includes("...") || !change.logoUrl;
 }
 
 export function makeSimulationFailureResult(error: string): SimulationResult {
@@ -19,6 +25,8 @@ export function makeSimulationFailureResult(error: string): SimulationResult {
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: true,
     simulationFailed: true,
     simulationError: error,
     metadataComplete: true,
@@ -77,16 +85,24 @@ export function buildSimulationMessage({
 }
 
 export function shouldRetryMetadata(result: SimulationResult): boolean {
-  if (result.simulationFailed || result.metadataComplete) return false;
+  if (result.metadataComplete) return false;
+  if (
+    result.simulationFailed &&
+    (result.approvalChanges ?? []).length === 0
+  ) return false;
   return !(
     result.tokenChanges.length === 0 &&
-    (!result.nativeChange || result.nativeChange.valueUsd !== null)
+    (!result.nativeChange || result.nativeChange.valueUsd !== null) &&
+    (result.approvalChanges ?? []).every(
+      (change) => !approvalMetadataIsIncomplete(change),
+    )
   );
 }
 
 export function isMetadataIncomplete(
   tokenChanges: AssetChange[],
   nativeChange: AssetChange | null,
+  approvalChanges: ApprovalChange[] = [],
 ): boolean {
   return (
     tokenChanges.some(
@@ -94,7 +110,22 @@ export function isMetadataIncomplete(
         change.symbol.includes("...") ||
         change.valueUsd === null ||
         (!change.nft && !change.logoUrl),
-    ) || !!(nativeChange && nativeChange.valueUsd === null)
+    ) ||
+    !!(nativeChange && nativeChange.valueUsd === null) ||
+    approvalChanges.some(approvalMetadataIsIncomplete)
+  );
+}
+
+export function sortApprovalChanges(
+  approvals: ApprovalChange[],
+): ApprovalChange[] {
+  const priority = (change: ApprovalChange) => {
+    if (change.isUnlimited) return 0;
+    if (change.verification === "unverified") return 1;
+    return 2;
+  };
+  return [...approvals].sort(
+    (left, right) => priority(left) - priority(right),
   );
 }
 
@@ -104,21 +135,30 @@ export function groupAssetChanges(result: SimulationResult): AssetChangeGroups {
     : [...result.tokenChanges];
   const outgoing = allChanges.filter((change) => change.direction === "out");
   const incoming = allChanges.filter((change) => change.direction === "in");
+  const approvals = sortApprovalChanges(result.approvalChanges ?? []);
 
   const summaryParts: string[] = [];
+  if (approvals.length > 0) {
+    summaryParts.push(
+      `${approvals.length} approval${approvals.length === 1 ? "" : "s"}`,
+    );
+  }
   for (const change of outgoing.slice(0, 2)) {
     summaryParts.push(`-${change.formattedAmount} ${change.symbol}`);
   }
   for (const change of incoming.slice(0, 2)) {
     summaryParts.push(`+${change.formattedAmount} ${change.symbol}`);
   }
-  const moreCount = allChanges.length - summaryParts.length;
+  const shownAssetCount =
+    Math.min(outgoing.length, 2) + Math.min(incoming.length, 2);
+  const moreCount = allChanges.length - shownAssetCount;
   if (moreCount > 0) summaryParts.push(`+${moreCount} more`);
 
   return {
     allChanges,
     incoming,
     outgoing,
+    approvals,
     summary: summaryParts.join(", "),
   };
 }

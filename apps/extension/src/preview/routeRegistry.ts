@@ -69,6 +69,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     defaultScenario: "default",
     scenarios: [
       "default",
+      "increase-allowance",
       "loading",
       "simulation-error",
       "malformed-disabled",
@@ -231,6 +232,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     defaultScenario: "default",
     scenarios: [
       "default",
+      "approval-and-send",
       "loading",
       "simulation-error",
       "malformed-disabled",

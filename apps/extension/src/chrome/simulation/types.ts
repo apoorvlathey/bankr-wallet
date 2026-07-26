@@ -1,6 +1,14 @@
 import type { Address } from "viem";
 
 import type { NftMetadata } from "../nftMetadata";
+import type { ApprovalChange } from "./approvalTypes";
+
+export type {
+  ApprovalChange,
+  ApprovalChangeType,
+  ApprovalSystem,
+  ApprovalVerification,
+} from "./approvalTypes";
 
 export type NftStandard = "erc721" | "erc1155";
 
@@ -35,6 +43,9 @@ export interface SimulationResult {
   txSuccess: boolean;
   nativeChange: AssetChange | null;
   tokenChanges: AssetChange[];
+  approvalChanges: ApprovalChange[];
+  /** True when opaque calldata, RPC support, or resource bounds prevent completeness. */
+  approvalDetectionIncomplete: boolean;
   simulationFailed: boolean;
   simulationError?: string;
   metadataComplete: boolean;
@@ -43,6 +54,7 @@ export interface SimulationResult {
 export interface TokenMetadataResult {
   tokenChanges: AssetChange[];
   nativeChange?: AssetChange | null;
+  approvalChanges?: ApprovalChange[];
 }
 
 /** Shape of NFT receipts decoded from the simulator return value. */

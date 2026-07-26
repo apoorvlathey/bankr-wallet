@@ -25,6 +25,8 @@ function result(overrides: Partial<SimulationResult> = {}): SimulationResult {
     txSuccess: true,
     nativeChange: null,
     tokenChanges: [],
+    approvalChanges: [],
+    approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete: true,
     ...overrides,
@@ -57,4 +59,14 @@ test("non-atomic mapping keeps v1 fungibles and bytecode NFTs/verdict", () => {
     [shared, byteOnly, nft],
   );
   assert.equal(merged.metadataComplete, false);
+});
+
+test("non-atomic mapping retains approvals even when another call reverts", () => {
+  const approval = [{ spender: "0xspender" }] as SimulationResult["approvalChanges"];
+  const merged = mergeNonAtomicSimulationResults(
+    result({ approvalChanges: approval }),
+    result({ txSuccess: false }),
+  );
+  assert.equal(merged.txSuccess, false);
+  assert.equal(merged.approvalChanges, approval);
 });

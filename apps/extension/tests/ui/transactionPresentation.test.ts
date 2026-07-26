@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   formatTransactionAction,
   getDecodedActionFallback,
+  shouldShowTransactionEstimatedChanges,
 } from "../../src/components/TransactionConfirmation/transactionPresentation";
 
 test("formats decoded function names as concise action labels", () => {
@@ -44,5 +45,20 @@ test("uses decoded actions only when clear signing and specialized summaries are
       hasSpecializedSummary: false,
     }),
     null,
+  );
+});
+
+test("standalone parsed ERC-20 approvals own their review without duplicate estimated changes", () => {
+  assert.equal(
+    shouldShowTransactionEstimatedChanges(false, true),
+    false,
+  );
+  assert.equal(
+    shouldShowTransactionEstimatedChanges(false, false),
+    true,
+  );
+  assert.equal(
+    shouldShowTransactionEstimatedChanges(true, false),
+    false,
   );
 });

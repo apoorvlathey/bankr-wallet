@@ -20,9 +20,11 @@ import {
 import { makeStorageArea, type StorageListener } from "./previewChromeStorage";
 import {
   activePreviewAccount,
+  previewApprovalAndSendSimulationResult,
   previewChainIdForName,
   previewCustomTokens,
   previewGasEstimate,
+  previewIncreaseAllowanceSimulationResult,
   previewSimulationResult,
   unknownPreviewMessage,
   type PreviewChromeLogger,
@@ -566,11 +568,22 @@ export function responseForPreviewMessage(
           simulationError: "Deterministic preview simulation unavailable",
           nativeChange: null,
           tokenChanges: [],
+          approvalChanges: [],
+          approvalDetectionIncomplete: false,
         };
+      }
+      if (route === "tx" && scenario === "increase-allowance") {
+        return previewIncreaseAllowanceSimulationResult;
+      }
+      if (route === "batch" && scenario === "approval-and-send") {
+        return previewApprovalAndSendSimulationResult;
       }
       return previewSimulationResult;
     case "retryTokenMetadata":
-      return { tokenChanges: previewSimulationResult.tokenChanges };
+      return {
+        tokenChanges: previewSimulationResult.tokenChanges,
+        approvalChanges: previewSimulationResult.approvalChanges,
+      };
     case "fetchTokenInfo":
       return {
         success: true,

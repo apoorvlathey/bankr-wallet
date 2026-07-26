@@ -242,6 +242,38 @@
 
 ## Slop audit
 
+- 2026-07-26 approval-change review audit: removed the duplicate Estimated
+  changes section from strict standalone ERC-20 approval requests, including
+  zero-amount revocations, because the editable Request details approval card
+  already owns that decision. Nested, incremental, permit, multicall, batch,
+  and Safe approval paths keep simulation visibility. The remaining approval
+  summary is now one separator-led ledger inside the existing financial-impact
+  surface: a compact semantic icon and `Approval changed` heading lead token
+  identity, then consistently aligned allowance, spender, and expiration rows.
+  Repeated helper and per-token status sentences are intentionally omitted;
+  the allowance row is the single source of exact state.
+  The decision-critical allowance row uses the 14px secondary-copy tier for its
+  bold label and the 16px primary-value tier for its tabular amount rather than
+  metadata-sized text.
+  When approval changes and asset deltas coexist, one full-width subtle rule
+  separates the approval ledger from Send/Receive; single-kind reviews omit it.
+  Unlimited and unverified states retain explicit language and semantic color
+  without tinting or boxing the entire nested region. Popup-width values
+  truncate with exact-value titles, address actions retain accessible targets,
+  and no new motion or interaction mode was introduced. Result: pass.
+
+- 2026-07-26 test-dapp section-navigation audit: added one sticky Bauhaus
+  section index directly below Connection so the dense internal JSON-RPC
+  harness remains navigable without turning each test group into a competing
+  tab state. A fixed black `Jump to` key leads a single horizontally scrollable
+  rail of concise, color-keyed text anchors; the labels retain meaning without
+  color, expose visible blue keyboard focus, and keep 48px targets. Destination
+  cards are semantic labelled sections with offset-aware anchors, smooth
+  movement, and an immediate reduced-motion path. The change reuses the
+  website palette, defined edges, hard shadow, Outfit hierarchy, and compact
+  developer-tool density without adding gradients, rounded card stacks, or
+  decorative animation. Result: pass.
+
 - 2026-07-26 Safe signer/executor selector audit: the shared `Signing with` /
   `Execute with` account menu now caps long lists at 320px, constrains width to
   the active viewport, and contains wheel/touch scrolling within the overlay.
@@ -957,6 +989,15 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-26: removed redundant simulation UI from standalone editable ERC-20
+  approvals, rebuilt nested approval changes as an aligned allowance ledger,
+  and added direct revoke, `increaseAllowance`, and combined Base
+  unlimited-approval plus 1 USDC transfer test-dapp coverage.
+
+- 2026-07-26: added a sticky, keyboard-visible section index below the test
+  dapp connection status, with responsive horizontal overflow and
+  reduced-motion-aware anchor scrolling.
 
 - 2026-07-23: aligned Shield's source-account trigger and menu with the shared
   wallet identity projection, so resolved ENS names and avatars appear

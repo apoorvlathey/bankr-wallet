@@ -1030,9 +1030,19 @@ best-effort on write. The root `swapApi.ts` is an export-only facade, enforced
 by architecture and behavior tests under `tests/swap/`.
 
 Transaction simulation caps access-list asset candidates and enriched asset
-changes at 128 and NFT change enrichment at 64. Portfolio-price projections
-cache only the derived price map with per-account single-flight reads, so a
-confirmation cannot repeatedly hydrate or scan complete holdings rows.
+changes at 128 and NFT change enrichment at 64. Approval projection caps
+owner/token/spender pairs at 64 and recognized nested decoding at 128 calls
+across four levels. It accepts only exact ERC-20/Permit2 event topics from
+successful simulated calls, binds the event owner to the reviewed account and
+Permit2 events to the canonical emitter, then requires block-pinned pre/final
+allowance reads before claiming verification. Same-batch consumption,
+revocation, reduction, expiry, and exact outer Safe reverts remove the row;
+missing RPC/readback or unavailable Safe-envelope proof can produce only an
+explicitly unverified warning. This path uses configured bounded RPC transport,
+never debug tracing, retry state overrides, signing, submission, or storage.
+Portfolio-price projections cache only the derived price map with per-account
+single-flight reads, so a confirmation cannot repeatedly hydrate or scan
+complete holdings rows.
 
 Bankr remote authority is isolated under `chrome/bankr/`: `response.ts` is
 pure bounded validation, `transport.ts` owns only fixed-origin bounded HTTP,

@@ -18,6 +18,7 @@ export interface EthSimulateLog {
 
 export interface EthSimulateCallResult {
   status?: string;
+  returnData?: string;
   logs?: EthSimulateLog[];
 }
 

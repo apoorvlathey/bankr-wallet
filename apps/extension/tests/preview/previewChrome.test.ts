@@ -287,6 +287,53 @@ test("scenario fixtures expose signing restrictions and visible failures", () =>
   assert.equal(simulation.simulationFailed, true);
   assert.match(simulation.simulationError ?? "", /preview simulation unavailable/i);
 
+  const increaseAllowance = createPreviewEnvironment(
+    "http://localhost/preview/tx?scenario=increase-allowance&wallet=privateKey",
+  );
+  const increaseAllowanceSimulation = responseForPreviewMessage(
+    increaseAllowance,
+    { type: "simulateAssetChanges" },
+  ) as {
+    approvalChanges: Array<{
+      requestedAmount: string;
+      previousAmount: string | null;
+      remainingAmount: string | null;
+    }>;
+  };
+  assert.deepEqual(
+    increaseAllowanceSimulation.approvalChanges.map((change) => ({
+      requestedAmount: change.requestedAmount,
+      previousAmount: change.previousAmount,
+      remainingAmount: change.remainingAmount,
+    })),
+    [
+      {
+        requestedAmount: "25000000",
+        previousAmount: "100000000",
+        remainingAmount: "125000000",
+      },
+    ],
+  );
+
+  const approvalAndSend = createPreviewEnvironment(
+    "http://localhost/preview/batch?scenario=approval-and-send&wallet=privateKey",
+  );
+  const approvalAndSendSimulation = responseForPreviewMessage(
+    approvalAndSend,
+    { type: "simulateBatchAssetChanges" },
+  ) as {
+    approvalChanges: Array<{ isUnlimited: boolean }>;
+    tokenChanges: Array<{ direction: string; formattedAmount: string }>;
+  };
+  assert.equal(approvalAndSendSimulation.approvalChanges[0]?.isUnlimited, true);
+  assert.deepEqual(
+    approvalAndSendSimulation.tokenChanges.map((change) => ({
+      direction: change.direction,
+      formattedAmount: change.formattedAmount,
+    })),
+    [{ direction: "out", formattedAmount: "1" }],
+  );
+
   const metadataError = createPreviewEnvironment(
     "http://localhost/preview/permission?scenario=metadata-unverified&wallet=privateKey",
   );

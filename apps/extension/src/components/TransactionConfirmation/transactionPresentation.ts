@@ -28,3 +28,10 @@ export function getDecodedActionFallback({
 
   return formatTransactionAction(decodedFunctionName);
 }
+
+export function shouldShowTransactionEstimatedChanges(
+  hasDelegation: boolean,
+  hasParsedApproval: boolean,
+): boolean {
+  return !hasDelegation && !hasParsedApproval;
+}

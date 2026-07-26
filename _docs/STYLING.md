@@ -297,6 +297,20 @@ allowance, nonce, and one-time delegate details inside the existing Advanced
 disclosure; only the material one-time-upgrade warning appears in the primary
 review.
 
+A strict standalone ERC-20 `approve(address,uint256)` request skips the
+financial-impact section entirely, including approval revocation with amount
+zero. Its editable Request details approval surface already owns token,
+allowance, spender, and mutation controls. Nested approvals,
+`increaseAllowance`, permits, multicalls, batches, and Safe requests retain
+Estimated changes. Within that shared simulation surface, approval changes use
+one separator-led allowance ledger rather than a tinted nested warning card:
+one semantic `Approval changed` heading, token identity, then aligned
+allowance/spender/expiration rows. Do not repeat helper text or an
+increase/unlimited status beneath the token name; the bold allowance row owns
+the exact state, while warning iconography and color establish urgency. When
+approval changes and asset deltas coexist, place one full-width subtle divider
+between the approval ledger and the Send/Receive groups.
+
 Native-gas Private Key, Seed Phrase, and Ledger confirmations place the
 editable address nonce immediately below Add to batch in that same Advanced
 disclosure. Use one compact label/value row with a small decimal field and

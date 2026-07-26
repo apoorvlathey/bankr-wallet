@@ -859,6 +859,26 @@ When adding a new routed page, update `apps/website/routing.config.json`, add th
 
 **Existing routed pages**: `os`, `stake`, `migrate`, `compare`, `mainnet`, `admin`, `test`.
 
+### Internal wallet test dapp
+
+`/test` is the noindex manual JSON-RPC harness. Its Approval Detection card
+keeps direct finite and zero-amount ERC-20 approvals, an
+`increaseAllowance(address,uint256)` request, an ERC-5792 batch with a buried
+unlimited approval, a Base-only ERC-5792 batch combining unlimited self-approval
+with a 1 USDC transfer to the fixed asset-change recipient, and the Ethereum
+`alphaUSDCDeltaV2.multicall(bytes[])` shape from the July 2026 drain together.
+Standalone `approve` cases verify
+that the editable Request details card replaces the duplicate simulation
+section; `increaseAllowance` verifies the final post-simulation allowance
+without receiving the standalone editor. Test approvals name the connected
+account as spender so an accidental confirmation does not delegate token
+authority to a third party. The hidden-multicall case is Ethereum-only; the
+other cases use the active chain's configured USDC.
+Immediately below the connection status, a sticky, horizontally scrollable
+section index links to every test card. Section anchors retain enough scroll
+margin to stay visible below that index, and smooth movement becomes immediate
+when the visitor prefers reduced motion.
+
 ### Privacy Pools Explorer
 
 `/privacy-pools-explorer` is an internal admin diagnostic linked only from the

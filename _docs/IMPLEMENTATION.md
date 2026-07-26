@@ -1829,7 +1829,16 @@ src/
 │   ├── simulation/        # Transaction simulation audit domain (see README.md)
 │   │   ├── types.ts       # Normalized asset-change and raw simulator shapes
 │   │   ├── constants.ts   # Shared gas caps and canonical infrastructure addresses
+│   │   ├── approvalTypes.ts # Permission-change transport schema
+│   │   ├── approvalAbis.ts # ERC-20/Permit2/nested-call decode and read ABIs
+│   │   ├── approvalAttachment.ts # Shared asset-result merge/revert policy
+│   │   ├── approvalIntents.ts # Bounded direct and recognized nested approval discovery
+│   │   ├── approvalLogs.ts # Successful eth_simulateV1 approval-event parser
+│   │   ├── approvalMetadata.ts # Token/spender display enrichment
+│   │   ├── approvalProjection.ts # Persistent allowance-increase policy
+│   │   ├── approvalSimulation.ts # Block-pinned two-pass approval verification
 │   │   ├── stateOverrides.ts # ERC-20/Permit2 retry override construction
+│   │   ├── ethSimulateClient.ts # Raw bounded block-pinned RPC runner
 │   │   ├── ethSimulateLogs.ts # Pure eth_simulateV1 transfer-log parser
 │   │   ├── client.ts      # Bounded RPC client cache
 │   │   ├── nativeCurrency.ts # Built-in/custom native metadata
@@ -1844,7 +1853,8 @@ src/
 │   │   ├── singleSimulation.ts # Single access-list/eth_call orchestration
 │   │   ├── batchSimulation.ts # Atomic batch simulation fallback
 │   │   ├── ethSimulateBatch.ts # Bounded eth_simulateV1 path
-│   │   └── nonAtomicBatch.ts # Dual-path merge precedence
+│   │   ├── nonAtomicBatch.ts # Dual-path merge precedence
+│   │   └── safeSimulation.ts # Safe-owned deltas plus exact-envelope verdict
 │   ├── forceInclusion/    # L1 deposit, nonce, receipt, and split recovery domain
 │   │   ├── single.ts      # Stable single-deposit export facade
 │   │   ├── l1Client.ts    # L1 chain/RPC selection and progress persistence
@@ -2735,6 +2745,55 @@ token-icon PNG with a bounded HEAD request before returning its URL. This
 fallback also feeds simulation rows, while NFT imagery stays on its separate
 metadata path. Cache writes are best-effort; stale token lists remain the
 offline fallback.
+
+### Estimated permission changes
+
+The transaction, ERC-5792 batch, cross-dapp batch, and Safe confirmation
+surfaces include ERC-20/ERC-2612 and Permit2 permission increases in
+`Estimated changes`. Permission rows render before Send/Receive deltas;
+unlimited allowances use danger styling, and bounded or unverified grants use
+warning styling. The projection is account-address based and runs before any
+signing path, so Bankr, private-key, seed-phrase, Ledger, and reject-only
+impersonator review surfaces share the same read-only behavior.
+One strict standalone ERC-20 `approve(address,uint256)` request, including
+`approve(spender, 0)`, omits the whole `Estimated changes` section because its
+editable approval card in Request details is the more complete single source
+of review truth. `increaseAllowance`, permits, opaque nested approvals,
+multicalls, batches, and Safe requests retain the simulation section because
+they do not use that standalone editable approval presentation.
+
+Permission discovery combines two bounded sources. Local decoding covers
+direct ERC-20 `approve`/allowance mutations, ERC-2612 `permit`, Permit2
+approve/permit/lockdown, self-delegatecall `multicall(bytes[])` contracts,
+canonical Multicall3, ERC-7821 execution batches, and Safe MultiSend CALL
+entries. Separately, the first `eth_simulateV1` execution
+collects ERC-20 and canonical Permit2 approval events from successful calls,
+which exposes approvals nested inside otherwise opaque protocol calldata.
+Events identify candidate owner/token/spender pairs; they are not treated as
+proof that an allowance remains.
+
+For every candidate pair, `approvalSimulation.ts` reads allowance at the
+pinned parent block and replays the exact reviewed call sequence at that same
+block with final allowance reads appended. A verified ERC-20 row is emitted
+only when the final allowance exceeds pre-state. A verified Permit2 row is
+emitted only when the effective live amount increases or the same live amount
+receives a later expiry. Consequently an approval fully spent, expired,
+reduced, or revoked later in the same batch is omitted. If `eth_simulateV1`,
+pre-state, final readback, or exact Safe envelope verification is unavailable,
+a nonzero locally/event-discovered grant remains visible only as
+`unverified`; the UI states that the remaining allowance could not be checked.
+An exact outer Safe revert suppresses all permission rows, while an unavailable
+outer pass downgrades underlying-call rows to unverified.
+
+Approval projection never uses the balance/allowance state overrides employed
+by asset-preview retry, never calls debug tracing or third-party simulation
+services, and never affects signing/submission. Candidate rows are capped at
+64; static recursion is capped at four levels and 128 calls; configured RPC
+request/response/deadline bounds still apply. Opaque calldata or malformed RPC
+events never produce a verified claim on their own; when the runtime event
+path or final readback is unavailable, affected nonzero grants remain
+unverified and detection is marked incomplete. ERC-7674 temporary approvals
+are outside the current scope.
 
 ### Gas Estimation
 
@@ -6513,7 +6572,11 @@ non-empty response to an unsupported ERC-7821 `execute` selector as proof that
 the underlying assets were visited. Before quorum, this Safe-address pass owns
 the estimated deltas. Once quorum exists, the same deltas are merged with an
 exact signed `execTransaction` simulation, whose outer-envelope result remains
-the authoritative revert verdict.
+the authoritative revert verdict. Underlying Safe calls also receive the
+shared persistent ERC-20/Permit2 approval projection. An exact outer revert
+clears those permission rows; if the exact envelope cannot be simulated, rows
+are retained only as unverified so the underlying-call approximation is never
+presented as final Safe state.
 
 Reject remains available beside the primary action through quorum. With no
 collected signature it terminalizes the unsigned request locally. Once any EOA

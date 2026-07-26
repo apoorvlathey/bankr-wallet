@@ -36,6 +36,8 @@ export async function buildSimulationResult(
       txSuccess: raw.txSuccess,
       nativeChange,
       tokenChanges: cachedTokenChanges,
+      approvalChanges: [],
+      approvalDetectionIncomplete: false,
       simulationFailed: false,
       metadataComplete:
         cachedTokenChanges.length === 0 && nativeChange === null,
@@ -85,6 +87,8 @@ export async function buildSimulationResult(
     txSuccess: raw.txSuccess,
     nativeChange,
     tokenChanges,
+    approvalChanges: [],
+    approvalDetectionIncomplete: false,
     simulationFailed: false,
     metadataComplete,
   };
