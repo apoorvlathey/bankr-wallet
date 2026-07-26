@@ -21,6 +21,7 @@ feature internals.
 | Area | File | Single responsibility | Effects |
 | --- | --- | --- | --- |
 | Resolution | `hooks/useClearSigningDescriptor.ts` | Wait for screen entry, resolve/verify/match a descriptor, decode and format fields, publish `onResolved` | Descriptor/cache reads through clear-signing libraries; no rendering |
+| Runtime token model | `model/runtimeTokenMetadata.ts` | Collect token references from nested formatted fields and accept only complete metadata for unit-aware intent interpolation | None |
 | Composition | `renderers/FieldRow.tsx` | Choose grouped, nested, empty, or ordinary field layout | None |
 | Value dispatch | `renderers/RenderedValueView.tsx` | Route each `RenderedValue` kind to its focused renderer | None directly |
 | Nested calls | `renderers/NestedCalldata.tsx` | Enforce the depth cap, recursively render matching inner calls, and show the raw fallback | Recursive descriptor resolution |
@@ -46,6 +47,8 @@ Keep rendering and resolution behavior neutral when splitting this domain:
 - `hideLoadingSkeleton` stays quiet while resolution is pending.
 - `hideHeader` lets a parent-owned action heading suppress only the duplicated
   intent/owner row while preserving every formatted field.
+- Interpolated intents and token-amount rows consume the same resolved ERC-20
+  symbol/decimals, with raw base units retained when metadata is unavailable.
 - nested calldata stops after `MAX_NESTED_DEPTH` and falls back to raw rows.
 - storage/runtime messages remain inside the focused effect-owning renderer or
   descriptor hook listed above.

@@ -77,6 +77,12 @@ export interface RenderInput {
     decimals?: number;
   };
   /**
+   * Complete runtime ERC-20 metadata keyed by chain and token address.
+   * Clear-signing intent interpolation uses the same metadata as amount rows
+   * so a heading cannot expose raw base units while the row shows token units.
+   */
+  tokenMetadata?: Record<string, TokenMetadataHint>;
+  /**
    * ERC-7730 envelope context referenced with `@` paths. For calldata this is
    * the containing transaction/call; for EIP-712 this is the signing envelope
    * with `to` set to the verifying contract.
@@ -164,6 +170,8 @@ function renderField(
       const childInput: RenderInput = {
         data: element,
         chainId: input.chainId,
+        nativeCurrency: input.nativeCurrency,
+        tokenMetadata: input.tokenMetadata,
         envelope: input.envelope,
       };
       return (field.fields || [])
@@ -443,7 +451,12 @@ function toRenderedValue(
         chainId: tokenChainId,
         thresholdRaw,
         thresholdMessage,
-        tokenMetadata: descriptorTokenMetadata(context.descriptor, localTokenAddr, input),
+        tokenMetadata: descriptorTokenMetadata(
+          context.descriptor,
+          localTokenAddr,
+          tokenChainId,
+          input,
+        ),
       };
     }
     case "amount": {
@@ -502,11 +515,17 @@ function toRenderedValue(
     case "tokenTicker".toLowerCase(): {
       const tokenAddress = normalizeAddress(String(raw));
       if (!tokenAddress) return { kind: "raw", text: stringifyValue(raw) };
+      const tokenChainId = resolveChainIdParam(params, input, itemIndex);
       return {
         kind: "tokenTicker",
         tokenAddress,
-        chainId: resolveChainIdParam(params, input, itemIndex),
-        tokenMetadata: descriptorTokenMetadata(context.descriptor, tokenAddress, input),
+        chainId: tokenChainId,
+        tokenMetadata: descriptorTokenMetadata(
+          context.descriptor,
+          tokenAddress,
+          tokenChainId,
+          input,
+        ),
       };
     }
     case "gweiname":
@@ -695,10 +714,22 @@ function interpolateIntent(
     .replace(/\}\}/g, close)
     .replace(/\{([^{}]+)\}/g, (_match, rawPath: string) => {
       const path = rawPath.trim();
-      const field = findFieldForIntentPath(format.fields || [], path, context) || {
+      const fieldMatch = findFieldForIntentPath(
+        format.fields || [],
         path,
-        format: "raw",
-      };
+        context,
+      );
+      const field = fieldMatch?.field || { path, format: "raw" };
+      const nestedData = fieldMatch?.parentPath
+        ? resolveInputPath(input, fieldMatch.parentPath)
+        : undefined;
+      const fieldInput =
+        nestedData === undefined
+          ? input
+          : {
+              ...input,
+              data: nestedData,
+            };
       const resolved =
         field.value !== undefined
           ? field.value
@@ -712,7 +743,7 @@ function interpolateIntent(
       const values = Array.isArray(resolved) ? resolved : [resolved];
       const rendered = values.map((value, index) =>
         renderedValueToIntentText(
-          toRenderedValue(field, value, input, context, index),
+          toRenderedValue(field, value, fieldInput, context, index),
           input.chainId,
         ),
       );
@@ -729,12 +760,12 @@ function findFieldForIntentPath(
   requestedPath: string,
   context: RenderContext,
   parentPath?: string,
-): Erc7730Field | null {
+): { field: Erc7730Field; parentPath?: string } | null {
   for (const rawField of fields) {
     const field = resolveFieldReference(rawField, context);
     const fullPath = field.path ? joinFieldPath(parentPath, field.path) : parentPath;
     if (field.path && pathsEquivalent(fullPath || field.path, requestedPath)) {
-      return field;
+      return { field, parentPath };
     }
     if (field.fields?.length) {
       const child = findFieldForIntentPath(
@@ -1140,8 +1171,15 @@ function resolveEnumMap(
 function descriptorTokenMetadata(
   descriptor: Erc7730Descriptor | undefined,
   tokenAddress: string | undefined,
+  chainId: number,
   input: RenderInput,
 ): TokenMetadataHint | undefined {
+  if (tokenAddress) {
+    const runtime =
+      input.tokenMetadata?.[runtimeTokenMetadataKey(chainId, tokenAddress)];
+    if (runtime) return runtime;
+  }
+
   const meta = descriptor?.metadata?.token;
   if (!meta?.ticker || meta.decimals === undefined) return undefined;
   const target = typeof input.envelope?.to === "string" ? input.envelope.to : undefined;
@@ -1152,6 +1190,13 @@ function descriptorTokenMetadata(
     symbol: meta.ticker,
     decimals: meta.decimals,
   };
+}
+
+export function runtimeTokenMetadataKey(
+  chainId: number,
+  tokenAddress: string,
+): string {
+  return `${chainId}:${tokenAddress.toLowerCase()}`;
 }
 
 function parseInteroperableAddress(value: string): { address?: string } | null {

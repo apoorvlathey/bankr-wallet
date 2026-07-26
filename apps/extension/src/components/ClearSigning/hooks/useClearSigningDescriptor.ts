@@ -7,6 +7,7 @@ import {
   applyFormat,
   formatRuntimeGuardsPass,
   resolveIntentText,
+  runtimeTokenMetadataKey,
 } from "@/lib/clearSigning/applyFormat";
 import { getBuiltinCalldataDescriptor } from "@/lib/clearSigning/builtinDescriptors";
 import { decodeCalldataForDescriptor } from "@/lib/clearSigning/decodeForDescriptor";
@@ -18,8 +19,13 @@ import {
 } from "@/lib/clearSigning/matchDescriptor";
 import { resolveDescriptor } from "@/lib/clearSigning/resolver";
 import type { Erc7730Descriptor } from "@/lib/clearSigning/types";
+import { resolveTokenMetadataClient } from "@/lib/tokenMetadataClient";
 import { useScreenEntered } from "@/components/ScreenTransition";
 
+import {
+  collectRuntimeTokenReferences,
+  toRuntimeTokenMetadataHint,
+} from "../model/runtimeTokenMetadata";
 import type { ClearSigningViewProps, MatchedState } from "../types";
 
 /**
@@ -204,16 +210,47 @@ export function useClearSigningDescriptor(props: ClearSigningViewProps): {
         onResolvedRef.current?.(false);
         return;
       }
-      const fields = applyFormat(matched.format, renderInput, descriptor);
-      if (fields.length === 0) {
+      const initialFields = applyFormat(matched.format, renderInput, descriptor);
+      if (initialFields.length === 0) {
         console.log(`${tag} ✗ applyFormat produced 0 fields`);
         setLoading(false);
         onResolvedRef.current?.(false);
         return;
       }
+      const tokenReferences = collectRuntimeTokenReferences(
+        initialFields,
+        chainId,
+      );
+      const metadataEntries = await Promise.all(
+        tokenReferences.map(async ({ chainId: tokenChainId, tokenAddress }) => {
+          const metadata = toRuntimeTokenMetadataHint(
+            await resolveTokenMetadataClient(tokenChainId, tokenAddress),
+          );
+          return [
+            runtimeTokenMetadataKey(tokenChainId, tokenAddress),
+            metadata,
+          ] as const;
+        }),
+      );
+      if (cancelled) return;
+      const tokenMetadata = Object.fromEntries(
+        metadataEntries.filter(
+          (entry): entry is readonly [string, NonNullable<(typeof entry)[1]>] =>
+            entry[1] !== null,
+        ),
+      );
+      const enrichedInput = {
+        ...renderInput,
+        tokenMetadata,
+      };
+      const fields = applyFormat(matched.format, enrichedInput, descriptor);
       console.log(`${tag} ✓ rendering ${fields.length} field(s)`);
 
-      const intent = resolveIntentText(matched.format, renderInput, descriptor);
+      const intent = resolveIntentText(
+        matched.format,
+        enrichedInput,
+        descriptor,
+      );
       setState({
         descriptor,
         fields,

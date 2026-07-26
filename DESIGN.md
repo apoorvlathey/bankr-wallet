@@ -242,6 +242,12 @@
 
 ## Slop audit
 
+- 2026-07-27 Permit2 clear-signing audit: action headings now share the
+  token symbol and decimals resolved for their amount row, so the primary
+  summary reads `Transfer 1 USDC` instead of leaking `1000000` base units.
+  Unknown-token requests retain the exact raw amount rather than guessing.
+  This improves financial hierarchy without adding visual chrome. Result: pass.
+
 - 2026-07-26 phishing-warning attribution audit: changed the user-facing
   blocklist sentence from an implementation-source attribution to WalletChan's
   product voice. The warning remains direct, preserves the risk consequence,
