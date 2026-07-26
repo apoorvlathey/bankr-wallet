@@ -13,7 +13,6 @@ import {
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
-
 import { isDarkThemeId, useTheme } from "@/theme";
 import {
   closeSidePanelForWindow,
@@ -116,6 +115,7 @@ import {
 import AppBootstrapTransition from "@/app/AppBootstrapTransition";
 import { useRuntimeMessaging } from "@/app/hooks/useRuntimeMessaging";
 import { useManualWalletLock } from "@/app/hooks/useManualWalletLock";
+import { useActiveSafeChainIds } from "@/app/hooks/useActiveSafeChainIds";
 import ManualWalletLockScreen from "@/app/screens/ManualWalletLockScreen";
 import {
   loadInitialApprovalRequests,
@@ -240,6 +240,7 @@ function App() {
   const isWalletUnlockedRef = useRef(isWalletUnlocked);
   const selectedChain = getResolvedChainByName(chainName, networksInfo);
   const visibleChains = getVisibleChains(networksInfo, activeAccount?.type);
+  const activeSafeChainIds = useActiveSafeChainIds(activeAccount);
 
   const openAccountSettingsView = (account: Account, returnTarget: "home" | "settingsAccounts") => { setAccountSettingsReturnTarget(returnTarget); setAccountSettingsInitialView("settings"); setAccountSettingsApiKeyDraft(null); setSettingsAccount(account); setView("accountSettings"); };
 
@@ -2476,8 +2477,9 @@ function App() {
             <TokenTransfer
               token={transferToken}
               fromAddress={address}
-              chainId={selectedChain?.chainId || 8453}
+              chainId={activeSafeChainIds?.values().next().value ?? selectedChain?.chainId ?? 8453}
               accountType={activeAccount?.type || "bankr"}
+              selectableChainIds={activeSafeChainIds ?? undefined}
               accounts={accounts}
               onBack={() => {
                 setTransferToken(null);
@@ -2506,7 +2508,8 @@ function App() {
               fromAddress={address}
               accountId={activeAccount?.id}
               accountType={activeAccount?.type || "bankr"}
-              chainId={selectedChain?.chainId || 8453}
+              selectableChainIds={activeSafeChainIds ?? undefined}
+              chainId={activeSafeChainIds?.values().next().value ?? selectedChain?.chainId ?? 8453}
               chainName={chainName || "Base"}
               onBack={() => {
                 setSwapInitialBuyToken(undefined);
@@ -2648,7 +2651,7 @@ function App() {
               accounts={accounts}
               activeAccount={activeAccount}
               selectedChain={walletConnectSelectedChain}
-              visibleChains={visibleChains}
+              visibleChains={visibleChains} selectableChainIds={activeSafeChainIds ?? undefined}
               onBack={() => setView("more")}
               onAccountSelect={handleAccountSwitch}
               onAddAccount={() => setView("addAccount")}
@@ -3513,10 +3516,8 @@ function App() {
                     />
                   ) : activeAccount?.type === "safe" ? (
                     <SafeHomeQuickActions
-                      accountId={activeAccount.id}
-                      chainId={selectedChain?.chainId ?? 8453}
                       hasConnectedApps={walletConnectSessionCount > 0}
-                      onSend={() => { setTransferToken(resolveSendEntryToken(null, networksInfo)); setView("transfer"); }}
+                      onSend={() => { setTransferToken(null); setView("transfer"); }}
                       onSwap={() => { setSwapInitialBuyToken(undefined); setSwapInitialSellToken(undefined); setView("swap"); }}
                       onMore={() => setView("more")}
                     />
@@ -3599,6 +3600,7 @@ function App() {
             context={activeDappContext}
             selectedChain={selectedChain}
             visibleChains={visibleChains}
+            selectableChainIds={activeSafeChainIds ?? undefined}
             chainBalances={homeChainBalances}
             hideBalances={homeChainBalancesHidden}
             onChainSelect={handleHomepageChainSelect}

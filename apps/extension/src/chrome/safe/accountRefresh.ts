@@ -5,11 +5,13 @@ import {
   importVerifiedSafeAccount,
 } from "./accountRepository";
 import { withDerivedSafeCapability } from "./capabilities";
+import { discoverNewSafeDeployments } from "./discovery";
 import { verifySafeOnchainState } from "./onchainState";
 import { reconcileSafeProposalNonceQueue } from "./proposalNonceReconciliation";
 import type { SafeAccountRecord, SafeChainSnapshot } from "./types";
 
 type RefreshDependencies = {
+  discoverNewSafeDeployments: typeof discoverNewSafeDeployments;
   getAccounts: typeof getAccounts;
   getSafeAccountRecord: typeof getSafeAccountRecord;
   importVerifiedSafeAccount: typeof importVerifiedSafeAccount;
@@ -18,12 +20,20 @@ type RefreshDependencies = {
 };
 
 const production: RefreshDependencies = {
+  discoverNewSafeDeployments,
   getAccounts,
   getSafeAccountRecord,
   importVerifiedSafeAccount,
   verifySafeOnchainState,
   reconcileSafeProposalNonceQueue,
 };
+
+export interface SafeAccountRefreshResult {
+  record: SafeAccountRecord;
+  newChainIds: number[];
+  discoveryFailureCount: number;
+  discoveryError?: string;
+}
 
 function parseAccountId(value: unknown): string {
   if (typeof value !== "string" || value.length < 1 || value.length > 512) {
@@ -48,7 +58,7 @@ function parseOptionalChainId(value: unknown): number | undefined {
 export async function refreshSafeAccountState(
   input: { accountId: unknown; chainId?: unknown },
   overrides: Partial<RefreshDependencies> = {},
-): Promise<SafeAccountRecord> {
+): Promise<SafeAccountRefreshResult> {
   const dependencies = { ...production, ...overrides };
   const accountId = parseAccountId(input.accountId);
   const chainId = parseOptionalChainId(input.chainId);
@@ -65,19 +75,39 @@ export async function refreshSafeAccountState(
   }
 
   const accounts: Account[] = await dependencies.getAccounts();
-  const snapshots = await Promise.all(targets.map(async (snapshot) =>
-    withDerivedSafeCapability(await dependencies.verifySafeOnchainState({
-      chainId: snapshot.chainId,
-      safeAddress: record.address,
-      transactionService: snapshot.transactionService,
-    }), accounts),
-  ));
+  const knownChainIds = Object.values(record.chains).map((snapshot) => snapshot.chainId);
+  const discoveryPromise = chainId === undefined
+    ? dependencies.discoverNewSafeDeployments({
+        address: record.address,
+        knownChainIds,
+      }).then(
+        (result) => ({ result }),
+        (error) => ({
+          error: error instanceof Error ? error.message : "Safe network discovery failed",
+        }),
+      )
+    : Promise.resolve(null);
+  const [snapshots, discovery] = await Promise.all([
+    Promise.all(targets.map(async (snapshot) =>
+      withDerivedSafeCapability(await dependencies.verifySafeOnchainState({
+        chainId: snapshot.chainId,
+        safeAddress: record.address,
+        transactionService: snapshot.transactionService,
+      }), accounts),
+    )),
+    discoveryPromise,
+  ]);
+  const discoveredSnapshots = discovery && "result" in discovery
+    ? discovery.result.snapshots.map((snapshot) =>
+        withDerivedSafeCapability(snapshot, accounts))
+    : [];
+  const allSnapshots = [...snapshots, ...discoveredSnapshots];
   const refreshed = await dependencies.importVerifiedSafeAccount({
     address: record.address,
     importedBy: record.importedBy,
-    snapshots,
+    snapshots: allSnapshots,
   });
-  await Promise.all(snapshots.map((snapshot) =>
+  await Promise.all(allSnapshots.map((snapshot) =>
     dependencies.reconcileSafeProposalNonceQueue({
       safeAccountId: record.accountId,
       chainId: snapshot.chainId,
@@ -85,5 +115,12 @@ export async function refreshSafeAccountState(
       threshold: snapshot.threshold,
     }),
   ));
-  return refreshed.record;
+  return {
+    record: refreshed.record,
+    newChainIds: discoveredSnapshots.map((snapshot) => snapshot.chainId),
+    discoveryFailureCount:
+      discovery && "result" in discovery ? discovery.result.failures.length : 0,
+    discoveryError:
+      discovery && "error" in discovery ? discovery.error : undefined,
+  };
 }

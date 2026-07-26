@@ -166,24 +166,30 @@ export function NetworkSelectorScreen({
           )}
           {filteredNetworks.map((network) => {
             const isSelected = network.chainId === selectedChainId;
+            const isSelectable = network.isSelectable !== false;
             return (
               <ListItem
                 key={network.chainId}
                 interactive
+                isDisabled={!isSelectable}
                 isSelected={isSelected}
                 aria-pressed={isSelected}
-                onClick={() => onSelect(network.chainId)}
+                onClick={() => {
+                  if (isSelectable) onSelect(network.chainId);
+                }}
               >
                 <ListItemMedia>
                   <NetworkLogo network={network} />
                 </ListItemMedia>
                 <ListItemContent>
                   <ListItemTitle>{network.name}</ListItemTitle>
-                  {network.nativeSymbol && (
+                  {!isSelectable ? (
+                    <ListItemDescription>Safe not deployed</ListItemDescription>
+                  ) : network.nativeSymbol ? (
                     <ListItemDescription>
                       Native token · {network.nativeSymbol}
                     </ListItemDescription>
-                  )}
+                  ) : null}
                 </ListItemContent>
                 {(network.balanceUsd ?? 0) > 0 && (
                   <ListItemMeta>

@@ -406,7 +406,7 @@ immediate.
 | Chat | `submitChatPrompt`, `getChatConversations`, `getChatConversation`, `createChatConversation`, `deleteChatConversation`, `addChatMessage`, `updateChatMessage` | Chat prompt submission uses the user's Bankr credentials/session and chat history is local user data. |
 | Settings/cache | `setArcBrowser`, `getSidePanelMode`, `setSidePanelMode`, `getClearSigningEnabled`, `setClearSigningEnabled`, `INVALIDATE_CLEAR_SIGNING_CACHE` | These are extension UI preferences/cache controls, not dapp APIs. |
 | Network settings | `ensureNetworksInfo`, `addNetwork`, `updateNetwork`, `setNetworkHidden`, `deleteNetwork`, `confirmAddChain` | Mutate provider-visible `networksInfo` / `chainName` and local saved-RPC history; keep service-worker-owned so webpages cannot alter RPC metadata or clobber user-added chains. |
-| Safe discovery/import and request refresh | `probeSafeAddress`, `findSafesByOwner`, `importSafeAccount`, `getSafeAccounts`, `refreshSafeAccount`, `getSafeProposals`, `syncSafeRequests` | Safe authority snapshots and proposal records remain background-owned. Discovery/probing returns opaque, unguessable, 30-minute in-memory verification receipt IDs; import must bind those receipts to the exact address and requested chains. Review refresh accepts one current Safe account ID plus an optional previously imported chain ID and re-verifies the stored address directly through the configured RPC; it never trusts renderer-supplied authority or requires Transaction Service discovery. Expired, missing, mismatched, worker-lost, non-Safe account IDs, and unimported chain IDs fail closed. |
+| Safe discovery/import and request refresh | `probeSafeAddress`, `findSafesByOwner`, `importSafeAccount`, `getSafeAccounts`, `refreshSafeAccount`, `getSafeProposals`, `syncSafeRequests` | Safe authority snapshots and proposal records remain background-owned. Discovery/probing returns opaque, unguessable, 30-minute in-memory verification receipt IDs; import must bind those receipts to the exact address and requested chains. Review refresh accepts one current Safe account ID plus an optional previously imported chain ID and re-verifies the stored address directly through the configured RPC. Omitting the chain ID also checks only missing visible Safe-supported networks through the Transaction Service, but every hit requires exact onchain verification before merge and service failure cannot downgrade known snapshots. Expired, missing, mismatched, worker-lost, non-Safe account IDs, and unimported exact chain IDs fail closed. |
 
 `getActiveAccount` is the narrow exception: `inject.ts` uses it during content
 script initialization to correct stale synced address state before emitting
@@ -2369,7 +2369,14 @@ Quick reference for which files to examine based on what area of security you're
    re-verifies that address through the configured RPC. It does not repeat
    Transaction Service discovery, broaden owner discovery, or disclose a local
    owner address. Safe security may omit the chain ID to re-verify every
-   previously imported snapshot.
+   previously imported snapshot while concurrently checking only missing
+   visible Safe-supported networks through the Transaction Service. Newly
+   found addresses still require exact onchain verification before their
+   chain-keyed snapshot is merged; discovery errors cannot downgrade or fail
+   successful known-chain RPC verification. The connected-dapp dock treats
+   this verified snapshot map as presentation eligibility: all visible chains
+   remain listed, while unverified chain IDs are disabled rather than being
+   offered as a provider switch.
 
 5. **One pinned owner per authorization.** Each approval chooses one current
    Bankr/private-key/seed/Ledger record and repeats live authority checks

@@ -21,9 +21,7 @@ import { useSwapQuotes } from "./useSwapQuotes";
 import { useSwapSlippage } from "./useSwapSlippage";
 import { getSwapSubmissionKind } from "./swapSubmissionModel";
 function SwapView({
-  fromAddress,
-  accountId,
-  accountType,
+  fromAddress, accountId, accountType, selectableChainIds,
   chainId: initialChainId,
   chainName: initialChainName,
   onBack,
@@ -64,13 +62,13 @@ function SwapView({
   useEffect(() => {
     if (autoSelectedSellRef.current || initialSellToken || sellToken ||
       holdingsAllChains.length === 0) return;
-    const cachedTopToken = pickDefaultSwapSellToken(holdingsAllChains);
+    const cachedTopToken = pickDefaultSwapSellToken(holdingsAllChains, undefined, selectableChainIds);
     if (!cachedTopToken) return;
     autoSelectedSellRef.current = true;
     setSellChainId(cachedTopToken.chainId);
     setBuyChainId(cachedTopToken.chainId);
     setSellToken(cachedTopToken);
-  }, [holdingsAllChains, initialSellToken, sellToken, setSellToken]);
+  }, [holdingsAllChains, initialSellToken, selectableChainIds, sellToken, setSellToken]);
   const amount = useSwapAmount(sellToken);
   const buyToken = useBuyTokenData({
     buyChainId,
@@ -194,6 +192,7 @@ function SwapView({
       !insufficientBalance &&
       (isBridge ? bridgeRoute : quotes.quote) &&
       !quotes.quoteLoading &&
+      (!selectableChainIds || (selectableChainIds.has(sellChainId) && selectableChainIds.has(buyChainId))) &&
       submissionKind !== "unsupported",
   );
   const prepared = usePreparedSwap({
@@ -317,6 +316,7 @@ function SwapView({
         onSelectChain={handlePickerChainSelect}
         fromAddress={fromAddress}
         holdingsAllChains={holdingsAllChains}
+        selectableChainIds={selectableChainIds}
       />
     );
   }

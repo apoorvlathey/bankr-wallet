@@ -198,11 +198,12 @@ export function createBackgroundSafeAccountMessageRouter(
       case "refreshSafeAccount":
         requireSafeFeature("security");
         respond((async () => {
-          const record = await dependencies.refreshSafeAccountState({
+          const result = await dependencies.refreshSafeAccountState({
             accountId: message.accountId,
             chainId: message.chainId,
           });
-          return { success: true, record };
+          void dependencies.sendRuntimeMessage({ type: "safeAccountsUpdated" }).catch(() => {});
+          return { success: true, ...result };
         })(), sendResponse);
         return { handled: true, keepChannelOpen: true };
       case "removeSafeAccount":

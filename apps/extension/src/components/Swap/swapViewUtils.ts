@@ -22,11 +22,13 @@ export function formatQuoteSummaryAmount(amount: string): string {
 export function pickDefaultSwapSellToken(
   tokens: readonly PortfolioToken[],
   chainId?: number,
+  selectableChainIds?: ReadonlySet<number>,
 ): PortfolioToken | null {
   const funded = tokens.filter(
     (token) =>
       SWAP_SUPPORTED_CHAIN_IDS.has(token.chainId) &&
       (chainId === undefined || token.chainId === chainId) &&
+      (!selectableChainIds || selectableChainIds.has(token.chainId)) &&
       (token.valueUsd > 0 || parseFloat(token.balance || "0") > 0),
   );
   if (funded.length === 0) return null;

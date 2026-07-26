@@ -17,7 +17,8 @@ existing direct and lazy imports retain the same default-export contract.
 - `TransferNotices.tsx` renders sponsorship eligibility/status and view-only
   notices.
 - `NetworkPicker.tsx` adapts Send's catalog balances and selection callback to
-  the shared `NetworkSelector`. The token picker's compact network pill opens
+  the shared `NetworkSelector`. For a Safe account it keeps undeployed networks
+  visible but disabled and ranks verified deployments first. The token picker's compact network pill opens
   that same searchable selector as a nested screen; choosing a network updates
   Send and returns directly to token discovery. `RecipientPicker.tsx` owns recipient-only
   search/rendering. Wallet rows use the canonical `AccountAvatar`, with Safe

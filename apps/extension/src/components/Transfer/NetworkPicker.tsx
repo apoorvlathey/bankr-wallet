@@ -7,6 +7,7 @@ interface NetworkPickerProps {
   getNativeSymbol: (chainId: number) => string | undefined;
   chainBalances: ReadonlyMap<number, number>;
   fundedChainIds: ReadonlySet<number>;
+  selectableChainIds?: ReadonlySet<number>;
   onSelect: (chainId: number) => void;
   onBack: () => void;
 }
@@ -18,6 +19,7 @@ export function NetworkPicker({
   getNativeSymbol,
   chainBalances,
   fundedChainIds,
+  selectableChainIds,
   onSelect,
   onBack,
 }: NetworkPickerProps) {
@@ -30,6 +32,7 @@ export function NetworkPicker({
         nativeSymbol: getNativeSymbol(chainId),
         balanceUsd: chainBalances.get(chainId) ?? 0,
         isFunded: fundedChainIds.has(chainId),
+        isSelectable: !selectableChainIds || selectableChainIds.has(chainId),
       }))}
       selectedChainId={selectedChainId}
       onSelect={(chainId) => {

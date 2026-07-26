@@ -32,6 +32,7 @@ function TokenTransfer({
   chainId,
   accountType,
   accounts = [],
+  selectableChainIds,
   onBack,
   onTransferInitiated,
 }: TokenTransferProps) {
@@ -88,6 +89,8 @@ function TokenTransfer({
         nativeSymbol: getNativeSymbol(candidateChainId),
         balanceUsd: catalog.chainBalances.get(candidateChainId) ?? 0,
         isFunded: catalog.fundedChainIds.has(candidateChainId),
+        isSelectable:
+          !selectableChainIds || selectableChainIds.has(candidateChainId),
       })),
     [
       allChains,
@@ -95,6 +98,7 @@ function TokenTransfer({
       catalog.fundedChainIds,
       getChainName,
       getNativeSymbol,
+      selectableChainIds,
     ],
   );
   const chainEnvironmentLabel = getChainEnvironmentLabel(
@@ -137,6 +141,8 @@ function TokenTransfer({
         recipientState.acknowledgeContract);
   const canSubmit = Boolean(
     catalog.selectedToken &&
+      (!selectableChainIds ||
+        selectableChainIds.has(catalog.selectedChainId)) &&
       recipientGatesPass &&
       preparation.isAmountValid() &&
       !isBusy &&
@@ -183,6 +189,7 @@ function TokenTransfer({
         getNativeSymbol={getNativeSymbol}
         chainBalances={catalog.chainBalances}
         fundedChainIds={catalog.fundedChainIds}
+        selectableChainIds={selectableChainIds}
         onSelect={handleChainChange}
         onBack={() => setIsNetworkPickerOpen(false)}
       />

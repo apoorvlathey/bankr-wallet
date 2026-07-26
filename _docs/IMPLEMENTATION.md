@@ -6481,10 +6481,31 @@ missing, or stale IDs fail before network access. Direct Safe-address import is
 a separate Safe-service preflight followed by exact onchain verification and
 discloses no local owner address.
 
+Safe account settings exposes **Refresh Safe details**. With no exact chain
+requested, the background starts two independent paths concurrently: configured
+RPC verification for every already imported snapshot, and Safe Transaction
+Service discovery across only the remaining visible Safe-supported networks.
+A Transaction Service hit is never persisted by itself; the candidate must pass
+the same exact onchain proxy, singleton, version, owner, threshold, module,
+guard, and fallback verification before its chain-keyed snapshot is merged into
+the existing address account. Service discovery errors are returned as bounded
+partial-status metadata and do not fail or downgrade a successful known-chain
+RPC refresh. Exact-chain proposal review retains its narrower direct-RPC-only
+behavior and never broadens into discovery.
+Account settings keeps the complete authority card visible when the Safe has one
+verified deployment. With multiple deployments it instead shows one compact,
+collapsed network row per chain; the accessible one-at-a-time accordion reveals
+nonce, Safe Wallet link, owners, singleton, threshold, service status, and
+security-extension details only for the selected chain.
+
 On the homepage, Safe accounts reuse the same `HomeQuickActions` component as
 Bankr, private-key, and seed-phrase accounts so Send, Swap, Shield, and More
 retain identical order, icon geometry, sound, focus, and hover behavior. Safe
-chain capability gates Send and Swap; Shield stays visible but disabled. No
+Send and Swap always remain enterable because wallet-initiated actions do not
+inherit a global/dapp chain. Their shared network browsers keep every visible
+network searchable, rank verified Safe deployments first, and disable
+undeployed rows with a **Safe not deployed** label; final review also rejects a
+stale unsupported selection. Shield stays visible but disabled. No
 Safe-only action row is added. Pending proposals surface through one compact approval banner whose
 View action opens the approvals inbox; Safe security remains in account
 settings. The banner and Chrome action badge share `safe/proposalStatus.ts`:
@@ -6493,6 +6514,16 @@ executed, cancelled, replaced, failed, and hidden records do not. Activity
 normalizes Safe service JSON origin metadata before display,
 bounds each proposal row, and hides the transaction empty state whenever Safe
 proposal activity is present.
+When a Safe is connected to the active dapp, the bottom dock's network drawer
+continues to show every visible network but enables selection only for chain IDs
+present in that Safe's verified snapshot map. Other rows remain searchable and
+are labeled **Safe not deployed**. The renderer reloads this public chain set
+after a Safe network refresh; ordinary account types retain the unrestricted
+drawer. Selectable Safe deployments are ranked above unsupported rows before
+the existing funded-value and Ethereum ordering is applied. The WalletConnect
+screen's network chooser uses the same verified chain set and ordering: every
+visible network remains listed, undeployed rows are disabled and labeled, and
+only verified Safe deployments can change WalletConnect's active chain.
 
 The approval inbox is presented as **Safe Requests**. Its header uses the
 official Safe mark, and its account block directly reuses

@@ -26,6 +26,9 @@ Send and Swap/Bridge token discovery share the compact `on <network> v`
 network button. It opens the shared searchable network selector as a nested
 screen; selection updates the owning Send, sell, or receive chain and returns
 to the refreshed token list without committing a token choice.
+For Safe accounts, both sell and receive browsers keep undeployed networks
+visible but disabled, rank verified deployments first, and constrain the
+generic cached-token default to that verified set.
 
 The compact wallet form gives each amount field a full row, keeps its fiat
 conversion inside that field, and separates network and token into compact

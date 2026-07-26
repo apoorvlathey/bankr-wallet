@@ -187,7 +187,7 @@ test("Swap initializes a generic entry from the cached top portfolio token", asy
   assert.match(data, /selectPortfolioTokensForInteraction\(/u);
   assert.match(data, /setHoldingsAllChains\(interactiveTokens\)/u);
   assert.match(data, /enrich: false/u);
-  assert.match(view, /pickDefaultSwapSellToken\(holdingsAllChains\)/u);
+  assert.match(view, /pickDefaultSwapSellToken\([\s\S]*?holdingsAllChains,[\s\S]*?selectableChainIds/u);
   assert.match(view, /setSellChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /setBuyChainId\(cachedTopToken\.chainId\)/u);
   assert.match(view, /resolveInitialSwapChainId\(initialChainId, initialSellToken\)/u);

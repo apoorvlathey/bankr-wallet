@@ -38,7 +38,11 @@ test("homepage and asset-row actions use their distinct Send entries", async () 
 
   assert.match(
     app,
-    /onSend=\{\(\) => \{\s*setTransferToken\(resolveSendEntryToken\(null, networksInfo\)\)/u,
+    /activeAccount\?\.type !== "safe"[\s\S]{0,500}?onSend=\{\(\) => \{\s*setTransferToken\(resolveSendEntryToken\(null, networksInfo\)\)/u,
+  );
+  assert.match(
+    app,
+    /<SafeHomeQuickActions[\s\S]{0,300}?onSend=\{\(\) => \{\s*setTransferToken\(null\)/u,
   );
   assert.match(
     app,

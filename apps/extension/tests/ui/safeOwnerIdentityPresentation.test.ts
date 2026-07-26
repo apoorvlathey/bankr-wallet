@@ -28,6 +28,20 @@ test("Safe owner lists reuse the shared interactive address pill", async () => {
   assert.match(addressPill, /AddressContactEditorModal/u);
 });
 
+test("multi-chain Safe settings collapse network details while one chain stays expanded", async () => {
+  const [screen, section] = await Promise.all([
+    readFile(new URL("../../src/components/SafeAccount/SafeSecurityScreen.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/components/SafeAccount/SafeChainSettingsSection.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(screen, /snapshots\.length === 1[\s\S]*?<SafeChainSettingsSection/u);
+  assert.match(screen, /snapshots\.length > 1[\s\S]*?<SafeChainSettingsAccordion/u);
+  assert.match(section, /<Accordion allowToggle/u);
+  assert.match(section, /title="Safe networks"/u);
+  assert.match(section, /<AccordionButton/u);
+  assert.match(section, /<AccordionPanel/u);
+});
+
 test("owner discovery labels imported Safes without disabling their review row", async () => {
   const [entryScreen, discoveredRow, verificationCard, capabilityBadge] = await Promise.all([
     readFile(new URL("../../src/components/SafeAccount/SafeEntryScreen.tsx", import.meta.url), "utf8"),

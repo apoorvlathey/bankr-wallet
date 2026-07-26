@@ -15,6 +15,7 @@ export interface TokenTransferProps {
   chainId: number;
   accountType: TransferAccountType;
   accounts?: Account[];
+  selectableChainIds?: ReadonlySet<number>;
   onBack: () => void;
   onTransferInitiated: (sponsored?: boolean) => void;
 }

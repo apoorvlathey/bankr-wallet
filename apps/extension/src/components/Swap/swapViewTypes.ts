@@ -105,6 +105,7 @@ export interface SwapViewProps {
   /** Active account ID used to resolve EIP-7702 support for local accounts. */
   accountId?: string;
   accountType: SwapAccountType;
+  selectableChainIds?: ReadonlySet<number>;
   chainId: number;
   chainName: string;
   onBack: () => void;

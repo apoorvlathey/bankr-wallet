@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  discoverNewSafeDeployments,
   findSafesOwnedByAccount,
   findSafesOwnedByAccountBatch,
   getSafeEligibleChains,
@@ -79,6 +80,34 @@ test("the reported Base Sepolia Safe reaches onchain verification with canonical
   }]);
   assert.equal(result.snapshots[0]?.chainId, 84532);
   assert.deepEqual(result.failures, []);
+});
+
+test("refresh discovery checks only networks not already attached to the Safe", async () => {
+  const infoCalls: number[] = [];
+  const result = await discoverNewSafeDeployments({
+    address: safe.toLowerCase() as `0x${string}`,
+    knownChainIds: [1],
+  }, async () => baseSepoliaSnapshot(), {
+    info: async (chainId) => {
+      infoCalls.push(chainId);
+      return {};
+    },
+    getServices: async () => [
+      {
+        chainId: 1,
+        chainName: "Ethereum",
+        shortName: "eth",
+        transactionService: "https://api.safe.global/tx-service/eth",
+        isTestnet: false,
+      },
+      baseSepoliaService,
+    ],
+    getNetworksInfo: baseSepoliaNetworks,
+  });
+
+  assert.deepEqual(infoCalls, [84532]);
+  assert.deepEqual(result.scannedChainIds, [84532]);
+  assert.deepEqual(result.snapshots.map((item) => item.chainId), [84532]);
 });
 
 test("owner discovery preserves the Base Sepolia RPC through verification", async () => {

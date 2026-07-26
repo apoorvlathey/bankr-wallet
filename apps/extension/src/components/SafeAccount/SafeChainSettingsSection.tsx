@@ -1,5 +1,10 @@
 import { ExternalLinkIcon } from "@chakra-ui/icons";
 import {
+  Accordion,
+  AccordionButton,
+  AccordionIcon,
+  AccordionItem,
+  AccordionPanel,
   Badge,
   Box,
   HStack,
@@ -18,6 +23,12 @@ import { LabeledAddressPopover } from "@/components/shared/LabeledAddressPopover
 import { ScreenSection } from "@/components/ui";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+interface SafeChainDescriptor {
+  chainId: number;
+  name: string;
+  explorer: string;
+}
 
 function configurationLabel(address: string): string {
   return address.toLowerCase() === ZERO_ADDRESS ? "None" : "Configured";
@@ -59,51 +70,20 @@ function AddressActionRow({
   );
 }
 
-export function SafeChainSettingsSection({
+function SafeChainDetails({
   snapshot,
   chain,
-  safeAddress,
   accounts,
 }: {
   snapshot: SafeChainSnapshot;
-  chain?: { name: string; explorer: string };
-  safeAddress: string;
+  chain?: SafeChainDescriptor;
   accounts: Account[];
 }) {
-  const chainName = chain?.name || `Chain ${snapshot.chainId}`;
   const explorerAddressUrl = chain ? `${chain.explorer}/address` : undefined;
 
   return (
-    <ScreenSection title={chainName}>
-      <Box
-        bg="surface.raised"
-        border="1px solid"
-        borderColor="border.default"
-        borderRadius="lg"
-        overflow="hidden"
-      >
-        <HStack px={4} py={3} spacing={3} borderBottom="1px solid" borderColor="border.subtle">
-          <ChainIcon chainId={snapshot.chainId} chainName={chainName} size="32px" withChip />
-          <Box flex={1} minW={0}>
-            <Text fontSize="sm" fontWeight="600">Safe {snapshot.version}</Text>
-            <Text color="fg.secondary" fontSize="xs" sx={{ fontVariantNumeric: "tabular-nums" }}>
-              Nonce {snapshot.nonce}
-            </Text>
-          </Box>
-          <IconButton
-            as="a"
-            href={`https://app.safe.global/home?safe=${snapshot.chainId}:${safeAddress}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open ${chainName} Safe in Safe Wallet`}
-            icon={<ExternalLinkIcon />}
-            size="sm"
-            variant="ghost"
-            color="accent.secondary"
-          />
-        </HStack>
-
-        <SimpleGrid columns={2} spacing={0} borderBottom="1px solid" borderColor="border.subtle">
+    <>
+      <SimpleGrid columns={2} spacing={0} borderBottom="1px solid" borderColor="border.subtle">
           <Box px={4} py={3} borderRight="1px solid" borderColor="border.subtle">
             <Text color="fg.muted" fontSize="xs">Approval threshold</Text>
             <Text mt={0.5} fontSize="sm" fontWeight="600">
@@ -116,9 +96,9 @@ export function SafeChainSettingsSection({
               {snapshot.transactionService}
             </Text>
           </Box>
-        </SimpleGrid>
+      </SimpleGrid>
 
-        <Box px={4} py={3} borderBottom="1px solid" borderColor="border.subtle">
+      <Box px={4} py={3} borderBottom="1px solid" borderColor="border.subtle">
           <Text color="fg.muted" fontSize="xs" mb={2}>Owners</Text>
           <VStack align="stretch" spacing={3}>
             {snapshot.owners.map((owner) => {
@@ -142,18 +122,18 @@ export function SafeChainSettingsSection({
               );
             })}
           </VStack>
-        </Box>
+      </Box>
 
-        <Box px={4} py={3} borderBottom="1px solid" borderColor="border.subtle">
+      <Box px={4} py={3} borderBottom="1px solid" borderColor="border.subtle">
           <Text color="fg.muted" fontSize="xs" mb={1}>Singleton contract</Text>
           <AddressActionRow
             address={snapshot.singleton}
             label="singleton address"
             explorerUrl={explorerAddressUrl && `${explorerAddressUrl}/${snapshot.singleton}`}
           />
-        </Box>
+      </Box>
 
-        <SimpleGrid columns={3} spacing={0} px={4} py={3}>
+      <SimpleGrid columns={3} spacing={0} px={4} py={3}>
           {[
             ["Modules", String(snapshot.modules.length)],
             ["Guard", configurationLabel(snapshot.guard)],
@@ -164,14 +144,111 @@ export function SafeChainSettingsSection({
               <Text mt={0.5} fontSize="sm" fontWeight="600" noOfLines={1}>{value}</Text>
             </Box>
           ))}
-        </SimpleGrid>
+      </SimpleGrid>
 
-        {snapshot.blockedReason && (
-          <Box px={4} py={3} bg="status.warning.bg" borderTop="1px solid" borderColor="status.warning.border">
-            <Text color="status.warning.fg" fontSize="sm">{snapshot.blockedReason}</Text>
-          </Box>
-        )}
+      {snapshot.blockedReason && (
+        <Box px={4} py={3} bg="status.warning.bg" borderTop="1px solid" borderColor="status.warning.border">
+          <Text color="status.warning.fg" fontSize="sm">{snapshot.blockedReason}</Text>
+        </Box>
+      )}
+    </>
+  );
+}
+
+function SafeChainHeader({
+  snapshot,
+  chainName,
+  safeAddress,
+  showChainIcon = true,
+}: {
+  snapshot: SafeChainSnapshot;
+  chainName: string;
+  safeAddress: string;
+  showChainIcon?: boolean;
+}) {
+  return (
+    <HStack px={4} py={3} spacing={3} borderBottom="1px solid" borderColor="border.subtle">
+      {showChainIcon && <ChainIcon chainId={snapshot.chainId} chainName={chainName} size="32px" withChip />}
+      <Box flex={1} minW={0}>
+        <Text fontSize="sm" fontWeight="600">Safe {snapshot.version}</Text>
+        <Text color="fg.secondary" fontSize="xs" sx={{ fontVariantNumeric: "tabular-nums" }}>
+          Nonce {snapshot.nonce}
+        </Text>
       </Box>
+      <IconButton
+        as="a"
+        href={`https://app.safe.global/home?safe=${snapshot.chainId}:${safeAddress}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open ${chainName} Safe in Safe Wallet`}
+        icon={<ExternalLinkIcon />}
+        size="sm"
+        variant="ghost"
+        color="accent.secondary"
+      />
+    </HStack>
+  );
+}
+
+export function SafeChainSettingsSection({
+  snapshot,
+  chain,
+  safeAddress,
+  accounts,
+}: {
+  snapshot: SafeChainSnapshot;
+  chain?: SafeChainDescriptor;
+  safeAddress: string;
+  accounts: Account[];
+}) {
+  const chainName = chain?.name || `Chain ${snapshot.chainId}`;
+  return (
+    <ScreenSection title={chainName}>
+      <Box bg="surface.raised" border="1px solid" borderColor="border.default" borderRadius="lg" overflow="hidden">
+        <SafeChainHeader snapshot={snapshot} chainName={chainName} safeAddress={safeAddress} />
+        <SafeChainDetails snapshot={snapshot} chain={chain} accounts={accounts} />
+      </Box>
+    </ScreenSection>
+  );
+}
+
+export function SafeChainSettingsAccordion({
+  snapshots,
+  chains,
+  safeAddress,
+  accounts,
+}: {
+  snapshots: SafeChainSnapshot[];
+  chains: readonly SafeChainDescriptor[];
+  safeAddress: string;
+  accounts: Account[];
+}) {
+  return (
+    <ScreenSection title="Safe networks" description={`${snapshots.length} deployments`}>
+      <Accordion allowToggle border="1px solid" borderColor="border.default" borderRadius="lg" overflow="hidden">
+        {snapshots.map((snapshot) => {
+          const chain = chains.find((item) => item.chainId === snapshot.chainId);
+          const chainName = chain?.name || `Chain ${snapshot.chainId}`;
+          return (
+            <AccordionItem key={snapshot.chainId} border="0" borderBottom="1px solid" borderColor="border.subtle" _last={{ borderBottom: 0 }}>
+              <AccordionButton px={4} py={3} gap={3} _hover={{ bg: "surface.raisedHover" }}>
+                <ChainIcon chainId={snapshot.chainId} chainName={chainName} size="32px" withChip />
+                <Box flex={1} minW={0} textAlign="left">
+                  <Text fontSize="sm" fontWeight="600" noOfLines={1}>{chainName}</Text>
+                  <Text color="fg.secondary" fontSize="xs" noOfLines={1}>
+                    Safe {snapshot.version} · {snapshot.threshold} of {snapshot.owners.length} owners
+                  </Text>
+                </Box>
+                <AccordionIcon color="fg.muted" />
+              </AccordionButton>
+              <AccordionPanel p={0} borderTop="1px solid" borderColor="border.subtle">
+                <SafeChainHeader snapshot={snapshot} chainName={chainName} safeAddress={safeAddress} showChainIcon={false} />
+                <SafeChainDetails snapshot={snapshot} chain={chain} accounts={accounts} />
+              </AccordionPanel>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     </ScreenSection>
   );
 }

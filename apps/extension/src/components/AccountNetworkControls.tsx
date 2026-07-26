@@ -33,6 +33,7 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@/components/ui";
+import { sortNetworkSelectorOptions } from "@/components/shared/NetworkSelector";
 import type { ResolvedChain } from "@/lib/chains";
 
 interface AccountNetworkControlsProps {
@@ -40,6 +41,7 @@ interface AccountNetworkControlsProps {
   activeAccount: Account | null;
   selectedChain: ResolvedChain | undefined;
   visibleChains: ResolvedChain[];
+  selectableChainIds?: ReadonlySet<number>;
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
   onAccountSettings: (account: Account) => void;
@@ -57,6 +59,7 @@ function AccountNetworkControls({
   activeAccount,
   selectedChain,
   visibleChains,
+  selectableChainIds,
   onAccountSelect,
   onAddAccount,
   onAccountSettings,
@@ -76,10 +79,23 @@ function AccountNetworkControls({
   const selectedChainItemRef = useRef<HTMLElement | null>(null);
 
   const normalizedChainSearch = chainSearch.trim().toLowerCase();
+  const orderedVisibleChains = useMemo(
+    () => {
+      const chains = visibleChains.map((chain) => ({
+        ...chain,
+        isSelectable:
+          !selectableChainIds || selectableChainIds.has(chain.chainId),
+      }));
+      return selectableChainIds
+        ? sortNetworkSelectorOptions(chains)
+        : chains;
+    },
+    [selectableChainIds, visibleChains],
+  );
   const filteredVisibleChains = useMemo(
     () =>
       normalizedChainSearch
-        ? visibleChains.filter(
+        ? orderedVisibleChains.filter(
             (chain) =>
               chain.name.toLowerCase().includes(normalizedChainSearch) ||
               String(chain.chainId).includes(normalizedChainSearch) ||
@@ -87,8 +103,8 @@ function AccountNetworkControls({
                 .toLowerCase()
                 .includes(normalizedChainSearch),
           )
-        : visibleChains,
-    [normalizedChainSearch, visibleChains],
+        : orderedVisibleChains,
+    [normalizedChainSearch, orderedVisibleChains],
   );
 
   useEffect(() => {
@@ -133,6 +149,10 @@ function AccountNetworkControls({
   }, [closeNetworkPicker, isNetworkPickerOpen, normalizedChainSearch]);
 
   const selectChain = (chainName: string) => {
+    const chain = orderedVisibleChains.find(
+      (candidate) => candidate.name === chainName,
+    );
+    if (!chain?.isSelectable) return;
     onChainSelect(chainName);
     closeNetworkPicker();
   };
@@ -277,6 +297,7 @@ function AccountNetworkControls({
                         : undefined
                     }
                     interactive
+                    isDisabled={!chain.isSelectable}
                     isSelected={chain.chainId === selectedChain?.chainId}
                     onMouseEnter={() => setHighlightedChainIndex(index)}
                     bg={
@@ -287,31 +308,27 @@ function AccountNetworkControls({
                     onClick={() => selectChain(chain.name)}
                   >
                     <ListItemMedia>
-                      <Flex
-                        boxSize="32px"
-                        align="center"
-                        justify="center"
-                        bg="surface.sunken"
-                        borderRadius="md"
-                      >
-                        <ChainIcon
-                          chainId={chain.chainId}
-                          chainName={chain.name}
-                          size="22px"
-                        />
-                      </Flex>
+                      <ChainIcon
+                        chainId={chain.chainId}
+                        chainName={chain.name}
+                        size="32px"
+                        withChip
+                      />
                     </ListItemMedia>
                     <ListItemContent>
                       <ListItemTitle>{chain.name}</ListItemTitle>
                       <ListItemDescription>
-                        Chain {chain.chainId} · {chain.nativeCurrency.symbol}
+                        {chain.isSelectable
+                          ? `Chain ${chain.chainId} · ${chain.nativeCurrency.symbol}`
+                          : "Safe not deployed"}
                       </ListItemDescription>
                     </ListItemContent>
-                    {chain.chainId === selectedChain?.chainId ? (
+                    {chain.chainId === selectedChain?.chainId &&
+                    chain.isSelectable ? (
                       <CheckIcon boxSize={4} color="accent.secondary" />
-                    ) : (
+                    ) : chain.isSelectable ? (
                       <ChevronRightIcon boxSize={5} color="fg.muted" />
-                    )}
+                    ) : null}
                   </ListItem>
                 ))}
               </FullScreenPickerGroup>

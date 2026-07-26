@@ -29,3 +29,21 @@ test("shared network selector keeps unknown-price funded chains ahead of Ethereu
     ["Base", "Ethereum", "Arbitrum", "Optimism"],
   );
 });
+
+test("shared network selector keeps selectable Safe deployments above unsupported chains", () => {
+  const sorted = sortNetworkSelectorOptions([
+    {
+      chainId: 137,
+      name: "Polygon",
+      balanceUsd: 25,
+      isSelectable: false,
+    },
+    { chainId: 8453, name: "Base", isSelectable: true },
+    { chainId: 1, name: "Ethereum", isSelectable: true },
+  ]);
+
+  assert.deepEqual(
+    sorted.map((network) => network.name),
+    ["Ethereum", "Base", "Polygon"],
+  );
+});

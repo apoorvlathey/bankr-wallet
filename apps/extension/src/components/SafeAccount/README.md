@@ -24,14 +24,17 @@
   counts every unresolved Safe proposal without starting a remote sync or
   exposing proposal details before authentication.
 - `SafeQuickActions.tsx`: reuses the canonical Send / Swap / Shield / More home
-  controls and applies the same verified-owner capability gate to Send and
-  same-chain Swap. Shield remains unavailable. The proposal banner is the only
+  controls. Send and Swap remain enterable; their own network selectors disable
+  undeployed Safe chains and rank verified deployments first. Shield remains
+  unavailable. The proposal banner is the only
   homepage approvals entry point; account settings owns security.
 - `SafeSecurityScreen.tsx`: Warm Midnight account-settings composition,
   display-name editing, state loading, refresh, and removal orchestration.
 - `SafeChainSettingsSection.tsx`: presentational per-chain authority ledger with
   owners rendered through the shared labeled-address pill, verified metadata,
-  security extensions, and explorer/Safe links.
+  security extensions, and explorer/Safe links. A single deployment keeps the
+  full ledger visible; multiple deployments use a one-at-a-time compact
+  accordion and reveal the same details only for the selected network.
 - `SafeRemoveDialog.tsx`: focused destructive confirmation that keeps published
   proposals and onchain data consequences explicit.
 

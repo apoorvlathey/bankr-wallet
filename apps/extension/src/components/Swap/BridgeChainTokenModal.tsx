@@ -105,6 +105,7 @@ interface BridgeChainTokenModalProps {
   initialPanel: "chains" | "tokens";
   /** Active account type. Sell-side chains are filtered to what can sign. */
   accountType: ChainAccountType;
+  selectableChainIds?: ReadonlySet<number>;
   /** Chain shown selected when the dropdown opens. */
   initialChainId: number;
   /** Already-selected token on this side, used to highlight + as exclude. */
@@ -142,6 +143,7 @@ export default function BridgeChainTokenModal({
   mode,
   initialPanel,
   accountType,
+  selectableChainIds,
   initialChainId,
   selectedTokenAddress,
   selectedTokenChainId,
@@ -662,6 +664,7 @@ export default function BridgeChainTokenModal({
       currentChainName={currentChainName}
       chainTotals={portfolioByChain}
       fundedChainIds={fundedChainIds}
+      selectableChainIds={selectableChainIds}
       onSelectChain={handleSelectChain}
       onOpenChainPicker={handleOpenChainPicker}
       popularTokens={popularTokens}

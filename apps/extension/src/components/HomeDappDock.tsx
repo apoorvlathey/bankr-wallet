@@ -46,6 +46,7 @@ interface HomeDappDockProps {
   context: ActiveDappConnectionContext | null;
   selectedChain: ResolvedChain | undefined;
   visibleChains: ResolvedChain[];
+  selectableChainIds?: ReadonlySet<number>;
   chainBalances: ReadonlyMap<number, number>;
   hideBalances: boolean;
   onChainSelect: (chainName: string) => void;
@@ -78,6 +79,7 @@ export default function HomeDappDock({
   context,
   selectedChain,
   visibleChains,
+  selectableChainIds,
   chainBalances,
   hideBalances,
   onChainSelect,
@@ -110,10 +112,11 @@ export default function HomeDappDock({
         chainId: chain.chainId,
         name: chain.name,
         balanceUsd: chainBalances.get(chain.chainId) ?? 0,
+        isSelectable: !selectableChainIds || selectableChainIds.has(chain.chainId),
       }));
 
     return sortNetworkSelectorOptions(chains);
-  }, [chainBalances, chainSearch, visibleChains]);
+  }, [chainBalances, chainSearch, selectableChainIds, visibleChains]);
 
   const closeSheet = () => {
     setChainSearch("");
@@ -345,7 +348,7 @@ export default function HomeDappDock({
                     borderRadius="lg"
                     overflow="hidden"
                   >
-                    {rankedChains.map(({ chain, balanceUsd }, index) => {
+                    {rankedChains.map(({ chain, balanceUsd, isSelectable }, index) => {
                       const isSelected = chain.chainId === selectedChain?.chainId;
                       return (
                         <Button
@@ -360,6 +363,7 @@ export default function HomeDappDock({
                           borderBottomWidth={index < rankedChains.length - 1 ? "1px" : 0}
                           borderColor="border.subtle"
                           justifyContent="flex-start"
+                          isDisabled={!isSelectable}
                           onClick={() => chooseChain(chain.name)}
                         >
                           <HStack w="full" minW={0} spacing={3}>
@@ -373,7 +377,9 @@ export default function HomeDappDock({
                               <Text color="fg.primary" fontSize="sm" fontWeight="600" noOfLines={1}>
                                 {chain.name}
                               </Text>
-                              {balanceUsd > 0 && (
+                              {!isSelectable ? (
+                                <Text color="fg.muted" fontSize="xs">Safe not deployed</Text>
+                              ) : balanceUsd > 0 && (
                                 <HStack spacing={1.5} color="fg.secondary">
                                   <WalletBalanceIcon />
                                   <Text fontSize="xs">

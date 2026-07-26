@@ -39,6 +39,7 @@ interface BridgeChainTokenPickerScreenProps {
   currentChainName: string;
   chainTotals: ReadonlyMap<number, number>;
   fundedChainIds: ReadonlySet<number>;
+  selectableChainIds?: ReadonlySet<number>;
   onSelectChain: (chainId: number) => void;
   onOpenChainPicker: () => void;
   popularTokens: readonly PortfolioToken[];
@@ -173,6 +174,7 @@ export function BridgeChainTokenPickerScreen({
   currentChainName,
   chainTotals,
   fundedChainIds,
+  selectableChainIds,
   onSelectChain,
   onOpenChainPicker,
   popularTokens,
@@ -200,6 +202,8 @@ export function BridgeChainTokenPickerScreen({
           nativeSymbol: chain.currency?.symbol,
           balanceUsd: chainTotals.get(chain.chainId) ?? 0,
           isFunded: fundedChainIds.has(chain.chainId),
+          isSelectable:
+            !selectableChainIds || selectableChainIds.has(chain.chainId),
           iconUrl: chain.icon ?? chain.logoURI,
           iconBg: chain.bgColor,
         }))}

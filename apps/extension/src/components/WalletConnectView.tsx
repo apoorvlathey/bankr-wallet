@@ -39,6 +39,7 @@ interface WalletConnectViewProps {
   activeAccount: Account | null;
   selectedChain: ResolvedChain | undefined;
   visibleChains: ResolvedChain[];
+  selectableChainIds?: ReadonlySet<number>;
   onBack: () => void;
   onAccountSelect: (account: Account) => void;
   onAddAccount: () => void;
@@ -74,6 +75,7 @@ export default function WalletConnectView({
   activeAccount,
   selectedChain,
   visibleChains,
+  selectableChainIds,
   onBack,
   onAccountSelect,
   onAddAccount,
@@ -220,6 +222,7 @@ export default function WalletConnectView({
           activeAccount={activeAccount}
           selectedChain={selectedChain}
           visibleChains={visibleChains}
+          selectableChainIds={selectableChainIds}
           onAccountSelect={onAccountSelect}
           onAddAccount={onAddAccount}
           onAccountSettings={onAccountSettings}

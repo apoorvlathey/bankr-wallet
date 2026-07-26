@@ -6,24 +6,33 @@ const readSource = (path: string) =>
   readFile(new URL(`../../src/${path}`, import.meta.url), "utf8");
 
 test("network pickers reuse the shared selector or its ordering model", async () => {
-  const [shared, swap, send, tokenSelector, homepage, dappDock] = await Promise.all([
+  const [shared, swap, send, tokenSelector, homepage, dappDock, accountControls] = await Promise.all([
     readSource("components/shared/NetworkSelector/NetworkSelectorScreen.tsx"),
     readSource("components/Swap/BridgeChainTokenPickerScreen.tsx"),
     readSource("components/Transfer/NetworkPicker.tsx"),
     readSource("components/Swap/TokenSelector.tsx"),
     readSource("components/PortfolioTabs.tsx"),
     readSource("components/HomeDappDock.tsx"),
+    readSource("components/AccountNetworkControls.tsx"),
   ]);
 
   assert.match(shared, /label="Search networks"/u);
   assert.match(shared, /sortNetworkSelectorOptions\(networks\)/u);
   assert.match(shared, /Native token · \{network\.nativeSymbol\}/u);
+  assert.match(shared, /isDisabled=\{!isSelectable\}/u);
+  assert.match(shared, /Safe not deployed/u);
   assert.match(swap, /<NetworkSelectorScreen/u);
   assert.match(send, /<NetworkSelectorScreen/u);
   assert.match(tokenSelector, /<NetworkSelectorScreen/u);
   assert.match(homepage, /<NetworkSelectorScreen/u);
   assert.match(homepage, /includeAllNetworks/u);
   assert.match(dappDock, /sortNetworkSelectorOptions\(chains\)/u);
+  assert.match(dappDock, /isDisabled=\{!isSelectable\}/u);
+  assert.match(dappDock, /Safe not deployed/u);
+  assert.match(accountControls, /sortNetworkSelectorOptions/u);
+  assert.match(accountControls, /isDisabled=\{!chain\.isSelectable\}/u);
+  assert.match(accountControls, /Safe not deployed/u);
+  assert.match(accountControls, /size="32px"\s+withChip/u);
 });
 
 test("Send and Swap token pickers share the compact nested network trigger", async () => {

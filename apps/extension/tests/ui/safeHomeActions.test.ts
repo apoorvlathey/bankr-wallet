@@ -195,7 +195,7 @@ test("Safe home reuses only the canonical wallet actions", async () => {
   );
   assert.doesNotMatch(source, /label="Approvals"/);
   assert.doesNotMatch(source, /label="Security"/);
-  assert.match(source, /swap: actionDisabledReason \|\| undefined/);
+  assert.doesNotMatch(source, /disabledActions|actionDisabledReason/);
   assert.doesNotMatch(source, /Safe swaps are not available yet/);
   assert.doesNotMatch(source, /onReceive/);
   assert.doesNotMatch(source, /shield:/);

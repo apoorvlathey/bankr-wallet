@@ -45,6 +45,16 @@ test("cached swap default can be constrained to a newly selected network", () =>
   assert.equal(selected?.symbol, "ETH");
 });
 
+test("cached swap default stays on a selectable Safe deployment", () => {
+  const selected = pickDefaultSwapSellToken(
+    [token("ETH", 1, 20), token("USDC", 8453, 75)],
+    undefined,
+    new Set([1]),
+  );
+
+  assert.equal(selected?.symbol, "ETH");
+});
+
 test("swap initialization keeps supported explicit assets and chain fallbacks", () => {
   const ethereum = token("ETH", 1, 20);
   assert.equal(resolveInitialSwapChainId(8453, ethereum), 1);

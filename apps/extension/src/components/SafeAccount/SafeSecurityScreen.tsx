@@ -29,7 +29,7 @@ import {
 } from "@/components/ui";
 import { CHAIN_REGISTRY } from "@/constants/chainRegistry";
 import { useThemedToast } from "@/hooks/useThemedToast";
-import { SafeChainSettingsSection } from "./SafeChainSettingsSection";
+import { SafeChainSettingsAccordion, SafeChainSettingsSection } from "./SafeChainSettingsSection";
 import { SafeRemoveDialog } from "./SafeRemoveDialog";
 
 export function SafeSecurityScreen({
@@ -119,8 +119,40 @@ export function SafeSecurityScreen({
   async function refresh() {
     setIsRefreshing(true);
     setError(null);
-    const response = await chrome.runtime.sendMessage({ type: "refreshSafeAccount", accountId: account.id });
-    if (!response?.success) setError(response?.error || "Could not refresh Safe");
+    const response = await chrome.runtime.sendMessage({
+      type: "refreshSafeAccount",
+      accountId: account.id,
+    }) as {
+      success?: boolean;
+      newChainIds?: number[];
+      discoveryFailureCount?: number;
+      discoveryError?: string;
+      error?: string;
+    };
+    if (!response?.success) {
+      setError(response?.error || "Could not refresh Safe");
+    } else if (response.newChainIds?.length) {
+      toast({
+        title: "Safe networks updated",
+        description: `Added ${response.newChainIds.length} newly deployed ${response.newChainIds.length === 1 ? "network" : "networks"}.`,
+        status: "success",
+        duration: 3500,
+      });
+    } else if (response.discoveryError || response.discoveryFailureCount) {
+      toast({
+        title: "Known networks refreshed",
+        description: response.discoveryError || `${response.discoveryFailureCount} networks could not be checked for new deployments.`,
+        status: "warning",
+        duration: 4000,
+      });
+    } else {
+      toast({
+        title: "Safe networks refreshed",
+        description: "No new deployments found.",
+        status: "success",
+        duration: 2500,
+      });
+    }
     load();
     setIsRefreshing(false);
   }
@@ -187,18 +219,20 @@ export function SafeSecurityScreen({
                 </FormControl>
               </ScreenSection>
 
-              {snapshots.length ? (
-                <VStack align="stretch" spacing={6}>
-                  {snapshots.map((snapshot) => (
-                    <SafeChainSettingsSection
-                      key={snapshot.chainId}
-                      snapshot={snapshot}
-                      chain={CHAIN_REGISTRY.find((item) => item.chainId === snapshot.chainId)}
-                      safeAddress={account.address}
-                      accounts={accounts}
-                    />
-                  ))}
-                </VStack>
+              {snapshots.length === 1 ? (
+                <SafeChainSettingsSection
+                  snapshot={snapshots[0]}
+                  chain={CHAIN_REGISTRY.find((item) => item.chainId === snapshots[0].chainId)}
+                  safeAddress={account.address}
+                  accounts={accounts}
+                />
+              ) : snapshots.length > 1 ? (
+                <SafeChainSettingsAccordion
+                  snapshots={snapshots}
+                  chains={CHAIN_REGISTRY}
+                  safeAddress={account.address}
+                  accounts={accounts}
+                />
               ) : (
                 <Alert status="warning" alignItems="start">
                   <AlertIcon />
@@ -218,8 +252,8 @@ export function SafeSecurityScreen({
                   <ListItem interactive onClick={() => void refresh()} isDisabled={isRefreshing}>
                     <ListItemMedia><RepeatIcon boxSize={5} /></ListItemMedia>
                     <ListItemContent>
-                      <ListItemTitle>{isRefreshing ? "Refreshing Safe…" : "Refresh onchain state"}</ListItemTitle>
-                      <ListItemDescription>Verify owners, threshold, and security extensions again</ListItemDescription>
+                      <ListItemTitle>{isRefreshing ? "Refreshing Safe details…" : "Refresh Safe details"}</ListItemTitle>
+                      <ListItemDescription>Update owners and settings, and find deployments on new networks.</ListItemDescription>
                     </ListItemContent>
                   </ListItem>
                 </ListSurface>

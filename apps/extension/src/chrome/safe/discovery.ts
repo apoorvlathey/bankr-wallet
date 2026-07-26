@@ -70,6 +70,12 @@ export interface SafeProbeResult {
   scannedChainIds: number[];
 }
 
+interface SafeAddressProbeDependencies {
+  info?: typeof fetchSafeInfo;
+  getServices?: typeof getSafeServiceChains;
+  getNetworksInfo?: typeof getStoredNetworksInfo;
+}
+
 const PREFIXES = new Map<string, number>([
   ["eth", 1],
   ["ethereum", 1],
@@ -173,25 +179,12 @@ export async function getSafeEligibleChains(
   return chains.slice(0, MAX_PROBE_CHAINS);
 }
 
-export async function probeSafeAddress(
-  input: string,
+async function probeSafeAddressOnChains(
+  address: SafeAddress,
+  chains: SafeEligibleChain[],
   verify: typeof verifySafeOnchainState = verifySafeOnchainState,
-  dependencies: {
-    info?: typeof fetchSafeInfo;
-    getServices?: typeof getSafeServiceChains;
-    getNetworksInfo?: typeof getStoredNetworksInfo;
-  } = {},
+  dependencies: SafeAddressProbeDependencies = {},
 ): Promise<SafeProbeResult> {
-  const parsed = parseSafeAddressInput(input);
-  let chains = await getSafeEligibleChains(parsed.requestedChainId, dependencies);
-  if (parsed.requestedChainPrefix) {
-    const normalized = parsed.requestedChainPrefix.replace(/[^a-z0-9]/g, "");
-    chains = chains.filter((chain) =>
-      chain.shortName === parsed.requestedChainPrefix ||
-      chain.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized,
-    );
-    if (chains.length !== 1) throw new Error("Unsupported chain prefix");
-  }
   const info = dependencies.info ?? fetchSafeInfo;
   const snapshots: SafeChainSnapshot[] = [];
   const failures: SafeProbeFailure[] = [];
@@ -202,11 +195,11 @@ export async function probeSafeAddress(
       const chain = chains[cursor++];
       try {
         await waitForSafeServiceSlot();
-        await info(chain.chainId, parsed.address);
+        await info(chain.chainId, address);
         snapshots.push(
           await verify({
             chainId: chain.chainId,
-            safeAddress: parsed.address,
+            safeAddress: address,
             ...(chain.rpcUrl ? { rpcUrl: chain.rpcUrl } : {}),
           }),
         );
@@ -226,11 +219,47 @@ export async function probeSafeAddress(
   snapshots.sort((a, b) => a.chainId - b.chainId);
   failures.sort((a, b) => a.chainId - b.chainId);
   return {
-    address: parsed.address,
+    address,
     snapshots,
     failures,
     scannedChainIds: chains.map((chain) => chain.chainId),
   };
+}
+
+export async function probeSafeAddress(
+  input: string,
+  verify: typeof verifySafeOnchainState = verifySafeOnchainState,
+  dependencies: SafeAddressProbeDependencies = {},
+): Promise<SafeProbeResult> {
+  const parsed = parseSafeAddressInput(input);
+  let chains = await getSafeEligibleChains(parsed.requestedChainId, dependencies);
+  if (parsed.requestedChainPrefix) {
+    const normalized = parsed.requestedChainPrefix.replace(/[^a-z0-9]/g, "");
+    chains = chains.filter((chain) =>
+      chain.shortName === parsed.requestedChainPrefix ||
+      chain.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized,
+    );
+    if (chains.length !== 1) throw new Error("Unsupported chain prefix");
+  }
+  return probeSafeAddressOnChains(parsed.address, chains, verify, dependencies);
+}
+
+export async function discoverNewSafeDeployments(
+  input: { address: SafeAddress; knownChainIds: readonly number[] },
+  verify: typeof verifySafeOnchainState = verifySafeOnchainState,
+  dependencies: SafeAddressProbeDependencies = {},
+): Promise<SafeProbeResult> {
+  if (
+    input.knownChainIds.length > MAX_PROBE_CHAINS ||
+    input.knownChainIds.some((chainId) => !Number.isSafeInteger(chainId) || chainId < 1)
+  ) {
+    throw new Error("Invalid known Safe chains");
+  }
+  const parsed = parseSafeAddressInput(input.address);
+  const known = new Set(input.knownChainIds);
+  const chains = (await getSafeEligibleChains(undefined, dependencies))
+    .filter((chain) => !known.has(chain.chainId));
+  return probeSafeAddressOnChains(parsed.address, chains, verify, dependencies);
 }
 
 async function findSafesOwnedByAccountOnChains(

@@ -150,8 +150,9 @@ behavior with Node tests under `apps/extension/tests/ui/`.
 - `components/shared/` is for wallet-aware presentation reused by multiple
   features. It is not a catch-all for one-off feature children. The shared
   `NetworkSelector` domain owns the renderer-only searchable network browser
-  and pure funded-first ordering used by Swap, Send, and homepage filtering;
-  each feature retains ownership of its balance data and selection effects.
+  and pure eligibility-then-funding ordering used by Swap, Send, homepage
+  filtering, WalletConnect, and the dapp dock; each feature retains ownership
+  of its balance data, verified Safe capability set, and selection effects.
 - `theme/primitives/` owns token-driven visual atoms, not application state.
 - `src/hooks/` contains only hooks used across feature domains.
 
