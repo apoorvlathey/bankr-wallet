@@ -10,7 +10,7 @@ import { formatEther } from "viem";
 import extensionPackage from "../../package.json";
 import { previewAssets } from "./previewAssets";
 import { previewSafeAccountRecords, previewSafeProposals } from "./safeHomePreview";
-import { PREVIEW_EPOCH_MS } from "./fixtures";
+import { PREVIEW_EPOCH_MS, previewCustomToken } from "./fixtures";
 import { previewShieldPortfolioResponse } from "./shieldFixtures";
 import {
   createPreviewEnvironment,
@@ -48,6 +48,8 @@ const PREVIEW_SHIELD_MINIMUM_WEI =
 const PREVIEW_MAX_UINT256 = (1n << 256n) - 1n;
 const PREVIEW_SHIELD_ENTRYPOINT =
   PRIVACY_POOLS_DEPLOYMENT.contracts.entrypointProxy.address;
+const PREVIEW_BASE_USDC =
+  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
 function parsePreviewShieldAmount(value: unknown): bigint | null {
   if (
@@ -604,6 +606,20 @@ export function responseForPreviewMessage(
         residualApprovals: previewSimulationResult.residualApprovals,
       };
     case "fetchTokenInfo":
+      if (
+        String(message?.address || message?.tokenAddress || "").toLowerCase() ===
+        previewCustomToken.contractAddress.toLowerCase()
+      ) {
+        return {
+          success: true,
+          data: {
+            name: "WalletChan",
+            symbol: "WCHAN",
+            decimals: 18,
+            logoUrl: previewAssets.brand.walletChan,
+          },
+        };
+      }
       return {
         success: true,
         data: {
@@ -744,6 +760,20 @@ export function responseForPreviewMessage(
       if (route === "permission" && scenario === "metadata-unverified") {
         return { success: false, data: null };
       }
+      if (
+        String(message?.tokenAddress || "").toLowerCase() ===
+        previewCustomToken.contractAddress.toLowerCase()
+      ) {
+        return {
+          success: true,
+          data: {
+            name: "WalletChan",
+            symbol: "WCHAN",
+            decimals: 18,
+            logoUrl: previewAssets.brand.walletChan,
+          },
+        };
+      }
       return {
         success: true,
         data: {
@@ -863,7 +893,45 @@ export function responseForPreviewMessage(
     case "getTransactionNonce":
       return { success: true, nonce: 42 };
     case "getFeePaymentOptions":
-      return { success: true, options: [] };
+      return {
+        success: true,
+        options: [
+          {
+            id: "native",
+            symbol: "ETH",
+            decimals: 18,
+            available: true,
+          },
+          {
+            id: PREVIEW_BASE_USDC,
+            symbol: "USDC",
+            decimals: 6,
+            available: true,
+            balance: "321123000",
+            stablecoin: true,
+            logoUrl: previewAssets.tokens.usdc,
+          },
+        ],
+      };
+    case "prepareFeePaymentQuote":
+      return {
+        success: true,
+        quoteId: "preview-base-usdc-fee-quote",
+        tokenId: PREVIEW_BASE_USDC,
+        tokenAddress: PREVIEW_BASE_USDC,
+        tokenSymbol: "USDC",
+        tokenDecimals: 6,
+        tokenStablecoin: true,
+        maximumTokenCost: "120000",
+        tokenBalance: "321123000",
+        expiresAt: Date.now() + 60_000,
+        approvalAdded: false,
+        approvalAmount: null,
+        paymaster: "0x1111111111111111111111111111111111111111",
+        userOperationNonce: "0x0",
+        sufficientBalance: true,
+        needsAuthorization: false,
+      };
     case "prepareTransactionReplacement":
       return { success: true, txRequest: { id: "preview-replacement" } };
     case "confirmTransactionAsync":

@@ -359,6 +359,17 @@ export function createPreviewTxScenario(
   walletType: PreviewWalletType,
   scenario: string,
 ): PendingTxRequest {
+  if (scenario === "readme-review" || scenario === "readme-fees-usdc") {
+    return createPreviewTxRequest(walletType, {
+      id: `preview-tx-${scenario}-${walletType}`,
+      tx: {
+        to: "0x6fF5693b99212Da76ad316178A184AB56D299b43",
+        data: "0x",
+        value: "0x9536c708910000",
+      },
+    });
+  }
+
   if (scenario === "increase-allowance") {
     return createPreviewTxRequest(walletType, {
       id: `preview-tx-increase-allowance-${walletType}`,

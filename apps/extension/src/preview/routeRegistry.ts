@@ -75,6 +75,8 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
       "malformed-disabled",
       "stress",
       "impersonator-disabled",
+      "readme-review",
+      "readme-fees-usdc",
     ],
     wallets: SIGNING_WALLETS,
     fidelity: "production",
