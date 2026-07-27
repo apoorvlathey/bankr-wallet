@@ -611,7 +611,7 @@ restrained WalletChan amber, product-led visuals, and direct typography.
 ## SEO & Meta
 
 ```html
-<title>WalletChan — EVM Wallet for Web3 | Sign Smarter. Move Faster.</title>
+<title>WalletChan - EVM Wallet for Web3 | Sign Smarter. Move Faster.</title>
 <meta
   name="description"
   content="WalletChan is a self-custodial Ethereum and EVM browser wallet. Connect to Web3 dapps, swap and bridge, and understand each signature before you approve."
