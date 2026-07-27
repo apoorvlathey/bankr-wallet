@@ -1149,12 +1149,16 @@ The extension maintains address consistency between storage and the active accou
   Chrome-attested hostname and concurrently queries WalletChan's bounded
   first-party `/api/domain-reputation` proxy plus the existing DefiLlama
   directory client. MetaMask blocklist and fuzzy matches always win. Otherwise,
-  an exact DefiLlama route-hostname match (with only `www.` normalization)
-  shows `Listed on DeFiLlama` even when the negative-list request is unavailable
-  or stale. Sites missing from DeFiLlama show an amber warning when negative-list
-  coverage is unavailable, or an ordinary unlisted warning after a fresh
-  negative result. Known/fuzzy threats retain their red warning even from a
-  stale last-known-good snapshot and require an explicit renderer
+  the Railway service's checked-in custom allowlist returns a trusted result;
+  entries may opt into dot-boundary subdomain matching with
+  `allowAllSubdomains`, and those results show `Verified domain`. If there is
+  no custom match, an exact DefiLlama route-hostname match (with only `www.`
+  normalization) shows `Listed on DeFiLlama` even when the negative-list
+  request is unavailable or stale. Sites missing from both trusted sources show
+  an amber warning when negative-list coverage is unavailable, or an ordinary
+  unlisted warning after a fresh negative result. Known/fuzzy threats retain
+  their red warning even from a stale last-known-good snapshot and require an
+  explicit renderer
   acknowledgement before the trusted-UI Connect action is enabled. Network
   failure warns but does not prevent connection. Reputation is live
   presentation state and is never added to `dappPermissions` or

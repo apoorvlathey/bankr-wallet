@@ -39,6 +39,35 @@ test("marks old snapshots stale without discarding known threats", () => {
   assert.equal(detector.check("blocked.example").outcome, "blocked");
 });
 
+test("custom allowlist trusts exact hosts and subdomains after threat checks", () => {
+  const allowlist = [{
+    hostname: "trusted.example",
+    allowAllSubdomains: true,
+  }];
+  const trustedDetector = new SnapshotDetector(
+    snapshotFromConfig(config, SOURCE_URL, fetchedAt),
+    () => Date.parse(fetchedAt),
+    allowlist,
+  );
+  assert.deepEqual(trustedDetector.check("app.trusted.example"), {
+    outcome: "trusted",
+    matchType: "allowlist",
+    matchedHostname: "trusted.example",
+    snapshot: { version: 2, fetchedAt, stale: false },
+  });
+
+  const blockedDetector = new SnapshotDetector(
+    snapshotFromConfig(
+      { ...config, blacklist: ["app.trusted.example"] },
+      SOURCE_URL,
+      fetchedAt,
+    ),
+    () => Date.parse(fetchedAt),
+    allowlist,
+  );
+  assert.equal(blockedDetector.check("app.trusted.example").outcome, "blocked");
+});
+
 test("validates source schemas and hostname-only lookup input", () => {
   assert.deepEqual(parsePhishingConfig(config), config);
   assert.deepEqual(

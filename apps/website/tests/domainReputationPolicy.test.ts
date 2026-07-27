@@ -37,11 +37,23 @@ test("validates the bounded Railway response projection", () => {
     },
   };
   assert.deepEqual(parseMetaMaskDomainReputationResponse(response), response);
-  assert.equal(
-    parseMetaMaskDomainReputationResponse({
-      ...response,
-      outcome: "trusted",
-    }),
-    null,
-  );
+  const trusted = {
+    ...response,
+    outcome: "trusted",
+    matchType: "allowlist",
+    matchedHostname: "walletchan.com",
+  };
+  assert.deepEqual(parseMetaMaskDomainReputationResponse(trusted), trusted);
+  assert.equal(parseMetaMaskDomainReputationResponse({
+    ...trusted,
+    matchType: "none",
+  }), null);
+  assert.equal(parseMetaMaskDomainReputationResponse({
+    ...trusted,
+    matchedHostname: undefined,
+  }), null);
+  assert.equal(parseMetaMaskDomainReputationResponse({
+    ...response,
+    outcome: "unknown",
+  }), null);
 });

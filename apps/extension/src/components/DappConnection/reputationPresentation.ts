@@ -12,11 +12,17 @@ export function buildDappReputationPresentation(
 ): DappReputationPresentation {
   switch (reputation.status) {
     case "recognized":
-      return {
-        tone: "success",
-        title: "Listed on DeFiLlama",
-        requiresAcknowledgement: false,
-      };
+      return reputation.source === "walletchan"
+        ? {
+            tone: "success",
+            title: "Verified domain",
+            requiresAcknowledgement: false,
+          }
+        : {
+            tone: "success",
+            title: "Listed on DeFiLlama",
+            requiresAcknowledgement: false,
+          };
     case "danger":
       return {
         tone: "error",

@@ -54,6 +54,18 @@ test("DeFiLlama recognition requires an exact hostname after www normalization",
   );
 });
 
+test("WalletChan custom allowlist recognition is green before directory lookup", () => {
+  assert.deepEqual(
+    combineDappReputation("app.walletchan.com", {
+      ...freshNoMatch,
+      outcome: "trusted",
+      matchType: "allowlist",
+      matchedHostname: "walletchan.com",
+    }, null),
+    { status: "recognized", source: "walletchan" },
+  );
+});
+
 test("exact directory recognition survives stale or unavailable negative checks", () => {
   assert.deepEqual(
     combineDappReputation(
@@ -85,11 +97,26 @@ test("negative-check availability matters only when the directory has no match",
 
 test("rejects malformed first-party response shapes", () => {
   assert.deepEqual(parseMetaMaskReputationResult(freshNoMatch), freshNoMatch);
-  assert.equal(
-    parseMetaMaskReputationResult({
-      ...freshNoMatch,
-      outcome: "trusted",
-    }),
-    null,
+  const trusted = {
+    ...freshNoMatch,
+    outcome: "trusted" as const,
+    matchType: "allowlist" as const,
+    matchedHostname: "walletchan.com",
+  };
+  assert.deepEqual(
+    parseMetaMaskReputationResult(trusted),
+    trusted,
   );
+  assert.equal(parseMetaMaskReputationResult({
+    ...trusted,
+    matchType: "none",
+  }), null);
+  assert.equal(parseMetaMaskReputationResult({
+    ...trusted,
+    matchedHostname: undefined,
+  }), null);
+  assert.equal(parseMetaMaskReputationResult({
+    ...freshNoMatch,
+    outcome: "unknown",
+  }), null);
 });

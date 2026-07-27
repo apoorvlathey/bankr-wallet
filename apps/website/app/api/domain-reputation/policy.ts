@@ -1,5 +1,13 @@
-export type MetaMaskDomainOutcome = "blocked" | "suspicious" | "no_match";
-export type MetaMaskDomainMatchType = "blocklist" | "fuzzylist" | "none";
+export type MetaMaskDomainOutcome =
+  | "blocked"
+  | "suspicious"
+  | "trusted"
+  | "no_match";
+export type MetaMaskDomainMatchType =
+  | "blocklist"
+  | "fuzzylist"
+  | "allowlist"
+  | "none";
 
 export interface MetaMaskDomainReputationResponse {
   outcome: MetaMaskDomainOutcome;
@@ -52,14 +60,18 @@ export function parseMetaMaskDomainReputationResponse(
 ): MetaMaskDomainReputationResponse | null {
   const candidate = record(value);
   const snapshot = record(candidate?.snapshot);
+  const validResult =
+    (candidate?.outcome === "blocked" &&
+      candidate.matchType === "blocklist") ||
+    (candidate?.outcome === "suspicious" &&
+      candidate.matchType === "fuzzylist") ||
+    (candidate?.outcome === "trusted" &&
+      candidate.matchType === "allowlist" &&
+      normalizeReputationHostname(candidate.matchedHostname) !== null) ||
+    (candidate?.outcome === "no_match" && candidate.matchType === "none");
   if (
     !candidate ||
-    !["blocked", "suspicious", "no_match"].includes(
-      String(candidate.outcome),
-    ) ||
-    !["blocklist", "fuzzylist", "none"].includes(
-      String(candidate.matchType),
-    ) ||
+    !validResult ||
     (candidate.matchedHostname !== undefined &&
       normalizeReputationHostname(candidate.matchedHostname) === null) ||
     !snapshot ||

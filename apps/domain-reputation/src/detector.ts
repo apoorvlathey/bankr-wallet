@@ -1,4 +1,9 @@
 import { PhishingDetector } from "@metamask/phishing-controller";
+import {
+  CUSTOM_DOMAIN_ALLOWLIST,
+  findCustomAllowlistMatch,
+  type CustomAllowlistEntry,
+} from "./customAllowlist.js";
 import type {
   DomainCheckResponse,
   LegacyPhishingConfig,
@@ -13,6 +18,8 @@ export class SnapshotDetector {
   constructor(
     readonly snapshot: StoredSnapshot,
     private readonly now: () => number = Date.now,
+    private readonly customAllowlist: readonly CustomAllowlistEntry[] =
+      CUSTOM_DOMAIN_ALLOWLIST,
   ) {
     this.#detector = new PhishingDetector(snapshot.config);
   }
@@ -44,6 +51,15 @@ export class SnapshotDetector {
         outcome: "blocked",
         matchType: "blocklist",
         ...(result.match ? { matchedHostname: result.match } : {}),
+        ...common,
+      };
+    }
+    const trusted = findCustomAllowlistMatch(hostname, this.customAllowlist);
+    if (trusted) {
+      return {
+        outcome: "trusted",
+        matchType: "allowlist",
+        matchedHostname: trusted.hostname,
         ...common,
       };
     }

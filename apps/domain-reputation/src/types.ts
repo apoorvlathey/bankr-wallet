@@ -14,8 +14,16 @@ export interface StoredSnapshot {
   config: LegacyPhishingConfig;
 }
 
-export type DomainCheckOutcome = "blocked" | "suspicious" | "no_match";
-export type DomainMatchType = "blocklist" | "fuzzylist" | "none";
+export type DomainCheckOutcome =
+  | "blocked"
+  | "suspicious"
+  | "trusted"
+  | "no_match";
+export type DomainMatchType =
+  | "blocklist"
+  | "fuzzylist"
+  | "allowlist"
+  | "none";
 
 export interface DomainCheckResponse {
   outcome: DomainCheckOutcome;

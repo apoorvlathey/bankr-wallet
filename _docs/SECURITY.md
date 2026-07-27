@@ -377,10 +377,13 @@ through `getDappConnectionReputation`, but it cannot choose the queried
 hostname. The wallet-UI message carries only a bounded pending request ID; the
 service worker resolves that ID from `pendingDappConnectionRequests` and sends
 its Chrome-attested hostname to the fixed first-party reputation endpoint and
-DefiLlama. A renderer-supplied hostname is ignored. An exact DefiLlama
-route-hostname comparison is an independent positive display signal, including
-when the negative-list request is unavailable; it never overrides a MetaMask
-block/fuzzy result returned by the parallel check.
+DefiLlama. A renderer-supplied hostname is ignored. The first-party service may
+return a custom trusted-domain match from its validated, checked-in allowlist;
+subdomain inheritance requires an explicit `allowAllSubdomains` flag and uses a
+dot-boundary suffix match. An exact DefiLlama route-hostname comparison is a
+second independent positive display signal, including when the negative-list
+request is unavailable. Neither positive signal overrides a MetaMask
+block/fuzzy result.
 The exact launcher may also call `ens-cache-browser-image` with a public image
 URL returned by the directory or connected-dapp projection. This is a distinct
 message from trusted wallet UI image requests and exposes only the existing
@@ -899,9 +902,11 @@ turn that privilege into a private-network proxy or an unbounded memory sink.
 Chrome-attested pending state to the fixed WalletChan API URL. The shared
 bounded reader rejects redirects and ambient credentials/referrers and applies
 a 4-second deadline and 16 KiB response ceiling. The response is schema checked
-before combination. Reputation failure is display-only and fail-open with an
-explicit unavailable warning; it grants no permission and cannot reach signing
-or submission.
+before combination, including exact outcome/match-type pairing for custom
+trusted results. MetaMask blocklist and fuzzy outcomes take priority over the
+custom allowlist and DefiLlama recognition. Reputation failure is display-only
+and fail-open with an explicit unavailable warning; a positive result likewise
+grants no permission and cannot reach signing or submission.
 
 `network/safeRpcForwarding.ts` applies the following boundary to injected-provider and
 WalletConnect RPC forwarding:

@@ -1,0 +1,10 @@
+[
+  {
+    "hostname": "walletchan.com",
+    "allowAllSubdomains": true
+  },
+  {
+    "hostname": "eth.sh",
+    "allowAllSubdomains": true
+  }
+]

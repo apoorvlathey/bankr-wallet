@@ -17,6 +17,17 @@ test("renders exact source-aware connection reputation copy", () => {
   );
   assert.deepEqual(
     buildDappReputationPresentation({
+      status: "recognized",
+      source: "walletchan",
+    }),
+    {
+      tone: "success",
+      title: "Verified domain",
+      requiresAcknowledgement: false,
+    },
+  );
+  assert.deepEqual(
+    buildDappReputationPresentation({
       status: "danger",
       source: "metamask",
     }),

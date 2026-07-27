@@ -17,13 +17,17 @@ export type DappConnectionReputation =
       name: string;
     }
   | {
+      status: "recognized";
+      source: "walletchan";
+    }
+  | {
       status: "unverified";
       reason: "not-listed" | "check-unavailable";
     };
 
 export interface MetaMaskReputationResult {
-  outcome: "blocked" | "suspicious" | "no_match";
-  matchType: "blocklist" | "fuzzylist" | "none";
+  outcome: "blocked" | "suspicious" | "trusted" | "no_match";
+  matchType: "blocklist" | "fuzzylist" | "allowlist" | "none";
   matchedHostname?: string;
   snapshot: {
     version: number;
@@ -62,14 +66,18 @@ export function parseMetaMaskReputationResult(
   const candidate = record(value);
   const snapshot = record(candidate?.snapshot);
   const matchedHostname = candidate?.matchedHostname;
+  const validResult =
+    (candidate?.outcome === "blocked" &&
+      candidate.matchType === "blocklist") ||
+    (candidate?.outcome === "suspicious" &&
+      candidate.matchType === "fuzzylist") ||
+    (candidate?.outcome === "trusted" &&
+      candidate.matchType === "allowlist" &&
+      normalizedHostname(matchedHostname) !== null) ||
+    (candidate?.outcome === "no_match" && candidate.matchType === "none");
   if (
     !candidate ||
-    !["blocked", "suspicious", "no_match"].includes(
-      String(candidate.outcome),
-    ) ||
-    !["blocklist", "fuzzylist", "none"].includes(
-      String(candidate.matchType),
-    ) ||
+    !validResult ||
     (matchedHostname !== undefined &&
       normalizedHostname(matchedHostname) === null) ||
     !snapshot ||
@@ -124,6 +132,12 @@ export function combineDappReputation(
       ...(metaMask.matchedHostname
         ? { matchedHostname: metaMask.matchedHostname }
         : {}),
+    };
+  }
+  if (metaMask?.outcome === "trusted") {
+    return {
+      status: "recognized",
+      source: "walletchan",
     };
   }
   const directoryMatch = directoryResults

@@ -81,7 +81,7 @@ test("fails safely on malformed upstream data", async () => {
   await withEnvironment(async () => {
     const response = await POST(request({ hostname: "app.example.com" }));
     assert.equal(response.status, 502);
-  }, async () => new Response('{"outcome":"trusted"}', { status: 200 }));
+  }, async () => new Response('{"outcome":"unknown"}', { status: 200 }));
 });
 
 test("stops reading an oversized upstream stream at the byte ceiling", async () => {

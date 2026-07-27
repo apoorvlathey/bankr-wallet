@@ -135,9 +135,17 @@ export function normalizeLookupHostname(value: unknown): string | null {
 export function isDomainCheckResponse(value: unknown): value is DomainCheckResponse {
   const candidate = record(value);
   const snapshot = record(candidate?.snapshot);
+  const validResult =
+    (candidate?.outcome === "blocked" &&
+      candidate.matchType === "blocklist") ||
+    (candidate?.outcome === "suspicious" &&
+      candidate.matchType === "fuzzylist") ||
+    (candidate?.outcome === "trusted" &&
+      candidate.matchType === "allowlist" &&
+      normalizeLookupHostname(candidate.matchedHostname) !== null) ||
+    (candidate?.outcome === "no_match" && candidate.matchType === "none");
   return !!candidate &&
-    ["blocked", "suspicious", "no_match"].includes(String(candidate.outcome)) &&
-    ["blocklist", "fuzzylist", "none"].includes(String(candidate.matchType)) &&
+    validResult &&
     (candidate.matchedHostname === undefined ||
       normalizeLookupHostname(candidate.matchedHostname) !== null) &&
     !!snapshot &&
