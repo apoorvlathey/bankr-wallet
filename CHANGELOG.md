@@ -10,6 +10,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [4.0.0] - 2026-07-27
+
 ### Added
 
 - **Biometric/passkey unlock.** A local WebAuthn PRF credential can unlock
@@ -194,6 +198,7 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Removing the final account backed by a seed phrase now requires an explicit
   warning, while agent-password sessions remain blocked from private-key,
   mnemonic, passkey-recovery, and Privacy Pools recovery disclosure.
+
 
 ## [3.19.0] - 2026-07-08
 
@@ -783,7 +788,8 @@ This release is a full rebuild of the wallet — multiple account types, a real 
 - View address on Debank from the homepage.
 - Lock-wallet button and footer attribution.
 
-[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v3.19.0...HEAD
+[Unreleased]: https://github.com/apoorvlathey/walletchan/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/apoorvlathey/walletchan/compare/v3.19.0...v4.0.0
 [3.19.0]: https://github.com/apoorvlathey/walletchan/compare/v3.18.0...v3.19.0
 [3.18.0]: https://github.com/apoorvlathey/walletchan/compare/v3.17.0...v3.18.0
 [3.17.0]: https://github.com/apoorvlathey/walletchan/compare/v3.16.0...v3.17.0

@@ -1,6 +1,6 @@
 {
   "name": "@walletchan/extension",
-  "version": "3.19.0",
+  "version": "4.0.0",
   "private": true,
   "license": "GPL-3.0-only",
   "type": "module",

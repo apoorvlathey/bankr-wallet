@@ -1,6 +1,6 @@
 {
   "name": "WalletChan - Web3 Wallet",
-  "version": "3.19.0",
+  "version": "4.0.0",
   "manifest_version": 3,
   "description": "Self-custodial Ethereum and EVM wallet for Web3 dapps. Create or import accounts, swap and bridge, sign clearly, and use Ledger.",
   "homepage_url": "https://walletchan.eth.sh",
