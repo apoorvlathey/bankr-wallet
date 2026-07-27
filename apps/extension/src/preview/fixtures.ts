@@ -8,11 +8,13 @@ import type { PendingWatchAssetRequest } from "@/chrome/requests/pendingWatchAss
 import type { PendingAddChainRequest } from "@/chrome/requests/pendingAddChainStorage";
 import type { CustomToken } from "@/chrome/customTokenStorage";
 import type { HiddenPortfolioToken } from "@/chrome/portfolio/hiddenTokens";
+import { googleFaviconUrl } from "@/constants/externalUrls";
 import {
   ERC7710_EMPTY_CAVEAT_ARGS,
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,
 } from "@/chrome/erc7715/caveats";
 import { getVisibleChains } from "@/lib/chains";
+import { encodeFunctionData, parseAbi } from "viem";
 import { previewAssets } from "./previewAssets";
 import { previewNetworks } from "./networkFixtures";
 import { applyPreviewBatchScenario } from "./batchScenarioFixtures";
@@ -41,6 +43,7 @@ export interface PreviewWallet {
 export const previewAddress = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
 export const previewSpender = "0x111111125421cA6dc452d289314280a0f8842A65";
 export const previewUsdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+export const previewBaseUsdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const previewWeth = "0x4200000000000000000000000000000000000006";
 export const previewCustomTokenAddress =
   "0xba5ed0000e1ca9136a695f0a848012a16008b032";
@@ -111,6 +114,34 @@ const increaseAllowanceData =
   "0x39509351" +
   previewSpender.toLowerCase().replace("0x", "").padStart(64, "0") +
   BigInt(25_000_000).toString(16).padStart(64, "0");
+const oneInchSwapAbi = parseAbi([
+  "function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes permit, bytes data) payable returns (uint256 returnAmount, uint256 spentAmount)",
+]);
+const nativeTokenSentinel =
+  "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as const;
+
+function createDefillamaSwapData(
+  recipient: `0x${string}`,
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: oneInchSwapAbi,
+    functionName: "swap",
+    args: [
+      previewSpender,
+      {
+        srcToken: previewBaseUsdc,
+        dstToken: nativeTokenSentinel,
+        srcReceiver: recipient,
+        dstReceiver: recipient,
+        amount: 148_620_000n,
+        minReturnAmount: 41_500_000_000_000_000n,
+        flags: 0n,
+      },
+      "0x",
+      "0x",
+    ],
+  });
+}
 
 const previewPermissionStart = Math.floor(PREVIEW_EPOCH_MS / 1000);
 const previewPermissionExpiry = previewPermissionStart + 3600;
@@ -406,6 +437,7 @@ export function createPreviewBatchScenario(
   walletType: PreviewWalletType,
   scenario: string,
 ): PendingBatchTxRequest {
+  const wallet = getPreviewWallet(walletType);
   return applyPreviewBatchScenario(
     createPreviewBatchRequest(walletType, {
       id: `preview-batch-${scenario}-${walletType}`,
@@ -414,8 +446,11 @@ export function createPreviewBatchScenario(
     {
       spender: previewSpender,
       usdc: previewUsdc,
+      defillamaUsdc: previewBaseUsdc,
       weth: previewWeth,
       approveData,
+      defillamaFavicon: googleFaviconUrl("swap.defillama.com", 64),
+      defillamaSwapData: createDefillamaSwapData(wallet.address),
     },
   );
 }

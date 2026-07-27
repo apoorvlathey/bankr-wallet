@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Box, Container } from "@chakra-ui/react";
+import { Box, Container, Image } from "@chakra-ui/react";
 import App from "@/App";
 import Onboarding from "@/pages/Onboarding";
 import UnlockScreen from "@/components/UnlockScreen";
@@ -651,8 +651,16 @@ export function PreviewScreen({
         <PreviewShell>
           <BatchTransactionConfirmation
             batchRequest={batchRequest}
-            currentIndex={2}
-            totalCount={5}
+            currentIndex={scenario === "defillama-swap" ? 0 : 2}
+            totalCount={scenario === "defillama-swap" ? 1 : 5}
+            identityIcon={scenario === "defillama-swap" ? (
+              <Image
+                src={batchRequest.favicon ?? undefined}
+                alt=""
+                boxSize="22px"
+                objectFit="contain"
+              />
+            ) : undefined}
             isInSidePanel={mode === "sidepanel"}
             accountType={batchRequest.accountType}
             accountAddress={batchRequest.params.from ?? batchRequest.accountAddress ?? ""}

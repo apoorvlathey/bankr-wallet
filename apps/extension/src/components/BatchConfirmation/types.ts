@@ -6,6 +6,7 @@ import type {
   ResidualApprovalRequestRef,
 } from "@/chrome/txSimulation";
 import type { FeePaymentRequestKind } from "@/components/FeePaymentSelector";
+import type { ReactNode } from "react";
 
 export interface BatchTransactionConfirmationProps {
   batchRequest: PendingBatchTxRequest;
@@ -30,6 +31,8 @@ export interface BatchTransactionConfirmationProps {
   ) => Promise<{ success: boolean; error?: string }>;
   /** Optional dapp identity for each call in a cross-dapp batch. */
   originPerCall?: Array<{ origin: string; favicon: string | null }>;
+  /** Optional trusted identity visual supplied by an internal composition. */
+  identityIcon?: ReactNode;
   titleOverride?: string;
   /** Cross-dapp batches own their confirmation message and result fan-out. */
   customConfirmHandler?: (

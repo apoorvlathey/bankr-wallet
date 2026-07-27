@@ -1,9 +1,9 @@
 {
-  "name": "WalletChan",
+  "name": "WalletChan - Web3 Wallet",
   "version": "3.19.0",
   "manifest_version": 3,
-  "description": "WalletChan",
-  "homepage_url": "https://walletchan.eth.sh",
+  "description": "Self-custodial Web3 wallet for Ethereum and EVM. Swap, Bridge, and Sign clearly.",
+  "homepage_url": "https://walletchan.com",
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@walletchan"

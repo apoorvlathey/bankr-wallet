@@ -50,7 +50,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     batchRequest, currentIndex, totalCount, isInSidePanel, accountType,
     accountAddress, onBack, onConfirmed, onRejected, onRejectAll,
     onBeforeReject, onNavigate, onRemoveCall, onEditCallData, originPerCall,
-    titleOverride, customConfirmHandler, customRejectHandler, crossDappBatch,
+    identityIcon, titleOverride, customConfirmHandler, customRejectHandler, crossDappBatch,
     approvalCleanupHandler, approvalCleanupAllHandler, onAddedToBatch,
     pageBgColor, feePaymentRequestKind = "batch", residualApprovalRequest,
   } = props;
@@ -268,6 +268,7 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
           iconChipBg={iconChipBg}
           isInternalWalletChan={isInternalWalletChan}
           originInitials={originInitials}
+          identityIcon={identityIcon}
         />}
         financialImpact={<FinancialImpact
           calls={calls}

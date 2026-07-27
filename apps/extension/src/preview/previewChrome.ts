@@ -23,6 +23,7 @@ import {
   previewApprovalAndSendSimulationResult,
   previewChainIdForName,
   previewCustomTokens,
+  previewDefillamaSwapSimulationResult,
   previewGasEstimate,
   previewIncreaseAllowanceSimulationResult,
   previewSimulationResult,
@@ -580,6 +581,9 @@ export function responseForPreviewMessage(
       }
       if (route === "batch" && scenario === "approval-and-send") {
         return previewApprovalAndSendSimulationResult;
+      }
+      if (route === "batch" && scenario === "defillama-swap") {
+        return previewDefillamaSwapSimulationResult;
       }
       return { ...previewSimulationResult, residualApprovals: [] };
     case "detectResidualApprovals":

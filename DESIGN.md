@@ -267,6 +267,12 @@
 
 ## Slop audit
 
+- 2026-07-27 website Docs navigation audit: added the external Docs destination
+  to the existing homepage navigation model immediately after `$WCHAN`, so the
+  desktop and mobile menus share the same order, native link semantics, focus
+  behavior, and established visual states without introducing new chrome.
+  Result: pass.
+
 - 2026-07-27 Permit2 clear-signing audit: action headings now share the
   token symbol and decimals resolved for their amount row, so the primary
   summary reads `Transfer 1 USDC` instead of leaking `1000000` base units.
@@ -1070,6 +1076,10 @@
   intent stays compact. Deterministic preview scenarios cover the full matrix.
 
 ## Changelog
+
+- 2026-07-27: added `Docs` immediately after `$WCHAN` in the shared homepage
+  navigation model, linking desktop and mobile visitors to
+  `https://docs.walletchan.com`.
 
 - 2026-07-26: changed the reported-phishing banner to say `our phishing
   blocklist`; MetaMask remains identified as the underlying source in

@@ -131,6 +131,7 @@ const navItems = [
   { label: "Features", href: "#features" },
   { label: "Testimonials", href: "#testimonials" },
   { label: "$WCHAN", href: "#wchan" },
+  { label: "Docs", href: "https://docs.walletchan.com" },
 ];
 
 export function HeroStorySection() {

@@ -154,6 +154,40 @@ export const previewApprovalAndSendSimulationResult: SimulationResult = {
   ],
 };
 
+export const previewDefillamaSwapSimulationResult: SimulationResult = {
+  txSuccess: true,
+  simulationFailed: false,
+  metadataComplete: true,
+  // Keep the approve call visible in Calls without duplicating it as a
+  // simulated approval-change card in this focused swap preview.
+  approvalChanges: [],
+  approvalDetectionIncomplete: false,
+  nativeChange: {
+    address: "native",
+    symbol: "ETH",
+    name: "Ether",
+    decimals: 18,
+    logoUrl: "/chainIcons/ethereum.svg",
+    rawDelta: "42000000000000000",
+    formattedAmount: "0.042",
+    valueUsd: 151.2,
+    direction: "in",
+  },
+  tokenChanges: [
+    {
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6,
+      logoUrl: "/preview-assets/usdc.svg",
+      rawDelta: "-148620000",
+      formattedAmount: "148.62",
+      valueUsd: 148.62,
+      direction: "out",
+    },
+  ],
+};
+
 export function previewChainIdForName(chainName: unknown): number {
   if (typeof chainName !== "string") return 8453;
   return DEFAULT_NETWORKS[chainName]?.chainId ?? 8453;

@@ -234,6 +234,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
     defaultScenario: "default",
     scenarios: [
       "default",
+      "defillama-swap",
       "approval-and-send",
       "loading",
       "simulation-error",
@@ -344,6 +345,7 @@ export const PREVIEW_ROUTE_REGISTRY: Record<
       "import-partial-failure",
       "observe-only",
       "approval-needed",
+      "ledger-owner-approval",
       "waiting-external",
       "quorum-ready",
       "nonce-conflict",

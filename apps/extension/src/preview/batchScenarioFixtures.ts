@@ -3,8 +3,11 @@ import type { PendingBatchTxRequest } from "@/chrome/erc5792Types";
 type BatchScenarioAssets = {
   spender: string;
   usdc: string;
+  defillamaUsdc: string;
   weth: string;
   approveData: string;
+  defillamaFavicon: string;
+  defillamaSwapData: `0x${string}`;
 };
 
 export function applyPreviewBatchScenario(
@@ -12,6 +15,31 @@ export function applyPreviewBatchScenario(
   scenario: string,
   assets: BatchScenarioAssets,
 ): PendingBatchTxRequest {
+  if (scenario === "defillama-swap") {
+    const origin = "https://swap.defillama.com";
+    return {
+      ...base,
+      origin,
+      senderOrigin: origin,
+      favicon: assets.defillamaFavicon,
+      params: {
+        ...base.params,
+        calls: [
+          {
+            to: assets.defillamaUsdc as `0x${string}`,
+            data: assets.approveData as `0x${string}`,
+            value: "0x0",
+          },
+          {
+            to: assets.spender as `0x${string}`,
+            data: assets.defillamaSwapData,
+            value: "0x0",
+          },
+        ],
+      },
+    };
+  }
+
   if (scenario === "malformed-disabled") {
     return {
       ...base,

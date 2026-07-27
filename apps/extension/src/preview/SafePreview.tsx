@@ -17,7 +17,18 @@ const SAFE_ACCOUNT: SafeAccount = {
 };
 const PK_OWNER = "0x1234567890123456789012345678901234567890" as const;
 const SEED_OWNER = "0x2222222222222222222222222222222222222222" as const;
+const LEDGER_OWNER = "0x8888888888888888888888888888888888888888" as const;
 const EXTERNAL_OWNER = "0x7777777777777777777777777777777777777777" as const;
+const LEDGER_ACCOUNT = {
+  id: "preview-ledger-safe-owner",
+  type: "ledger" as const,
+  address: LEDGER_OWNER,
+  displayName: "Ledger owner",
+  createdAt: 1,
+  deviceId: "preview-ledger-device",
+  hdPath: "m/44'/60'/0'/0/0",
+  hdIndex: 0,
+};
 
 function scenarioFixture(scenario: string): {
   proposal: SafeProposalRecord;
@@ -35,6 +46,17 @@ function scenarioFixture(scenario: string): {
       snapshot: {
         ...snapshot,
         owners: [PK_OWNER, SEED_OWNER, EXTERNAL_OWNER],
+        threshold: 2,
+        capability: "quorumAvailable",
+      },
+    };
+  }
+  if (scenario === "ledger-owner-approval") {
+    return {
+      proposal: { ...ready, state: "draft", confirmations: [] },
+      snapshot: {
+        ...snapshot,
+        owners: [LEDGER_OWNER, PK_OWNER, EXTERNAL_OWNER],
         threshold: 2,
         capability: "quorumAvailable",
       },
@@ -203,12 +225,15 @@ export default function SafePreview({ scenario }: { scenario: string }) {
     );
   }
   const { proposal, snapshot } = scenarioFixture(scenario);
+  const accounts = scenario === "ledger-owner-approval"
+    ? [LEDGER_ACCOUNT, ...previewAccounts]
+    : previewAccounts;
   return (
     <SafeProposalConfirmation
       safeAccount={SAFE_ACCOUNT}
       proposal={proposal}
       snapshot={snapshot}
-      accounts={previewAccounts}
+      accounts={accounts}
       chainName="Base"
       explorer="https://basescan.org"
       onBack={() => undefined}

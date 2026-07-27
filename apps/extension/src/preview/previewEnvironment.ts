@@ -441,6 +441,26 @@ export function createPreviewFetch(
     const rawUrl = requestUrl(input);
     const url = new URL(rawUrl, "http://preview.local");
 
+    if (
+      url.origin === "https://api.4byte.sourcify.dev" &&
+      url.pathname === "/signature-database/v1/lookup" &&
+      url.searchParams.get("function") === "0x12aa3caf"
+    ) {
+      return jsonResponse({
+        ok: true,
+        result: {
+          function: {
+            "0x12aa3caf": [
+              {
+                name: "swap(address,(address,address,address,address,uint256,uint256,uint256),bytes,bytes)",
+                filtered: false,
+              },
+            ],
+          },
+        },
+      });
+    }
+
     if (url.pathname === "/api/portfolio") {
       const scenario = environment?.parsed.state.scenario ?? "default";
       if (

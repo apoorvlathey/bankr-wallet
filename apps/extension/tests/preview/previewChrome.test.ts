@@ -261,6 +261,15 @@ test("preview fetch returns local portfolio data and blocks live IO", async () =
   const rpcBody = await rpc.json();
   assert.equal(BigInt(rpcBody.result), 2_812_260_000_000_000_000n);
 
+  const selector = await previewFetch(
+    "https://api.4byte.sourcify.dev/signature-database/v1/lookup?function=0x12aa3caf",
+  );
+  const selectorBody = await selector.json();
+  assert.equal(
+    selectorBody.result.function["0x12aa3caf"][0].name,
+    "swap(address,(address,address,address,address,uint256,uint256,uint256),bytes,bytes)",
+  );
+
   await assert.rejects(
     previewFetch("https://api.example.com/live"),
     /Blocked live fetch/,
@@ -339,6 +348,56 @@ test("scenario fixtures expose signing restrictions and visible failures", () =>
       formattedAmount: change.formattedAmount,
     })),
     [{ direction: "out", formattedAmount: "1" }],
+  );
+
+  const defillamaSwap = createPreviewEnvironment(
+    "http://localhost/preview/batch?scenario=defillama-swap&wallet=privateKey",
+  );
+  const defillamaRequest = defillamaSwap.pendingBatchRequests[0];
+  assert.equal(defillamaRequest.origin, "https://swap.defillama.com");
+  assert.match(
+    defillamaRequest.favicon ?? "",
+    /^https:\/\/t1\.gstatic\.com\/faviconV2\?/,
+  );
+  assert.equal(
+    new URL(defillamaRequest.favicon ?? "").searchParams.get("url"),
+    "https://swap.defillama.com",
+  );
+  assert.deepEqual(
+    defillamaRequest.params.calls.map((call) => call.data?.slice(0, 10)),
+    ["0x095ea7b3", "0x12aa3caf"],
+  );
+  const defillamaSimulation = responseForPreviewMessage(
+    defillamaSwap,
+    { type: "simulateBatchAssetChanges" },
+  ) as {
+    approvalChanges: unknown[];
+    nativeChange: { direction: string; formattedAmount: string } | null;
+    tokenChanges: Array<{
+      symbol: string;
+      direction: string;
+      formattedAmount: string;
+    }>;
+  };
+  assert.deepEqual(defillamaSimulation.approvalChanges, []);
+  assert.deepEqual(defillamaSimulation.nativeChange, {
+    address: "native",
+    symbol: "ETH",
+    name: "Ether",
+    decimals: 18,
+    logoUrl: "/chainIcons/ethereum.svg",
+    rawDelta: "42000000000000000",
+    formattedAmount: "0.042",
+    valueUsd: 151.2,
+    direction: "in",
+  });
+  assert.deepEqual(
+    defillamaSimulation.tokenChanges.map((change) => ({
+      symbol: change.symbol,
+      direction: change.direction,
+      formattedAmount: change.formattedAmount,
+    })),
+    [{ symbol: "USDC", direction: "out", formattedAmount: "148.62" }],
   );
 
   const metadataError = createPreviewEnvironment(

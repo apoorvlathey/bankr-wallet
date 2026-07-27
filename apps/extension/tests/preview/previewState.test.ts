@@ -93,7 +93,7 @@ test("every documented core scenario is accepted as reload-stable URL state", ()
       "unshield-pending",
     ],
     "swap-picker": ["sell", "buy", "chains", "search", "loading", "empty", "missing-logo", "stress"],
-    batch: ["default", "approval-and-send", "loading", "simulation-error", "malformed-disabled", "unsafe-self-call", "stress", "impersonator-disabled"],
+    batch: ["default", "defillama-swap", "approval-and-send", "loading", "simulation-error", "malformed-disabled", "unsafe-self-call", "stress", "impersonator-disabled"],
     "cross-batch": ["default", "loading", "error", "stress", "impersonator-disabled"],
     permission: ["default", "metadata-loading", "metadata-unverified", "draft-invalid", "submitting", "advanced-stress"],
   };
