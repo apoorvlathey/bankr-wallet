@@ -14,10 +14,10 @@ import {
   METAMASK_DELEGATOR_V1_3_CAVEAT_ENFORCERS,
 } from "@/chrome/erc7715/caveats";
 import { getVisibleChains } from "@/lib/chains";
-import { encodeFunctionData, parseAbi } from "viem";
 import { previewAssets } from "./previewAssets";
 import { previewNetworks } from "./networkFixtures";
 import { applyPreviewBatchScenario } from "./batchScenarioFixtures";
+import { createDefillamaSwapData, getReadmeTxOverrides } from "./readmeScenarioFixtures";
 
 export { previewNetworks, previewNetworkRpcUrls } from "./networkFixtures";
 import type { PreviewWalletType } from "./types";
@@ -114,35 +114,6 @@ const increaseAllowanceData =
   "0x39509351" +
   previewSpender.toLowerCase().replace("0x", "").padStart(64, "0") +
   BigInt(25_000_000).toString(16).padStart(64, "0");
-const oneInchSwapAbi = parseAbi([
-  "function swap(address executor, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags) desc, bytes permit, bytes data) payable returns (uint256 returnAmount, uint256 spentAmount)",
-]);
-const nativeTokenSentinel =
-  "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as const;
-
-function createDefillamaSwapData(
-  recipient: `0x${string}`,
-): `0x${string}` {
-  return encodeFunctionData({
-    abi: oneInchSwapAbi,
-    functionName: "swap",
-    args: [
-      previewSpender,
-      {
-        srcToken: previewBaseUsdc,
-        dstToken: nativeTokenSentinel,
-        srcReceiver: recipient,
-        dstReceiver: recipient,
-        amount: 148_620_000n,
-        minReturnAmount: 41_500_000_000_000_000n,
-        flags: 0n,
-      },
-      "0x",
-      "0x",
-    ],
-  });
-}
-
 const previewPermissionStart = Math.floor(PREVIEW_EPOCH_MS / 1000);
 const previewPermissionExpiry = previewPermissionStart + 3600;
 const previewPermissionAmount = 1_000_000_000_000_000n;
@@ -390,16 +361,8 @@ export function createPreviewTxScenario(
   walletType: PreviewWalletType,
   scenario: string,
 ): PendingTxRequest {
-  if (scenario === "readme-review" || scenario === "readme-fees-usdc") {
-    return createPreviewTxRequest(walletType, {
-      id: `preview-tx-${scenario}-${walletType}`,
-      tx: {
-        to: "0x6fF5693b99212Da76ad316178A184AB56D299b43",
-        data: "0x",
-        value: "0x9536c708910000",
-      },
-    });
-  }
+  const readmeOverrides = getReadmeTxOverrides(scenario, walletType);
+  if (readmeOverrides) return createPreviewTxRequest(walletType, readmeOverrides);
 
   if (scenario === "increase-allowance") {
     return createPreviewTxRequest(walletType, {
@@ -450,7 +413,7 @@ export function createPreviewBatchScenario(
       weth: previewWeth,
       approveData,
       defillamaFavicon: googleFaviconUrl("swap.defillama.com", 64),
-      defillamaSwapData: createDefillamaSwapData(wallet.address),
+      defillamaSwapData: createDefillamaSwapData(wallet.address, previewSpender, previewBaseUsdc),
     },
   );
 }

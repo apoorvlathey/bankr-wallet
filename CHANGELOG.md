@@ -56,7 +56,8 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - **Ledger hardware wallets.** Users can connect over Chrome WebHID, browse
   derivation paths and addresses, import Ledger accounts, and approve
   transactions or messages on-device without private keys entering the
-  extension.
+  extension. Ledger accounts can also approve supported WalletConnect sessions
+  for single transactions, personal messages, and validated EIP-712 requests.
 - **Pending transaction controls.** Activity can prepare reviewed Speed Up and
   Cancel replacements for the oldest pending Private Key, Seed Phrase, and
   Ledger transaction. These account types can also review or edit the address
@@ -65,19 +66,30 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
   accounts owned by Bankr API, Private Key, Seed Phrase, or Ledger accounts,
   surface pending proposals, collect owner approvals, execute at quorum, create
   canonical rejection proposals, and use Safe-aware Send, Swap, Activity, and
-  security views across supported networks. Ledger owners approve on-device and
-  may execute with native gas; token-funded Safe execution remains unavailable
-  for Ledger.
+  security views across supported networks. One Safe account can enable and
+  manage verified deployments across multiple chains. Ledger owners approve
+  on-device and may execute with native gas; token-funded Safe execution
+  remains unavailable for Ledger.
+- **Approval safety and cleanup.** Transaction previews recognize ERC-20 and
+  Permit2 approval intent, detect supported residual approvals after reviewed
+  flows, and offer evidence-bound revocation. Private Key and Seed Phrase
+  accounts can add verified cleanup calls to eligible atomic batches, while
+  unsigned Safe proposals can append canonical revocations before signing.
+- **Dapp reputation checks.** New connection prompts identify trusted custom
+  domains and exact DeFiLlama listings, warn when reputation coverage is
+  unavailable or a site is unlisted, and require an explicit acknowledgement
+  for blocklisted or lookalike domains.
 - **In-wallet WCHAN staking.** Users can stake and unstake WCHAN on Base, claim
   WETH rewards, review the live APY and seven-day fee window, and batch approval
   plus deposit when supported. All four signing wallet types are supported;
   view-only accounts can inspect balances without submitting actions.
-- **Private wallet powered by Privacy Pools.** Bankr API, Private Key, and Seed
-  Phrase accounts can Shield Ethereum ETH into a private portfolio and Unshield
-  through a private relayer, a recipient-paid transaction, or public recovery.
-  The flow includes proof and compliance progress, private Activity, partial
-  withdrawals, recipient account creation, and master-gated recovery backup and
-  restore; Ledger and view-only accounts cannot submit privacy mutations.
+- **Private wallet powered by Privacy Pools.** All four signing account
+  types—Bankr API, Private Key, Seed Phrase, and Ledger—can Shield Ethereum ETH
+  into a private portfolio and Unshield through a private relayer, a
+  recipient-paid transaction, or public recovery. The flow includes proof and
+  compliance progress, private Activity, partial withdrawals, recipient account
+  creation, and master-gated recovery backup and restore; Ledger approvals stay
+  on-device and view-only accounts cannot submit privacy mutations.
 
 ### Changed
 
@@ -103,6 +115,8 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
 - Onboarding, Add Account, account selection, account settings, and chain/token
   management now use dedicated full-screen flows with clearer security gates,
   searchable Settings, and a streamlined Quick Actions hub.
+- Store packages now use the “WalletChan - Web3 Wallet” product name, expanded
+  extension descriptions, and `walletchan.com` as the Chrome homepage.
 - Large portfolios now render and verify holdings progressively, keep active
   balances and charts stable during refreshes, and prioritize funded networks
   and relevant assets in selectors.
@@ -130,6 +144,10 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
   the selected sell asset while its catalog and onchain data refresh.
 - Dapp-requested network additions once again return through the injected
   provider correctly, including when re-enabling an existing hidden chain.
+- Permit2 clear-signing summaries now format reviewed token amounts with the
+  token's runtime decimals and symbol instead of presenting raw integer units.
+- Reused account pickers no longer snap the scroll position back to the active
+  account while the user browses other entries.
 - Sidepanel request handling now works reliably in Brave, keeps short viewports
   usable, opens fullscreen transaction and connection requests in the selected
   sidepanel mode, and restores the popup when leaving sidepanel mode.
@@ -155,6 +173,13 @@ To regenerate the `[Unreleased]` section from git diffs, invoke the `/changelog`
   from the browser sender, enforce exact origin/account/chain bindings, and keep
   impersonator prompts reject-only unless the user explicitly enables a local
   developer RPC endpoint.
+- Dapp reputation lookups resolve the browser-attested hostname from the
+  durable pending request, use bounded credential-free transports, preserve
+  blocklist and lookalike precedence over trusted-domain signals, and never
+  grant connection or signing authority.
+- WalletConnect diagnostic telemetry and its persistent telemetry identifier
+  are disabled while pairing, relay delivery, and session keepalive continue
+  as functional transport.
 - Bankr batch and swap execution binds the exact account and credential
   generation before validation, then rechecks that binding before submission.
 - WalletConnect reset rotates its SDK storage identity, browser fallbacks

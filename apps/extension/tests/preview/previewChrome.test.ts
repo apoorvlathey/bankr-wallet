@@ -124,7 +124,26 @@ test("App, Settings, and portfolio reads have explicit response shapes", async (
       type: "getFeePaymentOptions",
       txId: environment.pendingTxRequests[0]?.id,
     }),
-    { success: true, options: [] },
+    {
+      success: true,
+      options: [
+        {
+          id: "native",
+          symbol: "ETH",
+          decimals: 18,
+          available: true,
+        },
+        {
+          id: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          symbol: "USDC",
+          decimals: 6,
+          balance: "321123000",
+          logoUrl: "/preview-assets/usdc.svg",
+          stablecoin: true,
+          available: true,
+        },
+      ],
+    },
   );
   assert.deepEqual(
     responseForPreviewMessage(environment, {

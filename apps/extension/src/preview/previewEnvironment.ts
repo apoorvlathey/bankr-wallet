@@ -21,7 +21,13 @@ import {
   previewCustomToken,
   previewHiddenTokens,
 } from "./fixtures";
+import {
+  createPreviewHomeNetworks,
+  createPreviewHomePortfolioResponse,
+  createPreviewHomePortfolioSnapshots,
+} from "./homePreviewFixtures";
 import { previewAssets } from "./previewAssets";
+import { previewRpcResponse, type PreviewJsonRpcRequest } from "./previewRpcFixtures";
 import { parsePreviewState, type ParsedPreviewState } from "./previewState";
 import { resolveSafeHomePreviewAccount } from "./safeHomePreview";
 import type { PreviewWalletType } from "./types";
@@ -42,43 +48,6 @@ export interface PreviewEnvironment {
   storage: Record<PreviewStorageAreaName, PreviewStorageRecord>;
   unlocked: boolean;
   txHistory: unknown[];
-}
-
-const PREVIEW_HOME_CHART_SHAPE = [
-  42, 44, 47, 45, 43, 49, 54, 52, 58, 61, 59, 55,
-  50, 47, 51, 56, 62, 66, 63, 68, 72, 70, 76, 82,
-];
-const PREVIEW_HOME_CHART_START_VALUE_USD = 1_973.0599332574604;
-const PREVIEW_HOME_CHART_END_VALUE_USD = 10_228.54;
-const PREVIEW_HOME_CHART_RANGE_MS = 7 * 24 * 60 * 60 * 1_000;
-
-function createPreviewHomePortfolioSnapshots() {
-  const shapeMin = Math.min(...PREVIEW_HOME_CHART_SHAPE);
-  const shapeMax = Math.max(...PREVIEW_HOME_CHART_SHAPE);
-  const endTimestamp = Date.now();
-  return PREVIEW_HOME_CHART_SHAPE.map((value, index, values) => ({
-    timestamp:
-      endTimestamp -
-      PREVIEW_HOME_CHART_RANGE_MS +
-      (index / (values.length - 1)) * PREVIEW_HOME_CHART_RANGE_MS,
-    totalValueUsd:
-      PREVIEW_HOME_CHART_START_VALUE_USD +
-      ((value - shapeMin) / (shapeMax - shapeMin)) *
-        (PREVIEW_HOME_CHART_END_VALUE_USD -
-          PREVIEW_HOME_CHART_START_VALUE_USD),
-  }));
-}
-
-function createPreviewHomeNetworks() {
-  return Object.fromEntries(
-    Object.entries(previewNetworks).map(([name, network]) => [
-      name,
-      {
-        ...network,
-        hidden: network.chainId !== 1 && network.chainId !== 8453,
-      },
-    ]),
-  );
 }
 
 function accountForWallet(
@@ -255,7 +224,7 @@ export function createPreviewEnvironment(href: string): PreviewEnvironment {
       local,
       sync: {
         networksInfo:
-          route === "home" ? createPreviewHomeNetworks() : previewNetworks,
+          route === "home" ? createPreviewHomeNetworks(previewNetworks) : previewNetworks,
         address: activeAccount.address,
         displayAddress: activeAccount.displayName || activeAccount.address,
         chainName: "Base",
@@ -312,25 +281,10 @@ export const previewPortfolioResponse: PortfolioResponse = {
   totalValueUsd: 5241.703,
 };
 
-const previewHomePortfolioResponse: PortfolioResponse = {
-  ...previewPortfolioResponse,
-  tokens: [
-    ...previewPortfolioResponse.tokens,
-    {
-      symbol: "WCHAN",
-      name: "WalletChan",
-      contractAddress: previewCustomToken.contractAddress,
-      chainId: 8453,
-      decimals: 18,
-      balance: "120.456",
-      balanceFormatted: "120.456",
-      priceUsd: 0.55,
-      valueUsd: 66.2508,
-      logoUrl: previewAssets.brand.walletChan,
-    },
-  ],
-  totalValueUsd: previewPortfolioResponse.totalValueUsd + 66.2508,
-};
+const previewHomePortfolioResponse = createPreviewHomePortfolioResponse(
+  previewPortfolioResponse,
+  previewCustomToken,
+);
 
 export function getPreviewPortfolioResponse(scenario: string): PortfolioResponse {
   if (scenario === "portfolio-empty" || scenario === "empty") {
@@ -365,62 +319,6 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     headers: { "content-type": "application/json" },
   });
-}
-
-interface PreviewJsonRpcRequest {
-  id?: unknown;
-  method?: string;
-  params?: unknown[];
-}
-
-const MULTICALL3_ADDRESS = "0xca11bde05977b3631167028862be2a173976ca11";
-const PREVIEW_ETH_BALANCE = 2_812_260_000_000_000_000n;
-const PREVIEW_USDC_BALANCE = 321_123_000n;
-const PREVIEW_WCHAN_BALANCE = 120_456_000_000_000_000_000n;
-
-function quantity(value: bigint): `0x${string}` {
-  return `0x${value.toString(16)}`;
-}
-
-function uint256(value: bigint): `0x${string}` {
-  return `0x${value.toString(16).padStart(64, "0")}`;
-}
-
-function previewRpcResponse(request: PreviewJsonRpcRequest) {
-  const base = { jsonrpc: "2.0", id: request.id ?? null };
-
-  if (request.method === "eth_getBalance") {
-    return { ...base, result: quantity(PREVIEW_ETH_BALANCE) };
-  }
-
-  if (request.method === "eth_call") {
-    const call = request.params?.[0] as { to?: string } | undefined;
-    if (call?.to?.toLowerCase() === MULTICALL3_ADDRESS) {
-      // Force viem down its production single-call fallback path. Those calls
-      // are simpler to model deterministically than Multicall3's tuple output.
-      return {
-        ...base,
-        error: { code: -32000, message: "Preview multicall fallback" },
-      };
-    }
-    if (
-      call?.to?.toLowerCase() ===
-      previewCustomToken.contractAddress.toLowerCase()
-    ) {
-      return { ...base, result: uint256(PREVIEW_WCHAN_BALANCE) };
-    }
-    return { ...base, result: uint256(PREVIEW_USDC_BALANCE) };
-  }
-
-  if (request.method === "eth_chainId") {
-    return { ...base, result: "0x2105" };
-  }
-
-  if (request.method === "eth_blockNumber") {
-    return { ...base, result: "0x15f90a0" };
-  }
-
-  return { ...base, result: "0x0" };
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -507,8 +405,9 @@ export function createPreviewFetch(
         }
         return jsonResponse(
           Array.isArray(request)
-            ? request.map(previewRpcResponse)
-            : previewRpcResponse(request),
+            ? request.map((entry) =>
+              previewRpcResponse(entry, previewCustomToken.contractAddress))
+            : previewRpcResponse(request, previewCustomToken.contractAddress),
         );
       } catch {
         return jsonResponse({

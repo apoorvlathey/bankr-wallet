@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Box, Container, Image } from "@chakra-ui/react";
+import { Box, Container } from "@chakra-ui/react";
 import App from "@/App";
 import Onboarding from "@/pages/Onboarding";
 import UnlockScreen from "@/components/UnlockScreen";
@@ -35,6 +35,7 @@ import ComponentLab from "./ComponentLab";
 import MobilePrimitivesPreview from "./MobilePrimitivesPreview";
 import DecisionPrimitivesPreview from "./DecisionPrimitivesPreview";
 import SafePreview from "./SafePreview";
+import { AutoSelectFeePayment, ReadmeBatchIdentityIcon } from "./ReadmePreviewSupport";
 import {
   createPreviewBatchScenario,
   createPreviewCrossDappBatchScenario,
@@ -161,7 +162,6 @@ function AutoActivateButton({ label }: { label: string }) {
 
   return null;
 }
-
 function setReactInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
@@ -229,66 +229,6 @@ function AutoConfigureSwap({ bridge }: { bridge: boolean }) {
   }, [bridge]);
 
   return null;
-}
-
-function AutoSelectFeePayment({ symbol }: { symbol: "USDC" }) {
-  const phase = useRef<"open" | "select" | "settle" | "done">("open");
-  const [done, setDone] = useState(false);
-  useEffect(() => {
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      if (phase.current === "done" || attempts >= 50) {
-        window.clearInterval(timer);
-        return;
-      }
-      attempts += 1;
-
-      if (phase.current === "open") {
-        const selector = Array.from(document.querySelectorAll("button")).find(
-          (button) => {
-            const row = button.parentElement?.parentElement;
-            return (
-              row?.textContent?.includes("Pay network fee with") &&
-              button.textContent?.trim() === "ETH"
-            );
-          },
-        );
-        if (!selector) return;
-        selector.click();
-        phase.current = "select";
-        return;
-      }
-
-      if (phase.current === "select") {
-        const option = Array.from(document.querySelectorAll("button")).find(
-          (button) => {
-            const text = button.textContent?.trim() ?? "";
-            return text.startsWith(symbol) && text.includes("Balance");
-          },
-        );
-        if (!option) return;
-        option.click();
-        phase.current = "settle";
-        return;
-      }
-
-      if (phase.current === "settle") {
-        const bodyText = document.body.innerText;
-        const quoteReady = bodyText.includes(`Maximum fee: 0.12 ${symbol}`);
-        const sheetClosed = !bodyText.includes(
-          "Choose the asset used only for this transaction's network fee.",
-        );
-        if (!quoteReady || !sheetClosed) return;
-        phase.current = "done";
-        setDone(true);
-        window.clearInterval(timer);
-      }
-    }, 100);
-
-    return () => window.clearInterval(timer);
-  }, [symbol]);
-
-  return done ? null : <span data-preview-automation-pending hidden />;
 }
 
 function SwapPreview({
@@ -654,12 +594,7 @@ export function PreviewScreen({
             currentIndex={scenario === "defillama-swap" ? 0 : 2}
             totalCount={scenario === "defillama-swap" ? 1 : 5}
             identityIcon={scenario === "defillama-swap" ? (
-              <Image
-                src={batchRequest.favicon ?? undefined}
-                alt=""
-                boxSize="22px"
-                objectFit="contain"
-              />
+              <ReadmeBatchIdentityIcon src={batchRequest.favicon ?? undefined} />
             ) : undefined}
             isInSidePanel={mode === "sidepanel"}
             accountType={batchRequest.accountType}

@@ -151,7 +151,6 @@ function BatchTransactionConfirmation(props: BatchTransactionConfirmationProps) 
     onAddedToBatch,
     onSplitModalClose: review.splitModal.onClose,
   });
-
   const isValueMalformed = !!malformedValueInfo;
   const isCalldataMalformed = !!malformedCallInfo;
   const hasDeploymentCall = calls.some((call) => !call.to);
