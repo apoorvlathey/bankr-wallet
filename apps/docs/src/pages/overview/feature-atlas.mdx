@@ -1,0 +1,128 @@
+---
+title: WalletChan feature atlas
+description: Explore every major WalletChan capability and action across accounts, assets, dapps, transactions, privacy, security, and settings.
+searchPriority: 10
+outline: 3
+---
+
+# Feature atlas
+
+WalletChan combines clear request review, multiple custody and signing models,
+dapp connectivity, asset movement, privacy, and smart-account controls.
+
+<span className="atlas-kicker">The whole wallet</span>
+
+## Setup and accounts
+
+- Install on [Chrome or Firefox](/getting-started/install).
+- Create or import a [private-key, seed-phrase, Ledger, view-only, or optional
+  Bankr remote-signing account](/accounts/account-types).
+- Discover and import [Safe multisig accounts](/accounts/safe).
+- Add more accounts, rename them, reorder them, choose per-tab accounts,
+  export local secrets with master authorization, and remove eligible
+  accounts in [Manage accounts](/accounts/manage).
+- Derive multiple addresses from one seed group and keep the group relationship
+  visible in [Seed-phrase accounts](/accounts/seed-phrase).
+
+## Portfolio and assets
+
+- See native tokens, ERC-20 tokens, DeFi positions, low-value assets, hidden
+  assets, Shielded ETH, total portfolio value, and historical charts in
+  [Home and portfolio](/wallet/home-and-portfolio).
+- Filter holdings by network, follow the connected dapp's network, hide total
+  values for privacy, and choose unified or network-specific portfolio views.
+- Add a custom token, accept an EIP-747 watch-asset request, edit local token
+  metadata, hide or restore tokens, and manage low-value assets in
+  [Tokens and balances](/wallet/tokens).
+- Open chain explorers and portfolio dashboards for the active address.
+
+## Move and use funds
+
+- [Send](/wallet/send) native currency or ERC-20 tokens; choose a network and
+  token, enter a contact or name, switch token/USD entry, use percentage/MAX
+  controls, and optionally include calldata.
+- [Swap or bridge](/wallet/swap-and-bridge) from one token/network to another,
+  review route, price impact, minimum received, slippage, transaction count,
+  and settlement status.
+- [Stake WCHAN](/wallet/staking) into the WCHAN vault and review balance,
+  shares, APY, amount, and conditions before confirmation.
+- Ask [Bankr chat](/wallet/bankr-chat) for wallet help and transaction actions
+  when a Bankr account is available.
+
+## Dapps and browsing
+
+- Connect through the injected EIP-1193/EIP-6963 provider, choose which
+  accounts a site can see, inspect reputation signals, and disconnect later.
+- Pair remote apps with [WalletConnect](/dapps/walletconnect), inspect requested
+  chains/methods, and manage active sessions.
+- Search, bookmark, reorder, and open dapps in the
+  [WalletChan Browser](/dapps/web3-browser), including `.eth`, `.gwei`,
+  IPFS/IPNS, and supported onchain web content.
+- Approve chain additions, switch networks, add tokens, and inspect
+  [network/token requests](/dapps/network-and-token-requests).
+
+## Transaction understanding and control
+
+- Review the requesting site, signer, network, action, recipient, value,
+  estimated asset changes, approvals, gas, nonce, and raw/decoded calldata.
+- Use [transaction simulation and clear signing](/transactions/simulation) to
+  see likely sends, receives, NFTs, approvals, contract actions, and readable
+  ERC-7730 descriptions before signing.
+- Sign personal messages, EIP-712 typed data, and validated
+  [Sign-In with Ethereum](/transactions/signatures) requests.
+- Add compatible requests to a batch, review `wallet_sendCalls`, split calls,
+  and combine requests from more than one dapp in
+  [Batch transactions](/transactions/batches).
+- Pick slow/normal/fast/custom gas, edit local-account nonce, or pay supported
+  network fees with an eligible fee token.
+- [Cancel or speed up](/transactions/replacements) pending local/Ledger
+  transactions and inspect dropped replacements.
+- Revoke risky residual token approvals during supported transaction and batch
+  reviews with [Approval cleanup](/transactions/approval-cleanup).
+- Use [force inclusion](/transactions/force-inclusion) recovery on eligible
+  OP Stack routes when the normal sequencer path is unavailable.
+
+## Smart accounts and delegated access
+
+- Set or revoke EIP-7702 delegation for eligible local accounts, enabling
+  atomic batching where supported.
+- Review, edit, grant, inspect, and revoke constrained
+  [ERC-7715 permissions](/smart-accounts/erc-7715) such as spending limits,
+  time windows, and streaming rates.
+- Probe wallet capabilities for ERC-5792 batching and smart-account support
+  without silently granting authority.
+
+## Privacy
+
+- [Shield ETH](/privacy/shield) into a private balance with review, compliance
+  progress, and operation status.
+- Withdraw with available [unshield methods](/privacy/unshield-and-recovery),
+  including recipient-paid or relayed paths when offered.
+- Back up, verify, replace, or import the separate Shield recovery phrase;
+  rescan/recover Shield state and see balance-at-risk warnings.
+
+## Security and access
+
+- Encrypt local secrets, lock manually or automatically, change the master
+  password, and choose session timeout behavior.
+- Set up passkey-backed [biometric unlock](/security/biometric-unlock) on the
+  current device.
+- Create a constrained [agent password](/security/agent-password) that can
+  unlock and approve supported signing actions but cannot reveal private keys,
+  seed phrases, or other master-only secrets.
+- Keep Ledger keys on the device and approve signing on hardware.
+- Detect malformed calldata, signer mismatches, risky domains, unsupported raw
+  delegation payloads, and invalid typed-data/SIWE structures before signing.
+
+## Settings and maintenance
+
+- Search Settings; choose appearance and sounds; manage accounts; change
+  passwords and auto-lock; configure passkey, agent password, Shield recovery,
+  clear signing, networks, RPC endpoints, web3 browsing, and custom chains.
+- Clear local transaction history or Bankr chat history, reset the local nonce
+  cache, and inspect version/security links.
+- Configure developer-only unsigned impersonated transactions for a specific
+  RPC endpoint. This never turns a view-only address into a signing account.
+
+See [All settings](/settings/all-settings) for the exact action and access
+requirements of every control.

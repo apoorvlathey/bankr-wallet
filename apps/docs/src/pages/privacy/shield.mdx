@@ -1,0 +1,67 @@
+---
+title: Privacy Shield and Shielded ETH
+description: Shield ETH into WalletChan Private mode, understand fees, compliance states, privacy limits, account support, and Activity.
+searchPriority: 7
+outline: 3
+---
+
+# Privacy Shield
+
+Privacy Shield uses Ethereum Privacy Pools to move eligible ETH from a public
+account into WalletChan's wallet-wide Shielded ETH balance.
+
+It is available in production on Chromium and hidden on Firefox.
+
+## Before you start
+
+- The production pool is on Ethereum mainnet.
+- The minimum Shield amount is 0.01 ETH.
+- A 0.5% protocol fee is added to the public wallet debit.
+- You also need normal Ethereum transaction gas.
+- Back up the separate [Shield recovery
+  phrase](/security/backups#shield-recovery-phrase).
+
+## Shield
+
+1. Switch Home to **Private** and choose **Shield**.
+2. Select an eligible public source account.
+3. Enter ETH or USD, or use the percentage/MAX control.
+4. Review the exact public debit, Shielded ETH received, protocol fee, gas, and
+   privacy explanation.
+5. Complete the normal pinned transaction confirmation.
+
+MAX accounts for gas and the protocol fee instead of spending the full public
+ETH balance.
+
+## Account support
+
+Private-key, seed-phrase, Ledger, and Bankr source accounts can use supported
+Shield paths. Ledger requires hardware approval. Safe and view-only accounts
+cannot Shield.
+
+An agent password cannot initialize, prepare, submit, reveal, restore, or
+recover Privacy Shield authority.
+
+## Deposit lifecycle
+
+After the Ethereum receipt, the deposit enters compliance/association-set
+processing. WalletChan separates:
+
+- Submitted/confirming public transaction.
+- Compliance pending.
+- Ready private balance.
+- Recovery or definite failure.
+
+The UI presents an approximate one-hour compliance expectation and caps
+progress below completion until the required state is actually observed.
+Closing WalletChan does not cancel the operation.
+
+## What privacy does and does not hide
+
+The public Shield deposit is visible onchain. A private relay withdrawal is
+designed to reduce the direct public link between deposit and recipient, but
+amounts, timing, external behavior, relayer/network observations, and public
+recovery choices can reduce privacy.
+
+Privacy is a property of the whole usage pattern, not a guarantee from one
+button.

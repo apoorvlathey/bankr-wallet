@@ -1,0 +1,68 @@
+---
+title: Advanced dapp permissions with ERC-7715
+description: Review, edit, grant, inspect, and revoke constrained spending or streaming permissions in WalletChan.
+searchPriority: 6
+outline: 3
+---
+
+# Advanced dapp permissions
+
+ERC-7715 lets a dapp request reusable but constrained authority instead of
+asking you to approve every individual action.
+
+## Requirements
+
+WalletChan currently supports this for private-key and seed-phrase accounts
+already delegated to WalletChan's compatible default smart account. Bankr,
+Ledger, view-only, and Safe do not grant these permissions.
+
+Granting requires a master or passkey-master session. An agent password cannot
+issue new delegated authority.
+
+## What a request can contain
+
+WalletChan supports policy-approved forms such as:
+
+- One-time native or ERC-20 allowance.
+- Periodic spending allowance.
+- Streaming allowance/rate.
+- Token-approval revocation capability.
+
+The review shows the requesting app and reason, asset/current balance, delegate,
+allowed methods, amount/exposure, cadence, start, and expiration.
+
+## Edit within the safe envelope
+
+When the request allows editing, you can reduce or adjust:
+
+- Per-use, periodic, or total limits.
+- Stream rate and display unit.
+- Start and expiry time in UTC.
+- Allowed methods.
+- Approved cleanup/expiration parameters.
+
+WalletChan never lets the edit exceed the authority envelope validated by the
+background policy.
+
+## Grant or reject
+
+Granting is an onchain authority change. Rejecting leaves the account
+unchanged. View-only requests remain reject-only.
+
+## View and revoke
+
+Open the local account's settings to see permissions grouped by origin. Revoking
+creates an onchain transaction, so it requires signing and gas. Disconnecting
+the dapp alone does not revoke the permission.
+
+## Read Advanced
+
+Advanced details include exact permission manager, caveats, delegate, and raw
+JSON. If the plain-language summary and exact details disagree, reject.
+
+## Related guides
+
+- [Understand smart-account delegation](/smart-accounts/delegation)
+- [Manage dapp permissions](/dapps/permissions)
+- [Clean up token approvals](/transactions/approval-cleanup)
+- [Review signatures and typed data](/transactions/signatures)

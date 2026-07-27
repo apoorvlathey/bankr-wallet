@@ -1,0 +1,56 @@
+---
+title: Smart account delegation with EIP-7702
+description: Enable, inspect, customize, or revoke WalletChan smart-account delegation for atomic batching and fee-token gas.
+searchPriority: 6
+outline: 3
+---
+
+# Smart account delegation
+
+EIP-7702 lets an eligible private-key or seed-phrase EOA temporarily act
+through smart-account code while keeping the same address.
+
+## Why WalletChan uses it
+
+A compatible delegate can enable:
+
+- Atomic ERC-7821 batches.
+- One-confirmation approval + action plans.
+- Supported cross-dapp batches.
+- Token-paid gas.
+- ERC-7715 constrained permissions.
+
+## First use
+
+WalletChan checks the current onchain delegate. It can reuse a compatible
+ERC-7821 delegate or offer WalletChan's immutable default delegate on supported
+networks. The review explains the one-time account change before the action.
+
+If an incompatible external delegate exists, WalletChan warns that replacing it
+can affect another wallet or application. It does not silently overwrite it.
+
+## Account settings
+
+Private-key and seed accounts show per-network delegate state. You can:
+
+- Set WalletChan's reviewed default delegate.
+- Enter a custom delegate with a high-risk confirmation.
+- Revoke delegation and return the account to ordinary EOA behavior.
+
+Custom delegate issuance requires a master session. Canonical default setup and
+revocation can be agent-capable where policy allows.
+
+## Scope
+
+Delegation is account- and chain-specific. Enabling it on Base does not enable
+it on Ethereum. Ledger, view-only, and Safe accounts do not use this EOA
+delegation flow.
+
+## Security
+
+A delegate changes how calls from the account can be executed. Verify the
+delegate address, network, compatibility warning, and requested authority.
+Revoking it is an onchain transaction and costs gas.
+
+See [Batch transactions](/transactions/batches) and
+[Advanced dapp permissions](/smart-accounts/erc-7715).

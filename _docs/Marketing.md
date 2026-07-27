@@ -111,11 +111,14 @@ Longer version:
     accounts cover normal local signing paths.
 
 - **Multiple account modes**
-  - Bankr accounts for API-backed execution.
   - Private key accounts for local signing.
   - Seed phrase accounts with HD derivation.
+  - Ledger accounts for hardware-backed signing.
   - View-only / watch-style impersonator accounts for inspection.
-  - Public copy should say "three signing modes plus watch-only accounts."
+  - Existing Safe multisigs for shared-control proposal and execution workflows.
+  - Optional Bankr accounts for API-backed remote signing.
+  - Public copy should name the relevant account models instead of reducing the
+    wallet to a single signing path.
 
 - **Fast confirmations where the chain supports it**
   - Flashblocks-aware receipt polling on supported chains such as Base,
@@ -402,7 +405,7 @@ Feature headlines:
 - `Swap And Bridge In Wallet`
 - `Browse ENS And IPFS Locally`
 - `Every EVM Chain You Need`
-- `Bring Your Keys, Seed, Or Bankr Account`
+- `Bring Your Keys, Ledger, Safe, Or Bankr Account`
 - `Rich History For Real DeFi Sessions`
 - `Powered By $WCHAN`
 

@@ -1,0 +1,52 @@
+---
+title: Safe multisig accounts
+description: Discover, import, verify, propose, approve, execute, refresh, and remove Safe multisig accounts in WalletChan.
+---
+
+# Safe multisig accounts
+
+WalletChan can discover and import Safe accounts controlled by one of your
+signing accounts on supported networks.
+
+## Discover and import
+
+Open **Add account → Safe** and choose an eligible owner account. WalletChan
+checks configured Safe services and onchain ownership, prioritizes active Safes,
+and presents verified candidates. Select the Safe and networks you want to
+track.
+
+## Home and security state
+
+A Safe account shows its Safe identity, owner/threshold information, supported
+chain status, and pending proposal count. If ownership or deployment state
+cannot be verified, WalletChan limits actions and shows what needs attention.
+
+## Propose, approve, and execute
+
+Safe transaction reviews show the proposed calls, estimated financial impact,
+nonce, existing confirmations, threshold, and execution readiness.
+
+- **Propose** creates a Safe transaction through an eligible owner.
+- **Approve** adds the selected owner's confirmation.
+- **Execute** submits after the threshold and current Safe state allow it.
+
+A proposal can be visible before it is executable. Refresh to reconcile
+onchain and service state when another owner acts outside WalletChan.
+
+## Swaps and other actions
+
+Supported WalletChan actions can create Safe proposals instead of directly
+executing an EOA transaction. The Safe's network, module/capability state,
+threshold, and service availability determine what is offered.
+
+## Remove
+
+Removing a Safe from WalletChan removes the local tracked account only. It does
+not change Safe owners, threshold, modules, or onchain funds.
+
+## Related guides
+
+- [Review atomic and sequential batch transactions](/transactions/batches)
+- [Understand gas and fee payment](/transactions/gas-and-fees)
+- [Track Safe proposals in Activity](/wallet/activity)
+- [Compare Safe and owner-account behavior](/reference/account-behavior)

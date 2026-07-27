@@ -2,16 +2,28 @@
 
 **Primary domain**: walletchan.com
 **Fallback domain**: walletchan.eth.sh
-**Design System**: Bauhaus (see STYLING.md)
-**Status**: Planning
+**Design System**: Warm Midnight (see `DESIGN.md` and `WARM_MIDNIGHT.md`)
+**Status**: Legacy information-architecture reference. Current positioning and
+visual direction are defined in [`Marketing.md`](./Marketing.md), `DESIGN.md`,
+[`WARM_MIDNIGHT.md`](./WARM_MIDNIGHT.md), and current copy in
+`apps/website/app/`.
+
+> The Bauhaus wireframes and visual notes preserved later in this document are
+> historical. Do not use them as the current website direction. The live
+> website and the docs site both use Warm Midnight.
 
 ---
 
 ## Overview
 
-A funky, bold landing page that showcases WalletChan—the browser extension that brings your Bankr terminal wallet into any dapp. The website follows our Bauhaus design system with geometric shapes, primary colors (Red, Blue, Yellow), hard shadows, and constructivist typography.
+The current landing page showcases WalletChan as a self-custodial,
+multi-account Ethereum and EVM browser wallet. The top-level story is readable
+signing, modern dapp workflows, and moving assets without leaving the wallet.
+Bankr is an optional remote-signing account type, not the product definition.
+Warm Midnight uses graphite surfaces, clear financial-blue interaction,
+restrained WalletChan amber, product-led visuals, and direct typography.
 
-**Vibe**: Retro-futuristic, Constructivist, Bold, Playful yet Professional, "Wallets should be fun"
+**Vibe**: Warm, precise, trustworthy, direct, and unmistakably WalletChan.
 
 ---
 
@@ -77,13 +89,13 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                          │     ◯               │
-│  PULL YOUR BANKR                         │       ▢             │
-│  WALLET INTO                             │    △                │
-│  ANY DAPP                                │                     │
+│  SIGN SMARTER.                           │       ▢             │
+│  MOVE FASTER.                            │    △                │
+│                                          │                     │
 │                                          │   [Mascot GIF       │
-│  Like MetaMask, but powered by AI.       │    animated,        │
-│  Transaction execution through the       │    breathing]       │
-│  Bankr API. No seed phrases needed.      │                     │
+│  A self-custodial Ethereum and EVM       │    animated,        │
+│  wallet for clear signing, swaps,        │    breathing]       │
+│  bridges, and modern dapps.              │                     │
 │                                          │                     │
 │  [ADD TO CHROME]  [VIEW ON GITHUB]       │                     │
 │                                          │                     │
@@ -123,9 +135,9 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │    ◯              │      ▢             │      △              │
-│   4+              │     50+            │    100%             │
-│  CHAINS           │   TRANSACTIONS     │  OPEN-SOURCE        │
-│  SUPPORTED        │   PER DAY          │                     │
+│   EVM             │     CLEAR          │    100%             │
+│  MULTICHAIN       │   SIGNING          │  OPEN-SOURCE        │
+│  + CUSTOM RPC     │   REVIEWS          │                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -156,12 +168,12 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │ ◯            │  │ ▢            │  │ △            │          │
 │  │              │  │              │  │              │          │
-│  │ AI-POWERED   │  │ SIDE PANEL   │  │ MULTI-CHAIN  │          │
-│  │ TRANSACTIONS │  │ MODE         │  │ SUPPORT      │          │
+│  │ CLEAR        │  │ SIDE PANEL   │  │ MULTI-CHAIN  │          │
+│  │ SIGNING      │  │ MODE         │  │ SUPPORT      │          │
 │  │              │  │              │  │              │          │
-│  │ Execute via  │  │ Keep wallet  │  │ Base, ETH,   │          │
-│  │ Bankr API    │  │ visible, no  │  │ Polygon,     │          │
-│  │ prompts      │  │ popups!      │  │ Unichain     │          │
+│  │ Understand   │  │ Keep wallet  │  │ Built-in +   │          │
+│  │ each request │  │ visible, no  │  │ custom EVM   │          │
+│  │ before sign  │  │ popups!      │  │ networks     │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘          │
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
@@ -187,11 +199,14 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 
 **Features to Highlight**:
 
-1. **AI-Powered Transactions** - Execute transactions through Bankr API prompts
+1. **Clear Transaction Reviews** - Understand intent, calldata, signatures, and
+   simulated asset changes before approving
 2. **Side Panel Mode** - Keep wallet visible while browsing, no annoying popups
-3. **Multi-Chain Support** - Base, Ethereum, Polygon, Unichain (show chain icons)
+3. **Multi-Chain Support** - Curated Ethereum/EVM networks plus custom chains
 4. **Per-Tab Chain State** - Different chains in different browser tabs
-5. **Secure Storage** - AES-256-GCM encryption with PBKDF2 (600k iterations)
+5. **Secure Account Storage** - Locally encrypted private-key and seed-phrase
+   accounts, on-device Ledger keys, existing Safe accounts, and optional Bankr
+   accounts
 6. **EIP-6963 Compatible** - Works alongside other wallets with modern dapp discovery
 7. **Transaction History** - Track recent transactions with status updates
 8. **Browser Notifications** - Get notified when transactions complete
@@ -269,15 +284,14 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 │   │ 1 │─────────│ 2 │─────────│ 3 │─────────│ 4 │             │
 │   └───┘         └───┘         └───┘         └───┘             │
 │                                                                 │
-│  DOWNLOAD      ENABLE DEV     LOAD THE      ENTER API          │
-│  EXTENSION     MODE           EXTENSION     KEY                │
+│  INSTALL       OPEN          CREATE OR     CONNECT             │
+│  EXTENSION     WALLET        IMPORT        TO DAPPS            │
 │                                                                 │
 │  [Screenshot]  [Screenshot]   [Screenshot]  [Screenshot]       │
 │                                                                 │
-│  Get the       Toggle on      Click "Load   Get your key       │
-│  latest        Developer      unpacked"     from bankr.bot     │
-│  release       mode in        and select    and you're         │
-│  from GitHub   extensions     the folder    ready!             │
+│  Use a store   Complete       Choose seed,  Review each        │
+│  listing or    onboarding     private key,  connection and     │
+│  release       and unlock     Ledger, etc.  request             │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -300,10 +314,11 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 
 **Steps**:
 
-1. **Download** - Get the latest release from GitHub Releases
-2. **Enable Developer Mode** - Toggle in chrome://extensions (show screenshot)
-3. **Load Extension** - Click "Load unpacked" and select folder
-4. **Enter API Key** - Get from bankr.bot/api, enter wallet address, create password
+1. **Install** - Use a supported browser store or a verified GitHub release
+2. **Open WalletChan** - Complete onboarding and create a master password
+3. **Create or Import** - Use a seed phrase, private key, Ledger, view-only
+   address, or optional Bankr account; existing Safes can be added afterward
+4. **Connect to a dapp** - Approve the site and review each request before signing
 
 **CTA at bottom**: "Download Latest Release" (Red button linking to GitHub releases)
 
@@ -530,8 +545,8 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 │                                                                 │
 │  [●▲■] WalletChan                                             │
 │                                                                 │
-│  Pull your Bankr wallet out of the           Links:            │
-│  terminal and into your browser.             • GitHub          │
+│  Sign smarter. Move faster.                  Links:            │
+│  Clear signing across your EVM workflow.     • GitHub          │
 │                                              • Twitter         │
 │  Contract: 0x... [Copy]                      • Bankr.bot       │
 │                                              • Privacy Policy  │
@@ -596,17 +611,17 @@ A funky, bold landing page that showcases WalletChan—the browser extension tha
 ## SEO & Meta
 
 ```html
-<title>WalletChan - The Wallet for AI Era</title>
+<title>WalletChan — EVM Wallet for Web3 | Sign Smarter. Move Faster.</title>
 <meta
   name="description"
-  content="Browser extension that brings your Bankr terminal wallet to any dapp. AI-powered transactions, multi-chain support, no seed phrases needed."
+  content="WalletChan is a self-custodial Ethereum and EVM browser wallet. Connect to Web3 dapps, swap and bridge, and understand each signature before you approve."
 />
 
 <!-- Open Graph -->
 <meta property="og:title" content="WalletChan" />
 <meta
   property="og:description"
-  content="Pull your Bankr wallet into any dapp, like MetaMask!"
+  content="A self-custodial Ethereum and EVM browser wallet for clear signing, swaps, bridges, and modern dapps."
 />
 <meta property="og:image" content="https://walletchan.com/og-image.png" />
 <meta property="og:url" content="https://walletchan.com" />

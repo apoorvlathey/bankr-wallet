@@ -1,8 +1,13 @@
 # Privacy Policy
 
-**Last Updated:** January 31, 2026
+**Last Updated:** July 27, 2026
 
-WalletChan ("the Extension") is a Chrome browser extension that allows users to interact with decentralized applications (dApps) using the Bankr API. This Privacy Policy explains how we handle your information.
+WalletChan ("the Extension") is an Ethereum and EVM browser wallet for
+managing accounts, connecting to decentralized applications (dapps), and
+reviewing wallet actions. It supports local private-key and seed-phrase
+accounts, Ledger hardware accounts, existing Safe multisigs, view-only
+accounts, and an optional Bankr API account. This Privacy Policy explains how
+we handle your information.
 
 ---
 
@@ -12,11 +17,16 @@ WalletChan ("the Extension") is a Chrome browser extension that allows users to 
 
 The Extension stores the following data locally in your browser using Chrome's storage APIs:
 
-- **Encrypted API Key**: Your Bankr API key, encrypted with AES-256-GCM using a password you create. The password is never stored.
-- **Wallet Address**: The blockchain address you configure for use with dApps.
+- **Encrypted Local Wallet Data**: Private keys and seed phrases that you add
+  to WalletChan are encrypted on your device. Ledger private keys remain on the
+  hardware device.
+- **Account Metadata**: Public wallet addresses, labels, selected accounts,
+  Ledger derivation metadata, view-only accounts, and Safe account metadata.
 - **Network Configuration**: Your custom RPC endpoints and network settings.
 - **Transaction History**: A record of your last 50 transactions (stored locally for your reference).
 - **User Preferences**: Settings such as auto-lock timeout and display preferences.
+- **Encrypted Bankr Credential**: If you add a Bankr account, its API key is
+  encrypted locally using the wallet's protected vault.
 
 **Important**: All of this data remains on your device. We do not have access to it and cannot retrieve it.
 
@@ -28,10 +38,10 @@ The Extension transmits data to the following external services:
 
 | Service                         | Data Sent                    | Purpose                                            |
 | ------------------------------- | ---------------------------- | -------------------------------------------------- |
-| **Bankr API** (`api.bankr.bot`) | Transaction details, API key | Execute blockchain transactions                    |
 | **Blockchain RPC Endpoints**    | Standard Web3 RPC calls      | Read blockchain state (balances, contract data)    |
 | **eth.sh API**                  | Blockchain addresses         | Fetch human-readable labels for contract addresses |
 | **Google Favicons**             | Website domains              | Display website icons in the UI                    |
+| **Bankr API** (`api.bankr.bot`) | Transaction details, API key | Execute or sign actions for an added Bankr account |
 
 ---
 
@@ -67,8 +77,10 @@ You can delete your data at any time:
 
 The Extension relies on the following third-party services:
 
-- **Bankr API**: Used to execute blockchain transactions. Subject to Bankr's terms of service.
-- **Blockchain Networks**: Transactions are submitted to public blockchain networks (Ethereum, Base, Polygon, Unichain).
+- **Blockchain Networks**: Transactions are submitted to the Ethereum or EVM
+  network selected for the action.
+- **Bankr API**: Used only for Bankr-account actions. Subject to Bankr's terms
+  of service.
 
 ---
 

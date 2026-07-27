@@ -954,17 +954,17 @@ replayed without a background recheck.
 
 Every signing and execution flow must cover:
 
-| Scenario | Bankr owner | PK owner | Seed owner | Ledger owner | View-only |
+| Scenario | PK owner | Seed owner | Ledger owner | View-only | Bankr owner |
 | --- | --- | --- | --- | --- | --- |
-| Discover Safe by owner | Yes | Yes | Yes | Yes | Optional lookup only |
-| Import and link | Yes | Yes | Yes | Yes | Observe only |
-| Propose first signature | Required before ship | Required | Required | Automated + device QA | Blocked |
-| Add confirmation | Required before ship | Required | Required | Automated + device QA | Blocked |
-| Execute with owner EOA | Approval only | Required | Required | Automated + device QA | Blocked |
-| Execute with unrelated local EOA | Approval only | Required | Required | Automated + device QA | Blocked |
-| Safe message approval | Compatibility-gated | Compatibility-gated | Compatibility-gated | Compatibility-gated | Blocked |
-| Owner/module/settings change | Master-only if supported | Master-only | Master-only | Master-only | Blocked |
-| Agent password ordinary approval | Explicit policy test | Explicit policy test | Explicit policy test | Explicit policy + device QA | Blocked |
+| Discover Safe by owner | Yes | Yes | Yes | Optional lookup only | Yes |
+| Import and link | Yes | Yes | Yes | Observe only | Yes |
+| Propose first signature | Required | Required | Automated + device QA | Blocked | Required before ship |
+| Add confirmation | Required | Required | Automated + device QA | Blocked | Required before ship |
+| Execute with owner EOA | Required | Required | Automated + device QA | Blocked | Approval only |
+| Execute with unrelated local EOA | Required | Required | Automated + device QA | Blocked | Approval only |
+| Safe message approval | Compatibility-gated | Compatibility-gated | Compatibility-gated | Blocked | Compatibility-gated |
+| Owner/module/settings change | Master-only | Master-only | Master-only | Blocked | Master-only if supported |
+| Agent password ordinary approval | Explicit policy test | Explicit policy test | Explicit policy + device QA | Blocked | Explicit policy test |
 
 Also test one Safe linked to multiple WalletChan owner types and prove that the
 wrong cached password/API key/private key can never approve for another owner.

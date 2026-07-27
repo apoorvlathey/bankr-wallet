@@ -39,7 +39,7 @@ Safe private key or treats a Safe as an EOA.
   rejection proposal and normal threshold execution.
 - `signatureValidation.ts`, `ownerAuthorization.ts`: one-owner authorization,
   centralized live-session restoration for
-  Bankr/private-key/seed-phrase/Ledger owners, auth-epoch revalidation, and
+  private-key/seed-phrase/Ledger/Bankr owners, auth-epoch revalidation, and
   signature recovery. Ledger approval delegates only the exact SafeTx EIP-712
   payload to the central device signer.
 - `serviceRegistry.ts`: bounded, cached Safe Config Service discovery for every

@@ -1,0 +1,80 @@
+---
+title: Supported networks
+description: WalletChan built-in mainnets, testnets, custom networks, and feature differences between chains.
+searchPriority: 7
+outline: 3
+---
+
+# Supported networks
+
+WalletChan ships with a broad EVM network registry and also supports custom
+networks. A network being visible does not mean every remote service or
+advanced feature supports it.
+
+## Built-in mainnets
+
+| Network | Chain ID | Notes |
+| --- | ---: | --- |
+| Ethereum | 1 | Swaps, EIP-7702, Bankr |
+| Abstract | 2741 | Swaps |
+| Arbitrum | 42161 | Swaps, EIP-7702, Bankr |
+| Avalanche | 43114 | Swaps |
+| Base | 8453 | Swaps, EIP-7702, Flashblocks, Bankr |
+| Berachain | 80094 | Swaps, EIP-7702 |
+| Blast | 81457 | Hidden by default |
+| BNB Chain | 56 | Swaps, EIP-7702, Bankr |
+| HyperEVM | 999 | Swaps, EIP-7702 |
+| Ink | 57073 | Swaps, EIP-7702 |
+| Linea | 59144 | Swaps, EIP-7702 |
+| Mantle | 5000 | Hidden by default |
+| MegaETH | 4326 | Swaps, sync-send optimization, non-standard gas model, Bankr |
+| Mode | 34443 | Hidden by default |
+| Monad | 143 | Swaps, EIP-7702 |
+| Optimism | 10 | Swaps, EIP-7702, Bankr |
+| Plasma | 9745 | Swaps |
+| Polygon | 137 | Swaps, EIP-7702, Bankr |
+| Robinhood Chain | 4663 | Bankr; registry availability may precede general network launch |
+| Scroll | 534352 | Hidden by default |
+| Sonic | 146 | Hidden by default |
+| Tempo | 4217 | USD-denominated EVM metadata; no ordinary native-token balance |
+| Unichain | 130 | Swaps, EIP-7702, Bankr |
+| World Chain | 480 | Swaps |
+| ZKsync Era | 324 | Swaps |
+
+Built-in availability, visibility defaults, and service support can change
+with WalletChan releases.
+
+## Testnets
+
+WalletChan includes corresponding test networks such as Ethereum Sepolia and
+Hoodi, Base/Arbitrum/Optimism/Unichain Sepolia, Avalanche Fuji, Polygon Amoy,
+and testnets for the other built-in families. Testnets ship hidden and must be
+enabled explicitly from **Settings → Chains**.
+
+## Custom networks
+
+Add a network from Settings or approve a valid dapp `wallet_addEthereumChain`
+request. You can set:
+
+- Network name and chain ID.
+- One or more saved HTTPS/WSS RPC endpoints.
+- Block explorer URL.
+- Native currency name, symbol, and decimals.
+- Optional EIP-7702 delegate configuration where the chain supports it.
+- Developer-only impersonated transaction support for a specific RPC.
+
+See [Networks and RPCs](/settings/networks-and-rpcs).
+
+## Why features differ
+
+- **Swap and bridge** availability comes from current quote/catalog providers.
+- **Safe** needs a verified service/onchain configuration for that chain.
+- **Fee tokens** require compatible smart-account/paymaster infrastructure.
+- **EIP-7702** and atomic batches require chain support or an explicitly
+  configured delegate.
+- **Force inclusion** applies only to eligible OP Stack routes and account
+  paths.
+- **Bankr** remote signing only accepts networks supported by the Bankr API.
+
+WalletChan hides or explains an unavailable action rather than treating the
+network registry as a blanket promise.

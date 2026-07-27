@@ -1,0 +1,40 @@
+---
+title: View-only accounts
+description: Watch any EVM address in WalletChan without importing a private key or enabling real signing.
+---
+
+# View-only accounts
+
+View-only accounts, also called impersonator accounts, let you inspect an
+address's portfolio and see how supported requests would look without storing a
+signing secret.
+
+## Add one
+
+Choose **View-only**, enter an EVM address or supported name, and give it a
+label. WalletChan stores only public account information.
+
+## What you can do
+
+- View balances, portfolio activity, DeFi positions, and public transaction
+  history.
+- Connect an address to supported read-only dapp experiences.
+- Receive transaction or signature prompts and inspect the request.
+- Simulate supported transactions.
+- Use developer-only unsigned `eth_sendTransaction` forwarding with a
+  specifically configured impersonation RPC endpoint.
+
+## What you cannot do
+
+A view-only account has no key. It cannot produce a real signature, authorize a
+transfer, grant a permission, or submit a normal signed transaction. Its normal
+transaction and signature prompts are reject-only.
+
+:::warning
+An impersonation RPC is a developer tool for local forks and test
+environments. Enabling it does not prove ownership and must not be used as a
+substitute for a real signer on public networks.
+:::
+
+Configure the opt-in per saved RPC under [Networks and
+RPCs](/settings/networks-and-rpcs).

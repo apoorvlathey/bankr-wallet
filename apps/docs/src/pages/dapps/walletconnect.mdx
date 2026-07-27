@@ -1,0 +1,59 @@
+---
+title: WalletConnect sessions
+description: Pair WalletChan with a remote dapp using a WalletConnect URI, review network support, manage sessions, and disconnect.
+outline: 3
+---
+
+# WalletConnect
+
+Open **More → WalletConnect** and paste a valid `wc:` URI from the dapp.
+WalletChan uses the active eligible account and visible compatible networks to
+establish the session.
+
+## Pair
+
+1. Open WalletConnect in the dapp and copy its pairing URI.
+2. Paste it into WalletChan. A valid paste begins connection automatically.
+3. Review any network limitation or missing-network notice.
+4. Return to the dapp after the session connects.
+
+If the proposal needs an unavailable chain, private-key and seed accounts can
+open the Add network flow. After adding it, start a fresh WalletConnect pairing
+from the dapp; an old proposal is not silently widened.
+
+## Supported requests
+
+WalletConnect can route ordinary transactions, `personal_sign`, EIP-712 v3/v4,
+eligible ERC-5792 calls, account/chain reads, chain switching, and a bounded
+read-only RPC set.
+
+| Account | Session behavior |
+| --- | --- |
+| Private key / seed | Local signing and supported batches |
+| Ledger | Single transactions and supported message/EIP-712 signing |
+| View-only | Cannot approve a WalletConnect session |
+| Safe | Transactions and ERC-5792 only on verified deployed chains |
+| Bankr | Normal Bankr confirmation paths on supported chains |
+
+WalletConnect rejects deprecated `eth_sign` and typed-data v1.
+
+## Networks
+
+WalletConnect uses a shared WalletConnect chain selection, unlike injected
+dapps' per-tab chain state. Switch it from the WalletConnect view when needed.
+
+## Manage
+
+The session list shows active connections and their state. Refresh, switch the
+network, or disconnect. Home shows a connected-session indicator while at least
+one session is active.
+
+Disconnecting stops future requests from that session. It does not revoke
+onchain allowances previously granted to a contract.
+
+## Related guides
+
+- [Connect and manage dapp access](/dapps/connect)
+- [Understand dapp permissions and revocation](/dapps/permissions)
+- [Review WalletConnect batch requests](/transactions/batches)
+- [Troubleshoot pairing and connection issues](/help/troubleshooting)

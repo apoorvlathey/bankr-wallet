@@ -60,7 +60,7 @@ visible while remote rasterization is pending. The pure models import only types
   keys, approval metadata retry decisions, risk ordering, grouping, and
   approval-first summaries.
 - `tests/ui/approvalCleanupAvailability.test.ts` freezes private-key,
-  seed-phrase, Bankr, Ledger, impersonator, and Safe presentation policy.
+  seed-phrase, Ledger, impersonator, Safe, and Bankr presentation policy.
 - `tests/ui/residualApprovalPresentation.test.ts` freezes the compact copy,
   hover/focus explanation, and no-spender-label presentation contract.
 - `tests/ui/tokenContractPopover.test.ts` requires both estimated and confirmed

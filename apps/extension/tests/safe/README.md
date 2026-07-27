@@ -28,7 +28,7 @@
 - `accountTypePolicy.test.ts`: the exhaustive Safe account-type capability
   matrix, owner/executor/signing-path/fee-token routing, and central-policy
   imports across every background and renderer eligibility consumer.
-- `ownerAuthorizationPolicy.test.ts`: Bankr/private-key/seed/Ledger routing,
+- `ownerAuthorizationPolicy.test.ts`: private-key/seed/Ledger/Bankr routing,
   shared session-restoration boundaries, preservation of approvals received
   during a hardware wait, plus impersonator/Safe and agent-policy negatives.
 - `discovery.test.ts`, `serviceClient.test.ts`: chain-prefixed/manual probing,

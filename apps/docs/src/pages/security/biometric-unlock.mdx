@@ -1,0 +1,54 @@
+---
+title: Biometric and passkey unlock
+description: Set up, use, upgrade, and remove device-local WebAuthn PRF biometric unlock in WalletChan.
+outline: 3
+---
+
+# Biometric unlock
+
+WalletChan can use a platform passkey/biometric assertion to unlock encrypted
+wallet capabilities on the current device.
+
+## Set up
+
+Open **Settings → Security → Biometric Unlock** while in a master session.
+Follow the operating system's platform-authenticator prompt.
+
+The implementation uses WebAuthn PRF and purpose-separated encryption wrappers.
+The biometric itself is verified by your device; WalletChan does not receive a
+fingerprint or face scan.
+
+## Use
+
+Choose **Use biometric unlock** or accept the supported automatic prompt on the
+lock screen. Successful assertion creates a passwordless master session for the
+capabilities stored in the passkey record.
+
+It does not bypass Ledger hardware confirmation or turn a view-only account
+into a signer.
+
+## Device scope
+
+The factor is local to the configured browser/device and intentionally not a
+sync-based recovery mechanism. Keep the master password and all account
+recovery material.
+
+## Legacy upgrade
+
+An older biometric record may support only signing access. WalletChan shows an
+upgrade notice before allowing newer local-secret/seed flows so it can create a
+full purpose-separated record.
+
+## Actions that still require the master password
+
+Secret reveal, master-password change, passkey removal, some factor changes,
+and explicit recovery proofs can still ask for the actual master password even
+after biometric unlock.
+
+Agent-password sessions cannot configure or remove biometric unlock.
+
+## Related guides
+
+- [Understand password and lock behavior](/security/passwords)
+- [Back up every account recovery method](/security/backups)
+- [Configure constrained agent-password access](/security/agent-password)

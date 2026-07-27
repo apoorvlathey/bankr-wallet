@@ -1,0 +1,172 @@
+@import "@fontsource/anton/latin-400.css";
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/inter/latin-700.css";
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-700.css";
+
+:root {
+  --walletchan-base: #09090b;
+  --walletchan-raised: #111113;
+  --walletchan-hover: #18181b;
+  --walletchan-fg: #f4f4f5;
+  --walletchan-secondary: #a1a1aa;
+  --walletchan-muted: #85858f;
+  --walletchan-blue: #2563eb;
+  --walletchan-amber: #f59e0b;
+  --walletchan-font-brand: "Anton", "Arial Narrow", Impact, sans-serif;
+  --vocs-color-accent: var(--walletchan-blue);
+  --vocs-background-color-primary: var(--walletchan-base);
+  --vocs-background-color-surface: var(--walletchan-raised);
+  --vocs-background-color-surfaceMuted: #151517;
+  --vocs-background-color-surfaceTint: var(--walletchan-hover);
+  --vocs-text-color-primary: var(--walletchan-fg);
+  --vocs-text-color-secondary: var(--walletchan-secondary);
+  --vocs-text-color-muted: var(--walletchan-muted);
+  --vocs-text-color-heading: var(--walletchan-fg);
+  --vocs-border-color-primary: rgba(255, 255, 255, 0.12);
+  --vocs-border-color-secondary: rgba(255, 255, 255, 0.08);
+  --vocs-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vocs-font-family-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --vocs-spacing-content: 46rem;
+  --vocs-leading-p: 1.72;
+  --vocs-leading-li: 1.65;
+  color-scheme: dark;
+}
+
+[data-v-logo]:has(> [data-v-logo-image]) {
+  display: grid;
+  grid-template:
+    "mark name" 1fr
+    "mark docs" auto / 48px auto;
+  column-gap: 12px;
+  align-items: center;
+  height: 48px;
+}
+
+[data-v-logo] > [data-v-logo-image] {
+  grid-area: mark;
+  width: 48px;
+  height: 48px;
+  max-height: none;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+[data-v-logo]:has(> [data-v-logo-image])::before {
+  grid-area: name;
+  align-self: end;
+  color: var(--walletchan-fg);
+  font-family: var(--walletchan-font-brand);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  content: "WalletChan";
+}
+
+[data-v-logo]:has(> [data-v-logo-image])::after {
+  grid-area: docs;
+  align-self: start;
+  color: var(--walletchan-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  content: "Docs";
+}
+
+html {
+  background: var(--walletchan-base);
+}
+
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--walletchan-blue) 42%, transparent);
+  color: var(--walletchan-fg);
+}
+
+:where(h1, h2, h3) {
+  letter-spacing: -0.025em;
+}
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--walletchan-base),
+    0 0 0 5px #60a5fa;
+}
+
+.feature-atlas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.feature-atlas > a {
+  min-height: 132px;
+  padding: 18px;
+  color: var(--walletchan-fg);
+  text-decoration: none;
+  background: var(--walletchan-raised);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.feature-atlas > a:hover {
+  background: var(--walletchan-hover);
+  border-color: color-mix(in srgb, var(--walletchan-blue) 68%, white 8%);
+  transform: translateY(-2px);
+}
+
+.feature-atlas strong,
+.feature-atlas span {
+  display: block;
+}
+
+.feature-atlas strong {
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.feature-atlas span {
+  color: var(--walletchan-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.atlas-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: 14px;
+  padding: 4px 9px;
+  color: #0a0a0b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--walletchan-amber);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-atlas > a {
+    transition: none;
+  }
+
+  .feature-atlas > a:hover {
+    transform: none;
+  }
+}

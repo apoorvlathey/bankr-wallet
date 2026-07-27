@@ -1,0 +1,59 @@
+---
+title: WalletChan RPC
+description: Connect Foundry, Cast, viem, ethers, scripts, or agents to a local Ethereum JSON-RPC endpoint backed by WalletChan approval.
+searchPriority: 6
+outline: 3
+---
+
+# WalletChan RPC
+
+`@walletchan/rpc` is a separate local tool that exposes standard Ethereum
+JSON-RPC on `127.0.0.1:4209` by default and routes signing requests to a paired
+wallet.
+
+It is not an HTTP server inside the browser extension.
+
+## What it is for
+
+- Use Cast or Foundry unlocked-account mode.
+- Connect viem, ethers, scripts, or local agents.
+- Submit transactions and supported signatures through WalletChan review.
+- Forward read-only calls to a configured upstream RPC.
+- Use wallet-native ERC-5792 or a receipt-gated sequential fallback.
+
+## Pair
+
+The tool can pair through WalletConnect or MetaMask Connect. It displays a
+terminal QR, browser QR page, and copyable URI. Sessions can persist/recover,
+and you can force a new pairing.
+
+Live endpoints include health/session information, pairing/QR views, and a
+generated `/SKILL.md` for compatible agents.
+
+## Chains
+
+Use built-in aliases or configure any numeric EVM chain ID with an upstream
+RPC. Repeat the chain option for a multi-chain local server.
+
+## Safety boundaries
+
+Send/sign requests still require the wallet's user review. The RPC rejects
+`eth_sendRawTransaction`, `eth_signTransaction`, and deprecated `eth_sign`
+rather than becoming a raw-key service.
+
+Do not expose the localhost RPC to untrusted networks or processes. Any local
+program that can reach it can ask your paired wallet for actions, even though
+WalletChan still shows a prompt.
+
+## Installation and commands
+
+See the repository's current
+[WalletChan RPC README](https://github.com/apoorvlathey/walletchan/tree/main/apps/walletchan-rpc)
+for package installation, CLI flags, Foundry examples, and release notes.
+
+## Related guides
+
+- [Connect AI agents with WalletChan MCP](/developers/walletchan-mcp)
+- [Pair WalletChan through WalletConnect](/dapps/walletconnect)
+- [Submit ERC-5792 batch calls](/transactions/batches)
+- [Configure WalletChan networks and RPCs](/settings/networks-and-rpcs)

@@ -1,0 +1,65 @@
+---
+title: Backups and secret recovery
+description: Back up private keys, seed phrases, Ledger recovery, Safe ownership, Bankr account access, and the separate WalletChan Shield recovery phrase.
+searchPriority: 8
+outline: 3
+---
+
+# Backups and recovery
+
+Each account model has a different recovery path. “I backed up WalletChan” is
+not enough unless you know which secrets and external authorities you use.
+
+## Private-key account
+
+Back up the exact private key. It controls one address. Reveal requires a live
+master-password authorization; an agent password cannot reveal it.
+
+## Seed-phrase account
+
+Back up the 12 words in order. They control every derived account from that
+phrase, including addresses not yet added to WalletChan. After restore, preview
+and add the correct derivation indices if an account appears missing.
+
+## Ledger
+
+Use Ledger's recovery-phrase process. WalletChan stores only public address/path
+metadata and cannot reveal or recover the Ledger key.
+
+## Safe
+
+Safe recovery depends on the configured owners and threshold. Removing the Safe
+from WalletChan does not change onchain ownership. Ensure enough owners retain
+their own recovery methods.
+
+## Bankr
+
+Maintain access to the Bankr account and its credential recovery process. A
+WalletChan password alone cannot recreate a lost remote Bankr account.
+
+## Shield recovery phrase
+
+Privacy Shield has a separate wallet-wide 12-word phrase. It is not an Ethereum
+seed phrase and cannot restore your public accounts.
+
+Back it up under **Settings → Security → Shield Recovery**. Replacing it while
+ready or pending Shield funds exist can make those funds inaccessible; the UI
+shows balance-at-risk warnings and requires two acknowledgements.
+
+## Storage rules
+
+- Record secrets offline away from cameras and screen sharing.
+- Never paste them into chat, search, cloud notes, or support messages.
+- Test that you can identify which backup restores which account before adding
+  significant funds.
+- Keep the master password too; changing it requires current proof and reset is
+  destructive.
+
+WalletChan support will never ask you to send a secret.
+
+## Related guides
+
+- [Manage passwords, lock, and reset](/security/passwords)
+- [Understand device-bound biometric unlock](/security/biometric-unlock)
+- [Recover or publicly withdraw Shielded ETH](/privacy/unshield-and-recovery)
+- [Add, reveal, or remove accounts safely](/accounts/manage)

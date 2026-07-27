@@ -28,7 +28,7 @@ Privacy Pools ETH shielding, and supported-token network fees into one redesigne
 extension. Readable transaction review runs across the experience so you can
 understand what will happen before approving.
 
-It also supports private-key, seed-phrase, Bankr API, and view-only accounts,
+It also supports private-key, seed-phrase, view-only, and Bankr API accounts,
 along with swaps, bridges, batching, custom networks, and decentralized website
 browsing.
 
@@ -40,7 +40,7 @@ browsing.
   transactions and messages on the device.
 - Discover or import existing Safe multisigs, review their configuration,
   propose transactions, collect approvals, and execute at quorum.
-- Add private-key, seed-phrase, Bankr API, and view-only accounts.
+- Add private-key, seed-phrase, view-only, and Bankr API accounts.
 - Assign accounts and networks to connected dapps without repeatedly changing one
   global wallet context.
 

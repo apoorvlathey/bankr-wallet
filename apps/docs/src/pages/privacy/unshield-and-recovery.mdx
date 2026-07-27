@@ -1,0 +1,74 @@
+---
+title: Unshield, public withdrawal, and Shield recovery
+description: Withdraw Shielded ETH through private relay, receiver-paid gas, public recovery, and safely back up or restore the Shield phrase.
+searchPriority: 7
+outline: 3
+---
+
+# Unshield and recover
+
+Unshield moves ready Shielded ETH to an explicit public recipient.
+
+## Choose amount and recipient
+
+Enter ETH or USD, choose a saved contact/account or exact address, and review
+the private debit and public amount received. Contract recipients require an
+extra warning acknowledgement.
+
+WalletChan can limit an Unshield to the amount available in one ready
+commitment, even when the total Shielded ETH balance is larger.
+
+## Withdrawal methods
+
+### Private relay
+
+A relayer submits the public transaction. The quote shows relay fee in ETH/USD
+and percentage, provider/route, and expiry. Quotes auto-refresh. WalletChan
+enforces a hard fee cap and provides no unsafe override.
+
+Relayed withdrawals appear only in Private Activity because no WalletChan
+public account submitted the transaction.
+
+### Receiver pays gas
+
+An eligible WalletChan signing account submits the public transaction. That
+account and transaction are publicly visible. The action appears in both its
+Public Activity and the richer Private Activity entry.
+
+### Public withdrawal / recovery
+
+A public exit returns whole selected commitments to their matching original
+depositor and explicitly links the withdrawal. It is a recovery route, not a
+private relay.
+
+Eligible local/Bankr paths can combine 2–8 same-account commitments atomically.
+Ledger processes one commitment at a time. The review groups commitments by
+account, date, and amount and requires a public-linkage acknowledgement.
+
+## Shield recovery phrase
+
+The Shield phrase is a separate 12-word wallet-wide privacy identity. It is not
+your wallet seed phrase.
+
+Under **Settings → Security → Shield Recovery** you can:
+
+- Reveal, hide, copy, and verify the current phrase with master proof.
+- Restore an existing phrase and rescan Shield state.
+- Replace the phrase only after reviewing ready/pending funds at risk and
+  confirming two loss acknowledgements.
+
+Agent sessions cannot enter recovery management.
+
+## Stuck or unavailable balance
+
+Check whether the deposit is confirming, compliance-pending, ready, claimed by
+an in-progress operation, or needs recovery. Avoid starting duplicate exits.
+Use the Deposits/Public recovery view when a private route is unavailable and
+you accept the loss of privacy.
+
+## Related guides
+
+- [Shield ETH into Private mode](/privacy/shield)
+- [Back up the separate Shield recovery phrase](/security/backups#shield-recovery-phrase)
+- [Track private deposits and withdrawals](/wallet/activity)
+- [Troubleshoot Shield and Unshield states](/help/troubleshooting)

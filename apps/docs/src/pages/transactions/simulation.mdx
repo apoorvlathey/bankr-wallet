@@ -1,0 +1,65 @@
+---
+title: Simulation and clear signing
+description: Understand estimated asset changes, approval previews, decoded calldata, ERC-7730 clear signing, and simulation failure behavior.
+searchPriority: 8
+outline: 3
+---
+
+# Simulation and clear signing
+
+WalletChan tries to answer two questions before you confirm: “What is this call
+trying to do?” and “What is likely to change if it succeeds?”
+
+## Estimated changes
+
+Simulation can show:
+
+- Native token and ERC-20 sends/receives.
+- ERC-721 and ERC-1155 NFT changes.
+- ERC-20, ERC-2612, and Permit2 approval increases.
+- Batch-dependent changes in call order.
+- Post-state metadata and prices where safely available.
+
+Simulation is an estimate against current chain state. State can change before
+inclusion, and some contracts deliberately make simulation difficult.
+
+## Clear signing
+
+When a trusted ERC-7730 descriptor or WalletChan built-in pattern matches the
+deployed contract, the review can show a human-readable action with formatted
+token amounts, addresses, names, timestamps, durations, and nested calls.
+
+If no descriptor resolves, WalletChan falls back to decoded calldata, then raw
+calldata. Clear Signing is on by default and can be disabled under **Settings →
+Security → Clear Signing**; disabling also purges the descriptor cache.
+
+## Approval safety
+
+Unlimited or unverified approvals receive stronger warning treatment.
+Standalone ERC-20 `approve` requests show an editable allowance, including zero
+for revocation. Residual outgoing-token allowances may produce an **Approval
+remains** warning and cleanup option.
+
+## Failed or unavailable simulation
+
+- **Likely to fail** means the simulation observed a revert. WalletChan blocks
+  normal confirmation until you explicitly acknowledge the risk.
+- **Unavailable** means it could not get a trustworthy simulation result. Read
+  the decoded/raw request, origin, recipient, value, and approvals manually.
+- **Malformed calldata** is a validation warning, not a cosmetic decode failure.
+
+WalletChan may offer a Tenderly link for a supported non-deployment
+transaction.
+
+## Privacy
+
+Remote descriptor and simulation services receive the minimum public
+transaction/network context needed for their role. They never receive your
+private key, seed phrase, or master password.
+
+## Related guides
+
+- [Read the full transaction review](/transactions/review)
+- [Clean up residual token approvals](/transactions/approval-cleanup)
+- [Review signatures and typed data](/transactions/signatures)
+- [Understand gas estimates and fees](/transactions/gas-and-fees)

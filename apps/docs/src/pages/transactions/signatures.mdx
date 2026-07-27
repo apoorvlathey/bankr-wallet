@@ -1,0 +1,61 @@
+---
+title: Messages, typed data, and Sign-In with Ethereum
+description: Review and sign personal messages, EIP-712 v3/v4 typed data, and validated SIWE requests in WalletChan.
+searchPriority: 7
+outline: 3
+---
+
+# Messages, typed data, and SIWE
+
+WalletChan supports:
+
+- `personal_sign`
+- `eth_signTypedData_v3`
+- `eth_signTypedData_v4`
+
+Deprecated `eth_sign` and typed-data v1 requests are rejected.
+
+## Personal messages
+
+The review shows readable text when the payload is valid text and retains the
+raw payload under Advanced. Check the exact origin and signer. A signature can
+prove control or authorize offchain behavior even though it pays no gas.
+
+## EIP-712 typed data
+
+WalletChan validates schema size, graph/depth, types, signer, and payload before
+rendering structured fields. It shows domain and typed values, including
+recursive data and labeled addresses, with hashes/raw data under Advanced.
+
+Raw ERC-7710 delegation typed data from a dapp is blocked. WalletChan only
+creates supported delegation requests through its own authority flow.
+
+## Sign-In with Ethereum
+
+SIWE/EIP-4361 is parsed into domain, address, statement, URI, chain, nonce,
+issued/expiry/not-before times, and resources. WalletChan checks the site
+domain, account, URI, chain, nonce quality, and time window.
+
+Unsafe or inconsistent SIWE data requires explicit acknowledgement or is
+rejected. “Sign in” is still a cryptographic signature; read the statement and
+resources.
+
+## Account compatibility
+
+| Account | Personal / EIP-712 |
+| --- | --- |
+| Private key / seed | Local signing |
+| Ledger | Hardware signing |
+| View-only | Reject-only |
+| Safe | Not supported as EOA message signing |
+| Bankr | Remote signing |
+
+Master and agent-password sessions can authorize ordinary eligible signatures.
+Ledger always requires physical approval.
+
+## Related guides
+
+- [Read the transaction review model](/transactions/review)
+- [Understand simulation and clear signing](/transactions/simulation)
+- [Manage dapp permissions](/dapps/permissions)
+- [Browse supported signature standards](/reference/standards)

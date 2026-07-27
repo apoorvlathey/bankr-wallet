@@ -1,0 +1,56 @@
+---
+title: Force inclusion and sequencer recovery
+description: Use WalletChan force inclusion on eligible OP Stack and Arbitrum routes when the normal L2 sequencer path is unavailable.
+outline: 3
+---
+
+# Force inclusion
+
+Force inclusion is a censorship-resistance and sequencer-failure recovery tool.
+It is not the normal way to speed up a transaction.
+
+## OP Stack route
+
+On eligible networks, an Advanced review option sends the reviewed L2 intent
+through the parent L1 Optimism Portal. WalletChan estimates the additional L1
+requirements and tracks:
+
+1. L1 submission pending.
+2. L1 confirmed, L2 inclusion pending.
+3. L2 confirmed.
+4. A definite L1 or L2 failure.
+
+Supported mappings can include Base, Optimism, Unichain, Blast, Zora, World
+Chain, and configured test variants. Availability also depends on the selected
+account and parent-chain access.
+
+## Arbitrum route
+
+Arbitrum One uses a separate signed delayed-inbox path for eligible local
+accounts. A later permissionless force step is only available after the
+protocol deadline.
+
+## Account support
+
+- Private-key and seed accounts can use eligible local L1 signing.
+- Ledger, view-only, and Safe are excluded.
+- Bankr can use a route only where its parent-L1 access supports it.
+
+Force inclusion is incompatible with token-paid gas and some batch/deployment
+paths.
+
+## Costs and timing
+
+You pay parent-L1 costs and may need an L1 deposit before the L2 intent can be
+accepted. The L1 transaction confirming does not mean the L2 transaction is
+already final. Activity and transaction details show both explorers and stages.
+
+Use this only when you understand the extra cost and the normal sequencer route
+is unavailable or censoring the transaction.
+
+## Related guides
+
+- [Understand gas and L2 fees](/transactions/gas-and-fees)
+- [Track L1 and L2 stages in Activity](/wallet/activity)
+- [Cancel or speed up eligible pending transactions](/transactions/replacements)
+- [Troubleshoot pending transactions](/help/troubleshooting)

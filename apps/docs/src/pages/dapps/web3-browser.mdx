@@ -1,0 +1,61 @@
+---
+title: WalletChan Browser and onchain websites
+description: Search dapps and browse .eth, .gwei, IPFS, IPNS, and ERC-4804 content with WalletChan Browser on Chromium.
+outline: 3
+---
+
+# WalletChan Browser
+
+WalletChan Browser is a Chromium-only launcher and resolver for ordinary dapps
+and supported decentralized websites. Open it from **More**.
+
+## Search and open
+
+The launcher accepts:
+
+- Dapp names from directory search.
+- Valid HTTPS URLs.
+- `.eth` and `.gwei` names.
+- Supported GNS/onchain names and raw contract addresses.
+- Paths, queries, and fragments attached to a decentralized site.
+
+Directory results open in a new tab. A separate star action saves a result
+without opening it.
+
+## Decentralized content
+
+WalletChan can resolve ENS/ENSv2/CCIP-Read content hashes, GNS content, IPFS or
+IPNS destinations, and supported ERC-4804/ERC-5219 onchain HTML. A resolution
+interstitial explains the original name and selected content route before
+navigation.
+
+## Favorites, connected, and recent
+
+- **Favorites** are sites you saved and can reorder.
+- **Connected dapps** are origins with wallet account permission.
+- **Recent** reflects resolved browsing history/cache.
+
+These are different concepts. Favoriting does not connect an account, and
+disconnecting does not remove a favorite.
+
+## Local Kubo
+
+In **Settings → WalletChan Browser**, enable a local gateway, set its host/port,
+check gateway and Kubo API status, and optionally pin resolved onchain HTML.
+WalletChan reports checking, online, offline, CORS-blocked, unreachable, and
+invalid settings separately. A one-time setup page helps with Kubo CORS.
+
+## Security
+
+Browsing resolution does not use wallet credentials. Local IPFS pages retain
+their friendly `.eth`, `.gwei`, or onchain identity in WalletChan UI while the
+raw resolved origin remains the actual security boundary.
+
+This feature and Private mode are hidden on Firefox.
+
+## Related guides
+
+- [Connect sites safely](/dapps/connect)
+- [Manage connected-site permissions](/dapps/permissions)
+- [Configure networks and local RPCs](/settings/networks-and-rpcs)
+- [Troubleshoot WalletChan Browser and Kubo](/help/troubleshooting)

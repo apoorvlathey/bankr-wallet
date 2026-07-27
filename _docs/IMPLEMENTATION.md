@@ -2,15 +2,19 @@
 
 ## Overview
 
-WalletChan is a browser extension that supports five account types:
+WalletChan is a multi-account Ethereum/EVM browser wallet that supports six
+account models:
 
-1. **Bankr API Accounts** - AI-powered wallets that execute transactions through the Bankr API
-2. **Private Key Accounts** - Standard wallets with local key storage for transaction signing
-3. **Seed Phrase Accounts** - BIP39/BIP44 groups whose derived keys sign locally
-4. **Ledger Accounts** - Hardware-backed accounts that sign on a connected Ledger in Chromium
-5. **Impersonator Accounts** - View-only addresses that cannot sign; a
+1. **Private Key Accounts** - Standard wallets with local key storage for transaction signing
+2. **Seed Phrase Accounts** - BIP39/BIP44 groups whose derived keys sign locally
+3. **Ledger Accounts** - Hardware-backed accounts that sign on a connected Ledger in Chromium
+4. **Impersonator Accounts** - View-only addresses that cannot sign; a
    per-RPC developer opt-in may submit their reviewed transactions to a fork
    node with `eth_sendTransaction`
+5. **Safe Accounts** - Existing Safe multisig contract accounts whose proposals
+   are approved or executed by linked eligible owner accounts
+6. **Bankr API Accounts** - Optional remote-signing accounts that execute
+   supported transactions through the Bankr API
 
 This document describes the core architecture and transaction handling implementation.
 
@@ -891,16 +895,17 @@ the restraint rules in `_docs/WARM_MIDNIGHT.md`.
   estimate refreshes for the resolved recipient or calldata; ERC-20 MAX remains
   the full token balance.
 
-The extension supports five distinct account types that can be used simultaneously:
+The extension supports six distinct account models that can be used
+simultaneously:
 
-| Feature               | Bankr API Account          | Private Key Account                 | Seed Phrase Account                   | Ledger Account                         | Impersonator Account    |
-| --------------------- | -------------------------- | ----------------------------------- | ------------------------------------- | -------------------------------------- | ----------------------- |
-| Transaction Execution | Via Bankr API              | Local signing + RPC broadcast       | Local signing + RPC broadcast         | Device signing + RPC broadcast         | Fork RPC only, per-endpoint opt-in |
-| Message Signing       | ✅ Via API (`/wallet/sign`) | ✅ Full support                     | ✅ Full support                       | ✅ Personal sign + EIP-712             | ❌ Disabled (view-only) |
-| Privacy Pools         | ✅ Mainnet mutations        | ✅ Shield/Unshield/public exit       | ✅ Shield/Unshield/public exit         | ✅ Device-signed single transactions   | ❌ Disabled (view-only) |
-| Key Storage           | API key encrypted locally  | Private key encrypted locally       | Mnemonic + derived keys encrypted     | Keys remain on device; public metadata only | No secrets stored       |
-| Setup                 | API key + wallet address   | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only            |
-| Use Case              | AI-powered transactions    | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps |
+| Feature               | Private Key Account                 | Seed Phrase Account                   | Ledger Account                         | Impersonator Account                 | Safe Account                              | Bankr API Account          |
+| --------------------- | ----------------------------------- | ------------------------------------- | -------------------------------------- | ------------------------------------ | ----------------------------------------- | -------------------------- |
+| Transaction Execution | Local signing + RPC broadcast       | Local signing + RPC broadcast         | Device signing + RPC broadcast         | Fork RPC only, per-endpoint opt-in   | Proposal, owner quorum, then execution    | Via Bankr API              |
+| Message Signing       | ✅ Full support                     | ✅ Full support                       | ✅ Personal sign + EIP-712             | ❌ Disabled (view-only)              | ❌ Disabled                              | ✅ Via API (`/wallet/sign`) |
+| Privacy Pools         | ✅ Shield/Unshield/public exit       | ✅ Shield/Unshield/public exit         | ✅ Device-signed single transactions   | ❌ Disabled (view-only)              | ❌ Disabled                              | ✅ Mainnet mutations        |
+| Key Storage           | Private key encrypted locally       | Mnemonic + derived keys encrypted     | Keys remain on device; public metadata only | No secrets stored               | No Safe secret; verified public metadata | API key encrypted locally  |
+| Setup                 | Private key import or generate      | 12-word BIP39 import or generate      | Chrome WebHID pairing + address scan   | Address only                         | Discover or import an existing Safe       | API key + wallet address   |
+| Use Case              | Agent wallets, bots, standard usage | HD wallets, multiple derived accounts | Hardware-backed daily signing          | Viewing portfolio/dApps              | Shared-control multisig workflows         | Optional remote signing    |
 
 ### Pending Transaction Replacement
 
@@ -1286,33 +1291,33 @@ not introduce new policy or persistence behavior.
 
 The following chains are supported for transaction signing (listed in dropdown order):
 
-| Chain | Chain ID | Default RPC | Bankr API | PK/Seed/Impersonator | OP Stack |
+| Chain | Chain ID | Default RPC | PK/Seed/Ledger/Impersonator | OP Stack | Bankr API |
 | --- | ---: | --- | :---: | :---: | :---: |
-| Ethereum | 1 | https://eth.drpc.org | ✅ | ✅ | |
-| Abstract | 2741 | https://api.mainnet.abs.xyz | | ✅ | |
-| Arbitrum | 42161 | https://arb1.arbitrum.io/rpc | ✅ | ✅ | |
-| Avalanche | 43114 | https://api.avax.network/ext/bc/C/rpc | | ✅ | |
+| Ethereum | 1 | https://eth.drpc.org | ✅ | | ✅ |
+| Abstract | 2741 | https://api.mainnet.abs.xyz | ✅ | | |
+| Arbitrum | 42161 | https://arb1.arbitrum.io/rpc | ✅ | | ✅ |
+| Avalanche | 43114 | https://api.avax.network/ext/bc/C/rpc | ✅ | | |
 | Base | 8453 | https://base.drpc.org | ✅ | ✅ | ✅ |
-| Berachain | 80094 | https://rpc.berachain.com | | ✅ | |
-| Blast | 81457 | https://rpc.blast.io | | ✅ | ✅ |
-| BNB Chain | 56 | https://bsc-dataseed.binance.org | ✅ | ✅ | |
-| HyperEVM | 999 | https://rpc.hyperliquid.xyz/evm | | ✅ | |
-| Ink | 57073 | https://rpc-gel.inkonchain.com | | ✅ | ✅ |
-| Linea | 59144 | https://rpc.linea.build | | ✅ | |
-| Mantle | 5000 | https://rpc.mantle.xyz | | ✅ | ✅ |
-| MegaETH | 4326 | https://mainnet.megaeth.com/rpc | | ✅ | ✅ |
-| Mode | 34443 | https://mainnet.mode.network | | ✅ | ✅ |
-| Monad | 143 | https://rpc.monad.xyz | | ✅ | |
-| Optimism | 10 | https://mainnet.optimism.io | | ✅ | ✅ |
-| Plasma | 9745 | https://rpc.plasma.to | | ✅ | |
-| Polygon | 137 | https://polygon.drpc.org | ✅ | ✅ | |
-| Robinhood Chain | 4663 | https://rpc.mainnet.chain.robinhood.com | ✅ | ✅ | |
-| Scroll | 534352 | https://rpc.scroll.io | | ✅ | |
-| Sonic | 146 | https://rpc.soniclabs.com | | ✅ | |
-| Tempo | 4217 | https://rpc.presto.tempo.xyz | | ✅ | |
+| Berachain | 80094 | https://rpc.berachain.com | ✅ | | |
+| Blast | 81457 | https://rpc.blast.io | ✅ | ✅ | |
+| BNB Chain | 56 | https://bsc-dataseed.binance.org | ✅ | | ✅ |
+| HyperEVM | 999 | https://rpc.hyperliquid.xyz/evm | ✅ | | |
+| Ink | 57073 | https://rpc-gel.inkonchain.com | ✅ | ✅ | |
+| Linea | 59144 | https://rpc.linea.build | ✅ | | |
+| Mantle | 5000 | https://rpc.mantle.xyz | ✅ | ✅ | |
+| MegaETH | 4326 | https://mainnet.megaeth.com/rpc | ✅ | ✅ | |
+| Mode | 34443 | https://mainnet.mode.network | ✅ | ✅ | |
+| Monad | 143 | https://rpc.monad.xyz | ✅ | | |
+| Optimism | 10 | https://mainnet.optimism.io | ✅ | ✅ | |
+| Plasma | 9745 | https://rpc.plasma.to | ✅ | | |
+| Polygon | 137 | https://polygon.drpc.org | ✅ | | ✅ |
+| Robinhood Chain | 4663 | https://rpc.mainnet.chain.robinhood.com | ✅ | | ✅ |
+| Scroll | 534352 | https://rpc.scroll.io | ✅ | | |
+| Sonic | 146 | https://rpc.soniclabs.com | ✅ | | |
+| Tempo | 4217 | https://rpc.presto.tempo.xyz | ✅ | | |
 | Unichain | 130 | https://mainnet.unichain.org | ✅ | ✅ | ✅ |
-| World Chain | 480 | https://worldchain-mainnet.g.alchemy.com/public | | ✅ | ✅ |
-| ZKsync Era | 324 | https://mainnet.era.zksync.io | | ✅ | |
+| World Chain | 480 | https://worldchain-mainnet.g.alchemy.com/public | ✅ | ✅ | |
+| ZKsync Era | 324 | https://mainnet.era.zksync.io | ✅ | | |
 
 These are configured in `src/constants/chainRegistry.ts` (the single source of truth for built-in chain data) and normalized into `networksInfo` by the service-worker bootstrap if storage is missing.
 
@@ -2715,7 +2720,7 @@ WalletConnect support is a parallel dapp transport for sites that do not list Wa
 - `eth_accounts`, `eth_requestAccounts`, `eth_chainId`, `net_version`, `wallet_switchEthereumChain`, and a small read-only RPC allowlist are answered directly in the background.
 - WalletConnect chain selection is shared across all WC sessions, not per browser tab. Injected dapps continue to use their existing per-tab content-script chain state.
 
-**Security model:** WalletConnect is a transport only. Request account binding is still pinned at arrival (`accountId`, `accountAddress`, `accountType`), and confirm-time signing resolves the pinned account rather than the currently active account. Bankr, private-key, seed-phrase, and Ledger accounts approve sessions through their normal confirmation/signing paths. Ledger advertises only single transactions and its supported personal/EIP-712 signatures; ERC-5792 and delegated-permission methods remain excluded. Verified Safe accounts advertise single transactions and ERC-5792 batching, which remain pending until Safe execution produces the result expected by the dapp; EOA-style message signing and delegated permissions are excluded. View-only impersonator accounts cannot approve sessions or sign requests.
+**Security model:** WalletConnect is a transport only. Request account binding is still pinned at arrival (`accountId`, `accountAddress`, `accountType`), and confirm-time signing resolves the pinned account rather than the currently active account. Private-key, seed-phrase, Ledger, and Bankr accounts approve sessions through their normal confirmation/signing paths. Ledger advertises only single transactions and its supported personal/EIP-712 signatures; ERC-5792 and delegated-permission methods remain excluded. Verified Safe accounts advertise single transactions and ERC-5792 batching, which remain pending until Safe execution produces the result expected by the dapp; EOA-style message signing and delegated permissions are excluded. View-only impersonator accounts cannot approve sessions or sign requests.
 
 ### Swap API and token metadata
 
@@ -3177,14 +3182,19 @@ test compares their normalized chain/address sets so one-sided updates fail.
 
 Signature support differs by account type:
 
-| Account Type | Signature Support                        |
-| ------------ | ---------------------------------------- |
-| Bankr API    | ✅ Via `/wallet/sign` API                |
-| Private Key  | ✅ Full support (sign locally with viem) |
-| Seed Phrase  | ✅ Full support (sign locally with viem) |
-| Impersonator | ❌ Disabled (view-only)                  |
+| Account Type | Signature Support                           |
+| ------------ | ------------------------------------------- |
+| Private Key  | ✅ Full support (sign locally with viem)    |
+| Seed Phrase  | ✅ Full support (sign locally with viem)    |
+| Ledger       | ✅ Personal sign + supported EIP-712        |
+| Impersonator | ❌ Disabled (view-only)                     |
+| Safe         | ❌ EOA-style message signing is unsupported |
+| Bankr API    | ✅ Via `/wallet/sign` API                   |
 
-When dapps request signatures, the extension displays the request details. For Bankr accounts, signing is handled via the `/wallet/sign` API endpoint. For Private Key and Seed Phrase accounts, signing is done locally with viem. Impersonator accounts can only reject.
+When dapps request signatures, the extension displays the request details.
+Private Key and Seed Phrase accounts sign locally with viem, Ledger accounts
+sign supported requests on-device, and impersonator and Safe accounts can only
+reject. Optional Bankr accounts sign through the `/wallet/sign` API endpoint.
 
 ### Supported Signature Methods
 
@@ -5248,7 +5258,7 @@ passkey sessions must not restore merely because `getCachedPassword()` is null:
 | `setAgentPassword`                 | Set agent password after live-master authorization plus explicit current-master-password recovery proof |
 | `cancelTransaction`                | Cancel in-progress transaction           |
 | `confirmCrossDappBatch`            | Ship the user-assembled cross-dapp batch via native Bankr/PK/SP EIP-7702 execution or its exact-call fee-token UserOperation quote |
-| `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked Bankr, private-key, seed-phrase, or Ledger owner |
+| `approveSafeProposal`              | Sign a reviewed Safe proposal with a linked private-key, seed-phrase, Ledger, or Bankr owner |
 | `executeSafeProposal`              | Submit the exact reviewed Safe envelope with a private-key, seed-phrase, or native-gas Ledger payer; Ledger token gas is blocked |
 | `initiateSetDelegation` / `initiateRevokeDelegation` | Queue Smart Account Set/Revoke txs; custom/non-default Set is master-only at queue and confirm/broadcast, while canonical default and revoke retain routine agent-capable signing; final storage mirror is reconciled from `eth_getCode(EOA)` after receipt |
 

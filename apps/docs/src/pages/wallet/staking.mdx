@@ -1,0 +1,53 @@
+---
+title: Stake WCHAN
+description: Stake and unstake WCHAN, claim WETH rewards, understand sWCHAN shares, APY, and the seven-day early-withdrawal penalty.
+outline: 3
+---
+
+# Stake WCHAN
+
+WalletChan includes the Base WCHAN vault.
+
+## What the screen shows
+
+- WCHAN available to stake.
+- sWCHAN vault shares.
+- Claimable WETH rewards.
+- Seven-day WCHAN, WETH, and combined APY.
+- Current early-withdrawal penalty and the estimated zero-fee time.
+
+APY is historical/estimated and can change. A displayed zero is a valid value,
+not necessarily a loading error.
+
+## Stake
+
+Choose **Stake**, enter WCHAN or its USD equivalent, use a percentage/MAX
+control, and review the expected shares and call plan.
+
+Staking can require an approval followed by the vault deposit. Bankr and
+eligible delegated local accounts can batch the calls. Other accounts use an
+ordered sequential path.
+
+## Unstake
+
+Choose **Unstake**, enter the sWCHAN/WCHAN amount, and review the current
+penalty. The early-withdrawal fee starts at up to 20% and decays linearly over
+seven days. Additional deposits update the weighted deposit timestamp, so the
+displayed fee-free time can move.
+
+## Claim rewards
+
+Use the rewards action to claim available WETH. Claiming is a transaction and
+requires the normal confirmation flow.
+
+## Account differences
+
+- Eligible private-key/seed accounts can use atomic execution and fall back to
+  sequential calls.
+- Ledger asks for each sequential hardware approval.
+- View-only can inspect balances but cannot stake, unstake, or claim.
+- Safe staking is not part of the current Safe proposal rollout.
+- Bankr can use supported atomic execution.
+
+See [Batch transactions](/transactions/batches) and
+[Smart account delegation](/smart-accounts/delegation).

@@ -1,0 +1,42 @@
+---
+title: Private-key accounts
+description: Import, use, back up, and securely reveal a private-key account in WalletChan.
+---
+
+# Private-key accounts
+
+Private-key accounts sign locally. WalletChan encrypts the imported key and
+only makes it available to the local signer during an authorized operation.
+
+## Import
+
+Choose **Private key**, enter the key, and give the account an optional label.
+WalletChan derives the public address, checks the key/account binding, and
+stores an encrypted vault entry.
+
+## Use
+
+Private-key accounts support local transaction and message signing. Depending
+on the network and request, they can also use:
+
+- Editable local gas tiers and custom gas.
+- Address nonce editing for ordinary native-gas EOA transactions.
+- Speed-up and cancellation replacements for pending transactions.
+- EIP-7702 smart-account delegation and atomic batching where supported.
+- Sequential batch execution where atomic execution is unavailable.
+- Eligible fee-token gas routes.
+
+## Reveal the key
+
+Open the account's settings and choose the reveal action. WalletChan requires a
+live **master-password** authorization and rechecks that the key belongs to the
+account before releasing it.
+
+The [agent password](/security/agent-password) can never reveal a private key,
+even if it can approve a signing request for that account.
+
+## Remove
+
+Removing the account deletes WalletChan's local encrypted entry and account
+metadata after the required authorization and safety checks. It does not
+delete the account from the blockchain. Back up the key first.

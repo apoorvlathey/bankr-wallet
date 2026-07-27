@@ -2,7 +2,11 @@
 
 ## Overview
 
-This document describes the implementation of private key (PK) accounts alongside the existing Bankr API wallet support. Users can now choose to use either account type or both, with the extension handling transaction signing locally for PK accounts.
+This document records the private-key (PK) account implementation. Private-key
+accounts are one of WalletChan's local signing models in the broader
+multi-account wallet; Bankr is an optional remote-signing account path. See
+[`IMPLEMENTATION.md`](./IMPLEMENTATION.md) for the current account model and
+cross-account architecture.
 
 ## Security Architecture
 
@@ -788,8 +792,8 @@ async function handleConfirmSignatureRequest(
 │  ┌────────────────────────┐  ┌────────────────────────┐         │
 │  │   [🤖 Bankr API]    │  │   [🔑 Private Key]     │         │
 │  │                        │  │                        │         │
-│  │  AI-powered wallet     │  │  Standard wallet with  │         │
-│  │  No private keys       │  │  full signing support  │         │
+│  │  Optional remote signer│  │  Standard wallet with  │         │
+│  │  Key stays remote      │  │  full signing support  │         │
 │  │  Execute via Bankr API │  │  Local key storage     │         │
 │  └────────────────────────┘  └────────────────────────┘         │
 │                                                                  │
@@ -803,7 +807,7 @@ async function handleConfirmSignatureRequest(
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Setup Bankr Wallet                                              │
+│  Set Up Bankr API Account                                        │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Bankr API Key                                            │   │
@@ -926,12 +930,12 @@ This ensures that immediately after onboarding:
 
 The extension UI adapts based on the currently selected account type:
 
-| Feature                           | Bankr Account       | Private Key Account            |
-| --------------------------------- | ------------------- | ------------------------------ |
-| Chat History button (header)      | ✅ Visible          | ❌ Hidden                      |
-| "Chat with Bankr" button (footer) | ✅ Visible          | ❌ Hidden                      |
-| Signature buttons                 | Reject only (red)   | Sign (yellow) + Reject (white) |
-| Transaction History               | Filtered by account | Filtered by account            |
+| Feature                           | Private Key Account            | Bankr Account                  |
+| --------------------------------- | ------------------------------ | ------------------------------ |
+| Chat History button (header)      | ❌ Hidden                      | ✅ Visible                     |
+| "Chat with Bankr" button (footer) | ❌ Hidden                      | ✅ Visible                     |
+| Signature buttons                 | Sign + Reject                  | Sign through API + Reject      |
+| Transaction History               | Filtered by account            | Filtered by account            |
 
 **Rationale**: The Bankr chat feature uses the Bankr API, which is only available for Bankr accounts. Private Key accounts sign locally and don't interact with the Bankr API for chat.
 

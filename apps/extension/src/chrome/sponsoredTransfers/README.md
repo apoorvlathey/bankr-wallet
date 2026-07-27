@@ -8,7 +8,7 @@ relayer outcome can be ambiguous. Review the implementation in this order:
 2. `intentStorage.ts` — the locked `sponsoredTransferIntents` repository,
    encrypted relay payload codec, semantic dedupe, and terminal ACK removal.
 3. `vaultAccess.ts`, `authorization.ts` — Never-session recovery, exact account
-   signing for Bankr/private-key/seed accounts, and encrypted one-time intent
+   signing for private-key/seed/Bankr accounts, and encrypted one-time intent
    preparation.
 4. `submission.ts` — final account recheck, prepared → submitting persistence,
    the sole relayer POST, submitted success, and ambiguous-response retention.

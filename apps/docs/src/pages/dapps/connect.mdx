@@ -1,0 +1,55 @@
+---
+title: Connect WalletChan to a dapp
+description: Connect a site to WalletChan, choose approved accounts, understand reputation warnings, per-tab state, and disconnect safely.
+searchPriority: 7
+outline: 3
+---
+
+# Connect to a dapp
+
+WalletChan announces itself through EIP-6963 and also supports the familiar
+`window.ethereum` provider. A site cannot see an address until you approve its
+connection request.
+
+## Review a connection
+
+The request shows:
+
+- The exact site origin and bounded site identity.
+- The account(s) you are about to expose.
+- What connecting permits: reading approved addresses and asking for future
+  transactions or signatures.
+- Reputation signals when available.
+
+Connecting does **not** sign a message, approve a token, or move funds. Every
+later signing request receives its own review.
+
+## Reputation warnings
+
+WalletChan checks its blocklist/reputation service and exact DefiLlama
+directory presence. A known threat, suspicious lookalike, or high-risk result
+requires a deliberate acknowledgement before **Connect anyway**.
+
+An “unverified” site is not automatically malicious, and a recognized site is
+not a guarantee. Verify the origin and the request.
+
+## Per-tab accounts and networks
+
+Connected browser tabs keep authorized account and chain state. Switching the
+global wallet account does not redirect an existing tab's pending request to a
+different signer. WalletChan emits `accountsChanged` and `chainChanged` only to
+authorized pages.
+
+## Pending connection
+
+Connection prompts are durable and have no automatic age timeout. Closing the
+popup does not approve or reject. Reopen WalletChan to decide.
+
+## Disconnect
+
+Open **More → Connected dapps**, select the site, and remove access. WalletChan
+cancels that origin's pending requests and tells the page that no accounts are
+connected.
+
+Disconnecting a dapp is not the same as revoking an onchain token allowance.
+See [Approval cleanup](/transactions/approval-cleanup).

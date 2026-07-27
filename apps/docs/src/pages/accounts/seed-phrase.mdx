@@ -1,0 +1,49 @@
+---
+title: Seed-phrase accounts
+description: Generate or import a seed phrase, select derived addresses, and manage seed groups in WalletChan.
+---
+
+# Seed-phrase accounts
+
+A seed phrase controls a group of deterministic EVM addresses. WalletChan
+encrypts the phrase locally and tracks which accounts belong to the same seed
+group.
+
+## Generate or import
+
+You can:
+
+- Generate a new recovery phrase, reveal it deliberately, and confirm that you
+  saved it.
+- Import an existing phrase after validation.
+- Preview standard derived addresses before storing the account.
+- Select one or more addresses to add.
+- Give the seed group and first account useful labels.
+
+The first standard address is derivation `#0`. Later accounts retain their
+derivation index and seed-group relationship.
+
+## Add another derived account
+
+Open **Add account → Seed phrase** and choose an existing authorized seed group
+or import another phrase. WalletChan prevents accidental address collisions and
+does not duplicate an account that already exists.
+
+## Sign
+
+Seed accounts use the same local signing capabilities as
+[private-key accounts](/accounts/private-key), but WalletChan derives the
+selected key from the seed phrase only within the authorized operation.
+
+## Reveal and back up
+
+Revealing the seed phrase requires current master authorization. An agent
+password is never enough. Anyone with the phrase can control every derived
+account, including addresses you have not added to WalletChan yet.
+
+## Remove
+
+Removing one derived account does not change the blockchain or other addresses
+from the phrase. Removing the final account tied to a seed group can also make
+the local phrase record eligible for removal. Confirm the exact warning and
+keep an offline backup.

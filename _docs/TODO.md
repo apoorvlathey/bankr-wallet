@@ -1,5 +1,11 @@
 TODO
-These are all the feature requests, tasks, etc. that we need to implement to Bankr Wallet. Ensure to break yourself into subagents, plan each of the TODO below while breaking them into smaller tasks, commit frequently (use non pgp sign). Make sure to keep on creating markdown files for each new feature you implement, update existing markdown files like IMPLEMENTATION.md, etc., follow STYLING.md for consistent styles. As you finish tasks, make sure to mark them completed in this TODO.md file.
+These are WalletChan feature requests, follow-ups, and implementation tasks.
+Treat WalletChan as a multi-account Ethereum/EVM browser wallet; Bankr-specific
+items apply only to the optional remote-signing account path. Ensure to break
+yourself into subagents, plan each TODO below while breaking it into smaller
+tasks, commit frequently (use non-PGP signing), create or update the relevant
+Markdown documentation, and follow STYLING.md for consistent styles. As you
+finish tasks, mark them completed in this file.
 Don't push anything to github though. Make sure to auto compact your context where it makes the most sense as you are switching from one task to another (your memory can be persisted via Markdown files like this one).
 
 ---

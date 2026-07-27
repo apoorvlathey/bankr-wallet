@@ -1,0 +1,66 @@
+---
+title: Review a transaction
+description: Read WalletChan's transaction confirmation screen, request queue, signer, network, action, asset changes, approvals, gas, nonce, and warnings.
+searchPriority: 9
+outline: 3
+---
+
+# Review a transaction
+
+WalletChan uses one decision structure across dapps, WalletConnect, Send,
+staking, swaps, permission revocation, replacements, and privacy operations.
+
+## Read from top to bottom
+
+1. **Requester and action**: exact site or WalletChan feature, plain-language
+   action, contract or recipient.
+2. **Estimated changes**: likely tokens/NFTs sent or received and changed
+   approvals.
+3. **Request context**: signer, network, warnings, and route-specific details.
+4. **Advanced**: decoded/raw calldata, nonce, gas internals, hashes, and
+   technical metadata.
+5. **Commitment**: pinned signer, fee decision, Reject, and Confirm.
+
+## Request queue
+
+When several prompts exist, use next/previous and the counter. **Reject all**
+applies to the displayed queue scope. Back or closing the surface does not
+reject a request; requests have no automatic age timeout.
+
+## Signer and chain pinning
+
+The account and chain shown are part of the request. Switching the wallet
+elsewhere cannot redirect it to another signer. A signer mismatch causes
+rejection rather than an invisible substitution.
+
+## Simulation and warnings
+
+WalletChan may show loading, successful estimated changes, likely revert,
+unavailable simulation, malformed calldata, risky approval, suspicious origin,
+or balance/fee warnings. A likely revert is blocked by default and requires a
+separate acknowledgement before deliberate continuation, if continuation is
+allowed.
+
+## Account differences
+
+| Account | Final action |
+| --- | --- |
+| Private key | Local sign-once and broadcast |
+| Seed phrase | Local derived-key sign-once and broadcast |
+| Ledger | Hardware review and approval; mutable controls lock while waiting |
+| View-only | Reject-only unless exact developer impersonation RPC is enabled |
+| Safe | Create/approve/execute a Safe proposal instead of EOA signing |
+| Bankr | Remote signing/submission; Bankr manages gas |
+
+## Reject if unsure
+
+WalletChan cannot undo a confirmed onchain transaction. Reject and verify the
+site, recipient, amount, chain, asset changes, approval limits, and fee before
+trying again.
+
+## Related guides
+
+- [Understand simulation and clear signing](/transactions/simulation)
+- [Choose gas and fee options](/transactions/gas-and-fees)
+- [Review message and typed-data signatures](/transactions/signatures)
+- [Compare final actions by account type](/reference/account-behavior)

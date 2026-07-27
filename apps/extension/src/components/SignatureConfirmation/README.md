@@ -23,7 +23,7 @@ Typed-data addresses reuse `shared/LabeledAddressPopover.tsx`.
 - Signer validation, SIWE policy, account pinning, first-action claims, and
   final signature release remain in the background signature domain.
 - The renderer forwards the user's explicit decision without creating signing
-  policy or changing Bankr/private-key/seed-phrase routing.
+  policy or changing private-key/seed-phrase/Bankr routing.
 - Queue-level Reject all always reaches App's combined-request handler. It must
   not be narrowed to signatures while the counter spans request families.
 - Typed-data domain/types, request method, request parameters, and EIP-712

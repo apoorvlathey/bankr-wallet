@@ -1,0 +1,58 @@
+---
+title: Create or import a WalletChan wallet
+description: Set up WalletChan with a private key, seed phrase, Ledger, view-only address, or optional Bankr remote-signing account.
+searchPriority: 8
+outline: 3
+---
+
+# Create or import a wallet
+
+WalletChan starts by asking what kind of account you want. The choice affects
+where signing happens and which recovery material you must protect.
+
+## Choose an account
+
+- **Private key**: import one EVM private key. WalletChan encrypts it locally.
+- **Seed phrase**: generate or import a recovery phrase, preview derived
+  addresses, and choose the addresses you want to add.
+- **Ledger**: connect a supported Ledger device over Chrome WebHID and choose
+  addresses. The keys never leave the Ledger.
+- **View-only**: watch any EVM address without importing a signing secret.
+- **Bankr**: optionally connect an existing Bankr API account. Bankr signs
+  supported requests remotely.
+
+Read [Account types](/accounts/account-types) for a detailed comparison.
+
+## Set up your master password
+
+The master password protects WalletChan's encrypted local data and authorizes
+master-only actions. Choose a unique password. WalletChan cannot reset it for
+you without the relevant recovery material.
+
+During setup, WalletChan checks that the account-specific details and password
+are complete before committing the wallet. If onboarding is interrupted, open
+the extension again to resume or recover the setup rather than starting
+multiple parallel flows.
+
+## Back up recovery material
+
+Private keys and seed phrases are shown only in deliberate, protected flows.
+Generated seed phrases begin concealed. Reveal, record, and verify them away
+from cameras or screen sharing. Ledger users must secure the Ledger recovery
+phrase using Ledger's own instructions.
+
+WalletChan's [Shield recovery phrase](/privacy/unshield-and-recovery) is
+separate from your wallet seed phrase and must be backed up separately if you
+use Privacy Shield.
+
+## Add more accounts later
+
+Open the account picker or **Settings → Accounts → Add account**. Additional
+accounts use the same account-type-specific setup, but master authorization may
+be required for local secrets.
+
+## What happens next?
+
+After setup, WalletChan opens the [Home and portfolio
+view](/wallet/home-and-portfolio). You can receive funds immediately, connect
+dapps, or add other accounts.

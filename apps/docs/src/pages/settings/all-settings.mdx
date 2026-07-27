@@ -1,0 +1,126 @@
+---
+title: All WalletChan settings
+description: Find every WalletChan setting, status, access requirement, and maintenance action.
+searchPriority: 10
+outline: 3
+---
+
+# All settings
+
+Open the header menu and choose **Settings**. Search matches setting titles,
+descriptions, and terms such as “nonce,” “passkey,” “RPC,” or “clear signing.”
+
+## Accounts
+
+- Search and inspect accounts without accidentally switching the active one.
+- Open account settings to rename, refresh public identity, copy/QR/explorer,
+  reveal eligible local secrets, configure smart-account delegation, inspect
+  delegated permissions, or remove the account.
+- Reorder accounts from the account picker when no search filter is active.
+- Add private-key, seed-phrase, Ledger, view-only, Safe, or optional Bankr
+  accounts.
+
+See [Manage accounts](/accounts/manage).
+
+## Appearance
+
+Choose the extension's **Midnight** dark theme or **Bauhaus** light theme.
+Selection applies immediately and is stored on the local device.
+
+## Sounds
+
+Turn subtle interaction sounds on or off. When enabled, the screen can preview
+the cue. Sound reinforces visible feedback and never carries unique
+information.
+
+## Security
+
+### Change Password
+
+Verify the current master password, choose/confirm the new password, rotate
+protected records, clear other unlock factors, and lock. Disabled in an agent
+session.
+
+### Agent Password
+
+See On/Off status; set up with current master proof; review exact allowed and
+blocked operations; remove with master proof. See [Agent password](/security/agent-password).
+
+### Biometric Unlock
+
+See loading, Enabled, Off, unsupported, legacy-upgrade, setup, and remove
+states. Hidden/blocked in an agent session. See
+[Biometric unlock](/security/biometric-unlock).
+
+### Auto-Lock
+
+Choose 1, 5, 15, or 30 minutes; 1 or 4 hours; or Never. Invalid/missing stored
+values fall back to 15 minutes. Never requires accepting a stronger warning.
+
+### Shield Recovery
+
+Back up, reveal, copy, replace, or restore the separate Shield phrase; view
+balance-at-risk warnings and rescan. Agent sessions cannot enter.
+
+### Clear Signing
+
+Toggle human-readable ERC-7730 summaries. It is on by default. Turning it off
+purges cached descriptors; decoded/raw calldata remains available.
+
+## Chains
+
+- Search by network name, chain ID, or RPC host.
+- Switch between Active and Hidden lists.
+- Show/hide built-in networks and testnets.
+- Add, edit, or delete custom networks.
+- Manage multiple named saved RPC endpoints per network.
+- Select, copy, add, edit, remove, and verify endpoints.
+- See endpoint favicon and current/selected status.
+- Review wrong-chain or unreachable endpoint warnings and explicitly
+  **Use/Save anyway** where permitted.
+- Configure the developer-only view-only `eth_sendTransaction` opt-in for the
+  selected exact local/fork RPC.
+
+See [Networks and RPCs](/settings/networks-and-rpcs).
+
+## WalletChan Browser
+
+- Master enable switch.
+- Use a local Kubo gateway.
+- See gateway checking/online/offline status.
+- Pin supported ERC-4804 HTML locally.
+- Check Kubo API: checking, OK, CORS blocked, unreachable, or error.
+- Edit/reset custom gateway host and port.
+
+This destination is Chromium-only.
+
+## Data
+
+### Clear Transaction History
+
+Load record counts, choose one/many/all accounts, and confirm deletion. An
+empty-history state is shown when there is nothing to clear.
+
+### Reset Nonce Cache
+
+Clears WalletChan's local nonce cache and shows a success toast. It does not
+cancel a network transaction.
+
+### Clear Chat History
+
+Confirm removal of all local Bankr conversations and see success feedback.
+
+## About
+
+See the extension version, current theme, security-model summary, website,
+support/community, author, and product links.
+
+## Related controls outside Settings
+
+- Manual Lock is in the Home header.
+- Popup/side panel/fullscreen, Buy WCHAN, WalletChan OS, and Bankr Chat are in
+  the header menu where supported.
+- Connected dapps, WalletConnect, Address book, Stake, WalletChan Browser, and
+  Revoke approvals are under More.
+- Portfolio-specific Unify Balances, Filter follows dapp chain, Add custom
+  token, and Hide tokens are in portfolio options.

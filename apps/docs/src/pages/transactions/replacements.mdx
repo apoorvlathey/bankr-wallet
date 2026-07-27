@@ -1,0 +1,50 @@
+---
+title: Cancel or speed up a pending transaction
+description: Replace an eligible pending WalletChan transaction with a higher-fee speed-up or same-nonce cancellation.
+searchPriority: 8
+outline: 3
+---
+
+# Cancel or speed up a pending transaction
+
+Open an eligible pending transaction in Activity.
+
+## Speed Up
+
+**Speed Up** keeps the original nonce and transaction intent but proposes a
+higher fee. The review retains the original site/action, simulation, clear
+signing, value, and asset context so you can verify what is being resubmitted.
+
+## Cancel
+
+**Cancel** creates a higher-fee replacement at the same nonce whose purpose is
+to consume that nonce before the original transaction confirms. It appears as
+a WalletChan-authored **Cancel Transaction** row.
+
+Cancellation is an attempt, not a guarantee. If the original is mined first,
+it cannot be reversed.
+
+## Eligibility
+
+Replacement controls are available for still-pending ordinary native-gas
+transactions signed by private-key, seed-phrase, or Ledger accounts.
+
+They are not shown for Bankr actions, view-only accounts, Safe proposals,
+fee-token UserOperations, force-inclusion routes, or a transaction already
+superseded by another replacement.
+
+## Fees and nonce
+
+The replacement nonce is locked to the original. Choose a fee above the
+network/replacement floor. An underpriced value shows an inline error and is
+not submitted.
+
+## Dropped vs failed
+
+When one transaction in a nonce family wins, another may become **Dropped**.
+Dropped means displaced/not included; **Failed** means a definite execution or
+submission failure.
+
+Resetting WalletChan's nonce cache does not cancel an onchain pending
+transaction. Use [Data and history settings](/settings/data-and-history) only
+to recover from a local cache conflict.

@@ -1,0 +1,69 @@
+---
+title: Networks and RPC endpoints
+description: Show, hide, add, edit, delete, and troubleshoot EVM networks and multiple saved RPC endpoints in WalletChan.
+searchPriority: 7
+outline: 3
+---
+
+# Networks and RPCs
+
+Open **Settings → Chains**.
+
+## Active and Hidden
+
+Search by network name, numeric/hex chain ID, or RPC host. Built-in networks can
+be hidden and restored. Built-in testnets ship hidden until you enable them.
+Custom networks can be deleted after confirmation.
+
+Hiding a network removes it from normal selection; it does not move funds or
+disconnect a dapp already using another authorized state.
+
+## Add a custom network
+
+Provide network name, chain ID, and an RPC endpoint. Advanced includes explorer,
+native symbol/decimals, and developer impersonation. WalletChan checks URL
+scheme, private-network policy, duplicate IDs/names, and the chain ID reported
+by the RPC.
+
+You can also review a dapp's [EIP-3085 add-chain
+request](/dapps/network-and-token-requests).
+
+## Saved endpoints
+
+Each network can retain multiple named endpoints. The endpoint manager lets you:
+
+- See the active/selected endpoint and provider favicon.
+- Copy the full URL.
+- Add or edit a label and URL.
+- Select an existing endpoint.
+- Remove an inactive endpoint after confirmation.
+- Preserve built-in endpoint selection locally.
+
+Localhost shorthand is accepted where the validated policy allows it. RPC URLs
+can contain sensitive provider credentials; do not publish them.
+
+## Verification warnings
+
+WalletChan probes a saved endpoint. It distinguishes unreachable, invalid, and
+wrong chain ID. When **Use anyway** is offered, it is an explicit override for
+advanced users, not a verification success.
+
+An RPC controls what chain state WalletChan sees and where local signed
+transactions are broadcast. A malicious RPC can lie about balances,
+simulation, gas, and receipts, although it cannot derive your key from a signed
+transaction.
+
+## View-only developer transactions
+
+For an exact localhost/LAN/fork endpoint, you can enable unsigned
+`eth_sendTransaction` forwarding. Use it only when the development node already
+unlocks or impersonates the address.
+
+The toggle is stored per endpoint. It does not enable signatures, public-RPC
+submission, batches, Shield, smart-account grants, or real account ownership.
+
+## RPC issue alert
+
+Home shows a delayed stale-balance/RPC alert for a failing network and links
+directly to Edit RPC. Try another trusted endpoint, confirm its chain ID, then
+refresh the portfolio.

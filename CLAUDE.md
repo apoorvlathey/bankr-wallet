@@ -1,8 +1,18 @@
 # WalletChan
 
-Browser wallet extension + landing page website in a pnpm workspace monorepo. The extension signs txs via the Bankr API on all dapps; also supports Private Keys, Seed Phrases, and view-only Impersonator accounts.
+Self-custodial Ethereum and EVM browser wallet + landing page website in a pnpm
+workspace monorepo. The extension supports local private-key and seed-phrase
+accounts, Ledger hardware accounts, existing Safe multisigs, view-only
+accounts, and an optional Bankr API remote-signing account. Bankr is one
+account integration, not WalletChan's product identity or universal execution
+path.
 
-**Chains**: 8 built-in (Ethereum, Arbitrum, Base, BNB Chain, Optimism, MegaETH, Polygon, Unichain). PK / Seed Phrase / Impersonator accounts can also add custom EVM chains; Bankr API accounts are locked to the Bankr-supported subset (`isBankrSupported: true` in `chainRegistry.ts`). Single source of truth: `apps/extension/src/constants/chainRegistry.ts` — see [`_docs/ADD_CHAIN.md`](./_docs/ADD_CHAIN.md).
+**Chains**: WalletChan ships a broad built-in EVM registry and lets eligible
+local, Ledger, and view-only accounts add custom EVM chains. Bankr accounts are
+limited to entries marked `isBankrSupported`, and individual features have
+their own eligibility. The single source of truth is
+`apps/extension/src/constants/chainRegistry.ts`; see
+[`_docs/ADD_CHAIN.md`](./_docs/ADD_CHAIN.md).
 
 ## Always-on guardrails (read these first)
 
@@ -10,14 +20,20 @@ These rules apply to almost every change. The detailed docs are listed in [Docum
 
 ### Test ALL four wallet types
 
-Account types: `bankr` (API signing), `privateKey` (local), `seedPhrase` (local HD), `impersonator` (view-only).
+Signing account types: `privateKey` (local), `seedPhrase` (local HD), `ledger`
+(hardware), and `bankr` (optional API signing). WalletChan also supports
+`impersonator` (view-only) accounts and `safe` contract accounts controlled by
+linked signing owners.
 
 - Features that touch transactions, signatures, or auth must be tested against **all four**. Different types use different code paths (e.g., `confirmTransactionAsync` vs `confirmTransactionAsyncPK`).
 - Agent password must work for signing across ALL signing types, not just Bankr.
 - Private-key reveal is blocked for the agent password regardless of wallet type.
 - Execution features must reject impersonator accounts.
 
-Common mistake: fixing only the Bankr path and forgetting PK/Seed have separate handlers, or forgetting impersonator must be blocked from execution.
+Common mistake: treating any one signer as the default path. Private-key,
+seed-phrase, Ledger, and Bankr handlers differ; view-only accounts must stay
+reject-only outside their explicit local-fork developer mode, and Safe actions
+must remain proposals until their real approval/execution conditions are met.
 
 ### Tx-confirmation UI must stay consistent across surfaces
 
@@ -64,11 +80,14 @@ walletchan/
 ├── apps/
 │   ├── extension/             # Browser extension (Vite + React + Chakra UI)
 │   ├── website/               # Landing page (Next.js + Chakra UI)
+│   ├── docs/                  # End-user documentation (Vocs)
 │   ├── indexer/               # Ponder indexer for coin launches
 │   ├── staking-indexer/       # Ponder indexer for sBNKRW vault staking (legacy)
 │   ├── wchan-vault-indexer/   # Ponder indexer for sWCHAN
 │   ├── tg-bot/                # Token-gated Telegram bot (Grammy + Hono)
 │   ├── arb-bot/               # WETH↔WCHAN/BNKRW cross-pool arbitrage bot (Base)
+│   ├── walletchan-rpc/        # Local JSON-RPC -> WalletConnect bridge
+│   ├── walletchan-mcp/        # Local stdio MCP adapter for agents
 │   └── contracts/             # Solidity smart contracts (Foundry)
 ├── packages/
 │   ├── shared/                # Shared design tokens, assets, contract constants
@@ -76,7 +95,11 @@ walletchan/
 └── _docs/                     # LLM-facing documentation (start here)
 ```
 
-Extension has 5 Vite build targets (main / onboarding / inpage / inject / background). Message flow: Dapp → inpage.js → inject.js → background.js → Bankr API. Full details in [`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md).
+The extension has six Vite build targets: main, onboarding, inpage, inject,
+background, and the Chrome-only Ledger offscreen document. Dapp requests flow
+through the injected provider and background policy before routing to the
+selected local, Ledger, Bankr, or Safe path. Full details live in
+[`_docs/IMPLEMENTATION.md`](./_docs/IMPLEMENTATION.md).
 
 When validating or preparing the unpacked Chrome extension, always run
 `pnpm build:extension` from the repo root. Do not use package-level partial
@@ -85,7 +108,12 @@ reload testing: they only refresh part of `apps/extension/build/` and can leave
 manifest-referenced scripts like `static/js/inject.js`, `static/js/inpage.js`,
 or `static/js/background.js` missing or stale.
 
-Design system is token-driven with two themes (Bauhaus + Midnight). Components consume *intent* tokens (`accent.primary`, `surface.raised`, etc.) — never theme-color literals. See [`_docs/THEME.md`](./_docs/THEME.md).
+The extension theme system is token-driven: Warm Midnight is the default and
+Bauhaus remains an optional extension-only alternate. The website and docs site
+use Warm Midnight. Components consume *intent* tokens (`accent.primary`,
+`surface.raised`, etc.), never theme-color literals. See
+[`DESIGN.md`](./DESIGN.md), [`_docs/WARM_MIDNIGHT.md`](./_docs/WARM_MIDNIGHT.md),
+and [`_docs/THEME.md`](./_docs/THEME.md).
 
 ## Documentation References
 

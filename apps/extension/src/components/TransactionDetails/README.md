@@ -72,8 +72,8 @@ large hook.
   compact transaction metadata, then one advanced technical disclosure.
 - Force-inclusion state comes from the distinct L1/L2 hash invariant; do not
   infer stages from error strings.
-- Wallet-type-neutral history rendering must remain shared across Bankr,
-  private-key, and seed-phrase transactions.
+- Wallet-type-neutral history rendering must remain shared across private-key,
+  seed-phrase, and Bankr transactions.
 - Existing message names, receipt polling cadence, explorer URL validation,
   metadata fallback rules, and collapse defaults are compatibility behavior.
 - Safe executor history metadata owns the semantic detail action
@@ -140,12 +140,12 @@ large hook.
 ## Coverage
 
 - `tests/portfolio/portfolioBalanceNavigation.test.ts` covers the Activity →
-  transaction-details → Back path for all three wallet types.
+  transaction-details → Back path for its three account fixtures.
 - `src/preview/PreviewScreens.tsx` exercises the full-screen adapter across
   confirmed, pending, failed, bridge settlement, swap, approval/transfer,
   EIP-7702 and ERC-7715 revocation, atomic and sequential batch, force
   inclusion, deployment, legacy, metadata, and stress states. Its wallet
-  selector rebinds the history record to Bankr, private-key, and seed-phrase
+  selector rebinds the history record to private-key, seed-phrase, and Bankr
   identities rather than only changing chrome.
 - Run `pnpm --filter @walletchan/extension typecheck:ui` and targeted ESLint
   whenever this domain changes.

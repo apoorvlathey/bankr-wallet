@@ -1,0 +1,64 @@
+---
+title: How WalletChan protects you
+description: WalletChan's security model for encrypted secrets, request pinning, dapp isolation, signing, images, Ledger, Safe, and privacy authority.
+searchPriority: 8
+outline: 3
+---
+
+# How WalletChan protects you
+
+WalletChan combines local encryption, strict request boundaries, account-type
+specific signers, and human-readable reviews. No interface can make an unsafe
+request safe, so the final decision remains yours.
+
+## Secrets at rest
+
+Local private keys, seed phrases, credentials, and protected privacy material
+use AES-256-GCM records and purpose-separated wrappers. Password-derived keys
+use PBKDF2-SHA-256 with 600,000 iterations, a per-record salt, and authenticated
+encryption metadata.
+
+## Secrets in use
+
+Plaintext secrets are released only inside trusted WalletChan call paths after
+the required live authorization. Dapps and content scripts never receive a
+private key or seed phrase. Reveal actions recheck that the secret matches the
+selected account.
+
+## Request pinning
+
+Transactions, signatures, batches, permissions, WalletConnect actions, and Safe
+requests are pinned to the original account, chain, origin, and request
+content. Switching accounts cannot redirect a pending request.
+
+## Different signers, different boundaries
+
+- Private-key/seed accounts sign locally once, then broadcast the same bytes.
+- Ledger keeps keys on hardware and needs physical confirmation.
+- View-only is reject-only outside an exact developer impersonation RPC.
+- Safe uses verified owners, threshold, nonce, proposals, and execution.
+- Bankr signs remotely and proves the returned signer.
+
+## What you see before signing
+
+Origin, signer, network, plain-language action, simulation, asset changes,
+approvals, clear signing, decoded/raw calldata, fees, and warnings. Typed data
+and SIWE pass bounded validation before review.
+
+## Remote content
+
+Avatars, favicons, token logos, and NFT media are treated as untrusted. Remote
+raster content is byte-bounded, decoded, resized, and re-encoded; SVG/HTML
+content is rejected in privileged image paths.
+
+## What WalletChan cannot protect against
+
+- Sharing a seed phrase/private key.
+- Approving a malicious request you did not understand.
+- A compromised device or browser profile.
+- Irreversible transfers to the wrong address.
+- Smart-contract, bridge, token, relayer, RPC, or network failure.
+- Privacy loss from timing, amount, public recovery, or external behavior.
+
+Use [Passwords and unlock](/security/passwords) and
+[Backups](/security/backups) to configure your side of the security model.

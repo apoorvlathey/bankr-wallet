@@ -71,7 +71,7 @@ The privacy benefit is breaking the direct protocol-level link between them.
   destination.
 - Support Ethereum ETH shielding, balance recovery, partial/full relayed
   withdrawals, and ragequit.
-- Give Bankr, private-key, seed-phrase, and Ledger users one consistent privacy
+- Give private-key, seed-phrase, Ledger, and Bankr users one consistent privacy
   recovery model.
 - Keep every privacy secret out of React, content scripts, dapps, logs,
   analytics, support bundles, and synchronized storage.
@@ -1197,20 +1197,20 @@ recipients, tx hashes, or timing precise enough to correlate operations.
 
 ## 24. Test matrix
 
-| Scenario | Bankr | Private key | Seed phrase | Impersonator |
+| Scenario | Private key | Seed phrase | Impersonator | Bankr |
 | --- | ---: | ---: | ---: | ---: |
-| Create root with master session | Required | Required | Required | Rejected |
-| Create root with existing biometric factor | Required | Required | Required | Rejected |
-| Block root setup/export under agent | Required | Required | Required | Rejected |
-| Restore after service-worker restart | Required | Required | Required | Read-only |
-| Public shield confirmation | Rejected on Sepolia; required on mainnet | Required | Required | Rejected |
-| Resume after popup closes | Required | Required | Required | N/A |
-| Private withdrawal authorization | Wallet-wide identity; required path coverage | Required | Required | Rejected |
-| Relayer substitution rejection | Required | Required | Required | N/A |
-| Full rescan from phrase | Required | Required | Required | Rejected |
-| Ragequit | Rejected on Sepolia; original depositor on mainnet | Required | Required | Rejected |
-| Password rotation preserves identity | Required | Required | Required | N/A |
-| Passkey lifecycle preserves identity | Required | Required | Required | N/A |
+| Create root with master session | Required | Required | Rejected | Required |
+| Create root with existing biometric factor | Required | Required | Rejected | Required |
+| Block root setup/export under agent | Required | Required | Rejected | Required |
+| Restore after service-worker restart | Required | Required | Read-only | Required |
+| Public shield confirmation | Required | Required | Rejected | Rejected on Sepolia; required on mainnet |
+| Resume after popup closes | Required | Required | N/A | Required |
+| Private withdrawal authorization | Required | Required | Rejected | Wallet-wide identity; required path coverage |
+| Relayer substitution rejection | Required | Required | N/A | Required |
+| Full rescan from phrase | Required | Required | Rejected | Required |
+| Ragequit | Required | Required | Rejected | Rejected on Sepolia; original depositor on mainnet |
+| Password rotation preserves identity | Required | Required | N/A | Required |
+| Passkey lifecycle preserves identity | Required | Required | N/A | Required |
 | Reset/account removal warnings | Required | Required | Required | Required |
 
 Additional protocol tests:

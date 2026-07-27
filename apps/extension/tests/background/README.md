@@ -9,7 +9,7 @@ These tests mirror `src/chrome/background/` and freeze transport behavior:
 - dependency-injected side effects for auth, onboarding, settings, dapp,
   WalletConnect, watch-asset, chain-prompt, pending signing-request, and
   transaction-status routes;
-- shared transaction-confirm claims and exact Bankr/private-key/seed handler
+- shared transaction-confirm claims and exact private-key/seed/Bankr handler
   arguments, plus reset-barrier ordering for swaps and sponsored submission;
 - Bankr remote-signer proof, master-auth epoch, atomic account/credential
   commit, cold Never-session recovery, live passwordless-passkey no-op behavior

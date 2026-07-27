@@ -1,0 +1,43 @@
+---
+title: Dapp permissions and sessions
+description: Understand address access, connected dapps, token approvals, WalletConnect sessions, and reusable delegated permissions in WalletChan.
+outline: 3
+---
+
+# Permissions and sessions
+
+“Permission” can refer to several separate things. Removing one does not
+necessarily remove the others.
+
+## Connection permission
+
+Lets one exact website origin see approved accounts and ask for future actions.
+Remove it under **Connected dapps**. This also cancels that origin's pending
+requests.
+
+## WalletConnect session
+
+Lets a paired remote app send requests through WalletConnect. Disconnect it
+under **More → WalletConnect**.
+
+## Token approval
+
+An onchain allowance lets a spender contract move up to a token limit. It
+persists even after disconnecting the site. Revoke it with a supported
+[approval-cleanup](/transactions/approval-cleanup) action or an onchain tool
+such as the wallet's revoke.cash shortcut.
+
+## Advanced delegated permission
+
+An ERC-7715 grant is reusable onchain authority with methods, token amounts,
+frequency, start, or expiry limits. It requires a compatible local smart
+account and master authorization. View and revoke it from the relevant account
+settings. See [Advanced dapp permissions](/smart-accounts/erc-7715).
+
+## Signature or transaction request
+
+A one-time request is not a durable permission. WalletChan pins it to the
+origin, account, chain, and request data and asks for a fresh decision.
+
+When troubleshooting, identify which layer is still active before removing
+access.

@@ -542,7 +542,9 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - Verify gas estimate with overrides panel.
 - Verify calldata decoder expansion (all param types: address, uint, int, bool, bytes, string, array).
 - Verify force inclusion flow UI (toggle force inclusion on an OP Stack chain).
-- Test with **all three wallet types**: Bankr, PrivateKey, SeedPhrase. (Per CLAUDE.md, required for any tx/sig change — even though we're not touching logic, the UI is shared.)
+- Test with **all four signing wallet types**: PrivateKey, SeedPhrase, Ledger,
+  and Bankr. Ledger additionally requires real-device QA. (Per `AGENTS.md`,
+  required for any tx/sig change even though the UI work is shared.)
 - Confirm, then verify success animation in both themes.
 - Reject, verify the return to home state.
 
@@ -566,7 +568,7 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - Trigger `personal_sign` from a dapp — verify in both themes.
 - Trigger `eth_signTypedData_v4` — verify nested struct rendering in both themes (`AddressValue` copy button + explorer link must work per CLAUDE.md standard).
 - Trigger `wallet_watchAsset` — verify in both themes.
-- Test all three wallet types.
+- Test all four signing wallet types.
 
 ### Phase 9 — Batch Transactions ✅ Shipped
 
@@ -683,7 +685,7 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - View pending tx list with multiple pending requests in both themes.
 - Open tx detail modal in both themes.
 - Test the "Add to Batch" popover gate logic — the popover styling must adapt.
-- Test all three wallet types where supported (batch is Bankr + ERC-5792-capable).
+- Test every signing account type where the batch feature is supported.
 
 ### Phase 10 — Chat Screens ✅ Shipped
 
@@ -744,7 +746,8 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 - Push slippage past 10% to trigger the high-slippage popover warning text.
 - Push the swap to a price impact above 3% AND above 10% to trigger both the inline % and the full warning Box in both themes.
 - Tap Swap → verify `<SwapConfirmation>` renders the title banner, swap summary card, transaction list (try a multi-call swap so the per-call accent stripes cycle), gas estimate, and the Submitting state.
-- Test all three wallet types: Bankr API account, private key account, seed phrase account — each uses different signing handlers per CLAUDE.md.
+- Test private-key, seed-phrase, Ledger, and Bankr signing accounts where
+  supported; each uses a distinct signing path and Ledger requires device QA.
 
 ### Phase 12 — Onboarding + Remaining Modals ✅ Shipped
 
@@ -861,7 +864,7 @@ This requires a grep + replace sweep. ~30-50 usage sites.
 | 2 | Both themes render every screen, every modal, every flow correctly | ✅ pending v3.2.0 visual QA |
 | 3 | Switching themes is instant with no flash and persists across reloads | ✅ (bootstrap.ts + index.css/onboarding.css attribute selectors) |
 | 4 | `rg '#[0-9A-Fa-f]{6}' apps/extension/src --glob '!theme/**'` returns zero matches outside exempt files | ✅ (only chain brand colors, Chrome API, CSS body, OS brand gradient remain) |
-| 5 | All three wallet types (Bankr / PK / Seed) work identically to before in both themes | ✅ pending QA |
+| 5 | This phase's PK / Seed / Bankr software-signing fixtures work identically to before in both themes; current QA also follows the Ledger requirements in `AGENTS.md` | ✅ pending QA |
 | 6 | `_docs/STYLING.md`, `_docs/STORAGE.md`, `_docs/IMPLEMENTATION.md`, `CLAUDE.md` updated | ✅ STYLING (token vocab + authoring guide), IMPLEMENTATION (theme engine section), CLAUDE.md (intent tokens + Reject All rule + strip pattern + theme/ files). STORAGE.md unchanged — no storage shape changes in Phase 13. |
 | 7 | Adding `themes/paper.ts` would require editing zero component files | ✅ — the only inputs to a new theme are `themes/{name}.ts` + a one-line registration in `ThemeProvider.tsx`. |
 

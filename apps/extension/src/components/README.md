@@ -76,4 +76,4 @@ App / page adapter
 Dependencies do not point back toward `App.tsx` or page adapters. Pure model
 modules do not import React, Chakra, Chrome APIs, storage, or network clients.
 Behavior-neutral moves preserve props, exports, lazy-loading boundaries,
-message shapes, effect ordering, and Bankr/private-key/seed-phrase behavior.
+message shapes, effect ordering, and private-key/seed-phrase/Bankr behavior.

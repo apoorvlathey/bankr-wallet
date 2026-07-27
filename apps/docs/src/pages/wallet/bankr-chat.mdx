@@ -1,0 +1,52 @@
+---
+title: Bankr chat
+description: Use the Bankr AI agent inside WalletChan, manage conversations, follow job status, unlock, retry, and clear local chat history.
+---
+
+# Bankr chat
+
+Bankr chat lets a connected Bankr account talk to the Bankr agent without
+leaving WalletChan.
+
+## Start a conversation
+
+Open the chat action in the wallet header. Create a conversation and ask about
+balances, swaps, DeFi, or another supported Bankr task. Suggested empty-state
+prompts are examples, not a limit on what you can type.
+
+## Conversations
+
+- Create a new chat.
+- Return to recent conversations.
+- Favorite useful conversations.
+- Delete one conversation.
+- Retry or resend after a recoverable error.
+- Follow live status messages while Bankr processes a job.
+
+WalletChan stores a bounded local history: up to 50 conversations and 100
+messages per conversation. Empty chats are not saved.
+
+## Lock and authorization
+
+If the wallet locks during a conversation, the error offers **Unlock** and
+returns to the same conversation. A chat can prepare or discuss actions, but
+any WalletChan transaction or signature still uses its normal review and
+authorization boundary.
+
+## Privacy
+
+The conversation context is sent to Bankr to answer the request. Do not paste
+passwords, private keys, seed phrases, Shield recovery phrases, or other
+secrets.
+
+## Clear all history
+
+Use **Settings → Data → Clear Chat History**. This removes the local WalletChan
+conversation records after confirmation; it does not change blockchain state.
+
+## Related guides
+
+- [Understand Bankr accounts](/accounts/bankr)
+- [Review transactions before approval](/transactions/review)
+- [Manage chat and transaction history](/settings/data-and-history)
+- [Use a constrained agent password](/security/agent-password)

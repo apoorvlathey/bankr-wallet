@@ -1,0 +1,49 @@
+---
+title: Address book
+description: Save, resolve, search, edit, delete, and reorder recipient contacts in WalletChan.
+---
+
+# Address book
+
+Open **More → Address book** or open contacts from the Send recipient picker.
+
+## Add a contact
+
+Provide a label and either:
+
+- A `0x` EVM address.
+- ENS or a Basename.
+- A `.wei`, `.gwei`, or `.mega` name.
+
+WalletChan resolves supported names before saving and stores the resolved EVM
+address. Public names and avatars are fetched as display metadata; the contact's
+local label remains the primary identity.
+
+## Use contacts in Send
+
+Focus the Send recipient field to see relevant contacts and wallet accounts.
+Typed search ranks labels, public names, and addresses. Selecting a contact
+uses its saved address and still shows copy/explorer disclosure.
+
+## Manage
+
+- Search by label, public name, or address.
+- Edit the label or address.
+- Delete with confirmation.
+- Reorder with drag, touch, or keyboard controls.
+- Add a contact directly from the Send contacts group.
+
+When search filters the list, reordering preserves the hidden contacts in their
+stored positions.
+
+## Identity and safety
+
+WalletChan can show a cached public avatar/name and a deterministic fallback.
+Remote images are sanitized before display. Names and avatars are not proof of
+ownership; verify the `0x` address for valuable transfers.
+
+## Related guides
+
+- [Send tokens to contacts and wallet accounts](/wallet/send)
+- [Manage and reorder wallet accounts](/accounts/manage)
+- [Understand tokens and balance display](/wallet/tokens)

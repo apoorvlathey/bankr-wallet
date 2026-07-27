@@ -1,0 +1,162 @@
+---
+title: Troubleshoot WalletChan
+description: Fix unlock, account, balance, RPC, Ledger, pending transaction, swap, bridge, WalletConnect, Safe, Shield, and WalletChan Browser problems.
+searchPriority: 9
+outline: 3
+---
+
+# Troubleshooting
+
+Start with the exact status/error shown by WalletChan. Avoid resetting the
+wallet while an irreversible action is unresolved.
+
+## Wallet will not unlock
+
+- Confirm whether you are entering the master or agent password.
+- Use the show/hide control to catch input-layout mistakes.
+- Try biometric only if it was configured on this device.
+- A changed master password clears older agent/passkey factors.
+- If secure state looks stale after an extension update, close all WalletChan
+  surfaces and reopen.
+
+There is no email password reset. Full reset requires verified account and
+Shield backups.
+
+## Biometric unlock is unavailable
+
+The browser/device must support the required WebAuthn PRF/platform
+authenticator. A factor is device-local. Use the master password, then set up or
+upgrade Biometric Unlock from Settings.
+
+## Account missing after seed import
+
+Compare exact addresses and derive/load later indices. The address may be
+`#1`, `#2`, or later rather than the first previewed derivation. Confirm you
+used the correct 12 words and phrase order.
+
+## Ledger does not connect
+
+1. Use a Chromium browser with WebHID.
+2. Close Ledger Live and other wallet/device tabs.
+3. Reconnect and unlock the Ledger.
+4. Open the Ethereum app.
+5. Start the full-page pairing flow and select the device.
+
+If signing waits, read the Ledger screen. Rejecting or disconnecting produces a
+request error; retry only after the previous request terminates.
+
+## Balance is missing or stale
+
+- Check account and network filters.
+- Turn off a manually selected filter or **Filter follows dapp chain** if it
+  moved the portfolio.
+- Expand Low-value assets and check Currently Hidden.
+- Confirm the RPC chain ID and try another trusted saved endpoint.
+- Refresh. Portfolio prices/positions can fail while onchain balances still
+  load.
+
+## RPC alert or wrong-chain warning
+
+Open the alert's **Edit RPC** action. Verify the endpoint's reported chain ID,
+scheme, and provider status. Use **Save anyway** only when you understand why
+verification failed.
+
+## Token not shown
+
+Search hidden/low-value assets, then add the exact ERC-20 contract under
+portfolio options. A missing logo/price does not mean the token is fake or has
+zero balance; verify it independently.
+
+## Send is disabled
+
+Check recipient resolution, contract acknowledgement, amount, balance, native
+gas reserve, network, signer type, Safe deployment, and calldata format.
+View-only cannot sign outside an explicit development impersonation RPC.
+
+## Transaction is pending
+
+Open Activity and inspect nonce, fee, account type, and stage. For eligible
+private-key/seed/Ledger native-gas transactions, use Speed Up or Cancel. Do not
+submit unrelated duplicate transactions with random nonces.
+
+## Transaction failed
+
+Open the full error/receipt. A revert differs from a dropped replacement or an
+uncertain broadcast. Check whether an earlier sequential approval/call still
+succeeded before retrying.
+
+## Replacement is underpriced
+
+Reopen Speed Up/Cancel and choose a fee above the displayed replacement floor.
+The nonce is fixed and cannot be edited in replacement review.
+
+## Swap will not quote
+
+Check chain/token support, account type, amount, balance, liquidity, token
+metadata, RPC health, slippage, and quote service. Ledger should use a swap
+dapp because the built-in shortcut is disabled for Ledger.
+
+## Bridge is still pending
+
+Source confirmation is only the first stage. Open bridge detail for destination
+or refund links. WalletChan resumes settlement polling after a worker/browser
+restart, but provider/network delivery can take longer than the initial ETA.
+
+## WalletConnect will not pair
+
+- Copy a fresh complete `wc:` URI.
+- Use an eligible signing account; view-only cannot pair.
+- Confirm requested networks are visible and supported by that account.
+- If you add a missing network, generate a fresh proposal in the dapp.
+- Refresh active sessions and disconnect a stale duplicate before retrying.
+
+## Dapp shows the wrong account or chain
+
+The tab can retain its own approved account/chain. Reopen the dapp connection
+or use the connected-dapp controls. Global wallet switching does not rewrite a
+pinned pending request.
+
+## Batch partially completed
+
+Sequential execution can stop after earlier calls confirm. Open the bundle and
+individual Activity rows. Check remaining balances and approvals before
+retrying. An atomic batch should revert as a unit.
+
+## Safe proposal will not execute
+
+Check verified deployment, current Safe nonce, owner threshold, existing
+approvals, modules/guard status, selected executor, and gas balance. A
+future-nonce proposal can be approved/published but waits until its nonce is
+current.
+
+## Shielded balance is pending or unavailable
+
+Determine whether the public deposit is confirming, compliance-pending, ready,
+claimed by another operation, or needs recovery. Private mode is Chromium-only.
+Use the Deposits/Public withdrawal path only if you accept the public link.
+
+## Unshield relay quote is too expensive or expired
+
+WalletChan blocks over-cap fees and auto-refreshes expired quotes. Wait for a
+new quote, reduce/change the eligible commitment, use receiver-paid gas if
+offered, or choose public recovery with the privacy tradeoff. There is no unsafe
+fee-cap override.
+
+## Local Kubo is offline or CORS blocked
+
+Open **Settings → WalletChan Browser**, verify gateway host/port, run the status
+check, and follow the one-time Kubo CORS setup. Reset to the default gateway if
+custom settings are invalid.
+
+## Last resort
+
+Before reset, back up every private key, seed phrase, Ledger recovery, Safe
+owner, Bankr account access, and Shield phrase. A reset cannot cancel onchain
+work or recover an unbacked secret.
+
+## Related guides
+
+- [Find answers to common WalletChan questions](/help/faq)
+- [Prepare complete wallet backups](/security/backups)
+- [Inspect pending and completed Activity](/wallet/activity)
+- [Review every WalletChan setting](/settings/all-settings)

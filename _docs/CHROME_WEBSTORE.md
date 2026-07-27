@@ -1,7 +1,13 @@
 # Chrome Web Store Publishing Guide
 
-This document contains all the information required for the Chrome Web Store Privacy practices tab.
-Media assets are available in `./chrome-webstore/`
+This document contains the existing Chrome Web Store privacy-practices notes and
+permission justifications. It predates the complete v4 provider and data-flow
+inventory and must be reconciled with the final package before submission. Media
+assets are available in `./chrome-webstore/`.
+
+The staged v4 item summary, detailed description, screenshot sequence, and
+pre-submission gates live in
+[`CHROME_WEBSTORE_LISTING.md`](./CHROME_WEBSTORE_LISTING.md).
 
 ---
 
@@ -9,7 +15,12 @@ Media assets are available in `./chrome-webstore/`
 
 **What does your extension do?**
 
-WalletChan is a Chrome extension that provides an interface to connect BankrBot API wallets to web3 apps and send transaction requests on supported EVM chains (Base, Ethereum, Polygon, Unichain). It works by injecting a Web3 provider into web pages like any other standard wallet.
+WalletChan is a self-custodial Ethereum and EVM browser wallet. It lets users
+create or import accounts, connect them to web3 apps, review and sign requests,
+view assets, send tokens, swap, and bridge on supported chains. WalletChan
+injects a standard Web3 provider and also supports local keys, Ledger hardware
+accounts, existing Safe multisigs, view-only accounts, and optional Bankr
+remote-signing accounts.
 
 ---
 
@@ -36,9 +47,12 @@ The extension only accesses the active tab when explicitly invoked by the user t
 
 The storage permission is essential for the extension to function. It is used to store:
 
-1. Encrypted API Key: The user's Bankr API key is encrypted with AES-256-GCM using a password-derived key (PBKDF2 with 600,000 iterations) and stored securely in `chrome.storage.local`.
+1. Encrypted Wallet Material: Imported private keys, seed phrases, and optional
+Bankr API credentials are encrypted before storage in `chrome.storage.local`.
 
-2. Wallet Address: The user's impersonated wallet address is stored in `chrome.storage.sync`.
+2. Account Metadata: Public account addresses, account types, names, derivation
+metadata, Ledger paths, Safe associations, and view-only addresses are stored
+so the wallet can restore the user's account list.
 
 3. Network Configuration: Custom RPC endpoints and network settings are stored in `chrome.storage.local`.
 
@@ -62,7 +76,10 @@ The sidePanel permission enables the extension to open in Chrome's built-in side
 
 3. Multi-Transaction Workflow: When interacting with complex dApps that require multiple transactions, users can keep the side panel open and confirm transactions sequentially without interruption.
 
-The extension defaults to popup mode and only enables side panel mode after verifying it works correctly in the user's browser (some browsers like Arc have broken side panel implementations).
+On supported Chrome and Chromium installs, the extension enables side-panel mode
+by default after onboarding. Users can switch to popup mode at any time.
+Unsupported environments retain the popup path, and a failed side-panel open
+falls back to a detached popup for the current request.
 
 ---
 
@@ -201,6 +218,11 @@ This is required for dApps to detect and interact with the wallet.
 
 2. **No Monetization**: The extension does not contain ads, in-app purchases, or any form of monetization.
 
-3. **Security**: API keys are encrypted with AES-256-GCM with PBKDF2 key derivation (600,000 iterations). The password is never stored, only used to derive encryption keys.
+3. **Security**: Wallet secrets and optional service credentials are encrypted
+before local storage. Ledger keys remain on the device. Passwords are not stored
+as plaintext.
 
-4. **Limited Chain Support**: The extension only supports 4 blockchain networks (Base, Ethereum, Polygon, Unichain) to reduce attack surface and ensure transaction safety.
+4. **EVM Chain Scope**: The extension includes a curated registry of Ethereum
+and EVM mainnets plus native testnets. Eligible local, Ledger, and view-only
+accounts may also add custom EVM networks; optional Bankr accounts use a
+smaller explicitly supported built-in subset.

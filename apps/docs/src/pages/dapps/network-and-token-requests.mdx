@@ -1,0 +1,50 @@
+---
+title: Network, chain-switch, and token requests
+description: Review dapp requests to switch networks, add a custom EVM chain, or add a token to WalletChan.
+outline: 3
+---
+
+# Network and token requests
+
+Dapps can ask WalletChan to change connection state, but they cannot silently
+add a network or token.
+
+## Switch network
+
+`wallet_switchEthereumChain` asks the connected tab to use an existing visible
+network. WalletChan pins the requesting origin and chain. If the chain is
+unknown, it returns the standard `4902` error so the dapp can follow with an add
+request.
+
+## Add network
+
+An EIP-3085 `wallet_addEthereumChain` request shows the dapp identity and
+proposed:
+
+- Network name and chain ID.
+- RPC URL.
+- Block explorer.
+- Native token name, symbol, and decimals.
+- EIP-7702 capability notice where relevant.
+
+WalletChan validates URLs and chain metadata and checks duplicates. If the
+network already exists but is hidden, approval can reveal it instead of
+creating another record. A Chainlist link can help you independently verify
+public network information.
+
+## Watch a token
+
+EIP-747 `wallet_watchAsset` shows the site, network, token contract, symbol,
+decimals, and image information. Approving adds a local display entry; it does
+not grant the token contract permission or change the balance.
+
+## Account effects
+
+Chain state is per connected tab for injected dapps. Safe networks without a
+verified deployment can be visible but unavailable for transaction requests.
+Execution support can be narrower by account type than the wallet's full
+built-in network catalog. Optional Bankr remote signing also follows the Bankr
+API network catalog.
+
+See [Supported networks](/overview/networks) and
+[Networks and RPCs](/settings/networks-and-rpcs).

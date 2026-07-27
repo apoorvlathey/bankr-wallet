@@ -5,8 +5,8 @@
 - `revokeList.ts` validates, bounds, normalizes, and pair-deduplicates bulk
   cleanup targets before an owning storage domain mutates state.
 - `accountPolicy.ts` is the exhaustive atomic EOA cleanup policy. Only
-  private-key and seed-phrase accounts are eligible; Bankr, Ledger,
-  impersonator, and Safe behavior remains with their owning domains.
+  private-key and seed-phrase accounts are eligible; Ledger, impersonator,
+  Safe, and Bankr behavior remains with their owning domains.
 - `requestResolver.ts` resolves trusted pending request IDs into the exact
   owner, chain, and call sequence and computes the immutable evidence
   fingerprint.

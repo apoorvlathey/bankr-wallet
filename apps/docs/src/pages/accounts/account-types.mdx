@@ -1,0 +1,67 @@
+---
+title: WalletChan account types
+description: Compare private-key, seed-phrase, Ledger, view-only, Safe, and optional Bankr remote-signing accounts in WalletChan.
+searchPriority: 9
+outline: 3
+---
+
+# Account types
+
+WalletChan separates *account identity* from *how an action is authorized*.
+That is why the same dapp request can look identical at first but finish through
+a different signing path. Bankr is an optional remote-signing account, not a
+requirement for using WalletChan.
+
+| Account | Where signing happens | Can sign? | Recovery responsibility |
+| --- | --- | --- | --- |
+| Private key | Locally inside WalletChan | Yes | The imported private key |
+| Seed phrase | Locally from the selected derived account | Yes | The seed phrase |
+| Ledger | On the connected hardware device | Yes | Ledger device and Ledger recovery phrase |
+| View-only | Nowhere | No | No signing secret is stored |
+| Safe multisig | Through Safe proposal/owner approvals | Yes, after the Safe threshold is met | Safe owners and Safe configuration |
+| Bankr | Bankr API | Yes, on supported networks/actions | Bankr account access and WalletChan password |
+
+## Private key
+
+Best for importing one existing EVM account. The encrypted key is stored
+locally and decrypted only within an authorized session. See
+[Private-key accounts](/accounts/private-key).
+
+## Seed phrase
+
+Best for a group of related HD wallet addresses. You can generate or import a
+phrase, preview addresses, select multiple derivations, and derive more later.
+See [Seed-phrase accounts](/accounts/seed-phrase).
+
+## Ledger
+
+Best when you want hardware-enforced signing. WalletChan stores public account
+metadata and derivation information; the private key stays on the Ledger. See
+[Ledger accounts](/accounts/ledger).
+
+## View-only
+
+Best for watching a treasury, public figure, contract, or another wallet you do
+not control. It can receive prompts so you can inspect what a transaction would
+do, but it must not reach a real signing/submission path. See
+[View-only accounts](/accounts/view-only).
+
+## Safe multisig
+
+Best for shared control. WalletChan verifies Safe ownership on supported
+networks, imports the Safe, shows proposals, and lets eligible owner accounts
+propose, approve, or execute according to threshold. See
+[Safe multisig accounts](/accounts/safe).
+
+## Bankr
+
+Best if you already use Bankr and want an optional remote-signing account plus
+Bankr chat. Network and feature availability follows the Bankr API. See
+[Bankr accounts](/accounts/bankr).
+
+## Features vary by account
+
+Signing, batching, swaps, fee tokens, nonce editing, replacement transactions,
+and agent-password authorization can vary. Use [Wallet behavior by
+account](/reference/account-behavior) before assuming a feature works the same
+way for every signer.

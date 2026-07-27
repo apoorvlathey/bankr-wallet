@@ -1,0 +1,53 @@
+---
+title: Data, history, nonce cache, and wallet reset
+description: Clear WalletChan transaction history or chat, reset local nonce state, and understand the difference from a full wallet reset.
+outline: 3
+---
+
+# Data and history
+
+These controls change local WalletChan data. They cannot erase blockchain
+records.
+
+## Clear Transaction History
+
+Open **Settings → Data → Clear Transaction History**. WalletChan loads local
+counts by account. Select one, several, or all accounts, then confirm.
+
+This removes local enriched Activity/receipt records. Transactions remain
+public on explorers, and WalletChan may later observe new related state through
+normal portfolio/RPC reads.
+
+## Reset Nonce Cache
+
+Use this after a local nonce conflict or stale prepared state. It clears the
+wallet's local nonce allocator/cache and shows a success toast.
+
+It does not cancel, drop, or replace a published transaction. For that, use
+[Cancel or Speed Up](/transactions/replacements) where eligible.
+
+## Clear Chat History
+
+Removes all locally stored Bankr conversations after a confirmation. It does
+not revoke the Bankr credential or change onchain transactions.
+
+## Full reset
+
+The forgot-password/reset flow is much broader. It removes WalletChan identity,
+accounts, encrypted local keys/phrases and credentials, sessions, pending
+requests, WalletConnect state, history, caches, and privacy state.
+
+Reset can be blocked while an irreversible operation is unresolved. If Shield
+state exists, WalletChan requires an explicit loss acknowledgement. A reset is
+not a troubleshooting shortcut; use it only when you have verified backups and
+intend to rebuild the wallet.
+
+## Data that remains elsewhere
+
+- Onchain transactions, balances, allowances, delegations, and Safe state.
+- Browser/store installation history.
+- Dapp or WalletConnect peer records.
+- RPC provider and bridge/service logs.
+- Bankr/server-side data.
+
+Remove or revoke those through their own authority boundaries.

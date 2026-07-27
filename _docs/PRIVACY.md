@@ -409,11 +409,12 @@ Do not reuse blindly:
 
 ### Recommended model: one dedicated privacy recovery root
 
-WalletChan supports Bankr API, imported private-key, and seed-phrase accounts.
-Deriving privacy identity directly from each account would produce three
-different recovery experiences and can make a Bankr account unrecoverable if
-the API cannot reproduce the exact signing secret. A single WalletChan-owned
-privacy root gives all account types the same safety contract.
+WalletChan supports imported private-key, seed-phrase, Ledger, and optional
+Bankr API signing accounts, along with non-signing account models. Deriving
+privacy identity directly from each signing account would produce different
+recovery experiences and can make a Bankr account unrecoverable if the API
+cannot reproduce the exact signing secret. A single WalletChan-owned privacy
+root gives eligible account types the same safety contract.
 
 Generate a dedicated **Privacy recovery phrase** on the first privacy setup.
 It must be distinct in naming, derivation domain, storage, and UI from every
@@ -731,11 +732,12 @@ from an SDK; decode and compare the resulting call to the approved intent.
 
 Shield deposits and direct emergency exits are public EVM transactions. Route
 them through WalletChan's existing pending transaction and confirmation system
-so all three wallet types retain their normal signing path:
+so all four signing wallet types retain their normal signing path:
 
-- Bankr API / impersonator;
 - imported private key;
 - seed phrase / derived local account.
+- Ledger hardware account; and
+- optional Bankr API account.
 
 The adapter prepares intent-bound calls. The existing transaction handler
 chooses Bankr versus local signing. No adapter receives a plaintext EVM private
@@ -857,24 +859,24 @@ unavailable status must never be treated as approval for a private withdrawal.
 ## Testing matrix
 
 Any implementation touches transactions, authentication, and new secrets, so
-it is incomplete until all three wallet types pass.
+it is incomplete until all four signing wallet types pass.
 
-| Scenario | Bankr API | Private key | Seed phrase |
-| --- | ---: | ---: | ---: |
-| Create privacy recovery root with master session | Required | Required | Required |
-| Block setup/export under agent password | Required | Required | Required |
-| Restore root after service-worker restart | Required | Required | Required |
-| Public Sepolia shield confirmation and signing | Rejected before prompt | Required | Required |
-| Production mainnet native ETH shield | Required | Required | Required |
-| Resume after popup closes | Required | Required | Required |
-| Private Sepolia withdrawal confirmation | Rejected | Required | Required |
-| Relayer quote substitution rejected | Required | Required | Required |
-| Full rescan from privacy phrase | Required | Required | Required |
-| Emergency exit/ragequit on Sepolia | Rejected | Required | Required |
-| Production mainnet original-depositor ragequit | Required | Required | Required |
-| Password change preserves identity | Required | Required | Required |
-| Passkey unlock preserves identity | Required | Required | Required |
-| Reset/account removal warns on funds | Required | Required | Required |
+| Scenario | Private key | Seed phrase | Ledger | Bankr API |
+| --- | ---: | ---: | ---: | ---: |
+| Create privacy recovery root with master session | Required | Required | Required | Required |
+| Block setup/export under agent password | Required | Required | Required | Required |
+| Restore root after service-worker restart | Required | Required | Required | Required |
+| Public Sepolia shield confirmation and signing | Required | Required | Required | Rejected before prompt |
+| Production mainnet native ETH shield | Required | Required | Required | Required |
+| Resume after popup closes | Required | Required | Required | Required |
+| Private Sepolia withdrawal confirmation | Required | Required | Required | Rejected |
+| Relayer quote substitution rejected | Required | Required | Required | Required |
+| Full rescan from privacy phrase | Required | Required | Required | Required |
+| Emergency exit/ragequit on Sepolia | Required | Required | Required | Rejected |
+| Production mainnet original-depositor ragequit | Required | Required | Required | Required |
+| Password change preserves identity | Required | Required | Required | Required |
+| Passkey unlock preserves identity | Required | Required | Required | Required |
+| Reset/account removal warns on funds | Required | Required | Required | Required |
 
 Protocol tests must include:
 

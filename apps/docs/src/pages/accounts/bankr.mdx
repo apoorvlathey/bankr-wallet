@@ -1,0 +1,45 @@
+---
+title: Bankr accounts
+description: Connect and use a Bankr API account in WalletChan, including remote signing, transaction processing, and Bankr chat.
+---
+
+# Bankr accounts
+
+A Bankr account signs through the Bankr API instead of releasing a local
+private key to WalletChan's signing code.
+
+## Add a Bankr account
+
+Choose **Bankr** during onboarding or **Add account**, then provide the Bankr
+credential requested by WalletChan. WalletChan validates the account and binds
+the stored encrypted credential to the resulting account metadata.
+
+## Confirm transactions and signatures
+
+WalletChan still shows its normal review screen: requesting site, action,
+simulation, approvals, network, and fees. After you confirm, the request is
+sent to Bankr for signing or submission. Remote processing can remain pending
+while WalletChan polls for the final result.
+
+Closing the popup does not mean a submitted Bankr action was cancelled. Check
+[Activity](/wallet/activity) or reopen WalletChan for the durable result.
+
+## Bankr chat
+
+Bankr accounts can use [Bankr chat](/wallet/bankr-chat) for conversational
+wallet actions. Chat history is local to WalletChan and can be removed from
+**Settings → Data → Clear Chat History**.
+
+## Network and feature limits
+
+Bankr supports a subset of WalletChan's configured networks. If an action is
+available to a local account but not Bankr, WalletChan should show the
+restriction before submission. Local-only controls such as editing an EOA
+nonce or Ledger device approval do not apply.
+
+## Passwords
+
+The master password can unlock the account and authorize protected account
+changes. A configured [agent password](/security/agent-password) can authorize
+supported Bankr signing actions, but cannot reveal account secrets or change
+master-only security configuration.

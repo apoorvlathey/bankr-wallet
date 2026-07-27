@@ -1,0 +1,70 @@
+---
+title: Activity and transaction receipts
+description: Understand processing, pending, confirmed, failed, dropped, bridge, Safe, replacement, force-inclusion, and privacy activity in WalletChan.
+searchPriority: 7
+outline: 3
+---
+
+# Activity and receipts
+
+Activity is WalletChan's local, enriched history for actions associated with
+your accounts. It is not a complete block explorer for every transaction an
+address has ever made.
+
+## Scopes and filters
+
+Public Activity follows the selected account and optional network filter.
+Private Activity shows the wallet-wide Privacy Shield ledger and avoids
+duplicating relayed withdrawals as ordinary public-account transactions.
+
+Rows are grouped by Today, Yesterday, or calendar date.
+
+## Common statuses
+
+| Status | Meaning |
+| --- | --- |
+| Processing | WalletChan has begun an action but does not yet have a final receipt |
+| Pending | The transaction is published and awaiting inclusion/finality |
+| Confirmed | A successful receipt or final result was observed |
+| Failed | A definite revert, rejection, or submission failure occurred |
+| Dropped | A pending transaction was displaced or no longer appears eligible for inclusion |
+| Bridging | Source execution completed; destination settlement is still in progress |
+| Refunded | A bridge route returned funds |
+
+A broadcast timeout can remain Processing/Pending because rebroadcasting
+different bytes could be unsafe. “Dropped” is different from “reverted.”
+
+## Transaction details
+
+Select a row to see the requesting site or WalletChan action, signer, network,
+status, asset/NFT changes, readable or decoded action, Safe/bridge/privacy
+summary, gas and fee asset, time, explorer links, and advanced raw details.
+
+The details can also show:
+
+- Original/replacement relationships.
+- Address nonce for local EOA transactions.
+- OP Stack L1 data fee.
+- Force-inclusion L1 and L2 stages.
+- Permission or delegation receipts.
+- Bridge source/destination/refund transactions.
+- Privacy Shield compliance or withdrawal lifecycle.
+
+## Pending actions
+
+Eligible private-key, seed-phrase, and Ledger native-gas transactions show
+**Cancel** and **Speed Up**. Safe, view-only, fee-token, force-inclusion,
+Bankr, and already superseded transactions use different recovery rules.
+
+## Clear history
+
+**Settings → Data → Clear Transaction History** removes WalletChan's local
+records for selected accounts. It does not delete onchain transactions or
+block-explorer records.
+
+## Related guides
+
+- [Cancel or speed up pending transactions](/transactions/replacements)
+- [Manage local data and history](/settings/data-and-history)
+- [Track swap and bridge settlement](/wallet/swap-and-bridge)
+- [Understand Unshield and public recovery](/privacy/unshield-and-recovery)

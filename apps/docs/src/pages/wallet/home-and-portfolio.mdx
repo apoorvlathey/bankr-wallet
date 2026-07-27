@@ -1,0 +1,76 @@
+---
+title: Home and portfolio
+description: Understand WalletChan's Public and Private modes, portfolio chart, assets, DeFi positions, filters, privacy controls, and home actions.
+searchPriority: 6
+outline: 3
+---
+
+# Home and portfolio
+
+Home is where you switch accounts and networks, see portfolio state, and start
+wallet actions.
+
+## Public and Private modes
+
+On Chromium, the mode switch changes between:
+
+- **Public**: the selected account's normal onchain portfolio, positions, and
+  Activity.
+- **Private**: WalletChan's wallet-wide Shielded ETH balance and private
+  Activity. This balance is not owned by whichever public account happens to
+  be selected.
+
+Private mode is unavailable on Firefox. Learn more in
+[Privacy Shield](/privacy/shield).
+
+## Portfolio value and chart
+
+WalletChan shows the total known USD value and an eight-day chart. Hover or
+focus chart points for historical values. Select the visibility control to hide
+amounts without changing balances.
+
+The first paint may use cached portfolio data while WalletChan verifies current
+onchain balances. If a portfolio provider is unavailable, balances can still
+load while prices or DeFi positions remain incomplete.
+
+## Assets
+
+The Assets tab includes native currency, ERC-20s, recently received tokens,
+custom tokens, and Shielded ETH where relevant.
+
+- Search by token name or symbol.
+- Filter one network or show all.
+- Expand **Low-value assets**.
+- Select an asset to start Send; the Swap shortcut preserves that asset.
+- Enable **Unify balances** to group canonical ETH, USDC, and USDT across
+  networks.
+- Enable **Follow dapp network** so Assets and Activity follow the connected
+  tab's chain until you manually choose another filter.
+
+## Positions
+
+The Positions tab shows supported DeFi positions. An empty Positions tab can
+mean the account has no detected positions or the data source is temporarily
+unavailable; it does not move or change your positions.
+
+## Activity
+
+Activity is scoped to the selected account and network filter in Public mode.
+Private mode uses a separate privacy ledger. See
+[Activity and receipts](/wallet/activity).
+
+## Home actions
+
+Depending on account and mode, the main actions are **Send**, **Swap**,
+**Shield**, and **More**. More includes WCHAN staking, Address book, Connected
+dapps, WalletConnect, WalletChan Browser on Chromium, and an external
+revoke.cash shortcut.
+
+Safe accounts replace direct execution with proposal-aware actions and do not
+offer Shield. View-only accounts cannot sign.
+
+## Alerts and stale data
+
+Home can show a failed transaction, RPC delay/stale-balance warning, Safe
+attention notice, pending dapp connection, or reload-required alert. An RPC
+warning links directly to the relevant endpoint settings.

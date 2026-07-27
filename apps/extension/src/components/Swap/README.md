@@ -82,7 +82,7 @@ message, RPC, or storage effects except the existing explorer/copy actions in
 
 Dependencies point from `SwapView` → hooks/coordinators → preparation/execution
 boundaries. Presentation must not import preparation or execution modules.
-Preserve account pinning and all Bankr, private-key, seed-phrase, and view-only
+Preserve account pinning and all private-key, seed-phrase, view-only, and Bankr
 branches when changing this domain.
 
 UI architecture tests live under `tests/ui/`; transaction behavior remains

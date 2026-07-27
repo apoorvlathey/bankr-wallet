@@ -4,22 +4,33 @@ Browser wallet extension + landing page website in a pnpm workspace monorepo.
 
 ## Project Overview
 
-**What it does**: WalletChan is a Wallet Chrome extension that enables and executing transactions through the Bankr API on all the dapps. Like MetaMask, but AI-powered. Supports Private Keys and Seed phrases as well.
+**What it does**: WalletChan is a multi-account, self-custodial Ethereum and
+EVM browser wallet. It connects to dapps through an injected provider and
+WalletConnect; supports local, hardware, multisig, view-only, and optional
+remote-signing accounts; and includes portfolio, send, swap, bridge, clear
+signing, batching, Privacy Pools, and decentralized browsing workflows.
 
-**Supported chains**: Base (8453), Ethereum (1), MegaETH, Polygon (137), Unichain (130)
+**Supported chains**: Built-in Ethereum/EVM mainnets and their native testnets
+are defined in `apps/extension/src/constants/chainRegistry.ts`, with additional
+custom EVM chains available to eligible account types. Bankr accounts use a
+smaller explicitly flagged built-in subset.
 
 ## Critical: Test ALL Wallet Types
 
 **IMPORTANT**: WalletChan supports FOUR signing wallet types:
 
-1. **Bankr API accounts** (`type: "bankr"`) - Remote signing and transactions via the Bankr API
-2. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
-3. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
-4. **Ledger accounts** (`type: "ledger"`) - Hardware signing over Chrome WebHID; private keys never leave the device
+1. **Private Key accounts** (`type: "privateKey"`) - Local signing with imported private keys
+2. **Seed Phrase accounts** (`type: "seedPhrase"`) - Local signing with HD wallet derivation
+3. **Ledger accounts** (`type: "ledger"`) - Hardware signing over Chrome WebHID; private keys never leave the device
+4. **Bankr API accounts** (`type: "bankr"`) - Optional remote signing and transactions via the Bankr API
 
 WalletChan also supports **view-only impersonator accounts**
 (`type: "impersonator"`). They may receive reject-only transaction/signature
 prompts but must never reach a signing or submission path.
+
+Existing **Safe multisig accounts** (`type: "safe"`) are contract accounts, not
+a fifth direct signer type. Safe proposals are approved or executed through a
+linked eligible owner account and the owner path must be tested independently.
 
 **When implementing ANY feature that touches transactions, signatures, or authentication:**
 
@@ -105,7 +116,10 @@ walletchan/
 | WalletChan MCP  | Node.js stdio MCP       | —          | tsc        |
 | Contracts       | Solidity                | —          | Foundry    |
 
-**Design System**: Bauhaus - geometric, primary colors (Red #D02020, Blue #1040C0, Yellow #F0C020), hard shadows, thick borders. See `_docs/STYLING.md`.
+**Design System**: Warm Midnight is the current extension and website
+direction. The extension retains Bauhaus as an optional alternate theme; the
+website and docs site do not use it. See `DESIGN.md`, `_docs/WARM_MIDNIGHT.md`,
+and `_docs/STYLING.md`.
 
 ## Commands
 
@@ -164,7 +178,8 @@ The Chromium extension has 6 build targets (see `apps/extension/vite.config.*.ts
 | background.js | Service worker (API calls, storage, notifications) |
 | offscreen.js  | Chrome-only Ledger WebHID transport/signing document |
 
-**Message flow**: Dapp → inpage.js → inject.js → background.js → Bankr API
+**Message flow**: Dapp → inpage.js → inject.js → background.js → the selected
+local, Ledger, Safe, or optional Bankr execution path
 
 For detailed architecture, message types, and flows, see `_docs/IMPLEMENTATION.md`.
 

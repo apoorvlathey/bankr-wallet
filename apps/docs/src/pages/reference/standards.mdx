@@ -1,0 +1,36 @@
+---
+title: Ethereum standards supported by WalletChan
+description: Understand how WalletChan uses EIP-1193, EIP-6963, EIP-3085, EIP-747, EIP-712, SIWE, EIP-7702, ERC-5792, ERC-7715, ERC-7730, and related standards.
+outline: 3
+---
+
+# Ethereum standards
+
+| Standard | What it means in WalletChan |
+| --- | --- |
+| [EIP-1193](https://eip.tools/eip/1193) | The injected Ethereum provider request/event interface |
+| [EIP-6963](https://eip.tools/eip/6963) | Multiple-wallet discovery so dapps can identify WalletChan |
+| [EIP-3085](https://eip.tools/eip/3085) | Dapp asks to add an EVM network; WalletChan reviews metadata |
+| [EIP-3326](https://eip.tools/eip/3326) | Dapp asks to switch the connected chain |
+| [EIP-747](https://eip.tools/eip/747) | Dapp asks to watch/add a token |
+| [EIP-712](https://eip.tools/eip/712) | Structured typed-data signing v3/v4 |
+| [EIP-4361](https://eip.tools/eip/4361) | Sign-In with Ethereum parsing and validation |
+| [EIP-7702](https://eip.tools/eip/7702) | EOA smart-account delegation for compatible local accounts |
+| [ERC-5792](https://eip.tools/eip/5792) | Wallet capabilities, send-calls batches, and bundle status |
+| [ERC-7821](https://eip.tools/eip/7821) | Compatible atomic execution used by smart-account batches |
+| [ERC-7715](https://eip.tools/eip/7715) | Constrained reusable dapp permissions |
+| [ERC-7730](https://eip.tools/eip/7730) | Human-readable clear-signing descriptors |
+| [ERC-4337](https://eip.tools/eip/4337) | UserOperation/paymaster route for supported token-paid gas |
+| [EIP-747](https://eip.tools/eip/747) / `watchAsset` | Explicit token-add request |
+| [ERC-4804](https://eip.tools/eip/4804) / [ERC-5219](https://eip.tools/eip/5219) | Supported onchain website resolution/content |
+
+## Signature methods
+
+WalletChan supports `personal_sign`, `eth_signTypedData_v3`, and
+`eth_signTypedData_v4`. It rejects deprecated `eth_sign` and typed-data v1.
+
+## Standards do not imply universal availability
+
+Account type, network activation, smart-account delegate, Safe deployment,
+WalletConnect namespace, and remote-service support can make one method
+unavailable. Check [Wallet behavior by account](/reference/account-behavior).

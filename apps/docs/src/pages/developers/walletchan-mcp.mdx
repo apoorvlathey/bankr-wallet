@@ -1,0 +1,57 @@
+---
+title: WalletChan MCP for AI agents
+description: Connect Codex, Claude, Cursor, and other local MCP clients to WalletChan actions, portfolio, swaps, bridges, signatures, and scoped agent wallets.
+searchPriority: 6
+outline: 3
+---
+
+# WalletChan MCP
+
+`@walletchan/mcp` is a local stdio Model Context Protocol server for Codex,
+Claude, Cursor, and other local MCP clients. It starts or connects to the
+managed [WalletChan RPC](/developers/walletchan-rpc).
+
+It does not share wallet authority with `https://docs.walletchan.com/mcp`,
+which can only retrieve published WalletChan information.
+
+## Wallet-approved tools
+
+The default `walletconnect` profile can:
+
+- Pair/list wallets and read portfolio/account state.
+- Resolve ENS, Basenames, `.wei`, `.gwei`, and `.mega`.
+- Prepare/send transactions and batches.
+- Quote/execute swaps and bridges and check bridge status.
+- Sign messages and SIWE requests.
+- Use supported prepared-call and protocol skills.
+
+Actions that require authority appear in the paired wallet for review.
+
+## Execution profiles
+
+- **`walletconnect`**: paired wallet approval.
+- **`agent:<walletId>`**: scoped ERC-7710/1Shot delegated execution.
+- **`agent-eoa:<walletId>`**: explicit locally encrypted raw EOA signing
+  without a popup.
+
+The last two materially expand authority. Use separate low-value accounts,
+tight scopes, short expiries, and explicit budgets. Never treat an agent EOA as
+equivalent to WalletChan's constrained extension agent password.
+
+## Advanced agent features
+
+Current MCP surfaces include reusable function-call delegations, delegated
+x402 payments, SIWE login to allowlisted remote MCPs, and protocol actions for
+services such as Morpho, Moonwell, Aerodrome, Uniswap, Avantis, Bankr, and
+Virtuals. A managed Veil child MCP is opt-in and keeps public register/deposit
+approval separate from private x402/relay paths.
+
+Availability and risk vary by protocol. Review the generated calls and current
+README before granting authority.
+
+## Installation
+
+See the repository's current
+[WalletChan MCP README](https://github.com/apoorvlathey/walletchan/tree/main/apps/walletchan-mcp)
+for client configuration, pairing, profiles, tool schemas, protocol modules,
+and security guidance.

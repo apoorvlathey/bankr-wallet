@@ -2,9 +2,9 @@
 
 - `tokens.test.ts` freezes the exact native/ERC-20 chain capability catalog and
   requires the extension and proxy address sets to remain synchronized.
-- `capabilities.test.ts` covers Bankr, private-key, seed-phrase, Ledger,
-  view-only, deployment, first-use, pre-delegated, foreign-delegate, and
-  zero-balance option-filtering gates.
+- `capabilities.test.ts` covers private-key, seed-phrase, Ledger, view-only,
+  and Bankr account gates, plus deployment, first-use, pre-delegated,
+  foreign-delegate, and zero-balance option-filtering gates.
 - `userOperation.test.ts` pins WalletChan's Stateless DeleGator call encoding and
   typed-data signature recovery.
 - `authorization.test.ts` freezes real/dummy EIP-7702 authorization formatting.

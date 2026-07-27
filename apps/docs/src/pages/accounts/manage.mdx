@@ -1,0 +1,55 @@
+---
+title: Manage WalletChan accounts
+description: Switch, rename, reorder, inspect, export, derive, and remove accounts in WalletChan.
+---
+
+# Manage accounts
+
+Open the account identity at the top of the wallet or go to **Settings →
+Accounts**.
+
+## Switch accounts
+
+The account picker changes the active WalletChan account. A connected dapp may
+have its own approved account set and per-tab selection, so switching the
+wallet does not silently expose an unapproved address to the page.
+
+Pending requests are pinned to the account that received them. Switching
+accounts does not transfer a request to another signer.
+
+## Rename and reorder
+
+Use account settings to change a local label. Drag the accessible reorder
+handle to change account order. Seed-group and Safe metadata remain attached to
+the account.
+
+## Inspect and copy
+
+Account identity controls provide the full address, copy action, QR code, and
+links to configured chain explorers or supported portfolio dashboards. Public
+names and avatars are best-effort labels; always verify the address for a
+high-value action.
+
+## Add or derive
+
+Choose **Add account** to import a private key or seed phrase, derive another
+seed address, pair Ledger, add view-only, import a discovered Safe, or connect
+an optional Bankr account.
+
+## Reveal local secrets
+
+Private-key and seed-phrase reveal actions require a live master-password
+authorization. Passkey sessions may still ask for recovery proof for some
+factor changes. Agent-password sessions cannot reveal secrets.
+
+## Remove an account
+
+WalletChan checks active dapp permissions, pending requests, account-type
+dependencies, and protected local data before removal. Removal never moves
+funds or deletes an onchain account. Back up local secrets first.
+
+## Related guides
+
+- [Compare WalletChan account types](/accounts/account-types)
+- [Back up keys, phrases, and account access](/security/backups)
+- [Check feature behavior by account type](/reference/account-behavior)

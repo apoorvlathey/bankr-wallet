@@ -1,0 +1,63 @@
+---
+title: Tokens and balances
+description: Add custom tokens, accept watch-asset requests, edit token metadata, hide low-value assets, and restore hidden tokens in WalletChan.
+outline: 3
+---
+
+# Tokens and balances
+
+WalletChan combines portfolio-provider data with configured RPC checks and
+local token metadata.
+
+## Add a custom token
+
+1. Open portfolio options and choose **Add custom token**.
+2. Select the network.
+3. Paste the ERC-20 contract address.
+4. Review the resolved name, symbol, decimals, and explorer link.
+5. Save.
+
+If the token already exists or is merely hidden, WalletChan directs you to the
+existing entry instead of creating a duplicate.
+
+Custom metadata is a display aid. An incorrect symbol or decimals value does
+not change the contract, so verify the contract address.
+
+## Dapp token requests
+
+A dapp can call EIP-747 `wallet_watchAsset`. WalletChan shows an explicit
+request with the site, token, address, symbol, decimals, and image information
+before adding it. Rejecting the request does not reject an unrelated
+transaction.
+
+## Edit or remove a custom token
+
+Open the token's management view to change local display metadata. Chain and
+contract address remain fixed. Removing a custom entry removes the local
+metadata; it does not transfer or burn the token.
+
+## Hide tokens
+
+Choose one or many tokens from **Hide tokens**. Hidden assets are removed from
+the main portfolio view globally but remain onchain. Open **Currently Hidden**
+to restore one or all.
+
+## Low-value and recently received assets
+
+Small balances are collapsed under **Low-value assets**. Recently received
+tokens can appear before an external portfolio index catches up because
+WalletChan enriches confirmed receipts locally.
+
+## Missing price or logo
+
+A missing price does not imply a zero balance. WalletChan may use a
+GeckoTerminal onchain-liquidity fallback when CoinGecko lacks coverage. Logos
+and NFT images are fetched through bounded raster safety checks; unsafe or
+unavailable images fall back to a generated token mark.
+
+## Related guides
+
+- [Understand Home and portfolio balances](/wallet/home-and-portfolio)
+- [Send native currency and tokens](/wallet/send)
+- [Swap and bridge supported assets](/wallet/swap-and-bridge)
+- [Clean up token approvals](/transactions/approval-cleanup)

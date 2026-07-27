@@ -3,6 +3,31 @@
 > Screen-by-screen implementation decisions and current review status live in
 > [`_docs/WARM_MIDNIGHT.md`](./_docs/WARM_MIDNIGHT.md).
 
+## Docs site projection
+
+- Artifact type: searchable end-user documentation and product reference.
+- Positioning: clear consumer wallet guidance with enough depth for power users
+  and AI agents to retrieve an exact answer.
+- Adjectives: comprehensive, navigable, candid, unmistakably WalletChan.
+- Aesthetic essence: warm, technical, direct.
+- Direction: Warm Midnight only. The docs site does not expose or borrow the
+  alternate Bauhaus theme.
+- Brand lockup: the real pixel mascot paired with the uppercase Anton wordmark
+  and a compact `DOCS` label in the persistent navigation header.
+- Signature move: the Feature Atlas, a dense but readable linked index that
+  makes the wallet's breadth visible without turning each guide into a
+  marketing page.
+- Layout: persistent sidebar and search, 65–75ch reading measure, scannable
+  headings, strong internal links, and focused single-topic pages.
+- Palette: graphite `#09090B` / `#111113` / `#18181B`, off-white `#F4F4F5`,
+  financial blue `#2563EB` for navigation and focus, and amber `#F59E0B`
+  reserved for WalletChan identity and high-signal calls to action.
+- Motion: transform and opacity only, under 200ms, and disabled for
+  `prefers-reduced-motion`.
+- Accessibility: WCAG 2.2 AA contrast, visible focus, keyboard-searchable
+  navigation, semantic Markdown structure, and no information carried by color
+  alone.
+
 ## Context (from discovery)
 
 - Artifact type: mobile-first browser wallet and financial application.
@@ -961,7 +986,7 @@
   section heading once every call has a meaningful label, connecting the muted
   context label to an action equation such as “Approve + Swap”; amber is
   reserved for the equation separators so the names remain the scanning focus;
-  force inclusion stays last in advanced options, and all three wallet types
+  force inclusion stays last in advanced options, and all four signing wallet types
   retain their existing execution paths. Superseded origin/from/network,
   descriptor-only, and duplicate native-value summaries were removed rather
   than hidden behind the new composition. Midnight call numbers use one neutral
@@ -1025,7 +1050,7 @@
   failure remains adjacent to status; raw addresses, calldata, deploy data, and
   gas share one native advanced disclosure. Defined edges replace nested card
   shadows, current address identities flow through shared controls, and preview
-  fixtures bind Bankr, private-key, and seed-phrase accounts to the real record.
+  fixtures bind private-key, seed-phrase, and Bankr accounts to the real record.
   ERC-7730 fields remain inside the rounded summary owner instead of becoming a
   detached description card. The primary explorer action sits beside the
   status-line chain; force-inclusion explorer actions sit beside their terminal
@@ -1321,7 +1346,7 @@
   with chain-marked source and destination actions for bridges; kept the
   complete history visible, and added deterministic mixed-state preview
   fixtures. Compact, popup, window, and sidepanel layouts were reviewed in both
-  themes; Bankr, private-key, and seed-phrase navigation passed with no
+  themes; private-key, seed-phrase, and Bankr navigation passed with no
   overflow, runtime errors, or axe violations.
 - 2026-07-16: tightened the Activity ledger to a 64px row rhythm with 8px
   vertical insets, a relationship-based 2px line gap only for denser bridge

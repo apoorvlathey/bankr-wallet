@@ -271,17 +271,17 @@ forwarded through the content script or exposed to dapps.
 
 ## Wallet and authorization matrix
 
-| Path | Bankr | Private key | Seed phrase | Impersonator | Agent session |
+| Path | Private key | Seed phrase | Impersonator | Agent session | Bankr |
 | --- | --- | --- | --- | --- | --- |
-| View aggregate status | Yes | Yes | Yes | Read-only | Read-only |
-| Initialize with master/passkey | Yes | Yes | Yes | No | No |
-| Quote and review active-chain Shield | Yes | Yes | Yes | No | No |
-| Submit Sepolia Shield (`dev:extension`) | No, rejected before prompt | Yes | Yes | No | No |
-| Submit mainnet Shield (production) | Yes | Yes | Yes | No | No |
-| Private Unshield | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | No |
-| Withdraw publicly on Sepolia (`dev:extension`) | No | Original depositor only | Original depositor only | No | No |
-| Withdraw publicly on mainnet (production) | Original depositor only | Original depositor only | Original depositor only | No | No |
-| Reveal/restore phrase | Main password only | Main password only | Main password only | No | No |
+| View aggregate status | Yes | Yes | Read-only | Read-only | Yes |
+| Initialize with master/passkey | Yes | Yes | No | No | Yes |
+| Quote and review active-chain Shield | Yes | Yes | No | No | Yes |
+| Submit Sepolia Shield (`dev:extension`) | Yes | Yes | No | No | No, rejected before prompt |
+| Submit mainnet Shield (production) | Yes | Yes | No | No | Yes |
+| Private Unshield | Yes, wallet-wide identity | Yes, wallet-wide identity | Yes, wallet-wide identity | No | Yes, wallet-wide identity |
+| Withdraw publicly on Sepolia (`dev:extension`) | Original depositor only | Original depositor only | No | No | No |
+| Withdraw publicly on mainnet (production) | Original depositor only | Original depositor only | No | No | Original depositor only |
+| Reveal/restore phrase | Main password only | Main password only | No | No | Main password only |
 
 Account switching after a Shield review does not transfer authority: final
 preparation and signing re-pin the explicit internal source account ID,

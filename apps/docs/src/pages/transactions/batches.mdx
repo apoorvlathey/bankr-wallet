@@ -1,0 +1,64 @@
+---
+title: Batch transactions
+description: Review ERC-5792 wallet_sendCalls, atomic and sequential batches, bundle status, Safe proposals, and user-assembled cross-dapp batches.
+searchPriority: 7
+outline: 3
+---
+
+# Batch transactions
+
+WalletChan supports ERC-5792 call bundles and a user-assembled cross-dapp batch.
+A batch can reduce prompts, preserve dependent call order, or execute
+atomically when the account and network support it.
+
+## Dapp batches
+
+Supported provider and WalletConnect methods include:
+
+- `wallet_getCapabilities`
+- `wallet_sendCalls`
+- `wallet_getCallsStatus`
+- `wallet_showCallsStatus`
+
+A one-call bundle uses the normal single-transaction review. Multi-call review
+shows ordered calls, dapp attribution, simulation, approvals, decoded/raw data,
+gas, and whether atomic execution is required.
+
+You can expand calls, edit supported approval values, remove calls where the
+request permits, or split a compatible batch. A dapp-required atomic bundle
+cannot silently become sequential.
+
+## Execution strategy
+
+| Account | Batch behavior |
+| --- | --- |
+| Private key / seed | EIP-7702 + ERC-7821 atomic when compatible; otherwise sequential if allowed |
+| Ledger | Not advertised for ERC-5792 batches |
+| View-only | Unsupported |
+| Safe | Creates a Safe proposal; bundle stays pending through real execution |
+| Bankr | Atomic ERC-7821 on supported paths |
+
+Bundle status records retain per-call results and transaction receipts.
+
+## Cross-dapp batch
+
+For compatible pending transaction requests on one account and chain, choose
+**Add to batch**. The combined review groups calls by source site. You can
+remove one source, reject its original request, reject all, or confirm once.
+
+WalletChan pins the assembled batch to the original account/chain and fans the
+final transaction hash/status back to each source. Bankr can use an atomic
+plan; local private-key/seed accounts require a compatible EIP-7702 path.
+
+## Partial sequential execution
+
+Sequential batches can stop after an earlier call succeeds. Activity records
+the completed and failed call indices. Check for remaining token approvals or
+partially completed state before retrying.
+
+## Related guides
+
+- [Read the transaction review screen](/transactions/review)
+- [Choose gas and fee options](/transactions/gas-and-fees)
+- [Remove residual token approvals](/transactions/approval-cleanup)
+- [Inspect batch results in Activity](/wallet/activity)

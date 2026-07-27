@@ -1,0 +1,54 @@
+---
+title: Ledger hardware accounts
+description: Pair a Ledger over Chrome WebHID, choose derived addresses, and approve WalletChan transactions on the device.
+---
+
+# Ledger accounts
+
+Ledger accounts keep signing keys on the hardware device. WalletChan stores the
+public address, derivation path, and device/account metadata needed to request
+a signature.
+
+## Requirements
+
+- A Chromium browser with WebHID support.
+- An unlocked Ledger with the Ethereum app open.
+- No other wallet or Ledger application holding the device connection.
+
+Ledger setup and signing are not available through Firefox's current extension
+transport.
+
+## Add a Ledger
+
+1. Choose **Ledger** from onboarding or **Add account**.
+2. Connect and unlock the device.
+3. Approve the browser's device-selection prompt.
+4. Choose the derivation scheme and one or more displayed addresses.
+5. Label the imported account if desired.
+
+WalletChan never reads the Ledger recovery phrase or private key.
+
+## Sign
+
+After you confirm a WalletChan review, the request remains visible while the
+device asks for approval. Verify the address, amount, network, and data on the
+Ledger itself. WalletChan then broadcasts the signed transaction or returns the
+signature.
+
+Do not disconnect the device while it says **Waiting for Ledger**. If you reject
+on-device, the wallet reports the request as rejected and does not submit it.
+
+## Supported controls
+
+Ledger accounts can use local fee selection, ordinary EOA nonce controls,
+pending-transaction speed-up/cancel flows, Send, supported message signing,
+Safe-owner actions, sequential staking legs, Shield paths, and transaction
+simulation. The built-in Swap/Bridge shortcut, ERC-5792 batches, fee-token gas,
+EIP-7702/ERC-7715, and force inclusion are not offered. Every Ledger signing
+feature still requires real-device approval.
+
+## Troubleshooting
+
+Close Ledger Live and other wallet tabs, reconnect the cable, unlock the
+device, open the Ethereum app, and retry. See
+[Troubleshooting](/help/troubleshooting#ledger-does-not-connect).

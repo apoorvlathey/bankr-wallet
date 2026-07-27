@@ -642,8 +642,8 @@ in **both themes**:
 - `pnpm build:extension`
 - Reload at `chrome://extensions`
 - Walk the affected screens in Bauhaus → switch to Midnight → walk again
-- For tx / signature flows: test with **all three wallet types** (Bankr API,
-  Private Key, Seed Phrase) per `CLAUDE.md`. Even though theme work doesn't
+- For tx / signature flows: test with **all four signing wallet types** (Private
+  Key, Seed Phrase, Ledger, and Bankr API) per `AGENTS.md`. Even though theme work doesn't
   touch logic, the UI is shared across wallet types and a regression in one
   rendering path is easy to miss.
 - Toggle Settings → Appearance, reload the extension, confirm the choice

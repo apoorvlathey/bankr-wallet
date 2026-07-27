@@ -17,7 +17,7 @@
   original row.
 - `valueSemantics.test.ts` freezes OP Stack's split between the zero-valued L1
   portal call and the reviewed nonzero L2 `_value`, keeps L1 gas and L2 value
-  balance checks independent, and verifies the Bankr/private-key/seed-phrase
+  balance checks independent, and verifies the private-key/seed-phrase/Bankr
   single and batch paths all consume the shared builder.
 
 Local signing's sign-once/broadcast mechanics remain in `../localSigning/`;

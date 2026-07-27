@@ -1,0 +1,56 @@
+---
+title: Token approvals and approval cleanup
+description: Understand token allowances, unlimited approvals, residual approval warnings, Revoke, Revoke all, and disconnecting versus revoking.
+searchPriority: 8
+outline: 3
+---
+
+# Token approvals and cleanup
+
+A token approval gives a spender contract permission to move up to an
+allowance. It is an onchain permission that can outlive the dapp connection.
+
+## What WalletChan shows
+
+Simulation recognizes supported ERC-20, ERC-2612, and Permit2 changes. Review
+the token, spender, new allowance, expiration, and whether the approval is
+unlimited.
+
+A standalone `approve` call receives a focused editable amount view. Setting
+the amount to zero is a revocation.
+
+## Approval remains
+
+After an outgoing token action, WalletChan can detect a verified non-zero
+allowance that will remain. The **Approval remains** notice is distinct from
+the token transfer itself.
+
+For supported private-key/seed atomic paths and unsigned Safe proposals:
+
+- **Revoke?** appends a canonical `approve(spender, 0)` cleanup call.
+- **Revoke all** appends cleanup calls for multiple supported findings.
+
+The UI shows loading, completed, disabled, and unavailable states. It does not
+invent a cleanup call when token/spender evidence is insufficient.
+
+## Disconnecting is not revoking
+
+Removing a site from **Connected dapps** prevents future wallet requests and
+address access. It does not change allowances already stored in token
+contracts.
+
+Use the wallet's external revoke.cash shortcut when an allowance is outside the
+current review or unsupported by inline cleanup. Revocation itself costs gas.
+
+## Sequential partial completion
+
+If an approval transaction confirms but the later swap/deposit fails, the
+allowance can remain. Check Activity before retrying and revoke if it is no
+longer needed.
+
+## Related guides
+
+- [Understand connected-site permissions](/dapps/permissions)
+- [Inspect simulated approval changes](/transactions/simulation)
+- [Track partial completion in Activity](/wallet/activity)
+- [Review approval calls inside batches](/transactions/batches)

@@ -1,0 +1,60 @@
+---
+title: Wallet behavior by account type
+description: Compare WalletChan transaction, signature, swap, bridge, batch, gas, Safe, privacy, and secret behavior for every account.
+searchPriority: 9
+outline: 3
+---
+
+# Wallet behavior by account
+
+Network and service support can narrow an otherwise eligible feature.
+
+| Feature | Private key | Seed phrase | Ledger | View-only | Safe | Bankr |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ordinary transaction | Local | Local derived key | Hardware | Reject-only* | Proposal/execution | Remote |
+| Personal/EIP-712 signature | Local | Local | Hardware | Reject-only | No EOA message signing | Remote |
+| Built-in Send | Yes | Yes | Yes | Review-only* | Safe proposal | Yes |
+| Built-in same-chain Swap | Yes | Yes | No; use a swap dapp | Fork-only* | Safe proposal | Yes |
+| Built-in Bridge | Yes | Yes | No | No | No | Yes |
+| ERC-5792 batch | Atomic/sequential | Atomic/sequential | No | No | Safe proposal | Yes |
+| Cross-dapp batch | Eligible atomic | Eligible atomic | No | No | No | Yes |
+| Fee-token gas | Eligible | Eligible | No | No | Eligible local executor | Existing delegate only |
+| EIP-7702 delegation | Yes | Yes | No | No | Not the EOA flow | Compatible path |
+| ERC-7715 grants | Eligible | Eligible | No | No | No | No |
+| Force inclusion | Eligible | Eligible | No | No | No | Parent-L1 dependent |
+| Shield | Yes | Yes | Yes | No | No | Yes |
+| Safe owner | Yes | Yes | Yes | No | N/A | Yes |
+| Reveal private key | Master only | Master only | Impossible | N/A | N/A | N/A |
+| Reveal seed phrase | N/A | Master only | Use Ledger recovery | N/A | N/A | N/A |
+
+\* View-only can forward reviewed unsigned transactions only through an exact
+explicitly enabled local/fork RPC that already impersonates the address. It
+still cannot sign.
+
+## Password authorization
+
+| Operation | Master/passwordless-master | Agent password |
+| --- | --- | --- |
+| Ordinary eligible transaction/signature | Yes | Yes |
+| Ledger signature | Starts request; device still approves | Starts request; device still approves |
+| Reveal key/phrase | Explicit master password | No |
+| Add/remove/derive accounts | Yes | No |
+| Change Bankr credential | Yes | No |
+| Change master/factors | Explicit master password | No |
+| Custom delegate/new ERC-7715 authority | Yes | No |
+| Privacy Shield authority/recovery | Yes | No |
+| Full reset | Master policy | No |
+
+## Safe owner vs Safe account
+
+The selected Safe is the account whose assets/proposal are being managed. A
+linked private-key, seed-phrase, Ledger, or Bankr owner supplies approval. At
+execution, an eligible local/Ledger executor pays the outer gas. Threshold and
+nonce decide when execution becomes possible.
+
+## Related guides
+
+- [Compare all account types](/accounts/account-types)
+- [Understand transaction review differences](/transactions/review)
+- [Learn password and authorization rules](/security/passwords)
+- [Browse supported wallet standards](/reference/standards)

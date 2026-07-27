@@ -1,0 +1,265 @@
+---
+title: WalletChan frequently asked questions
+description: Answers about WalletChan accounts, recovery, dapps, transactions, gas, swaps, bridges, Privacy Shield, Safe, Ledger, networks, and agent access.
+searchPriority: 10
+outline: 3
+---
+
+# Frequently asked questions
+
+## General and account safety
+
+### Is WalletChan self-custodial?
+
+It depends on the account. Private-key and seed accounts sign locally;
+Ledger keeps keys on hardware; Safe authority is shared by its onchain owners.
+View-only stores no signing secret. Bankr signs remotely through Bankr. Read
+[Account types](/accounts/account-types) instead of applying one custody label
+to all six models.
+
+### What account types does WalletChan support?
+
+Private key, seed phrase, Ledger, view-only, Safe multisig, and optional Bankr
+remote signing.
+[Compare their behavior](/reference/account-behavior).
+
+### What is the difference between my password, seed phrase, and private key?
+
+The password unlocks encrypted local WalletChan data. A seed phrase derives a
+family of accounts. A private key controls one account. Losing a password may
+require rebuilding from account backups; anyone with a seed/private key can
+control the corresponding funds.
+
+### Can WalletChan recover a lost password, seed phrase, or private key?
+
+WalletChan cannot email or reconstruct one. Recovery depends on a valid backup,
+an authorized existing session, Ledger recovery, enough Safe owners, or Bankr
+account access. A destructive reset does not recover funds.
+
+### Why is an account missing after I import my seed phrase?
+
+The address may use a later derivation index. Add/derive more addresses from
+the saved seed group and compare the exact `0x` address. WalletChan uses the
+standard EVM path `m/44'/60'/0'/0/N`.
+
+### Can I reveal a private key or seed phrase with an agent password?
+
+No. Reveal requires an explicit master password. Ledger keys can never be
+revealed by WalletChan.
+
+### Is the Shield recovery phrase the same as my wallet seed phrase?
+
+No. It is a separate wallet-wide Privacy Shield identity and cannot restore
+your public Ethereum accounts.
+
+## Dapps, approvals, and signing
+
+### What does connecting to a dapp allow?
+
+It lets the exact origin see approved addresses and request future actions.
+Connection alone does not move tokens or sign a message. Every action receives
+its own review.
+
+### Is disconnecting a dapp the same as revoking token approvals?
+
+No. Disconnecting removes wallet access for the site. An allowance is an
+onchain token permission and remains until an onchain revocation changes it.
+
+### What is an unlimited token approval?
+
+It lets the spender move a very large token amount without another approval.
+WalletChan shows strong warnings for detected unlimited increases. Reduce an
+editable approval or revoke it when no longer needed.
+
+### How can I understand what I am signing?
+
+Check origin, signer, network, action, estimated changes, approval limits,
+clear-signing summary, decoded/raw calldata, and fees. Typed data and SIWE get a
+structured review. Reject if the readable and exact details disagree.
+
+### What happens when simulation fails?
+
+A likely revert is blocked until a separate risk acknowledgement, where
+continuation is allowed. If simulation is unavailable, the request can still
+be risky; manually inspect origin, value, recipient, approvals, and decoded/raw
+data.
+
+### Does a SIWE sign-in cost gas?
+
+No, but it produces a cryptographic proof that can log you in or authorize
+offchain terms. Verify the domain, address, URI, chain, statement, nonce, time
+limits, and resources.
+
+### Can different tabs use different WalletChan accounts or networks?
+
+Yes. Injected dapp account/chain state is per authorized tab/origin. A pending
+request remains pinned to the account and chain that received it.
+
+## Transactions and gas
+
+### Why is my transaction pending?
+
+Common reasons include network congestion, low replacement fee, earlier nonce
+ordering, RPC/receipt delay, remote Bankr processing, bridge settlement, or a
+Safe proposal awaiting approval. Open Activity for the exact stage.
+
+### How do I speed up or cancel a transaction?
+
+Open an eligible pending private-key, seed-phrase, or Ledger native-gas
+transaction and choose **Speed Up** or **Cancel**. Both use the same nonce and a
+higher fee. Safe, view-only, fee-token, force-inclusion, and Bankr paths are
+not eligible.
+
+### Can WalletChan reverse a confirmed transfer?
+
+No. EVM transactions are irreversible after confirmation. A pending
+cancellation is only a competing same-nonce replacement and is not guaranteed.
+
+### Why is MAX less than my ETH balance?
+
+Native MAX reserves buffered gas and fee headroom. Spending the full balance
+would leave no fee for the transfer.
+
+### Can I pay gas with USDC or another token?
+
+On eligible chains and account/delegate states, yes. The picker displays the
+current supported tokens and a bounded quote. Ledger and view-only cannot use
+token-paid gas, and native gas remains the fallback.
+
+### What does Reset Nonce Cache do?
+
+It clears WalletChan's local nonce allocator state. It does not cancel or drop
+an onchain pending transaction.
+
+### Why did my transaction fail?
+
+Inspect the detail error and receipt. Possible causes include contract revert,
+insufficient balance/gas reserve, expired quote, invalid nonce, underpriced
+replacement, RPC mismatch, partially completed sequential calls, or a rejected
+hardware/remote signer.
+
+## Networks, tokens, swaps, and bridges
+
+### Which networks does WalletChan support?
+
+WalletChan has [25 built-in mainnets, related testnets, and custom EVM
+networks](/overview/networks). Swaps, bridges, Safe, fee tokens, delegation,
+force inclusion, and Bankr remote signing each support a subset.
+
+### How do I add a custom EVM network or RPC?
+
+Use **Settings → Chains → Add network**, or approve a valid dapp EIP-3085
+request. Verify chain ID, RPC, explorer, and native token. You can save multiple
+named endpoints.
+
+### How do I add or hide a token?
+
+Use portfolio options to add an ERC-20 contract or hide tokens. Hidden tokens
+remain onchain and can be restored under **Currently Hidden**. A dapp's
+watch-asset request also needs explicit approval.
+
+### Why is a token balance visible but its USD value is missing?
+
+The onchain balance can load without reliable price data. A missing price is
+not a zero balance.
+
+### Why is Swap unavailable or not quoting?
+
+Check account type, supported chain/token, balance, liquidity, RPC health,
+token metadata, and quote service. The built-in shortcut does not currently
+support Ledger; use a swap dapp and approve its ordinary transaction on-device.
+
+### What is slippage?
+
+The tolerated difference between quoted and executed output. Higher slippage
+raises the allowed price movement and can lead to a worse execution. Review
+minimum received.
+
+### Why have my bridged tokens not arrived?
+
+Source confirmation and destination delivery are separate. Check Activity for
+Bridging, Complete, Refunded, Expired, or Cancelled and open the available
+source/destination explorer links.
+
+### Can a Safe bridge funds through WalletChan?
+
+Not through the built-in bridge. Safe same-chain Send and Swap proposals are
+supported; bridge is disabled until destination Safe deployment and authority
+can be verified.
+
+## Smart accounts, Safe, and Ledger
+
+### What is smart-account setup?
+
+For eligible private-key/seed accounts, WalletChan can set an EIP-7702 delegate
+on one network to enable atomic batches, token-paid gas, and constrained
+permissions. It keeps the same address and can be revoked.
+
+### Can WalletChan batch multiple transactions?
+
+Yes through supported ERC-5792 dapp requests or a user-assembled cross-dapp
+batch. Atomic versus sequential behavior depends on account, chain, delegate,
+and whether the dapp requires atomic execution.
+
+### What are delegated permissions?
+
+ERC-7715 permissions are reusable onchain authority bounded by token, amount,
+frequency, method, start, and expiry. Only eligible master-authorized local
+accounts can grant them. Disconnecting the dapp does not revoke them.
+
+### How does a Safe transaction work?
+
+An owner proposes or approves. The Safe's threshold and nonce decide when it
+can execute. The executor sends the outer transaction and pays its gas.
+Future-nonce proposals can be signed/published but wait for their nonce before
+execution.
+
+### Can I use Ledger with WalletChan?
+
+Yes on Chromium/WebHID for normal transactions, supported messages/EIP-712,
+Send, sequential staking legs, Safe owner actions, and Shield paths. The
+built-in Swap/Bridge, ERC-5792, fee-token gas, EIP-7702/ERC-7715, and force
+inclusion are not offered.
+
+## Privacy, browser, and agent access
+
+### What is Shielded ETH?
+
+It is WalletChan's wallet-wide ready balance in the configured Ethereum Privacy
+Pool. The public deposit is visible; withdrawal privacy depends on the selected
+route and your broader usage pattern.
+
+### Why is a Shield deposit not ready?
+
+It can be awaiting the Ethereum receipt or the compliance/association-set
+stage. WalletChan separates pending from ready balance and shows approximate
+progress rather than treating confirmation as instant privacy readiness.
+
+### Can an agent password or view-only account use Shield?
+
+No for initialization, shielding, withdrawal, reveal, restore, rescan, or
+public recovery. Privacy authority is master-only; view-only has no signer.
+
+### How do I open `.eth` or `.gwei` websites?
+
+On Chromium, open **WalletChan Browser** and enter the name, or enable supported
+address-bar browsing. Configure public or local Kubo gateway behavior in
+Settings.
+
+### What can the agent password do?
+
+It can authorize ordinary eligible transactions/signatures but cannot reveal
+secrets, change accounts/credentials/factors, grant new reusable authority,
+operate privacy authority, or reset. Ledger still asks for physical approval.
+
+### What is the difference between WalletChan RPC and MCP?
+
+[WalletChan RPC](/developers/walletchan-rpc) exposes local Ethereum JSON-RPC
+for scripts/tools. [WalletChan MCP](/developers/walletchan-mcp) exposes
+structured agent tools and optional advanced execution profiles. Both are
+separate local packages, not hidden extension screens.
+
+### Can I turn sounds off or change auto-lock?
+
+Yes. Use **Settings → Sounds** and **Settings → Security → Auto-Lock**. Manual
+Lock is always available from Home.

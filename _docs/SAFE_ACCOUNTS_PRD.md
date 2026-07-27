@@ -4,6 +4,8 @@
 >
 > Created: 2026-07-19
 >
+> Updated: 2026-07-27
+>
 > Product: WalletChan browser extension
 >
 > Related research: [`SAFE_ACCOUNTS.md`](./SAFE_ACCOUNTS.md)
@@ -12,9 +14,9 @@
 
 WalletChan will add `safe` as a first-class account type for existing Safe
 multisig wallets. A Safe is the selected wallet address shown to dapps and the
-source of assets and calls. Existing WalletChan Bankr, private-key, and seed
-phrase accounts act as linked owner signers. An impersonator account can help
-discover or observe a Safe, but can never approve or execute for it.
+source of assets and calls. Existing WalletChan private-key, seed-phrase,
+Ledger, and Bankr accounts act as linked owner signers. An impersonator account can
+help discover or observe a Safe, but can never approve or execute for it.
 
 The first complete release is **Bring your existing Safe**. Users can:
 
@@ -51,7 +53,7 @@ questions.
 | Initial audience | Users bringing an already deployed Safe. Safe creation is out of scope. |
 | Chain model | One visual account may group the same address across chains, but configuration and authority are stored and verified independently per chain. |
 | Discovery | User-initiated only. The user selects exactly one local signing account per owner lookup, with a privacy disclosure. Manual import is always available. |
-| Signing support | Bankr, private-key, and seed-phrase owners must all pass before signing support ships. Impersonators remain observe-only. |
+| Signing support | Private-key, seed-phrase, Ledger, and Bankr owners must all pass before signing support ships. Impersonators remain observe-only. |
 | Approval UX | One explicit authorization per owner. No “approve all owners” action. |
 | Service role | Safe Transaction Service coordinates proposals and confirmations; onchain Safe state remains authoritative. |
 | Transaction integrity | Rebuild and hash every proposal locally. Never trust a service-provided hash, decoded call, owner list, or confirmation without verification. |
@@ -119,7 +121,7 @@ pretending the Safe behaves like an EOA.
 - Make an existing Safe a first-class WalletChan account.
 - Work on the intersection of WalletChan-enabled chains and verified canonical
   Safe deployments; never infer configuration from another chain.
-- Link all matching Bankr, private-key, and seed-phrase owner accounts.
+- Link all matching private-key, seed-phrase, Ledger, and Bankr owner accounts.
 - Preserve WalletChan's clear-signing, simulation, account pinning, session
   restoration, and agent-password boundaries.
 - Coordinate proposals bidirectionally with Safe{Wallet}.
@@ -205,8 +207,8 @@ The address path heading is **Enter Safe address**; the divider owns the word
 manual-address path so discovery results remain the only competing content.
 
 `Find by owner account` uses a home-selector-style trigger with a right
-chevron. It opens a dedicated picker containing only Bankr, private-key, and
-seed-phrase accounts. Selecting an account immediately begins discovery; there
+chevron. It opens a dedicated picker containing only private-key, seed-phrase,
+Ledger, and Bankr accounts. Selecting an account immediately begins discovery; there
 is no second confirmation button. The full-screen picker keeps the privacy note
 short: “Sent directly to Safe for this search.”
 
@@ -660,7 +662,7 @@ discovery.ts                manual probing and opt-in owner discovery
 transactionBuilder.ts       calls -> Safe transaction fields and local hash
 multiSend.ts                strict canonical batch encode/decode
 signatureValidation.ts      EOA recovery, owner checks, sorting/packing
-ownerAuthorization.ts       Bankr/PK/seed signer routing and final rechecks
+ownerAuthorization.ts       PK/seed/Ledger/Bankr signer routing and final rechecks
 serviceClient.ts            bounded direct official Safe service client
 serviceValidation.ts        schema, hash, and confirmation validation
 proposalLifecycle.ts        propose/approve/publish/reconcile orchestration
@@ -829,14 +831,15 @@ Any material change invalidates the review.
 
 | WalletChan record | Discover/link | Approve | Execute outer tx | Requirement |
 | --- | --- | --- | --- | --- |
-| Bankr | Yes | Required before ship | Only if direct execution capability is verified | Exact `/wallet/sign` Safe EIP-712/hash behavior, recovered signer, current credential tag, session restoration |
 | Private key | Yes | Required | Required | Requested-account-only key resolution and final local effect boundary |
 | Seed phrase | Yes | Required | Required | Derived account key path with the same local effect boundary |
+| Ledger | Yes | Required | Required with native gas | SafeTx EIP-712 signing on-device, recovered signer validation, and centralized Ledger transaction execution |
 | Impersonator | Optional discovery | Never | Never | Observe-only even when its address matches an owner |
 | Safe | Never treated as its own owner signer | Never recursively in v1 | Never | Nested Safe owners unsupported |
+| Bankr | Yes | Required before ship | Only if direct execution capability is verified | Exact `/wallet/sign` Safe EIP-712/hash behavior, recovered signer, current credential tag, session restoration |
 
 Ordinary Safe transaction approval may use an agent password only after an
-explicit policy test proves parity for Bankr, PK, and seed owner paths. Safe
+explicit policy test proves parity for PK, seed, Ledger, and Bankr owner paths. Safe
 configuration changes remain master-only when introduced later. Private key
 and seed reveal remain blocked for agent passwords.
 
@@ -927,7 +930,7 @@ contracts and unsupported configurations fail closed.
 1. Add the Safe Add Account tile and two entry paths.
 2. Implement manual chain-prefixed/ordinary address probing with partial
    failure handling.
-3. Implement opt-in owner discovery for Bankr, PK, and seed addresses.
+3. Implement opt-in owner discovery for PK, seed, Ledger, and Bankr addresses.
 4. Auto-link matching signing accounts by normalized address and account ID.
 5. Build the import review, capability badge, security screen, and remove flow.
 6. Cache completed background verification behind bounded, expiring opaque
@@ -974,7 +977,7 @@ fixtures byte-for-byte.
 5. Publish first proposals and later confirmations idempotently.
 6. Add signed-offchain/waiting/ready outcomes and notifications.
 
-Gate: Bankr, PK, and seed owners can create and confirm proposals visible in
+Gate: PK, seed, Ledger, and Bankr owners can create and confirm proposals visible in
 Safe{Wallet}; impersonators and mismatched cached credentials cannot sign.
 
 ### Step 7 — Execution
@@ -1124,7 +1127,8 @@ receives neither flow, nor any Safe proposal or confirmation write.
       approval inbox work across supported chains.
 - [x] Every service proposal hash and confirmation is locally validated.
 - [x] Single and canonical MultiSend calls use WalletChan clear signing.
-- [x] Bankr, private-key, and seed owners use explicitly tested approval paths.
+- [x] Private-key, seed, Ledger, and Bankr owners use explicitly tested approval
+      paths.
 - [x] Impersonator and unsupported contract-owner paths cannot sign.
 - [x] Agent-password policy is tested for all owner types; secret reveal remains
       blocked.

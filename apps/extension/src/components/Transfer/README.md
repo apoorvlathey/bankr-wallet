@@ -68,11 +68,11 @@ existing direct and lazy imports retain the same default-export contract.
   recovery checks, intent IDs, acknowledgement, and sponsored submission.
 - `model/sponsoredTransferPolicy.ts` owns the temporary Base-USDC sponsorship
   feature gate. It is currently disabled, so Base USDC uses normal ERC-20
-  transaction intake for Bankr, private-key, and seed-phrase accounts.
+  transaction intake for private-key, seed-phrase, and Bankr accounts.
 - `hooks/useTransferSubmission.ts` owns the normal pending-transaction message
   and selects between Bankr-sponsored and normal confirmation intake. Signing
-  remains in the background transaction domains for Bankr, private-key, and
-  seed-phrase accounts; impersonators use the same review intake and can only
+  remains in the background transaction domains for private-key, seed-phrase,
+  and Bankr accounts; impersonators use the same review intake and can only
   submit through the selected RPC's explicit developer opt-in.
 
 ## Dependency direction
@@ -97,5 +97,5 @@ but never on sections. No file in this folder stores secrets or signs locally.
 Pure amount/account-label behavior is covered by
 `tests/ui/transferFormatting.test.ts`; durable sponsored recovery is covered by
 `tests/sponsoredTransfers/sponsoredTransferReconciliation.test.ts`. Normal
-Bankr/private-key/seed-phrase signing continues through the transaction suites
+private-key/seed-phrase/Bankr signing continues through the transaction suites
 and `qa:extension:signing`.

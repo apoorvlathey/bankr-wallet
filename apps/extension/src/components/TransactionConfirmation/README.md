@@ -48,7 +48,7 @@ callers and lazy imports. It stays policy-free and preserves the default export.
   callback-driven presentation, except `CopyButton.tsx`'s clipboard feedback.
 - Presentation modules do not choose wallet authorization or message types.
 - Preserve the gas-estimator key/remount, request ID, first-action callbacks,
-  and Bankr/private-key/seed-phrase/Ledger/impersonator branches.
+  and private-key/seed-phrase/Ledger/impersonator/Bankr branches.
 - Replacement requests keep native gas editable but lock transaction content,
   batching, fee-token selection, force inclusion, and the exact pending nonce.
 - Speed Up retains the original request identity, simulation, clear-signing,

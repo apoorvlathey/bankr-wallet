@@ -1,0 +1,106 @@
+---
+title: Wallet and web3 glossary
+description: Understand WalletChan, Ethereum, dapps, gas, approvals, swaps, bridges, smart accounts, Safe, and Privacy Shield terminology.
+outline: 3
+---
+
+# Glossary
+
+## Account
+
+An address plus a way to authorize it. WalletChan account types include private
+key, seed phrase, Ledger, view-only, Safe, and optional Bankr remote signing.
+
+## Address
+
+A `0x` identifier for an EVM account or contract. A name/avatar can label it but
+does not replace address verification.
+
+## Allowance / token approval
+
+Onchain permission for a spender contract to move up to a token amount.
+Disconnecting a dapp does not revoke it.
+
+## Atomic batch
+
+Several calls that all succeed together or all revert. A sequential batch can
+partially complete.
+
+## Bridge
+
+A protocol that moves value/state between networks. Source confirmation and
+destination settlement are separate stages.
+
+## Calldata
+
+The encoded function and arguments sent to a smart contract.
+
+## Clear signing
+
+A human-readable description of a contract action, using ERC-7730 or a trusted
+local pattern, with decoded/raw fallback.
+
+## Dapp
+
+A website/application that connects to an Ethereum wallet and requests reads,
+transactions, or signatures.
+
+## EOA
+
+An externally owned account controlled by a key. EIP-7702 can attach smart
+account behavior while retaining the same address.
+
+## Gas
+
+The network execution fee. A gas limit bounds work; fee values influence cost
+and inclusion priority.
+
+## Nonce
+
+An account transaction sequence number. Same-nonce higher-fee replacements can
+speed up or attempt to cancel a pending EOA transaction.
+
+## RPC endpoint
+
+A server WalletChan uses to read chain state and broadcast signed
+transactions.
+
+## Safe
+
+A smart-contract multisig account controlled by owners and a confirmation
+threshold.
+
+## Seed phrase
+
+Words that derive a family of private keys/accounts. WalletChan seed accounts
+use standard EVM derivation paths.
+
+## Shielded ETH
+
+WalletChan's wallet-wide ready private balance in the configured Privacy Pool.
+Its recovery phrase is separate from wallet seed phrases.
+
+## SIWE
+
+Sign-In with Ethereum (EIP-4361), a structured message for proving address
+control to a service.
+
+## Slippage
+
+The tolerated difference between quoted and executed swap output. Minimum
+received reflects the selected tolerance.
+
+## View-only
+
+An address tracked without a signing secret. Normal prompts are reject-only.
+
+## WalletConnect
+
+A relay protocol that pairs a wallet with another app/session using a `wc:`
+URI.
+
+## Related guides
+
+- [Browse the complete WalletChan feature atlas](/overview/feature-atlas)
+- [Check supported Ethereum standards](/reference/standards)
+- [Compare behavior across account types](/reference/account-behavior)

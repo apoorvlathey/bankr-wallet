@@ -1231,7 +1231,7 @@ than moving its data logic into `App.tsx`.
 | P4-09 | done | Cross-dapp batch presentation | P4-08 | Cross-batch components/integration | Per-origin grouping clear; custom handlers, persistence and reject-all unchanged. `L,T,P,E,V,A,W` | Wave C |
 | P4-10 | done | Add-chain and watch-asset confirmations | P4-02 | Corresponding screens | Same shell/hierarchy; exact chain/token data, warnings, copy/explorer retained. `L,T,P,E,V,A,W` | Wave B |
 | P4-11 | done | Pending-request inbox alignment | P4-04, P4-05, P4-06, P4-08, P4-09 | `PendingTxList` | New presentation states are recognizable; adjacency/navigation/reject-all behavior unchanged. `L,T,P,E,V,A,W` | Integration |
-| P4-GATE | active | Trust-critical runtime gate | P4-03 through P4-11 | Full extension/dapps | Packaged transaction, personal/typed signature, batch, exactly-once, popup close/reopen and view-only reject-only paths pass for all three wallet types; successful signing/broadcast on a production dapp remains manual. `L,T,P,E,V,A,W,R` | Gate |
+| P4-GATE | active | Trust-critical runtime gate | P4-03 through P4-11 | Full extension/dapps | Packaged transaction, personal/typed signature, batch, exactly-once, popup close/reopen and view-only reject-only paths pass for all supported signing account types; Ledger includes device QA and successful signing/broadcast on a production dapp remains manual. `L,T,P,E,V,A,W,R` | Gate |
 
 Wave A gives three workers disjoint confirmation files. Do not parallelize
 standard and cross-dapp batch until the standard batch pattern is merged.
@@ -1262,7 +1262,7 @@ standard and cross-dapp batch until the standard batch pattern is merged.
 | P6-05 | done | Security and data settings groups | P3-06 | Settings leaf screens | Form fields vs navigation items separated; destructive actions isolated; save model clear. `L,T,P,E,V,A,W` | Wave A across disjoint files |
 | P6-06 | done | Network connections screens | P3-06, P2-09 | Chain/RPC settings and pickers | Plain-language hierarchy; add/edit validation and existing storage behavior unchanged. `L,T,P,E,V,A` | Wave A |
 | P6-07 | done | About screen | P3-06 | New settings leaf | Version, author, ecosystem links, theme info live here; no new storage. `L,T,P,E,V,A` | Wave A |
-| P6-GATE | active | Auth/account/settings runtime gate | P6-01 through P6-07 | Full extension | Packaged master/agent/manual-lock/reveal-restriction coverage passes for all three wallet types and passkey/session tests pass 8/8; genuine biometric ceremony, timed auto-lock and browser-restart smoke remain manual. `L,T,P,E,V,A,W,R` | Gate |
+| P6-GATE | active | Auth/account/settings runtime gate | P6-01 through P6-07 | Full extension | Packaged master/agent/manual-lock/reveal-restriction coverage passes for all four signing wallet types and passkey/session tests pass 8/8; genuine biometric ceremony, Ledger device approval, timed auto-lock and browser-restart smoke remain manual. `L,T,P,E,V,A,W,R` | Gate |
 
 ### 11.11 Phase 7 task backlog: remaining surfaces and release QA
 
@@ -1318,10 +1318,12 @@ message type, stop and reassess the design before expanding scope.
 
 ## 13. Required wallet-type test matrix
 
-Any redesigned surface involving authentication, transactions, signatures, or
-permissions must be exercised with all three wallet types:
+This historical phase used three software-signing fixtures. Any current
+redesigned surface involving authentication, transactions, signatures, or
+permissions must also follow the complete signing and Safe-owner matrix in
+`AGENTS.md`, including Ledger device QA.
 
-| Flow | Bankr API account | Private key account | Seed phrase account |
+| Flow | Private key account | Seed phrase account | Bankr API account |
 | --- | --- | --- | --- |
 | Unlock with master password | Required | Required | Required |
 | Unlock with agent password | Required | Required | Required |
@@ -1337,7 +1339,8 @@ permissions must be exercised with all three wallet types:
 Also verify that agent-password restrictions on private-key/seed reveal remain
 unchanged.
 
-The mandatory signing matrix uses the three product wallet classes above.
+The table records this phase's software-signing fixtures; it is not the current
+complete account-model inventory.
 Where the runtime also exposes a separate view-only/impersonated account path,
 test it as a negative path: Confirm/signing must be absent or disabled, Reject
 must work, and the UI must explain why the action is unavailable. Do not merge
@@ -1405,7 +1408,7 @@ The redesign is complete when:
 - One primary action exists per screen or sticky action region.
 - All component states are specified and visually consistent.
 - Both themes remain functional at every preview size.
-- All transaction/signature/auth flows pass with all three wallet types.
+- All transaction/signature/auth flows pass with all four signing wallet types.
 - No storage, message, signing, or crypto behavior changes as part of the UI
   work.
 
@@ -1830,7 +1833,7 @@ fail-closed guards rather than blanket suppression; signing authorization,
 storage shapes, message types, and valid-request behavior remain unchanged.
 
 Packaged Chrome QA loads the complete production manifest into fresh profiles.
-It passes transaction rejection for all three wallet types; six personal/
+It passes transaction rejection for all four signing wallet types; six personal/
 typed-data signature scenarios; view-only transaction/signature rejection;
 three ERC-5792 batch rejection scenarios; daily-use navigation with external
 portfolio/RPC traffic blocked; and 30 master/agent/account-protection assertions

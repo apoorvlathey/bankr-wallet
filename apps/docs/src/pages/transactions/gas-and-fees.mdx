@@ -1,0 +1,66 @@
+---
+title: Gas, transaction speed, and fee tokens
+description: Choose gas tiers, custom fees, native MAX reserves, token-paid gas, and understand account and network eligibility.
+searchPriority: 8
+outline: 3
+---
+
+# Gas, speed, and fee tokens
+
+Gas pays for EVM computation and inclusion. WalletChan estimates it, applies
+network-specific headroom, and keeps the fee decision next to Confirm.
+
+## Local gas tiers
+
+Private-key, seed-phrase, and eligible Ledger transactions offer **Slow**,
+**Standard**, **Fast**, and **Custom**. Custom mode exposes gas limit,
+priority fee, and max fee relationships with validation.
+
+A dapp-provided gas value can act as a floor where applicable. MegaETH uses the
+chain's non-standard gas estimate rather than trusting a standard-wallet gas
+value. Bankr manages gas remotely and shows a read-only explanation.
+
+## Native MAX
+
+For native transfers, MAX reserves buffered gas plus fee headroom. It is
+intentionally lower than the full native balance. Token MAX can use the full
+token balance while leaving the chosen gas asset separate.
+
+## Pay gas with a token
+
+On eligible networks and accounts, open the fee-asset picker. It shows supported
+tokens, balance, maximum quoted fee, logo, and stablecoin fiat equivalent where
+available. Native currency remains the default.
+
+Token-paid gas uses a bounded ERC-4337/Pimlico route and a compatible
+WalletChan EIP-7702 delegate.
+
+| Account | Fee-token eligibility |
+| --- | --- |
+| Private key / seed | Existing or reviewed first-use WalletChan delegation |
+| Ledger / view-only | Not supported |
+| Safe | Eligible private-key/seed executor at execution quorum |
+| Bankr | Only when the official delegate is already active |
+
+Fee tokens are unavailable for contract deployments, force inclusion, or
+foreign/custom delegates. The token catalog differs by chain and quote
+availability.
+
+## Quotes and failures
+
+Fee quotes expire and are not silently reused. If a quote or preparation fails,
+choose Retry or return to native gas. An insufficient-token message may suggest
+reducing a transfer amount or choosing the native token.
+
+## L2 fees
+
+OP Stack transaction details can show the separate L1 data fee. Base,
+Optimism, and Unichain can also use fast receipt polling when the selected RPC
+supports their preconfirmation path.
+
+## Related guides
+
+- [Understand every transaction review field](/transactions/review)
+- [Use force inclusion on eligible L2s](/transactions/force-inclusion)
+- [Cancel or speed up pending transactions](/transactions/replacements)
+- [Choose fees for batch transactions](/transactions/batches)

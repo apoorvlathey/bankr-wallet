@@ -1,0 +1,74 @@
+---
+title: Swap or bridge tokens
+description: Swap tokens on one network or bridge between networks with WalletChan, including quotes, slippage, route steps, approvals, and settlement.
+searchPriority: 7
+outline: 3
+---
+
+# Swap or bridge
+
+WalletChan uses one screen for two related actions:
+
+- Choose the same network on both sides to **swap**.
+- Choose different networks to **bridge**.
+
+## Pick networks and tokens
+
+Funded networks appear first, followed by the rest of the available catalog.
+Token search covers wallet holdings, popular tokens, the provider catalog, and
+supported custom token addresses.
+
+Opening Swap from Home starts from the highest-value eligible funded asset.
+Opening it from an asset row preserves that token.
+
+## Enter the amount
+
+Enter token units or USD, use the percentage slider, or choose MAX. WalletChan
+checks balance, price availability, token metadata, and native gas needs before
+requesting a firm quote.
+
+## Read the quote
+
+A quote can show:
+
+- Estimated amount received and minimum received.
+- Exchange rate and price impact.
+- Provider/route and route fees.
+- Approval or Permit2 steps.
+- Number and order of transactions.
+- Bridge destination and estimated arrival time.
+- Whether destination native gas is included or may be needed.
+
+Quotes expire. WalletChan refreshes or re-quotes at confirmation instead of
+submitting stale route data.
+
+## Slippage
+
+Open slippage settings to use a preset or custom percentage. Higher slippage
+can make volatile routes more likely to execute but permits a worse price.
+WalletChan accepts a bounded custom value, not an unlimited tolerance.
+
+## Execution by account
+
+- **Private key/seed phrase** uses an EIP-7702 atomic plan when compatible,
+  otherwise an ordered sequential fallback where permitted.
+- **Ledger** is not supported by the built-in Swap/Bridge shortcut. Use a swap
+  dapp and approve its ordinary transaction through the normal Ledger review.
+- **View-only** is blocked except for explicitly opted-in local/fork RPC
+  impersonation, where supported sequential calls may be forwarded unsigned.
+- **Safe** can create a same-chain swap proposal. Safe bridging is disabled
+  until destination deployment and authority can be verified.
+- **Bankr** can submit supported atomic plans remotely.
+
+## Bridge settlement
+
+A source transaction confirming is not the same as the destination transfer
+completing. [Activity](/wallet/activity) can show **Bridging**, **Complete**,
+**Refunded**, **Expired**, or **Cancelled**, with source, destination, and
+refund explorer links when available. Polling resumes after extension restarts.
+
+## Failed approvals or partial sequential plans
+
+If an approval succeeds but a later call fails, the approval can remain
+onchain. Inspect Activity and use [Approval cleanup](/transactions/approval-cleanup)
+or the revoke.cash shortcut when appropriate.

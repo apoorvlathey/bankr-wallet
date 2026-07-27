@@ -1,0 +1,74 @@
+---
+title: Send tokens
+description: Send native currency or ERC-20 tokens with WalletChan, including contacts, names, MAX gas reserve, calldata, Safe proposals, and view-only behavior.
+searchPriority: 7
+outline: 3
+---
+
+# Send tokens
+
+Open **Send** from Home or select an asset row.
+
+## Choose the asset
+
+The general Send shortcut starts with Ethereum ETH. Entering from an asset row
+preserves that token and network. Use the network and token pickers to change
+either one.
+
+WalletChan ranks funded networks and assets first. A Safe network where the
+Safe is not verified/deployed remains visible but cannot be selected for a
+proposal.
+
+## Choose a recipient
+
+Recipient input accepts:
+
+- A `0x` EVM address.
+- One of your WalletChan accounts.
+- A saved [Address book](/wallet/address-book) contact.
+- Supported names including ENS/Basenames, `.wei`, `.gwei`, and `.mega`.
+
+WalletChan shows the resolved address, known label, avatar, copy action, and
+explorer link where available. A local contact label takes priority over a
+public name. Always verify the address itself.
+
+Sending to a smart contract triggers an acknowledgement because contracts may
+not provide a way to return funds.
+
+## Enter the amount
+
+Use token units or switch to USD when a current price is available. The
+percentage slider and **MAX** use the exact balance.
+
+For a native token, MAX reserves buffered network fees so the transaction can
+still be submitted. For an ERC-20, the token can be maxed independently, but
+you still need the selected fee asset.
+
+WalletChan blocks zero, invalid, and over-balance amounts before review.
+
+## Advanced calldata
+
+Open Advanced to include valid `0x` calldata. This is useful for an explicit
+contract call or deployment flow, but changes the transaction from a simple
+transfer. WalletChan tries to decode supported calldata and shows raw data as a
+fallback.
+
+## Review and submit
+
+Send uses the normal [transaction review](/transactions/review). The exact
+completion path depends on the account:
+
+- Private-key and seed accounts sign locally.
+- Ledger asks for hardware approval.
+- View-only shows a no-signing warning. Unsigned submission exists only for an
+  explicitly opted-in local/fork RPC.
+- Safe creates a proposal and moves funds only after approval and execution.
+- Bankr submits remotely.
+
+The Base gas-free USDC interface is currently feature-gated off and should not
+be expected in production.
+
+## If something looks wrong
+
+Reject the review. Back returns to Send without signing. A closed review stays
+pending unless you explicitly reject it.
