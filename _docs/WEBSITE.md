@@ -500,7 +500,12 @@ restrained WalletChan amber, product-led visuals, and direct typography.
 - Twitter/X: @apoorveth
 - GitHub: Repository link
 - Bankr.bot: Get API key
-- Discord: (if created)
+- Discord: https://walletchan.com/discord
+
+`/discord` serves first-party Open Graph and X card metadata using
+`/og/discord-og.png`, then forwards browser visitors to the durable Discord
+invite after hydration. Keep this as an HTML page rather than an immediate
+server redirect so link-preview crawlers can read the WalletChan social card.
 
 ---
 

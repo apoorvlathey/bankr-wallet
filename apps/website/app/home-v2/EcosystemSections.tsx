@@ -4,9 +4,11 @@ import {
   Box,
   Button,
   Container,
+  Flex,
   Grid,
   HStack,
   Image,
+  Link,
   SimpleGrid,
   Text,
   VStack,
@@ -31,6 +33,7 @@ import {
   CHROME_STORE_URL,
   FIREFOX_STORE_URL,
   GITHUB_URL,
+  TWITTER_URL,
 } from "../constants";
 import { FeatureCard, SectionHeading } from "./SectionPrimitives";
 import { hairline, palette } from "./design";
@@ -289,104 +292,170 @@ export function TokenSection() {
 
 export function FinalCta() {
   return (
-    <Box
-      as="section"
-      id="open-source"
-      minH={{ md: "560px" }}
-      py={{ base: 24, md: 32 }}
-      borderTop="1px solid rgba(255,255,255,0.12)"
-      scrollMarginTop="96px"
-      display="flex"
-      alignItems="center"
-    >
-      <Container maxW="5xl">
-        <VStack spacing={0} textAlign="center">
-          <Image
-            src="/images/walletchan-icon-nobg.png"
-            alt="WalletChan mascot"
-            boxSize={{ base: "88px", md: "120px" }}
-            objectFit="contain"
-            mb={{ base: 5, md: 7 }}
-          />
-          <Text
-            color={palette.white}
-            fontSize={{ base: "40px", md: "68px" }}
-            fontWeight="700"
-            letterSpacing="0"
-            lineHeight="1.02"
-          >
-            Install and get started now!
-          </Text>
-          <HStack mt={8} spacing={3} justify="center" flexWrap="wrap">
-            <Button
-              as="a"
-              href={CHROME_STORE_URL}
-              target="_blank"
-              h="50px"
-              px={7}
-              borderRadius="10px"
-              bg={palette.yellow}
-              color={palette.ink}
-              textTransform="none"
-              letterSpacing="0"
+    <>
+      <Box
+        as="section"
+        id="open-source"
+        minH={{ md: "560px" }}
+        py={{ base: 24, md: 32 }}
+        borderTop="1px solid rgba(255,255,255,0.12)"
+        scrollMarginTop="96px"
+        display="flex"
+        alignItems="center"
+      >
+        <Container maxW="5xl">
+          <VStack spacing={0} textAlign="center">
+            <Image
+              src="/images/walletchan-icon-nobg.png"
+              alt="WalletChan mascot"
+              boxSize={{ base: "88px", md: "120px" }}
+              objectFit="contain"
+              mb={{ base: 5, md: 7 }}
+            />
+            <Text
+              color={palette.white}
+              fontSize={{ base: "40px", md: "68px" }}
               fontWeight="700"
-              leftIcon={
-                <Image
-                  src="/images/browsers/chrome.svg"
-                  alt=""
-                  boxSize="22px"
-                />
-              }
-              rightIcon={<ChevronRight size={18} />}
-              _hover={{ bg: palette.amberSoft }}
-            >
-              Add to Chrome
-            </Button>
-            <Button
-              as="a"
-              href={FIREFOX_STORE_URL}
-              target="_blank"
-              h="50px"
-              px={7}
-              borderRadius="10px"
-              bg={palette.ink2}
-              color={palette.white}
-              border="1px solid rgba(255,255,255,0.12)"
-              textTransform="none"
               letterSpacing="0"
-              fontWeight="600"
-              leftIcon={
+              lineHeight="1.02"
+            >
+              Install and get started now!
+            </Text>
+            <HStack mt={8} spacing={3} justify="center" flexWrap="wrap">
+              <Button
+                as="a"
+                href={CHROME_STORE_URL}
+                target="_blank"
+                h="50px"
+                px={7}
+                borderRadius="10px"
+                bg={palette.yellow}
+                color={palette.ink}
+                textTransform="none"
+                letterSpacing="0"
+                fontWeight="700"
+                leftIcon={
+                  <Image
+                    src="/images/browsers/chrome.svg"
+                    alt=""
+                    boxSize="22px"
+                  />
+                }
+                rightIcon={<ChevronRight size={18} />}
+                _hover={{ bg: palette.amberSoft }}
+              >
+                Add to Chrome
+              </Button>
+              <Button
+                as="a"
+                href={FIREFOX_STORE_URL}
+                target="_blank"
+                h="50px"
+                px={7}
+                borderRadius="10px"
+                bg={palette.ink2}
+                color={palette.white}
+                border="1px solid rgba(255,255,255,0.12)"
+                textTransform="none"
+                letterSpacing="0"
+                fontWeight="600"
+                leftIcon={
+                  <Image
+                    src="/images/browsers/firefox.svg"
+                    alt=""
+                    boxSize="22px"
+                  />
+                }
+                _hover={{ bg: palette.ink3 }}
+              >
+                Add to Firefox
+              </Button>
+              <Button
+                as="a"
+                href={GITHUB_URL}
+                target="_blank"
+                h="50px"
+                px={7}
+                borderRadius="10px"
+                bg="transparent"
+                color={palette.white}
+                border="1px solid rgba(255,255,255,0.12)"
+                textTransform="none"
+                letterSpacing="0"
+                fontWeight="600"
+                leftIcon={<Github size={22} />}
+                _hover={{ bg: palette.ink2 }}
+              >
+                View GitHub
+              </Button>
+            </HStack>
+          </VStack>
+        </Container>
+      </Box>
+      <Box
+        as="footer"
+        py={6}
+        borderTop="1px solid rgba(255,255,255,0.12)"
+      >
+        <Container maxW="7xl">
+          <Flex
+            direction={{ base: "column", sm: "row" }}
+            align="center"
+            justify="space-between"
+            gap={4}
+          >
+            <Text color={palette.muted} fontSize="13px">
+              © {new Date().getFullYear()} WalletChan
+            </Text>
+            <HStack spacing={5}>
+              <Link
+                href={TWITTER_URL}
+                target="_blank"
+                rel="noreferrer"
+                display="inline-flex"
+                alignItems="center"
+                gap={2}
+                color={palette.muted}
+                fontSize="14px"
+                fontWeight="700"
+                _hover={{ color: palette.white, textDecoration: "none" }}
+              >
+                <XIcon size={15} />
+                @WalletChan_
+              </Link>
+              <Link
+                href="/discord"
+                target="_blank"
+                rel="noreferrer"
+                display="inline-flex"
+                alignItems="center"
+                gap={2}
+                color={palette.muted}
+                fontSize="14px"
+                fontWeight="700"
+                _hover={{ color: palette.white, textDecoration: "none" }}
+              >
                 <Image
-                  src="/images/browsers/firefox.svg"
+                  src="/icons/discord-symbol-white.svg"
                   alt=""
-                  boxSize="22px"
+                  w="18px"
+                  h="14px"
+                  opacity={0.72}
                 />
-              }
-              _hover={{ bg: palette.ink3 }}
-            >
-              Add to Firefox
-            </Button>
-            <Button
-              as="a"
-              href={GITHUB_URL}
-              target="_blank"
-              h="50px"
-              px={7}
-              borderRadius="10px"
-              bg="transparent"
-              color={palette.white}
-              border="1px solid rgba(255,255,255,0.12)"
-              textTransform="none"
-              letterSpacing="0"
-              fontWeight="600"
-              leftIcon={<Github size={22} />}
-              _hover={{ bg: palette.ink2 }}
-            >
-              View GitHub
-            </Button>
-          </HStack>
-        </VStack>
-      </Container>
-    </Box>
+                Discord
+              </Link>
+            </HStack>
+          </Flex>
+        </Container>
+      </Box>
+    </>
+  );
+}
+
+function XIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
   );
 }

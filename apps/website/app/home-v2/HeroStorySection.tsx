@@ -566,6 +566,35 @@ function V2Nav({ condensed }: { condensed: boolean }) {
             ))}
           </HStack>
           <HStack spacing={2}>
+            <IconButton
+              as="a"
+              href="/discord"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Join WalletChan on Discord"
+              display={{ base: "none", md: "inline-flex" }}
+              bg="transparent"
+              color={palette.white}
+              border="1px solid rgba(255,255,255,0.14)"
+              borderRadius="8px"
+              minW="40px"
+              w="40px"
+              h="40px"
+              icon={
+                <Image
+                  src="/icons/discord-symbol-white.svg"
+                  alt=""
+                  w="20px"
+                  h="15px"
+                />
+              }
+              _hover={{
+                bg: "rgba(255,255,255,0.08)",
+                borderColor: "rgba(255,255,255,0.24)",
+                transform: "translateY(-1px)",
+              }}
+              _active={{ transform: "scale(0.98)" }}
+            />
             <Button
               as="a"
               href={installTarget.href}
@@ -608,6 +637,20 @@ function V2Nav({ condensed }: { condensed: boolean }) {
             borderRadius="22px"
             p={2}
           >
+            <Link
+              href="/discord"
+              target="_blank"
+              rel="noreferrer"
+              color={palette.white}
+              px={4}
+              py={3}
+              borderRadius="16px"
+              fontWeight="800"
+              onClick={() => setOpen(false)}
+              _hover={{ bg: "rgba(255,255,255,0.1)", textDecoration: "none" }}
+            >
+              Discord
+            </Link>
             {navItems.map((item) => (
               <Link
                 key={item.href}
