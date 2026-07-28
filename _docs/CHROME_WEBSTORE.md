@@ -41,6 +41,40 @@ The extension only accesses the active tab when explicitly invoked by the user t
 
 ---
 
+### 1a. alarms
+
+**Justification:**
+
+WalletChan uses `chrome.alarms` for bounded background reliability work that
+must survive Manifest V3 service-worker suspension:
+
+1. Periodically refresh imported existing-Safe account and proposal state.
+2. Reconcile pending or ambiguous Safe executions until their onchain result is
+   known, then clear the reconciliation alarm.
+3. Schedule a delayed retry of Privacy Pools ASP/compliance eligibility data
+   when the wallet UI is closed.
+
+The permission is not used for analytics, advertising, user profiling, or
+unrelated background browsing.
+
+---
+
+### 1b. favicon
+
+**Justification:**
+
+WalletChan uses Chrome's internal favicon endpoint to show recognizable site
+icons for decentralized websites opened through ENS/IPFS gateways in the
+wallet's browsing, bookmark, and request-review interfaces. The implementation
+only accepts explicitly validated HTTPS hosted-gateway URLs (`*.eth.limo`,
+`*.eth.link`, `*.gwei.domains`, and `*.w3eth.io`) and local IPFS/IPNS subdomain
+gateway URLs.
+
+The permission is not used to read browsing history, inspect page content, or
+enumerate arbitrary websites.
+
+---
+
 ### 2. storage
 
 **Justification:**
@@ -48,11 +82,11 @@ The extension only accesses the active tab when explicitly invoked by the user t
 The storage permission is essential for the extension to function. It is used to store:
 
 1. Encrypted Wallet Material: Imported private keys, seed phrases, and optional
-Bankr API credentials are encrypted before storage in `chrome.storage.local`.
+   Bankr API credentials are encrypted before storage in `chrome.storage.local`.
 
 2. Account Metadata: Public account addresses, account types, names, derivation
-metadata, Ledger paths, Safe associations, and view-only addresses are stored
-so the wallet can restore the user's account list.
+   metadata, Ledger paths, Safe associations, and view-only addresses are stored
+   so the wallet can restore the user's account list.
 
 3. Network Configuration: Custom RPC endpoints and network settings are stored in `chrome.storage.local`.
 
@@ -101,7 +135,22 @@ This is essential for user experience because blockchain transactions can take f
 
 **Justification:**
 
-The offscreen permission is used only for Ledger hardware-wallet operations. After the user explicitly grants a Ledger device through Chrome's WebHID chooser, WalletChan creates a packaged offscreen document to keep the Ledger transport alive while the popup closes or the user reviews and approves a transaction on the device. The document receives only public derivation paths and unsigned transaction/message data, returns a signature, and is closed after an idle timeout. It does not capture the page, execute remote code, or receive private keys.
+WalletChan uses packaged offscreen documents for two Chrome-only operations that
+must continue independently of the popup and Manifest V3 service-worker
+lifecycle:
+
+1. Ledger hardware wallets: After the user explicitly selects a Ledger
+   through Chrome's WebHID chooser, an offscreen document maintains the device
+   transport while addresses are derived or the user reviews and approves a
+   transaction or message on the device. Ledger private keys never leave the
+   hardware device.
+2. Privacy Pools: A separate packaged offscreen worker performs the
+   computationally intensive local proof generation required for user-requested
+   shielding and unshielding operations.
+
+Both documents use only code bundled with the extension. They do not capture
+pages, inspect browsing content, execute remote code, run analytics, or display
+advertising. They are closed after the requested operation or an idle timeout.
 
 ---
 
@@ -219,10 +268,10 @@ This is required for dApps to detect and interact with the wallet.
 2. **No Monetization**: The extension does not contain ads, in-app purchases, or any form of monetization.
 
 3. **Security**: Wallet secrets and optional service credentials are encrypted
-before local storage. Ledger keys remain on the device. Passwords are not stored
-as plaintext.
+   before local storage. Ledger keys remain on the device. Passwords are not stored
+   as plaintext.
 
 4. **EVM Chain Scope**: The extension includes a curated registry of Ethereum
-and EVM mainnets plus native testnets. Eligible local, Ledger, and view-only
-accounts may also add custom EVM networks; optional Bankr accounts use a
-smaller explicitly supported built-in subset.
+   and EVM mainnets plus native testnets. Eligible local, Ledger, and view-only
+   accounts may also add custom EVM networks; optional Bankr accounts use a
+   smaller explicitly supported built-in subset.
